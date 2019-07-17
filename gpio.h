@@ -3,7 +3,7 @@
 // Concrete implementation of the IGpio ABC
 
 #include "igpio.h"
-#include "pigipio.h"
+#include "pigpio.h"
 
 namespace mgo
 {
