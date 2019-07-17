@@ -1,4 +1,4 @@
-#include "StepperMotor.h"
+#include "steppermotor.h"
 
 #include <cassert>
 #include <thread>
@@ -8,6 +8,7 @@ namespace mgo
 {
 
 StepperMotor::StepperMotor( const IGpio& gpio )
+    : m_gpio( gpio )
 {
     // Start the thread
     std::thread t( [&]()
@@ -25,7 +26,7 @@ StepperMotor::~StepperMotor()
 }
 
 
-void StepperMotor::goToStep( long step )
+void StepperMotor::goToStep( long /* step */ )
 {
 }
 
@@ -33,7 +34,7 @@ void StepperMotor::stop()
 {
 }
 
-void StepperMotor::setSpeedPercent( int speed )
+void StepperMotor::setSpeedPercent( int /* speed */ )
 {
 }
 

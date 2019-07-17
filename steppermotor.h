@@ -1,5 +1,7 @@
 #pragma once
 
+#include "igpio.h"
+
 #include <atomic>
 #include <memory>
 #include <thread>
@@ -13,24 +15,25 @@ enum class Direction
     reverse
 };
 
-class StepperMotor : public IStepperMotor
+class StepperMotor
 {
 public:
-    StepperMotor( const &IGpio gpio );
+    StepperMotor( const IGpio& gpio );
     ~StepperMotor();
-    bool isRunning() override;
-    Direction getDirection() override;
-    long getCurrentStep() override;
+    bool isRunning();
+    Direction getDirection();
+    long getCurrentStep();
     // Go to a specific step
-    void goToStep( long step ) override;
+    void goToStep( long step );
     // Set motor speed
-    void setSpeedPercent( int percent ) override;
+    void setSpeedPercent( int percent );
     // Stop any motion
-    void stop() override;
+    void stop();
     // Block until the current operation completes
-    void wait() override;
+    void wait();
 private:
-    const &IGpio& m_gpio;
+    const IGpio& m_gpio;
+    std::thread m_thread;
 };
 
 } // end namespace
