@@ -22,6 +22,7 @@ class IGpio
 public:
     virtual void setStepPin( PinState ) = 0;
     virtual void setReversePin( PinState ) = 0;
+    virtual void delayMicroSeconds( long usecs ) = 0;
 };
 
 } // end namespace
