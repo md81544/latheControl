@@ -10,8 +10,8 @@ namespace mgo
 
 enum class PinState
 {
-    High,
-    Low
+    high,
+    low
 };
 
 // concrete classes can initialise / terminate
