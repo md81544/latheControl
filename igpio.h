@@ -19,8 +19,9 @@ enum class PinState
 
 class IGpio
 {
-    void setStepPin( PinState ) = 0;
-    void setReversePin( PinState ) = 0;
+public:
+    virtual void setStepPin( PinState ) = 0;
+    virtual void setReversePin( PinState ) = 0;
 };
 
 } // end namespace
