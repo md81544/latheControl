@@ -5,6 +5,8 @@
 
 #include "../igpio.h"
 
+#include <unistd.h>
+
 namespace mgo
 {
 
@@ -15,6 +17,10 @@ public:
     virtual ~MockGpio() {}
     void setStepPin( PinState ) override {}
     void setReversePin( PinState ) override {}
+    void delayMicroSeconds( long usecs ) override
+    {
+        usleep( usecs );
+    }
 };
 
 } // end namespace
