@@ -7,8 +7,12 @@
 namespace mgo
 {
 
-StepperMotor::StepperMotor( IGpio& gpio )
-    : m_gpio( gpio )
+StepperMotor::StepperMotor(
+    IGpio& gpio,
+    long stepsPerRevolution
+    )
+    :   m_gpio( gpio ),
+        m_stepsPerRevolution( stepsPerRevolution )
 {
     // Start the thread
     std::thread t( [&]()
@@ -40,7 +44,8 @@ StepperMotor::StepperMotor( IGpio& gpio )
                     m_busy = false;
                 }
             }
-            
+            // Update any status variables
+            m_currentStep = currentStep;
         }
     } // thread end
     );
@@ -58,6 +63,15 @@ StepperMotor::~StepperMotor()
 
 void StepperMotor::goToStep( long step )
 {
+    if ( m_busy )
+    {
+        // TODO... throw?
+        // Or allow the target to just be
+        // changed?
+        // For now it's just ignored if the
+        // stepper motor is busy
+        return;
+    }
     m_busy = true;
     m_targetStep = step;
 }
@@ -68,6 +82,11 @@ void StepperMotor::stop()
 
 void StepperMotor::setSpeedPercent( int /* speed */ )
 {
+}
+
+long StepperMotor::getCurrentStep()
+{
+    return m_currentStep;
 }
 
 void StepperMotor::wait()
