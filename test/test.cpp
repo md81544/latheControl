@@ -4,7 +4,7 @@
 #define CATCH_CONFIG_MAIN
 #include "catch.hpp"
 
-TEST_CASE( "Step once", "[step once]" )
+TEST_CASE( "Step once" )
 {
     mgo::MockGpio gpio( true );
     mgo::StepperMotor motor( gpio, 1'000 );
@@ -12,4 +12,18 @@ TEST_CASE( "Step once", "[step once]" )
     motor.wait();
 
     REQUIRE( motor.getCurrentStep() == 3 );
+}
+
+TEST_CASE( "Stop motor" )
+{
+    mgo::MockGpio gpio( true );
+    mgo::StepperMotor motor( gpio, 1'000 );
+    // High number of steps:
+    motor.goToStep( 1'000'000 );
+    gpio.delayMicroSeconds( 1'000 );
+    REQUIRE( motor.isRunning() );
+    motor.stop();
+    motor.wait();
+    REQUIRE( ! motor.isRunning() );
+    REQUIRE( motor.getCurrentStep() > 0 );
 }

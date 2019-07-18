@@ -39,6 +39,7 @@ private:
     std::atomic<long> m_targetStep;
     std::atomic<bool> m_busy{ false };
     std::atomic<long> m_currentStep;
+    std::atomic<bool> m_stop{ false };
 };
 
 } // end namespace

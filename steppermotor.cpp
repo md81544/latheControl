@@ -30,6 +30,13 @@ StepperMotor::StepperMotor(
             {
                 targetStep = m_targetStep;
             }
+            if ( m_stop )
+            {
+                targetStep = currentStep;
+                m_targetStep = targetStep;
+                m_stop = false;
+                m_busy = false;
+            }
             if( targetStep != currentStep )
             {
                 // Do step, assuming just forward for now
@@ -78,6 +85,7 @@ void StepperMotor::goToStep( long step )
 
 void StepperMotor::stop()
 {
+    m_stop = true;
 }
 
 void StepperMotor::setSpeedPercent( int /* speed */ )
@@ -95,6 +103,11 @@ void StepperMotor::wait()
     {
         m_gpio.delayMicroSeconds( 10'000 );
     }
+}
+
+bool StepperMotor::isRunning()
+{
+    return m_busy;
 }
 
 } // end namespace
