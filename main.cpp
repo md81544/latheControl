@@ -9,14 +9,16 @@ int main()
     {
         mgo::Gpio gpio( 8, 7 ); // step pin, reverse pin
 
-        for ( int n = 0; n < 1000; ++ n )
-        {
-            gpio.setStepPin( mgo::PinState::high );
-            gpio.delayMicroSeconds( 500 );
-            gpio.setStepPin( mgo::PinState::low );
-            gpio.delayMicroSeconds( 500 );
-        }
+        mgo::StepperMotor motor( gpio, 1'000 );
 
+        long step = 250;
+        for ( int n = 0; n < 4; ++n )
+        {
+            motor.goToStep( step );
+            motor.wait();
+            gpio.delayMicroSeconds( 1'000'000 );
+            step += 250;
+        }
         return 0;
     }
     catch( const std::exception& e )

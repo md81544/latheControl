@@ -79,6 +79,10 @@ void StepperMotor::goToStep( long step )
         // stepper motor is busy
         return;
     }
+    if ( m_currentStep == step )
+    {
+        return;
+    }
     m_busy = true;
     m_targetStep = step;
 }
