@@ -18,7 +18,7 @@ enum class Direction
 class StepperMotor
 {
 public:
-    StepperMotor( const IGpio& gpio );
+    StepperMotor( IGpio& gpio );
     ~StepperMotor();
     bool isRunning();
     Direction getDirection();
@@ -32,8 +32,11 @@ public:
     // Block until the current operation completes
     void wait();
 private:
-    const IGpio& m_gpio;
+    IGpio& m_gpio;
     std::thread m_thread;
+    std::atomic<bool> m_terminateThread{ false };
+    std::atomic<long> m_targetStep;
+    std::atomic<bool> m_busy{ false };
 };
 
 } // end namespace
