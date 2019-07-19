@@ -5,6 +5,7 @@
 #include <atomic>
 #include <memory>
 #include <thread>
+#include <mutex>
 
 namespace mgo
 {
@@ -38,8 +39,11 @@ private:
     std::atomic<bool> m_terminateThread{ false };
     std::atomic<long> m_targetStep;
     std::atomic<bool> m_busy{ false };
-    std::atomic<long> m_currentStep;
+    std::atomic<long> m_currentStep{ 0 };
     std::atomic<bool> m_stop{ false };
+    // lock should be taken before any code outside the
+    // background thread changes any member variables
+    std::mutex  m_mtx;
 };
 
 } // end namespace

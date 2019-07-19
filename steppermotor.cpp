@@ -1,8 +1,6 @@
 #include "steppermotor.h"
 
 #include <cassert>
-#include <thread>
-#include <mutex>
 
 namespace mgo
 {
@@ -17,42 +15,44 @@ StepperMotor::StepperMotor(
     // Start the thread
     std::thread t( [&]()
     {
-        long currentStep = 0;
-        long targetStep = m_targetStep;
         long delay = 500; // usecs, TODO
         for(;;)
         {
-            if( m_terminateThread)
-            {
-                break;
-            }
-            if( targetStep != m_targetStep )
-            {
-                targetStep = m_targetStep;
-            }
-            if ( m_stop )
-            {
-                targetStep = currentStep;
-                m_targetStep = targetStep;
-                m_stop = false;
-                m_busy = false;
-            }
-            if( targetStep != currentStep )
-            {
-                // Do step, assuming just forward for now
-                m_gpio.setStepPin( PinState::high );
-                m_gpio.delayMicroSeconds( delay );
-                m_gpio.setStepPin( PinState::low );
-                m_gpio.delayMicroSeconds( delay );
-
-                ++currentStep; // TOOD, direction
-                if ( currentStep == targetStep )
+            {   // scope for lock_guard
+                // When in this scope we can assume all member
+                // variables can be written and read from freely
+                // without them being changed externally. Other
+                // member functions must lock the mutex m_mtx
+                // before changing any member variables.
+                std::lock_guard<std::mutex> mtx( m_mtx );
+                if( m_terminateThread)
                 {
+                    break;
+                }
+                if ( m_stop )
+                {
+                    m_targetStep = long( m_currentStep );
+                    m_stop = false;
                     m_busy = false;
                 }
-            }
-            // Update any status variables
-            m_currentStep = currentStep;
+                if( m_targetStep != m_currentStep )
+                {
+                    // Do step, assuming just forward for now
+                    m_gpio.setStepPin( PinState::high );
+                    m_gpio.delayMicroSeconds( delay );
+                    m_gpio.setStepPin( PinState::low );
+
+                    ++m_currentStep; // TOOD, direction
+                    if ( m_currentStep == m_targetStep )
+                    {
+                        m_busy = false;
+                    }
+                }
+            } // scope for lock_guard
+            // We always perform the second delay regardless of
+            // whether we're stepping, to give the main thread a
+            // chance to grab the mutex
+            m_gpio.delayMicroSeconds( delay );
         }
     } // thread end
     );
@@ -70,6 +70,7 @@ StepperMotor::~StepperMotor()
 
 void StepperMotor::goToStep( long step )
 {
+    std::lock_guard<std::mutex> mtx( m_mtx );
     if ( m_busy )
     {
         // TODO... throw?
@@ -89,6 +90,7 @@ void StepperMotor::goToStep( long step )
 
 void StepperMotor::stop()
 {
+    std::lock_guard<std::mutex> mtx( m_mtx );
     m_stop = true;
 }
 

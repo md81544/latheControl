@@ -6,7 +6,7 @@
 
 TEST_CASE( "Step once" )
 {
-    mgo::MockGpio gpio( true );
+    mgo::MockGpio gpio( false );
     mgo::StepperMotor motor( gpio, 1'000 );
     motor.goToStep( 3 );
     motor.wait();
@@ -16,7 +16,7 @@ TEST_CASE( "Step once" )
 
 TEST_CASE( "Stop motor" )
 {
-    mgo::MockGpio gpio( true );
+    mgo::MockGpio gpio( false );
     mgo::StepperMotor motor( gpio, 1'000 );
     // High number of steps:
     motor.goToStep( 1'000'000 );
