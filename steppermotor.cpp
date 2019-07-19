@@ -16,6 +16,7 @@ StepperMotor::StepperMotor(
     std::thread t( [&]()
     {
         long delay = 500; // usecs, TODO
+        Direction oldDirection = Direction::forward;
         for(;;)
         {
             {   // scope for lock_guard
@@ -37,12 +38,25 @@ StepperMotor::StepperMotor(
                 }
                 if( m_targetStep != m_currentStep )
                 {
+                    if ( oldDirection != m_direction )
+                    {
+                        m_gpio.setReversePin( 
+                            m_direction == Direction::forward ?
+                                PinState::low : PinState::high
+                            );
+                    }
                     // Do step, assuming just forward for now
                     m_gpio.setStepPin( PinState::high );
                     m_gpio.delayMicroSeconds( delay );
                     m_gpio.setStepPin( PinState::low );
-
-                    ++m_currentStep; // TOOD, direction
+                    if ( m_targetStep < m_currentStep )
+                    {
+                        --m_currentStep;
+                    }
+                    else
+                    {
+                        ++m_currentStep;
+                    }
                     if ( m_currentStep == m_targetStep )
                     {
                         m_busy = false;
@@ -84,6 +98,11 @@ void StepperMotor::goToStep( long step )
     {
         return;
     }
+    m_direction = Direction::forward;
+    if ( step < m_currentStep )
+    {
+        m_direction = Direction::reverse;
+    }
     m_busy = true;
     m_targetStep = step;
 }
@@ -114,6 +133,11 @@ void StepperMotor::wait()
 bool StepperMotor::isRunning()
 {
     return m_busy;
+}
+
+Direction StepperMotor::getDirection()
+{
+    return m_direction;
 }
 
 } // end namespace
