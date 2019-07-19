@@ -27,3 +27,12 @@ TEST_CASE( "Stop motor" )
     REQUIRE( ! motor.isRunning() );
     REQUIRE( motor.getCurrentStep() > 0 );
 }
+
+TEST_CASE( "Stop stopped motor" )
+{
+    mgo::MockGpio gpio( false );
+    mgo::StepperMotor motor( gpio, 1'000 );
+    motor.stop();
+    motor.wait();
+    REQUIRE( ! motor.isRunning() );
+}
