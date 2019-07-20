@@ -127,9 +127,22 @@ void StepperMotor::setRpm( double rpm )
 {
     // m_delay (in usecs) is used twice per thread loop
     std::lock_guard<std::mutex> mtx( m_mtx );
+    if ( rpm < 0.1 )
+    {
+        // Arbitrarily anything lower than this
+        // and we stop/
+        m_stop = true;
+        return;
+    }
     m_delay = std::round( 500'000.0 /
             ( static_cast<double>( m_stepsPerRevolution ) * ( rpm / 60.0 ) )
         );
+    if ( m_delay < 10 )
+    {
+        // Avoid very small delay values as the stepper
+        // motor won't be able to keep up
+        m_delay = 10;
+    }
 }
 
 int StepperMotor::getDelay()
