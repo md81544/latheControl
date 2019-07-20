@@ -27,7 +27,10 @@ public:
     // Go to a specific step
     void goToStep( long step );
     // Set motor speed
-    void setSpeedPercent( int percent );
+    void setRpm( double rpm );
+    // Get current delay value. Can't think of a
+    // purpose for this apart from unit testing :)
+    int getDelay();
     // Stop any motion
     void stop();
     // Block until the current operation completes
@@ -41,6 +44,7 @@ private:
     std::atomic<bool>      m_busy{ false };
     std::atomic<long>      m_currentStep{ 0 };
     std::atomic<bool>      m_stop{ false };
+    std::atomic<int>       m_delay{ 500 }; // usecs
     std::atomic<Direction> m_direction{ Direction::forward };
     // lock should be taken before any code outside the
     // background thread changes any member variables

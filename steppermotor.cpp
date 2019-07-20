@@ -1,6 +1,7 @@
 #include "steppermotor.h"
 
 #include <cassert>
+#include <cmath>
 
 namespace mgo
 {
@@ -15,8 +16,8 @@ StepperMotor::StepperMotor(
     // Start the thread
     std::thread t( [&]()
     {
-        long delay = 500; // usecs, TODO
         Direction oldDirection = Direction::forward;
+        int delay;
         for(;;)
         {
             {   // scope for lock_guard
@@ -47,7 +48,7 @@ StepperMotor::StepperMotor(
                     }
                     // Do step, assuming just forward for now
                     m_gpio.setStepPin( PinState::high );
-                    m_gpio.delayMicroSeconds( delay );
+                    m_gpio.delayMicroSeconds( m_delay );
                     m_gpio.setStepPin( PinState::low );
                     if ( m_targetStep < m_currentStep )
                     {
@@ -62,6 +63,7 @@ StepperMotor::StepperMotor(
                         m_busy = false;
                     }
                 }
+                delay = m_delay; // remember delay value while in mtx scope
             } // scope for lock_guard
             // We always perform the second delay regardless of
             // whether we're stepping, to give the main thread a
@@ -113,8 +115,19 @@ void StepperMotor::stop()
     m_stop = true;
 }
 
-void StepperMotor::setSpeedPercent( int /* speed */ )
+void StepperMotor::setRpm( double rpm )
 {
+    // m_delay (in usecs) is used twice per thread loop
+    std::lock_guard<std::mutex> mtx( m_mtx );
+    m_delay = std::round( 500'000.0 /
+            ( static_cast<double>( m_stepsPerRevolution ) * ( rpm / 60.0 ) )
+        );
+}
+
+int StepperMotor::getDelay()
+{
+    std::lock_guard<std::mutex> mtx( m_mtx );
+    return m_delay;
 }
 
 long StepperMotor::getCurrentStep()

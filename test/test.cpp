@@ -78,3 +78,20 @@ TEST_CASE( "Check direction" )
     motor.wait();
     REQUIRE( motor.getDirection() == mgo::Direction::forward );
 }
+
+TEST_CASE( "Test RPM" )
+{
+    mgo::MockGpio gpio( false );
+    mgo::StepperMotor motor( gpio, 1'000 );
+    motor.setRpm( 60 );
+    // That's one revolution per second, and we've set steps per
+    // revolution to be 1000, so delay (which is used TWICE per
+    // thread loop), should be 500 usecs
+    REQUIRE( motor.getDelay() == 500 );
+    motor.setRpm( 120 );
+    REQUIRE( motor.getDelay() == 250 );
+    motor.setRpm( 2000 );
+    REQUIRE( motor.getDelay() == 15 );
+    motor.setRpm( 1 );
+    REQUIRE( motor.getDelay() == 30'000 );
+}
