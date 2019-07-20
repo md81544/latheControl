@@ -21,9 +21,9 @@ class StepperMotor
 public:
     StepperMotor( IGpio& gpio, long stepsPerRevolution );
     ~StepperMotor();
-    bool isRunning();
-    Direction getDirection();
-    long getCurrentStep();
+    bool isRunning() const;
+    Direction getDirection() const;
+    long getCurrentStep() const;
     // Go to a specific step
     void goToStep( long step );
     // Set motor speed

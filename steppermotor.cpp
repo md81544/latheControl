@@ -23,9 +23,9 @@ StepperMotor::StepperMotor(
     std::thread t( [&]()
     {
         Direction oldDirection = Direction::forward;
-        int delay;
         for(;;)
         {
+            int delay;
             {   // scope for lock_guard
                 // When in this scope we can assume all member
                 // variables can be written and read from freely
@@ -151,7 +151,7 @@ int StepperMotor::getDelay()
     return m_delay;
 }
 
-long StepperMotor::getCurrentStep()
+long StepperMotor::getCurrentStep() const
 {
     return m_currentStep;
 }
@@ -164,12 +164,12 @@ void StepperMotor::wait()
     }
 }
 
-bool StepperMotor::isRunning()
+bool StepperMotor::isRunning() const
 {
     return m_busy;
 }
 
-Direction StepperMotor::getDirection()
+Direction StepperMotor::getDirection() const
 {
     return m_direction;
 }
