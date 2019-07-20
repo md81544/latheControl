@@ -11,7 +11,7 @@ int main()
 
         mgo::StepperMotor motor( gpio, 1'000 );
 
-        motor.setRpm( 360 );
+        motor.setRpm( 240 );
 
         long step = 250;
         for ( int n = 0; n < 4; ++n )
@@ -30,6 +30,11 @@ int main()
             gpio.delayMicroSeconds( 1'000'000 );
             step -= 250;
         }
+
+        motor.setRpm( 10 );
+        motor.goToStep( 1'000 );
+        motor.wait();
+
         return 0;
     }
     catch( const std::exception& e )

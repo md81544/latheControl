@@ -51,6 +51,7 @@ StepperMotor::StepperMotor(
                             m_direction == Direction::forward ?
                                 PinState::low : PinState::high
                             );
+                        oldDirection = m_direction;
                     }
                     // Do step, assuming just forward for now
                     m_gpio.setStepPin( PinState::high );

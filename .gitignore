@@ -32,3 +32,6 @@
 *.app
 test/test
 els
+
+# Other
+tags
