@@ -95,3 +95,25 @@ TEST_CASE( "Test RPM" )
     motor.setRpm( 1 );
     REQUIRE( motor.getDelay() == 30'000 );
 }
+
+TEST_CASE( "Change target step while busy" )
+{
+    mgo::MockGpio gpio( false );
+    mgo::StepperMotor motor( gpio, 1'000 );
+    motor.setRpm( 2'000 );
+    motor.goToStep( 1'000 );
+    gpio.delayMicroSeconds( 1'000 );
+    motor.goToStep( 2'000 );
+    motor.wait();
+    // Check the second "go to" was ignored
+    REQUIRE(motor.getCurrentStep() == 1'000);
+}
+
+TEST_CASE( "Testing" )
+{
+    mgo::MockGpio gpio( false );
+    mgo::StepperMotor motor( gpio, 1'000 );
+    motor.setRpm( 2'000 );
+    motor.goToStep( 1'000 );
+    motor.wait();
+}

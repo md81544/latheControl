@@ -47,16 +47,18 @@ StepperMotor::StepperMotor(
                 {
                     if ( oldDirection != m_direction )
                     {
+                        // Ensure direction pin is set correctly
                         m_gpio.setReversePin(
                             m_direction == Direction::forward ?
                                 PinState::low : PinState::high
                             );
                         oldDirection = m_direction;
                     }
-                    // Do step, assuming just forward for now
+                    // Do step pulse
                     m_gpio.setStepPin( PinState::high );
                     m_gpio.delayMicroSeconds( m_delay );
                     m_gpio.setStepPin( PinState::low );
+                    // Second part of the delay is at the end of the loop
                     if ( m_targetStep < m_currentStep )
                     {
                         --m_currentStep;
@@ -74,7 +76,7 @@ StepperMotor::StepperMotor(
             } // scope for lock_guard
             // We always perform the second delay regardless of
             // whether we're stepping, to give the main thread a
-            // chance to grab the mutex
+            // chance to grab the mutex if needed
             m_gpio.delayMicroSeconds( delay );
         }
     } // thread end
@@ -96,11 +98,10 @@ void StepperMotor::goToStep( long step )
     std::lock_guard<std::mutex> mtx( m_mtx );
     if ( m_busy )
     {
-        // TODO... throw?
-        // Or allow the target to just be
-        // changed?
-        // For now it's just ignored if the
-        // stepper motor is busy
+        // We ignore any request to go to a location if
+        // we are already stepping. The client code can
+        // issue a stop if needed before changing target
+        // step location.
         return;
     }
     if ( m_currentStep == step )
