@@ -90,10 +90,21 @@ TEST_CASE( "Test RPM" )
     REQUIRE( motor.getDelay() == 500 );
     motor.setRpm( 120 );
     REQUIRE( motor.getDelay() == 250 );
-    motor.setRpm( 2000 );
+    motor.setRpm( 2'000 );
     REQUIRE( motor.getDelay() == 15 );
     motor.setRpm( 1 );
     REQUIRE( motor.getDelay() == 30'000 );
+}
+
+TEST_CASE( "Test RPM Limits" )
+{
+    mgo::MockGpio gpio( false );
+    mgo::StepperMotor motor( gpio, 1'000 );
+    motor.setRpm( 0 );
+    motor.goToStep( 10 ); // Shouldn't take infinite time :)
+    motor.wait();
+    motor.setRpm( 9'999'999 ); // bit too fast :)
+    REQUIRE( motor.getDelay() > 5 );
 }
 
 TEST_CASE( "Change target step while busy" )
