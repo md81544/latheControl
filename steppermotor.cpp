@@ -13,6 +13,12 @@ StepperMotor::StepperMotor(
     :   m_gpio( gpio ),
         m_stepsPerRevolution( stepsPerRevolution )
 {
+    // Ensure we start off with the right direction
+    m_gpio.setReversePin(
+        m_direction == Direction::forward ?
+            PinState::low : PinState::high
+        );
+
     // Start the thread
     std::thread t( [&]()
     {
@@ -41,7 +47,7 @@ StepperMotor::StepperMotor(
                 {
                     if ( oldDirection != m_direction )
                     {
-                        m_gpio.setReversePin( 
+                        m_gpio.setReversePin(
                             m_direction == Direction::forward ?
                                 PinState::low : PinState::high
                             );

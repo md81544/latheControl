@@ -11,6 +11,8 @@ int main()
 
         mgo::StepperMotor motor( gpio, 1'000 );
 
+        motor.setRpm( 360 );
+
         long step = 250;
         for ( int n = 0; n < 4; ++n )
         {
@@ -18,6 +20,15 @@ int main()
             motor.wait();
             gpio.delayMicroSeconds( 1'000'000 );
             step += 250;
+        }
+        step -= 500;
+        motor.setRpm( 30 );
+        for ( int n = 0; n < 4; ++n )
+        {
+            motor.goToStep( step );
+            motor.wait();
+            gpio.delayMicroSeconds( 1'000'000 );
+            step -= 250;
         }
         return 0;
     }
