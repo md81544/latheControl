@@ -44,7 +44,7 @@ private:
     std::atomic<bool>      m_busy{ false };
     std::atomic<long>      m_currentStep{ 0 };
     std::atomic<bool>      m_stop{ false };
-    std::atomic<int>       m_delay{ 500 }; // usecs
+    std::atomic<int>       m_delay{ 500 }; // µsecs
     std::atomic<Direction> m_direction{ Direction::forward };
     // lock should be taken before any code outside the
     // background thread changes any member variables

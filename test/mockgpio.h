@@ -10,6 +10,8 @@
 #include "../igpio.h"
 
 #include <unistd.h>
+#include <atomic>
+#include <thread>
 
 namespace mgo
 {
@@ -26,6 +28,11 @@ public:
     virtual ~MockGpio()
     {
         print( "Terminating GPIO library" );
+        m_terminate = true;
+        if ( m_thread.joinable() )
+        {
+            m_thread.join();
+        }
     }
 
     void setStepPin( PinState state ) override
@@ -61,11 +68,29 @@ public:
     }
 
     void setRotaryEncoderCallback(
-        std::function<void(int)>
-        ) override{} // TODO
+        std::function<void(int)> cb
+        ) override
+    {
+        m_callback = cb;
+        std::thread t([&]()
+            {
+                for(;;)
+                {
+                    if( m_terminate ) break;
+                    usleep( 10'000 );
+                    m_callback( 1 );
+                }
+            }
+            );
+        t.swap( m_thread );
+
+    }
 
 private:
     bool m_print;
+    std::atomic<bool> m_terminate{ false };
+    std::thread m_thread;
+    std::function<void(int)> m_callback;
 
     void print( const std::string& msg )
     {
