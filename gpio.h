@@ -26,6 +26,9 @@ public:
     void setStepPin( PinState ) override;
     void setReversePin( PinState ) override;
     void delayMicroSeconds( long usecs ) override;
+    void setRotaryEncoderCallback(
+        std::function<void(int)>
+        ) override{} // TODO
 private:
     int m_stepPin;
     int m_reversePin;

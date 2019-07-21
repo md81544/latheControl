@@ -5,6 +5,8 @@
 // interface to allow the StepperMotor
 // class to be used for tests
 
+#include <functional>
+
 namespace mgo
 {
 
@@ -22,7 +24,10 @@ class IGpio
 public:
     virtual void setStepPin( PinState ) = 0;
     virtual void setReversePin( PinState ) = 0;
-    virtual void delayMicroSeconds( long usecs ) = 0;
+    virtual void delayMicroSeconds( long ) = 0;
+    virtual void setRotaryEncoderCallback(
+        std::function<void(int)>
+        ) = 0;
 };
 
 } // end namespace

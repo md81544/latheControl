@@ -60,6 +60,10 @@ public:
         usleep( usecs );
     }
 
+    void setRotaryEncoderCallback(
+        std::function<void(int)>
+        ) override{} // TODO
+
 private:
     bool m_print;
 
