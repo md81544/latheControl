@@ -2,6 +2,20 @@
 #include "gpio.h"
 
 #include <iostream>
+#include <functional>
+
+std::function<void(int, int, uint32_t, void*)> cb;
+
+void callback(
+    int gpio,
+    int level,
+    uint32_t tick,
+    void* user
+    )
+{
+    cb( gpio, level, tick, user );
+}
+
 
 int main()
 {
@@ -10,30 +24,68 @@ int main()
         mgo::Gpio gpio( 8, 7 ); // step pin, reverse pin
 
         mgo::StepperMotor motor( gpio, 1'000 );
+        motor.setRpm( 2'000 );
 
-        motor.setRpm( 240 );
+        // Experimental code, to put in a class------------------
+        int pinA = 23;
+        int pinB = 24;
 
-        long step = 250;
-        for ( int n = 0; n < 4; ++n )
+        gpioSetMode(pinA, PI_INPUT);
+        gpioSetMode(pinB, PI_INPUT);
+
+        // pull up is needed as encoder common is grounded
+        gpioSetPullUpDown(pinA, PI_PUD_UP);
+        gpioSetPullUpDown(pinB, PI_PUD_UP);
+
+        auto cbLambda = [&]( int gpio, int level, uint32_t /* tick */, void * )
         {
-            motor.goToStep( step );
-            motor.wait();
-            gpio.delayMicroSeconds( 1'000'000 );
-            step += 250;
-        }
-        step -= 500;
-        motor.setRpm( 30 );
-        for ( int n = 0; n < 4; ++n )
-        {
-            motor.goToStep( step );
-            motor.wait();
-            gpio.delayMicroSeconds( 1'000'000 );
-            step -= 250;
-        }
+            static int lastPin{ 0 };
+            static int levA;
+            static int levB;
+            static int pos{ 0 };
+            static int oldPos{ 0 };
 
-        motor.setRpm( 10 );
-        motor.goToStep( 1'000 );
-        motor.wait();
+            if ( gpio == pinA )
+            {
+                levA = level;
+            }
+            else
+            {
+                levB = level;
+            }
+            if ( gpio != lastPin ) // debounce
+            {
+                lastPin = gpio;
+                if ( gpio == pinA && level == 1 )
+                {
+                    if( levB ) ++pos;
+                }
+                else if ( gpio == pinB && level == 1 )
+                {
+                    if( levA ) --pos;
+                }
+                if ( pos != oldPos )
+                {
+                    // Move the motor accordingly. Motor = 1,000 steps
+                    // per rev, rotary encoder = 100 pulses per rev
+                    motor.goToStep( pos * 10 );
+                    // we don't wait for the motor as we are in a callback
+                    // and timing is critical
+                    oldPos = pos;
+                }
+            }
+        };
+        cb = cbLambda;
+
+        gpioSetAlertFuncEx( pinA, callback, nullptr );
+        gpioSetAlertFuncEx( pinB, callback, nullptr );
+
+        std::cout << "Press ENTER to terminate " << std::endl;
+        std::cin.ignore();
+
+        gpioSetAlertFuncEx(pinA, 0, nullptr);
+        gpioSetAlertFuncEx(pinB, 0, nullptr);
+        // Experimental code, to put in a class------------------
 
         return 0;
     }
