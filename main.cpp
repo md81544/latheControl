@@ -1,8 +1,10 @@
 #include "steppermotor.h"
 #include "gpio.h"
+#include "curses.h"
 
 #include <iostream>
 #include <functional>
+#include <string>
 
 std::function<void(int, int, uint32_t, void*)> cb;
 
@@ -24,9 +26,101 @@ int main()
         mgo::Gpio gpio( 8, 7 ); // step pin, reverse pin
 
         mgo::StepperMotor motor( gpio, 1'000 );
-        motor.setRpm( 2'000 );
+        int speed = 400;
+        long targetStep = 0;
+        long memory = 0;
+        motor.setRpm( speed );
 
-        // Experimental code, to put in a class------------------
+        mgo::Curses::Window wnd;
+        wnd.cursor( mgo::Curses::Cursor::off );
+        wnd << "Press up/down to set speed\n";
+        wnd << "Press left and right arrow to move\n";
+        wnd << "Press space to stop\n";
+        wnd << "Press M to remember position, and R to return to it\n";
+        wnd << "Escape quits the application\n";
+        wnd.refresh();
+        wnd.setBlocking( mgo::Curses::Input::nonBlocking );
+        std::string status;
+        bool moving = false;
+        bool quit = false;
+        while( ! quit )
+        {
+            int key = wnd.getKey();
+            switch( key )
+            {
+                case -1:
+                {
+                    break;
+                }
+                case 27:
+                {
+                    moving = false;
+                    quit = true;
+                    break;
+                }
+                case 259:
+                {
+                    if( speed < 2000 ) speed += 20;
+                    break;
+                }
+                case 258:
+                {
+                    if( speed > 20 ) speed -= 20;
+                    break;
+                }
+                case 260:
+                {
+                    status = "moving left";
+                    moving = true;
+                    targetStep = 10'000'000;
+                    break;
+                }
+                case 77:  // M
+                case 109: // m
+                {
+                    memory = motor.getCurrentStep();
+                    break;
+                }
+                case 82:  // R
+                case 114: // r
+                {
+                    status = "Returning";
+                    moving = true;
+                    targetStep = memory;
+                    break;
+                }
+                case 261:
+                {
+                    status = "moving right";
+                    moving = true;
+                    targetStep = -10'000'000;
+                    break;
+                }
+                default:
+                {
+                    status = "stopped";
+                    moving = false;
+                    break;
+                }
+            }
+
+            motor.setRpm( speed );
+            if( !moving )
+            {
+                motor.stop();
+            }
+            else
+            {
+                motor.goToStep( targetStep );
+            }
+
+            wnd.move( 5, 0 );
+            wnd << "Status: " << key  << " " << status << "  " << speed << " rpm"
+                "                                \n";
+            wnd.refresh();
+        }
+
+        /* Experimental code, to put in a class------------------
         int pinA = 23;
         int pinB = 24;
 
@@ -37,7 +131,7 @@ int main()
         gpioSetPullUpDown(pinA, PI_PUD_UP);
         gpioSetPullUpDown(pinB, PI_PUD_UP);
 
-        auto cbLambda = [&]( int gpio, int level, uint32_t /* tick */, void * )
+        auto cbLambda = [&]( int gpio, int level, uint32_t, void * )
         {
             static int lastPin{ 0 };
             static int levA;
@@ -86,6 +180,7 @@ int main()
         gpioSetAlertFuncEx(pinA, 0, nullptr);
         gpioSetAlertFuncEx(pinB, 0, nullptr);
         // Experimental code, to put in a class------------------
+        */
 
         return 0;
     }
