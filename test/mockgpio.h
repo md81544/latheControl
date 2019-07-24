@@ -67,25 +67,6 @@ public:
         usleep( usecs );
     }
 
-    void setRotaryEncoderCallback(
-        std::function<void(int)> cb
-        ) override
-    {
-        m_callback = cb;
-        std::thread t([&]()
-            {
-                for(;;)
-                {
-                    if( m_terminate ) break;
-                    usleep( 10'000 );
-                    m_callback( 1 );
-                }
-            }
-            );
-        t.swap( m_thread );
-
-    }
-
 private:
     bool m_print;
     std::atomic<bool> m_terminate{ false };

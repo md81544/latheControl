@@ -129,20 +129,3 @@ TEST_CASE( "Testing" )
     motor.wait();
 }
 
-TEST_CASE( "Rotary Encoder Callback" )
-{
-    bool calledBack = false;
-    mgo::MockGpio gpio( false );
-    // Once we set a callback, the rotary encoder checker in
-    // the GPIO object should call us back each time the encoder
-    // is moved. The mock object just calls back each 10 ms.
-    gpio.setRotaryEncoderCallback(
-        [ &calledBack ]( int )
-        {
-            calledBack = true;
-        }
-        );
-    gpio.delayMicroSeconds( 100'000 );
-    REQUIRE( calledBack == true );
-}
-

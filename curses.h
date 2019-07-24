@@ -1,7 +1,6 @@
 #pragma once
 
 // Simple wrapper for ncurses.
-// TODO: colours, mouse
 
 #include <ncurses.h>
 

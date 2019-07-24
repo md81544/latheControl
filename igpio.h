@@ -25,9 +25,6 @@ public:
     virtual void setStepPin( PinState ) = 0;
     virtual void setReversePin( PinState ) = 0;
     virtual void delayMicroSeconds( long ) = 0;
-    virtual void setRotaryEncoderCallback(
-        std::function<void(int)>
-        ) = 0;
 };
 
 } // end namespace
