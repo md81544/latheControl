@@ -1,1 +1,0 @@
-[ ] Don't need to mock out StepperMotor - just pass adapter for talking to the hardware (or not)
