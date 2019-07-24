@@ -26,7 +26,7 @@ int main()
         mgo::Gpio gpio( 8, 7 ); // step pin, reverse pin
 
         mgo::StepperMotor motor( gpio, 1'000 );
-        int speed = 400;
+        int speed = 200;
         long targetStep = 0;
         long memory = 0;
         motor.setRpm( speed );
@@ -60,7 +60,7 @@ int main()
                 }
                 case 259:
                 {
-                    if( speed < 2000 ) speed += 20;
+                    if( speed < 900 ) speed += 20;
                     break;
                 }
                 case 258:
@@ -68,7 +68,7 @@ int main()
                     if( speed > 20 ) speed -= 20;
                     break;
                 }
-                case 260:
+                case 260: // Left arrow
                 {
                     status = "moving left";
                     moving = true;
@@ -89,11 +89,23 @@ int main()
                     targetStep = memory;
                     break;
                 }
-                case 261:
+                case 261: // Right arrow
                 {
                     status = "moving right";
                     moving = true;
                     targetStep = -10'000'000;
+                    break;
+                }
+                case 44: // comma (<) - nudge left
+                {
+                    moving = true;
+                    targetStep = motor.getCurrentStep() + 50;
+                    break;
+                }
+                case 46: // full stop (>) - nudge right
+                {
+                    moving = true;
+                    targetStep = motor.getCurrentStep() - 50;
                     break;
                 }
                 default:
@@ -115,8 +127,11 @@ int main()
             }
 
             wnd.move( 5, 0 );
-            wnd << "Status: " << key  << " " << status << "  " << speed << " rpm"
+            wnd << "Status: " << " " << status << "  " << speed << " rpm"
                 "                                \n";
+            wnd << "Target: " << targetStep << ", current: "
+                << motor.getCurrentStep() << "                       \n";
+            wnd << "Memory: " << memory << "                  \n";
             wnd.refresh();
         }
 
