@@ -39,7 +39,9 @@ void Ui::run()
             {
                 break;
             }
-            case 27:
+            case 81:  // Q
+            case 113: // q
+            case 27:  // Esc
             {
                 moving = false;
                 quit = true;
