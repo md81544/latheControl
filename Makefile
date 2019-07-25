@@ -1,11 +1,23 @@
-.PHONY: fake, clean
+CC      = g++
+CFLAGS  = -Wall -Wextra -Wpedantic -Werror -g
+LIBS = -lncurses -pthread
 
-els: main.cpp steppermotor.cpp gpio.cpp curses.cpp steppermotor.h igpio.h gpio.h curses.h
-	g++ -std=c++14 -o els -Wall -Wextra -Wpedantic -Werror *.cpp -lpthread -lpigpio -lncurses
+SOURCES := $(wildcard *.cpp)
+FAKESOURCES := $(shell ls *.cpp | grep -v gpio.cpp)
 
-fake: main.cpp steppermotor.cpp gpio.cpp curses.cpp steppermotor.h igpio.h test/mockgpio.h curses.h
-	g++ -DFAKE -std=c++14 -o els -Wall -Wextra -Wpedantic -Werror curses.cpp main.cpp steppermotor.cpp ui.cpp -lpthread -lncurses
+BINARY = els
 
+.PHONY: all clean fake
+
+all: $(BINARY)
+
+
+$(BINARY): $(SOURCES)
+	$(CC) $(CFLAGS) $(SOURCES) -o $(BINARY) $(LIBS) -lpigpio
+
+# Make binary without need for pigpio lib for testing UI
+fake: $(SOURCES)
+	$(CC) -DFAKE $(CFLAGS) $(FAKESOURCES) -o $(BINARY) $(LIBS)
 
 clean:
-	rm els
+	rm -f $(BINARY)
