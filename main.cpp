@@ -1,5 +1,5 @@
 #ifdef FAKE
-#include "test/mockgpio.h"
+#include "mockgpio.h"
 #else
 #include "gpio.h"
 #endif

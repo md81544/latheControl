@@ -7,7 +7,7 @@
 // but mocked. Includes ability to write
 // diags messages.
 
-#include "../igpio.h"
+#include "igpio.h"
 
 #include <unistd.h>
 #include <atomic>

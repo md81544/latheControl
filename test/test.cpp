@@ -1,5 +1,5 @@
 #include "mockgpio.h"
-#include "../steppermotor.h"
+#include "steppermotor.h"
 
 #define CATCH_CONFIG_MAIN
 #include "catch.hpp"
