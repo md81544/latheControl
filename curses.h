@@ -22,7 +22,8 @@ enum class Colours : short int
 {
     greenOnBlack = 1,
     redOnBlack,
-    yellowOnBlack
+    yellowOnBlack,
+    whiteOnBlack
 };
 
 class Window

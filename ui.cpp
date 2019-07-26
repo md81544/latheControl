@@ -28,7 +28,7 @@ void Ui::run()
     wnd << "Escape quits the application\n";
     wnd.refresh();
     wnd.setBlocking( Input::nonBlocking );
-    std::string status;
+    std::string status = "stopped";
     bool moving = false;
     bool quit = false;
     int key;
@@ -54,11 +54,13 @@ void Ui::run()
                 }
                 case 259:
                 {
+                    beep();
                     if( speed < 900 ) speed += 20;
                     break;
                 }
                 case 258:
                 {
+                    beep();
                     if( speed > 20 ) speed -= 20;
                     break;
                 }
@@ -78,7 +80,9 @@ void Ui::run()
                 case 82:  // R
                 case 114: // r
                 {
-                    status = "Returning";
+                    motor.stop();
+                    motor.wait();
+                    status = "returning";
                     moving = true;
                     targetStep = memory;
                     break;
@@ -120,6 +124,7 @@ void Ui::run()
         {
             motor.goToStep( targetStep );
         }
+        if ( !motor.isRunning() ) status = "stopped";
 
         std::string targetString = std::to_string( targetStep );
         if ( targetStep ==  100'000'000 ) targetString = "<----";
@@ -132,7 +137,7 @@ void Ui::run()
         wnd << "Target:  " << targetString << ", current: "
             << motor.getCurrentStep() << "                       \n\n";
         wnd.setColour( Colours::redOnBlack );
-        wnd << "Memory: " << memory << "                  \n";
+        wnd << "Memory:  " << memory << "                  \n";
         wnd.setColour( Colours::greenOnBlack );
         wnd.refresh();
     }
