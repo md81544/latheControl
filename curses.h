@@ -18,7 +18,12 @@ enum class Cursor{ off, on };
 enum class Input{ blocking, nonBlocking };
 enum class Scrolling{ on, off };
 
-
+enum class Colours : short int
+{
+    greenOnBlack = 1,
+    redOnBlack,
+    yellowOnBlack
+};
 
 class Window
 {
@@ -38,6 +43,7 @@ public:
     void setBlocking(mgo::Curses::Input block);
     void cursor(mgo::Curses::Cursor cursor);
     void scrolling(mgo::Curses::Scrolling scrolling);
+    void setColour( Colours );
 private:
     void printOss();
     std::ostringstream m_oss;

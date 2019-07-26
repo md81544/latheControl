@@ -57,6 +57,12 @@ mgo::Curses::Window::Window()
     {
         throw std::runtime_error( "Error initialising ncurses" );
     }
+    ::start_color();
+    // TODO, remove hard coding / add colour setting functionality?
+    ::init_pair( static_cast<short>(Colours::greenOnBlack),  COLOR_GREEN,  COLOR_BLACK );
+    ::init_pair( static_cast<short>(Colours::redOnBlack),    COLOR_RED,    COLOR_BLACK );
+    ::init_pair( static_cast<short>(Colours::yellowOnBlack), COLOR_WHITE, COLOR_BLACK );
+    ::attron(COLOR_PAIR( Colours::greenOnBlack ));
     ::raw();
     ::keypad( stdscr, TRUE );
     ::noecho();
@@ -175,3 +181,9 @@ void mgo::Curses::Window::scrolling(mgo::Curses::Scrolling scrolling)
     }
 }
 
+void mgo::Curses::Window::setColour( Colours pair )
+{
+    printOss(); // write out any existing text
+    ::attron(COLOR_PAIR( pair ) );
+    
+}
