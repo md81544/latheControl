@@ -2,8 +2,42 @@
 #include "curses.h"
 #include "steppermotor.h"
 
+#include <cmath>
+#include <sstream>
+#include <string>
+
+namespace
+{
+
+// This converts steps to real-world units.
+// We can also negate the value depending
+// on motor orientation (on a lathe the z-
+// axis decreases in value towards the chuck)
+std::string cnv( int steps )
+{
+    double mm = steps * -0.001;
+    if( std::abs( mm ) < 0.001 )
+    {
+        mm = 0.0;
+    }
+    std::ostringstream oss;
+    oss.precision(3);
+    oss << std::fixed << mm << " mm";
+    return oss.str();
+}
+
+} // end anonymous namespace
+
 namespace mgo
 {
+
+// TODO:
+//   show memory stores on screen, use 1-5 to select
+//   then M/R work on that one.
+//   T (tailstock) - mandatory set before operation
+//   C (chuck) - mandatory set before operation
+//   Add a "shutdown" command at the end to return
+//   to "T" so we start in a known position?
 
 Ui::Ui( IGpio& gpio )
     : m_gpio( gpio )
@@ -124,21 +158,29 @@ void Ui::run()
         {
             motor.goToStep( targetStep );
         }
-        if ( !motor.isRunning() ) status = "stopped";
+        if ( !motor.isRunning() )
+        {
+            status = "stopped";
+        }
 
-        std::string targetString = std::to_string( targetStep );
+        std::string targetString = cnv( targetStep );
+
         if ( targetStep ==  100'000'000 ) targetString = "<----";
         if ( targetStep == -100'000'000 ) targetString = "---->";
 
         wnd.move( 6, 0 );
         wnd.setColour( Colours::yellowOnBlack );
-        wnd << "Status: " << " " << status << "  " << speed << " rpm"
-            "                                \n";
-        wnd << "Target:  " << targetString << ", current: "
-            << motor.getCurrentStep() << "                       \n\n";
+        wnd.clearToEol();
+        wnd << "Status:  " << " " << status << "  " << speed << " rpm\n";
+        wnd.clearToEol();
+        wnd << "Target:   " << targetString << ", current: "
+            << cnv( motor.getCurrentStep() ) << "\n\n";
         wnd.setColour( Colours::redOnBlack );
-        wnd << "Memory:  " << memory << "                  \n";
+        wnd.clearToEol();
+        wnd << "Memory:   " << cnv( memory ) << "\n";
         wnd.setColour( Colours::greenOnBlack );
+        wnd.clearToEol();
+        wnd << "Keypress: " << key << "\n";
         wnd.refresh();
     }
 }
