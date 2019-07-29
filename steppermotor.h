@@ -40,7 +40,7 @@ private:
     long m_stepsPerRevolution;
     std::thread m_thread;
     std::atomic<bool>      m_terminateThread{ false };
-    std::atomic<long>      m_targetStep;
+    std::atomic<long>      m_targetStep{ 0 };
     std::atomic<bool>      m_busy{ false };
     std::atomic<long>      m_currentStep{ 0 };
     std::atomic<bool>      m_stop{ false };
