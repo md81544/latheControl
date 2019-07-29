@@ -53,6 +53,7 @@ void Ui::run()
     m_wnd << "Up/down to set speed\n";
     m_wnd << "Left and right arrow to move, comma and stop to nudge\n";
     m_wnd << "Space to stop\n";
+    m_wnd << "1 - 4 selects memory store to use\n";
     m_wnd << "M to remember position, and R to return to it\n";
     m_wnd << "Escape or Q to quit\n";
     m_wnd.setBlocking( Input::nonBlocking );
@@ -75,6 +76,9 @@ void Ui::run()
         }
 
         updateDisplay();
+        // Small delay just to avoid the loop spinning
+        // at full speed
+        m_gpio.delayMicroSeconds( 5'000 );
     }
 }
 
@@ -178,7 +182,7 @@ void Ui::updateDisplay()
     if ( m_targetStep == INF_LEFT  ) targetString = "<----";
     if ( m_targetStep == INF_RIGHT ) targetString = "---->";
 
-    m_wnd.move( 6, 0 );
+    m_wnd.move( 7, 0 );
     m_wnd.setColour( Colours::yellowOnBlack );
     m_wnd.clearToEol();
     m_wnd << "Status:   "  << std::setw(3) << std::left << m_speed << " rpm   ";
@@ -207,9 +211,12 @@ void Ui::updateDisplay()
     highlightCheck( 3 );
     m_wnd << cnv( m_memory.at( 3 ) ) << "\n\n";
 
+    /* Uncomment for debug / getting key codes:
     m_wnd.setColour( Colours::greenOnBlack );
     m_wnd.clearToEol();
     m_wnd << "Keypress: " << m_keyPressed << "\n";
+    */
+
     m_wnd.refresh();
 }
 
