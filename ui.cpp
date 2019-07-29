@@ -114,13 +114,6 @@ void Ui::processKeyPress()
                 if( m_speed > 20 ) m_speed -= 20;
                 break;
             }
-            case 260: // Left arrow
-            {
-                m_status = "moving left";
-                m_moving = true;
-                m_targetStep = INF_LEFT;
-                break;
-            }
             case 77:  // M
             case 109: // m
             {
@@ -137,8 +130,25 @@ void Ui::processKeyPress()
                 m_targetStep = m_memory.at( m_currentMemory );
                 break;
             }
+            case 260: // Left arrow
+            {
+                if ( m_moving && m_targetStep < m_motor->getCurrentStep() )
+                {
+                    m_motor->stop();
+                    m_motor->wait();
+                }
+                m_status = "moving left";
+                m_moving = true;
+                m_targetStep = INF_LEFT;
+                break;
+            }
             case 261: // Right arrow
             {
+                if ( m_moving && m_targetStep > m_motor->getCurrentStep() )
+                {
+                    m_motor->stop();
+                    m_motor->wait();
+                }
                 m_status = "moving right";
                 m_moving = true;
                 m_targetStep = INF_RIGHT;
@@ -191,25 +201,24 @@ void Ui::updateDisplay()
     m_wnd << "Target:   " << targetString << ", current: "
         << cnv( m_motor->getCurrentStep() ) << "\n\n";
 
+    // Memory labels
     m_wnd.clearToEol();
-    highlightCheck( 0 );
-    m_wnd << "Memory 1     ";
-    highlightCheck( 1 );
-    m_wnd << "Memory 2     ";
-    highlightCheck( 2 );
-    m_wnd << "Memory 3     ";
-    highlightCheck( 3 );
-    m_wnd << "Memory 4\n";
-    m_wnd.clearToEol();
+    for ( int n = 0; n < 4; ++n )
+    {
+        std::string label = "Memory " + std::to_string( n + 1 );
+        highlightCheck( n );
+        m_wnd << std::setw(12) << label;
+    }
+    m_wnd << "\n";
 
-    highlightCheck( 0 );
-    m_wnd << cnv( m_memory.at( 0 ) ) << "     ";
-    highlightCheck( 1 );
-    m_wnd << cnv( m_memory.at( 1 ) ) << "     ";
-    highlightCheck( 2 );
-    m_wnd << cnv( m_memory.at( 2 ) ) << "     ";
-    highlightCheck( 3 );
-    m_wnd << cnv( m_memory.at( 3 ) ) << "\n\n";
+    // Memory values
+    m_wnd.clearToEol();
+    for ( int n = 0; n < 4; ++n )
+    {
+        highlightCheck( n );
+        m_wnd << std::setw(12) << std::left
+            << cnv( m_memory.at( n ) );
+    }
 
     /* Uncomment for debug / getting key codes:
     m_wnd.setColour( Colours::greenOnBlack );
