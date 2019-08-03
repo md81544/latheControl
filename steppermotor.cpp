@@ -156,6 +156,12 @@ long StepperMotor::getCurrentStep() const
     return m_currentStep;
 }
 
+void StepperMotor::zeroPosition()
+{
+    std::lock_guard<std::mutex> mtx( m_mtx );
+    m_currentStep = 0;
+}
+
 void StepperMotor::wait()
 {
     while ( m_busy )

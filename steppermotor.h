@@ -24,6 +24,8 @@ public:
     bool isRunning() const;
     Direction getDirection() const;
     long getCurrentStep() const;
+    // Call the current step position zero
+    void zeroPosition();
     // Go to a specific step
     void goToStep( long step );
     // Set motor speed

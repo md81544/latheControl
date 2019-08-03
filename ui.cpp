@@ -174,6 +174,76 @@ void Ui::processKeyPress()
                 m_currentMemory = static_cast<std::size_t>( m_keyPressed - 49 );
                 break;
             }
+
+            // Speed presets with Function keys
+
+            case 265: // F1
+            {
+                m_speed = 20;
+                break;
+            }
+            case 266: // F2
+            {
+                m_speed = 40;
+                break;
+            }
+            case 267: // F3
+            {
+                m_speed = 80;
+                break;
+            }
+            case 268: // F4
+            {
+                m_speed = 120;
+                break;
+            }
+            case 269: // F5
+            {
+                m_speed = 200;
+                break;
+            }
+            case 270: // F6
+            {
+                m_speed = 300;
+                break;
+            }
+            case 271: // F7
+            {
+                m_speed = 400;
+                break;
+            }
+            case 272: // F8
+            {
+                m_speed = 500;
+                break;
+            }
+            case 273: // F9
+            {
+                m_speed = 600;
+                break;
+            }
+            case 274: // F10
+            {
+                m_speed = 700;
+                break;
+            }
+            case 275: // F11
+            {
+                m_speed = 800;
+                break;
+            }
+            case 276: // F12
+            {
+                m_speed = 900;
+                break;
+            }
+
+            case 122: // z
+            case 90:  // Z
+            {
+                // call the current position zero
+                m_motor->zeroPosition();
+            }
             default:
             {
                 m_status = "stopped";
@@ -220,11 +290,11 @@ void Ui::updateDisplay()
             << cnv( m_memory.at( n ) );
     }
 
-    /* Uncomment for debug / getting key codes:
-    m_wnd.setColour( Colours::greenOnBlack );
-    m_wnd.clearToEol();
-    m_wnd << "Keypress: " << m_keyPressed << "\n";
-    */
+    // Uncomment for debug / getting key codes:
+    // m_wnd << "\n\n";
+    // m_wnd.setColour( Colours::greenOnBlack );
+    // m_wnd.clearToEol();
+    // m_wnd << "Keypress: " << m_keyPressed << "\n";
 
     m_wnd.refresh();
 }
