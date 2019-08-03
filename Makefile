@@ -1,5 +1,5 @@
 CC      = g++
-CFLAGS  = -Wall -Wextra -Wpedantic -Werror -g
+CFLAGS  = -std=c++14 -Wall -Wextra -Wpedantic -Werror -g
 LIBS = -lncurses -pthread
 
 SOURCES := $(wildcard *.cpp)
