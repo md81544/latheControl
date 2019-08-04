@@ -241,8 +241,13 @@ void Ui::processKeyPress()
             case 122: // z
             case 90:  // Z
             {
-                // call the current position zero
+                // Zeroing can be confusing unless we
+                // force a stop (i.e. the motor might start
+                // as we are no longer at the target position)
+                m_motor->stop();
+                m_targetStep = 0;
                 m_motor->zeroPosition();
+                m_moving = false;
                 break;
             }
             default:
