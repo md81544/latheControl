@@ -243,6 +243,7 @@ void Ui::processKeyPress()
             {
                 // call the current position zero
                 m_motor->zeroPosition();
+                break;
             }
             default:
             {
