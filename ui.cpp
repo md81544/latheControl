@@ -264,11 +264,13 @@ void Ui::processKeyPress()
             }
             case 42: // asterisk, shutdown
             {
+                #ifndef FAKE
                 m_motor->stop();
                 m_motor->wait();
                 m_moving = false;
                 m_quit = true;
                 system( "sudo shutdown -h now" );
+                #endif
                 break;
             }
             default:
