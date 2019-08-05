@@ -104,14 +104,26 @@ void Ui::processKeyPress()
             }
             case 259:
             {
-                beep();
-                if( m_speed < 900 ) m_speed += 20;
+                if( m_speed < 20 )
+                {
+                    m_speed = 20;
+                }
+                else
+                {
+                    if( m_speed < 900 ) m_speed += 20;
+                }
                 break;
             }
             case 258:
             {
-                beep();
-                if( m_speed > 20 ) m_speed -= 20;
+                if( m_speed > 20 )
+                {
+                    m_speed -= 20;
+                }
+                else
+                {
+                    if (m_speed > 1) --m_speed;
+                }
                 break;
             }
             case 77:  // M
@@ -248,6 +260,15 @@ void Ui::processKeyPress()
                 m_targetStep = 0;
                 m_motor->zeroPosition();
                 m_moving = false;
+                break;
+            }
+            case 42: // asterisk, shutdown
+            {
+                m_motor->stop();
+                m_motor->wait();
+                m_moving = false;
+                m_quit = true;
+                system( "sudo shutdown -h now" );
                 break;
             }
             default:
