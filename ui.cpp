@@ -50,11 +50,12 @@ void Ui::run()
     m_motor->setRpm( m_speed );
 
     m_wnd.cursor( Cursor::off );
-    m_wnd << "Up/down to set speed\n";
+    m_wnd << "Up/down (or Fn keys) to set speed\n";
     m_wnd << "Left and right arrow to move, comma and stop to nudge\n";
     m_wnd << "Space to stop\n";
     m_wnd << "1 - 4 selects memory store to use\n";
-    m_wnd << "M to remember position, and R to return to it\n";
+    m_wnd << "M to remember position, and R to return to it (shift-F "
+             "for fast return)\n";
     m_wnd << "Escape or Q to quit\n";
     m_wnd.setBlocking( Input::nonBlocking );
     while( ! m_quit )
