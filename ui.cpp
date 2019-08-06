@@ -73,6 +73,11 @@ void Ui::run()
         if ( !m_motor->isRunning() )
         {
             m_status = "stopped";
+            if( m_fastReturning )
+            {
+                m_speed = m_oldSpeed;
+                m_fastReturning = false;
+            }
         }
 
         updateDisplay();
@@ -250,6 +255,19 @@ void Ui::processKeyPress()
                 break;
             }
 
+            case 70:  // F (note uppercase ONLY)
+            {
+                // Fast return to point
+                m_oldSpeed = m_speed;
+                m_speed = 900;
+                m_fastReturning = true;
+                m_motor->stop();
+                m_motor->wait();
+                m_status = "fast returning";
+                m_moving = true;
+                m_targetStep = m_memory.at( m_currentMemory );
+                break;
+            }
             case 122: // z
             case 90:  // Z
             {
