@@ -288,6 +288,7 @@ void Ui::processKeyPress()
                 m_motor->wait();
                 m_moving = false;
                 m_quit = true;
+                m_motor.reset();
                 system( "sudo shutdown -h now" );
                 #endif
                 break;
