@@ -175,12 +175,22 @@ void Ui::processKeyPress()
             }
             case 44: // comma (<) - nudge left
             {
+                if ( m_moving )
+                {
+                    m_motor->stop();
+                    m_motor->wait();
+                }
                 m_moving = true;
                 m_targetStep = m_motor->getCurrentStep() + 25;
                 break;
             }
             case 46: // full stop (>) - nudge right
             {
+                if ( m_moving )
+                {
+                    m_motor->stop();
+                    m_motor->wait();
+                }
                 m_moving = true;
                 m_targetStep = m_motor->getCurrentStep() - 25;
                 break;
