@@ -22,15 +22,16 @@ class Gpio : public IGpio
 {
 public:
     Gpio(
-        int stepPin,
-        int reversePin,
-        int rotaryEncoderPinA,
-        int rotaryEncoderPinB
+        int   stepPin,
+        int   reversePin,
+        float rotaryEncoderGearing,
+        int   rotaryEncoderPinA,
+        int   rotaryEncoderPinB
         );
     virtual ~Gpio();
     void setStepPin( PinState ) override;
     void setReversePin( PinState ) override;
-    float getRpm() override
+    float getRpm() override;
     float getPositionDegrees() override;
     RotationDirection getRotationDirection() override;
     // Blocks until spingle is at position:
@@ -42,6 +43,7 @@ public:
 private:
     int m_stepPin;
     int m_reversePin;
+    float m_rotaryEncoderGearing;
     int m_rotaryEncoderPinA;
     int m_rotaryEncoderPinB;
 };

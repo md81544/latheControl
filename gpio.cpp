@@ -10,20 +10,22 @@ namespace
 
 int pinA{ 0 };
 int pinB{ 0 };
+int levelA{ 0 };
+int levelB{ 0 };
 int lastPin;
-Direction direction;
+mgo::RotationDirection direction;
 
-void callback(int pin, int level, uint32_t tick)
+void callback( int pin, int level, uint32_t /* tick */ )
 {
     using namespace mgo;
 
-    if (gpio == mygpioA)
+    if ( pin == pinA )
     {
-        levA = level;
+        levelA = level;
     }
     else
     {
-        levB = level;
+        levelB = level;
     }
 
     if ( pin != lastPin) // debounce 
@@ -31,11 +33,11 @@ void callback(int pin, int level, uint32_t tick)
         lastPin = pin;
         if ( pin == pinA && level == 1 )
         {
-            if ( levB ) direction = mgo::Direction::normal;
+            if ( levelB ) direction = RotationDirection::normal;
         }
         else if ( pin == pinB && level == 1 )
         {
-            if (levA) direction = Direction::reversed;
+            if (levelA) direction = RotationDirection::reversed;
         }
     }
 }
@@ -46,13 +48,15 @@ namespace mgo
 {
 
 Gpio::Gpio(
-    int stepPin,
-    int reversePin,
-    int rotaryEncoderPinA,
-    int rotaryEncoderPinB
+    int   stepPin,
+    int   reversePin,
+    float rotaryEncoderGearing,
+    int   rotaryEncoderPinA,
+    int   rotaryEncoderPinB
     )
     :   m_stepPin( stepPin ),
         m_reversePin( reversePin ),
+        m_rotaryEncoderGearing( rotaryEncoderGearing ),
         m_rotaryEncoderPinA( rotaryEncoderPinA ),
         m_rotaryEncoderPinB( rotaryEncoderPinB )
 {
@@ -96,19 +100,19 @@ float Gpio::getRpm()
     return 1'000.f;
 }
 
-float getPositionDegrees()
+float Gpio::getPositionDegrees()
 {
     // TODO
     return 0.f;
 }
 
-RotationDirection getRotationDirection()
+RotationDirection Gpio::getRotationDirection()
 {
     // TODO
     return RotationDirection::normal;
 }
 
-void  callbackAtPositionDegrees(
+void  Gpio::callbackAtPositionDegrees(
     float, // targetDegrees,
     std::function<void()> cb
     )

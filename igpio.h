@@ -32,7 +32,6 @@ public:
     virtual void setStepPin( PinState ) = 0;
     virtual void setReversePin( PinState ) = 0;
     // Support for rotary encoder:
-    virtual void  setRotaryEncoderGearing( float ) = 0;
     virtual float getRpm() = 0;
     virtual float getPositionDegrees() = 0;
     virtual void  callbackAtPositionDegrees( float, std::function<void()> ) = 0;
