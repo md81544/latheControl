@@ -13,33 +13,51 @@ int pinB{ 0 };
 int levelA{ 0 };
 int levelB{ 0 };
 int lastPin;
+
+uint32_t tickCount{ 0 };
+uint32_t lastTick;
+uint32_t tickDiffTotal{ 0 };
 mgo::RotationDirection direction;
+float averageTickDelta{ 0.f };
 
 void callback( int pin, int level, uint32_t /* tick */ )
 {
     using namespace mgo;
 
-    if ( pin == pinA )
+    // Check rotation periodically
+    if( tickCount == 0 )
     {
-        levelA = level;
-    }
-    else
-    {
-        levelB = level;
+        if ( pin == pinA )
+        {
+            levelA = level;
+        }
+        else
+        {
+            levelB = level;
+        }
+
+        if ( pin != lastPin) // debounce 
+        {
+            lastPin = pin;
+            if ( pin == pinA && level == 1 )
+            {
+                if ( levelB ) direction = RotationDirection::normal;
+            }
+            else if ( pin == pinB && level == 1 )
+            {
+                if (levelA) direction = RotationDirection::reversed;
+            }
+        }
     }
 
-    if ( pin != lastPin) // debounce 
+    ++tickCount;
+    if( tickCount == 1000 ) // arbitrary bucket size
     {
-        lastPin = pin;
-        if ( pin == pinA && level == 1 )
-        {
-            if ( levelB ) direction = RotationDirection::normal;
-        }
-        else if ( pin == pinB && level == 1 )
-        {
-            if (levelA) direction = RotationDirection::reversed;
-        }
+        tickCount = 0;
+        averageTickDelta = tickDiffTotal / 1000.f;
+        tickDiffTotal = 0;
     }
+    tickDiffTotal += tick - lastTick; // don't need to worry about wrap
 }
 
 } // end anonymous namespace
@@ -50,12 +68,14 @@ namespace mgo
 Gpio::Gpio(
     int   stepPin,
     int   reversePin,
+    int   rotaryEncoderPulsesPerRevolution,
     float rotaryEncoderGearing,
     int   rotaryEncoderPinA,
     int   rotaryEncoderPinB
     )
     :   m_stepPin( stepPin ),
         m_reversePin( reversePin ),
+        m_rotaryEncoderPulsesPerRevolution( rotaryEncoderPulsesPerRevolution ),
         m_rotaryEncoderGearing( rotaryEncoderGearing ),
         m_rotaryEncoderPinA( rotaryEncoderPinA ),
         m_rotaryEncoderPinB( rotaryEncoderPinB )
@@ -96,20 +116,28 @@ void Gpio::setReversePin( PinState state )
 
 float Gpio::getRpm()
 {
-    // TODO
-    return 1'000.f;
+    // ticks are in microseconds
+    return  60'000'000 /
+    ( averageTickDelta * m_rotaryEncoderPulsesPerRevolution * m_rotaryEncoderGearing );
 }
 
 float Gpio::getPositionDegrees()
 {
-    // TODO
+    // There will be latency in this as the pigpio thread which calls back to
+    // the callback in the anonymous namespace above only does so approx once
+    // per millisecond (it batches up the callbacks and calls us maybe thirty
+    // times per batch). So this shouldn't be relied upon - use the
+    // callbackAtPositionDegrees() function which extrapolates out based on
+    // previous data.
+
+    // TODO - probably remove this function?
+
     return 0.f;
 }
 
 RotationDirection Gpio::getRotationDirection()
 {
-    // TODO
-    return RotationDirection::normal;
+    return direction;
 }
 
 void  Gpio::callbackAtPositionDegrees(

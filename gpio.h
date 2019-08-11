@@ -24,6 +24,7 @@ public:
     Gpio(
         int   stepPin,
         int   reversePin,
+        int   rotaryEncoderPulsesPerRevolution,
         float rotaryEncoderGearing,
         int   rotaryEncoderPinA,
         int   rotaryEncoderPinB
@@ -43,6 +44,7 @@ public:
 private:
     int m_stepPin;
     int m_reversePin;
+    int m_rotaryEncoderPulsesPerRevolution; // this is per *R*E* revolution
     float m_rotaryEncoderGearing;
     int m_rotaryEncoderPinA;
     int m_rotaryEncoderPinB;
