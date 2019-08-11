@@ -53,7 +53,7 @@ void Ui::run()
     m_wnd << "Up/down (or Fn keys) to set speed\n";
     m_wnd << "Left and right arrow to move, comma and stop to nudge\n";
     m_wnd << "Space to stop\n";
-    m_wnd << "1 - 4 selects memory store to use\n";
+    m_wnd << "Square brackets [ ] select memory store to use\n";
     m_wnd << "M to remember position, and R to return to it (shift-F "
              "for fast return)\n";
     m_wnd << "Escape or Q to quit\n";
@@ -184,12 +184,20 @@ void Ui::processKeyPress()
                 m_targetStep = m_motor->getCurrentStep() - 50;
                 break;
             }
-            case 49: // 1
-            case 50: // 2
-            case 51: // 3
-            case 52: // 4
+            case 91: // [
             {
-                m_currentMemory = static_cast<std::size_t>( m_keyPressed - 49 );
+                if( m_currentMemory > 0 )
+                {
+                    --m_currentMemory;
+                }
+                break;
+            }
+            case 93: // ]
+            {
+                if( m_currentMemory < m_memory.size() - 1 )
+                {
+                    ++m_currentMemory;
+                }
                 break;
             }
 
