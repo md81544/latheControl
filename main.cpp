@@ -15,7 +15,8 @@ int main()
         #ifdef FAKE
             mgo::MockGpio gpio( false );
         #else
-            mgo::Gpio gpio( 8, 7 ); // step pin, reverse pin
+            // parameters are: step pin, reverse pin, rotary encoder A, r.e. B
+            mgo::Gpio gpio( 8, 7, 23, 24 );
         #endif
 
         mgo::Ui ui( gpio );

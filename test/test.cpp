@@ -117,15 +117,18 @@ TEST_CASE( "Change target step while busy" )
     motor.goToStep( 2'000 );
     motor.wait();
     // Check the second "go to" was ignored
-    REQUIRE(motor.getCurrentStep() == 1'000);
+    REQUIRE( motor.getCurrentStep() == 1'000 );
 }
 
-TEST_CASE( "Testing" )
+TEST_CASE( "Rotary Encoder RPM" )
 {
     mgo::MockGpio gpio( false );
-    mgo::StepperMotor motor( gpio, 1'000 );
-    motor.setRpm( 2'000 );
-    motor.goToStep( 1'000 );
-    motor.wait();
+    // getRpm returns data from a rotary encoder which
+    // is attached to the spindle
+    float rpm = gpio.getRpm();
+    REQUIRE( rpm == 1'000.f );
+    gpio.setRotaryEncoderGearing( 0.5f );
+    rpm = gpio.getRpm();
+    REQUIRE( rpm == 500.f );
 }
 

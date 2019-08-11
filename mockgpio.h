@@ -1,17 +1,15 @@
 #pragma once
 
-#include <iostream>
-#include <sstream>
-
 // Concrete implementation of the IGpio ABC,
 // but mocked. Includes ability to write
 // diags messages.
 
 #include "igpio.h"
 
+#include <iostream>
+#include <sstream>
 #include <unistd.h>
-#include <atomic>
-#include <thread>
+
 
 namespace mgo
 {
@@ -28,11 +26,6 @@ public:
     virtual ~MockGpio()
     {
         print( "Terminating GPIO library" );
-        m_terminate = true;
-        if ( m_thread.joinable() )
-        {
-            m_thread.join();
-        }
     }
 
     void setStepPin( PinState state ) override
@@ -59,6 +52,34 @@ public:
         }
     }
 
+    virtual void  setRotaryEncoderGearing( float gearing )
+    {
+        m_gearing = gearing;
+    }
+
+    float getRpm() override
+    {
+        return m_gearing * 1'000.f;
+    }
+
+    float getPositionDegrees() override
+    {
+        return 0.f;
+    }
+
+    RotationDirection getRotationDirection() override
+    {
+        return RotationDirection::normal;
+    }
+
+    void  callbackAtPositionDegrees(
+        float, // targetDegrees,
+        std::function<void()> cb
+        )
+    {
+        cb();
+    }
+
     void delayMicroSeconds( long usecs ) override
     {
         std::ostringstream oss;
@@ -68,12 +89,9 @@ public:
     }
 
 private:
-    bool m_print;
-    std::atomic<bool> m_terminate{ false };
-    std::thread m_thread;
-    std::function<void(int)> m_callback;
-
-    void print( const std::string& msg )
+    bool  m_print;
+    float m_gearing{ 1.f };
+    void  print( const std::string& msg )
     {
         if( m_print )
         {

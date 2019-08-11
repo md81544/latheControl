@@ -21,14 +21,29 @@ public:
 class Gpio : public IGpio
 {
 public:
-    Gpio( int stepPin, int reversePin );
+    Gpio(
+        int stepPin,
+        int reversePin,
+        int rotaryEncoderPinA,
+        int rotaryEncoderPinB
+        );
     virtual ~Gpio();
     void setStepPin( PinState ) override;
     void setReversePin( PinState ) override;
+    float getRpm() override
+    float getPositionDegrees() override;
+    RotationDirection getRotationDirection() override;
+    // Blocks until spingle is at position:
+    void  callbackAtPositionDegrees(
+        float, // targetDegrees,
+        std::function<void()> cb
+        ) override;
     void delayMicroSeconds( long usecs ) override;
 private:
     int m_stepPin;
     int m_reversePin;
+    int m_rotaryEncoderPinA;
+    int m_rotaryEncoderPinB;
 };
 
 } // end namespace
