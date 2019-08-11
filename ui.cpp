@@ -2,13 +2,14 @@
 
 #include <cmath>
 #include <iomanip>
+#include <limits>
 #include <sstream>
 
 namespace
 {
 
-const int INF_RIGHT = -100'000'000;
-const int INF_LEFT  =  100'000'000;
+const int INF_RIGHT = std::numeric_limits<int>::min();
+const int INF_LEFT  = std::numeric_limits<int>::max(); 
 
 // This converts steps to real-world units.
 // We can also negate the value depending
@@ -175,13 +176,13 @@ void Ui::processKeyPress()
             case 44: // comma (<) - nudge left
             {
                 m_moving = true;
-                m_targetStep = m_motor->getCurrentStep() + 50;
+                m_targetStep = m_motor->getCurrentStep() + 25;
                 break;
             }
             case 46: // full stop (>) - nudge right
             {
                 m_moving = true;
-                m_targetStep = m_motor->getCurrentStep() - 50;
+                m_targetStep = m_motor->getCurrentStep() - 25;
                 break;
             }
             case 91: // [
