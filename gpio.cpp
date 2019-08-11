@@ -20,7 +20,7 @@ uint32_t tickDiffTotal{ 0 };
 mgo::RotationDirection direction;
 float averageTickDelta{ 0.f };
 
-void callback( int pin, int level, uint32_t /* tick */ )
+void callback( int pin, int level, uint32_t tick )
 {
     using namespace mgo;
 
