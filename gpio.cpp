@@ -36,7 +36,7 @@ void callback( int pin, int level, uint32_t tick )
             levelB = level;
         }
 
-        if ( pin != lastPin) // debounce 
+        if ( pin != lastPin) // debounce
         {
             lastPin = pin;
             if ( pin == pinA && level == 1 )
@@ -50,14 +50,20 @@ void callback( int pin, int level, uint32_t tick )
         }
     }
 
-    ++tickCount;
-    if( tickCount == 1000 ) // arbitrary bucket size
+    // Note - we only count one pin's pulses, and measure from
+    // rising edge to next rising edge
+    if( pin == pinA && level == 1 )
     {
-        tickCount = 0;
-        averageTickDelta = tickDiffTotal / 1000.f;
-        tickDiffTotal = 0;
+        ++tickCount;
+        if( tickCount == 1000 ) // arbitrary bucket size
+        {
+            tickCount = 0;
+            averageTickDelta = tickDiffTotal / 1000.f;
+            tickDiffTotal = 0;
+        }
+        tickDiffTotal += tick - lastTick; // don't need to worry about wrap
+        lastTick = tick;
     }
-    tickDiffTotal += tick - lastTick; // don't need to worry about wrap
 }
 
 } // end anonymous namespace
@@ -116,18 +122,7 @@ void Gpio::setReversePin( PinState state )
 
 float Gpio::getRpm()
 {
-    // TODO: this is working, but returning a higher value than
-    // expected. The averageTickDelta appears to be around 20µs for
-    // what is meant to be 500rpm on the spindle.
-    //
-    // So the calculation below is right, but the average tick delta
-    // value seems too low..?
-    //
-    // To investigate - so TODO: add logging, and perhaps log all values
-    // for a brief period of time (e.g. one 1,000 value bucket?
-    // Also verify that the rotary encoder actually IS doing 2000 p/r.
-    //
-    // Also the rpm value appears to stop updating above a certain speed:
+    // TODO: the rpm value appears to stop updating above a certain speed:
     // investigate whether we are still getting called back, or does the rotary
     // encoder need to be driven more slowly (i.e. lower the gearing)?
     //
