@@ -19,10 +19,23 @@ uint32_t lastTick;
 uint32_t tickDiffTotal{ 0 };
 mgo::RotationDirection direction;
 float averageTickDelta{ 0.f };
+bool firstCalls{ true };
 
 void callback( int pin, int level, uint32_t tick )
 {
     using namespace mgo;
+
+    if ( firstCalls )
+    {
+        // We ignnore the first few calls until we can
+        // set the previous tick
+        if( pin == painA && level == 1 )
+        {
+            lastTick = tick;
+            firstCalls = false;
+        }
+        return;
+    }
 
     // Check rotation periodically
     if( tickCount == 0 )
