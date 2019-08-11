@@ -4,8 +4,8 @@ namespace
 {
 
 // Although it hasn't been implemented as a singleton,
-// we cannot have more than one instance of the Gpio
-// object, so it's safe to use these static variables
+// logically we cannot have more than one instance of the
+// Gpio object,so it's safe to use these static variables
 // and functions to make the callback processing easier
 
 int pinA{ 0 };
@@ -20,7 +20,7 @@ uint32_t tickDiffTotal{ 0 };
 mgo::RotationDirection direction;
 float averageTickDelta{ 0.f };
 
-void callback( int pin, int level, uint32_t /* tick */ )
+void callback( int pin, int level, uint32_t tick )
 {
     using namespace mgo;
 
@@ -116,7 +116,22 @@ void Gpio::setReversePin( PinState state )
 
 float Gpio::getRpm()
 {
-    // ticks are in microseconds
+    // TODO: this is working, but returning a higher value than
+    // expected. The averageTickDelta appears to be around 20µs for
+    // what is meant to be 500rpm on the spindle.
+    //
+    // So the calculation below is right, but the average tick delta
+    // value seems too low..?
+    //
+    // To investigate - so TODO: add logging, and perhaps log all values
+    // for a brief period of time (e.g. one 1,000 value bucket?
+    // Also verify that the rotary encoder actually IS doing 2000 p/r.
+    //
+    // Also the rpm value appears to stop updating above a certain speed:
+    // investigate whether we are still getting called back, or does the rotary
+    // encoder need to be driven more slowly (i.e. lower the gearing)?
+    //
+    // Ticks are in microseconds
     return  60'000'000 /
     ( averageTickDelta * m_rotaryEncoderPulsesPerRevolution * m_rotaryEncoderGearing );
 }
