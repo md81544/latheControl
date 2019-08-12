@@ -102,6 +102,8 @@ Gpio::Gpio(
 
 Gpio::~Gpio()
 {
+    if( m_pinA != 0 ) gpioSetAlertFuncEx( m_pinA, nullptr, this);
+    if( m_pinB != 0 ) gpioSetAlertFuncEx( m_pinB, nullptr, this);
     gpioTerminate();
 }
 
@@ -127,6 +129,8 @@ void Gpio::setRotaryEncoderCallback(
     void* user
     )
 {
+    m_pinA = pinA;
+    m_pinB = pinB;
     // Set up callbacks for rotary encoder
     gpioSetMode( pinA, PI_INPUT );
     gpioSetMode( pinB, PI_INPUT );

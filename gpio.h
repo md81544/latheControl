@@ -43,6 +43,8 @@ public:
 private:
     int m_stepPin;
     int m_reversePin;
+    int m_pinA{ 0 };
+    int m_pinB{ 0 };
 };
 
 } // end namespace

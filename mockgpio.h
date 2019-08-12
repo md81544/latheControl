@@ -69,9 +69,17 @@ public:
             ).count();
     }
 
+    void stopRotaryEncoderCallback()
+    {
+        // class-specific function to allow us to stop the
+        // callbacker manually
+        print( "Stopping callbacker" );
+        m_terminate = true;
+    }
+
     void setRotaryEncoderCallback(
         int pinA,
-        int, // pinB,
+        int pinB,
         std::function<void( int, int, uint32_t, void* )> callback,
         void* userData
         ) override
@@ -91,7 +99,6 @@ public:
                             userData
                             );
                         std::this_thread::sleep_for( microseconds( 20 ) );
-                        /*
                         if( m_terminate ) break;
                         callback(
                             pinB,
@@ -116,7 +123,6 @@ public:
                             userData
                             );
                         std::this_thread::sleep_for( microseconds( 20 ) );
-                        */
                     }
                     catch( const std::exception& e )
                     {
@@ -124,6 +130,7 @@ public:
                         break;
                     }
                 }
+                print( "Callbacker thread ended" );
             } );
         m_callbacker.swap( t );
     }
