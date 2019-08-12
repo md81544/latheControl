@@ -36,7 +36,8 @@ public:
             int      level,
             uint32_t tick,
             void*    user
-            )> callback
+            )> callback,
+        void* userData
         ) override;
     void delayMicroSeconds( long usecs ) override;
 private:

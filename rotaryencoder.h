@@ -35,20 +35,33 @@ public:
         m_gpio.setRotaryEncoderCallback(
             m_pinA,
             m_pinB,
-            staticCallback
+            staticCallback,
+            this
             );
     }
+
     static void staticCallback(
         int      pin,
         int      level,
         uint32_t tick,
-        void*    user
+        void*    userData
         );
+
     void callback(
         int      pin,
         int      level,
         uint32_t tick
         );
+
+    float getRpm();
+    float getPositionDegrees();
+    RotationDirection getRotationDirection();
+    void  storeCurrentPosition();
+    void  callbackAtPosition(
+        uint32_t position,
+        std::function<void()> cb
+        );
+
 private:
     IGpio&   m_gpio;
     int      m_pinA;

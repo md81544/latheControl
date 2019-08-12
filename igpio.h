@@ -33,8 +33,9 @@ public:
             int      pin,
             int      level,
             uint32_t tick,
-            void*    user
-            )> callback
+            void*    userData
+            )> callback,
+        void* userData
         ) = 0;
     // General:
     virtual void delayMicroSeconds( long ) = 0;

@@ -7,10 +7,10 @@ void RotaryEncoder::staticCallback(
     int      pin,
     int      level,
     uint32_t tick,
-    void*    user
+    void*    userData
     )
 {
-    RotaryEncoder* self = reinterpret_cast<RotaryEncoder*>(user);
+    RotaryEncoder* self = reinterpret_cast<RotaryEncoder*>(userData);
     self->callback( pin, level, tick );
 }
 
@@ -75,4 +75,53 @@ void RotaryEncoder::callback(
     }
 }
 
+float RotaryEncoder::getRpm()
+{
+    // TODO: the rpm value appears to stop updating above a certain speed:
+    // investigate whether we are still getting called back, or does the rotary
+    // encoder need to be driven more slowly (i.e. lower the gearing)?
+    //
+    // Ticks are in microseconds
+    return 1.f;
+    return  60'000'000 /
+        ( m_averageTickDelta * m_pulsesPerRev * m_gearing );
+}
+
+float RotaryEncoder::getPositionDegrees()
+{
+    // There will be latency in this as the pigpio thread which calls back to
+    // the callback in the anonymous namespace above only does so approx once
+    // per millisecond (it batches up the callbacks and calls us maybe thirty
+    // times per batch). So this shouldn't be relied upon - use the
+    // callbackAtPositionDegrees() function which extrapolates out based on
+    // previous data.
+
+    // TODO - probably remove this function?
+
+    return 360.f * ( m_tickCount / m_pulsesPerSpindleRev );
+}
+
+RotationDirection RotaryEncoder::getRotationDirection()
+{
+    return m_direction;
+}
+
+void RotaryEncoder::storeCurrentPosition()
+{
+
+}
+
+void  RotaryEncoder::callbackAtPosition(
+    uint32_t /* position */,
+    std::function<void()> cb
+    )
+{
+    // Because there is a latency on the callback (the pigpio
+    // library batches up the callbacks), we interpolate here
+    // for better accuracy. We set the target degrees, wait for
+    // the tick for the last time we hit that position, then
+    // calculate how long we need to wait, then block for that
+    // time, then callback.
+    cb();
+}
 } // end namespace

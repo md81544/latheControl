@@ -6,8 +6,12 @@
 
 #include "igpio.h"
 
+#include <atomic>
+#include <chrono>
 #include <iostream>
+#include <functional>
 #include <sstream>
+#include <thread>
 #include <unistd.h>
 
 
@@ -26,6 +30,12 @@ public:
     virtual ~MockGpio()
     {
         print( "Terminating GPIO library" );
+        m_terminate = true;
+        if( m_callbacker.joinable() )
+        {
+            print( "Waiting for callbacker thread to terminate" );
+            m_callbacker.join();
+        }
     }
 
     void setStepPin( PinState state ) override
@@ -52,18 +62,70 @@ public:
         }
     }
 
+    uint32_t getTick()
+    {
+        return std::chrono::duration_cast< std::chrono::microseconds>(
+            std::chrono::system_clock::now().time_since_epoch()
+            ).count();
+    }
+
     void setRotaryEncoderCallback(
-        int, // pinA
-        int, // pinB
-        std::function<void(
-            int      pin,
-            int      level,
-            uint32_t tick,
-            void*    user
-            )> // callback
+        int pinA,
+        int, // pinB,
+        std::function<void( int, int, uint32_t, void* )> callback,
+        void* userData
         ) override
     {
-        // TODO set up a thread to callback regularly
+        auto t = std::thread( [&]()
+            {
+                using namespace std::chrono;
+                for(;;)
+                {
+                    try
+                    {
+                        if( m_terminate ) break;
+                        callback(
+                            pinA,
+                            1,
+                            getTick(),
+                            userData
+                            );
+                        std::this_thread::sleep_for( microseconds( 20 ) );
+                        /*
+                        if( m_terminate ) break;
+                        callback(
+                            pinB,
+                            1,
+                            getTick(),
+                            userData
+                            );
+                        std::this_thread::sleep_for( microseconds( 20 ) );
+                        if( m_terminate ) break;
+                        callback(
+                            pinA,
+                            0,
+                            getTick(),
+                            userData
+                            );
+                        std::this_thread::sleep_for( microseconds( 20 ) );
+                        if( m_terminate ) break;
+                        callback(
+                            pinB,
+                            0,
+                            getTick(),
+                            userData
+                            );
+                        std::this_thread::sleep_for( microseconds( 20 ) );
+                        */
+                    }
+                    catch( const std::exception& e )
+                    {
+                        print( e.what() );
+                        break;
+                    }
+                }
+            } );
+        m_callbacker.swap( t );
     }
 
     void delayMicroSeconds( long usecs ) override
@@ -75,8 +137,10 @@ public:
     }
 
 private:
+    std::atomic<bool> m_terminate{ false };
+    std::thread m_callbacker;
+
     bool  m_print;
-    float m_gearing{ 1.f };
     void  print( const std::string& msg )
     {
         if( m_print )

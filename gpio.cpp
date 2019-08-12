@@ -123,7 +123,8 @@ void Gpio::setRotaryEncoderCallback(
         int      level,
         uint32_t tick,
         void*    user
-        )> callback
+        )> callback,
+    void* user
     )
 {
     // Set up callbacks for rotary encoder
@@ -133,59 +134,11 @@ void Gpio::setRotaryEncoderCallback(
     gpioSetPullUpDown( pinA, PI_PUD_UP );
     gpioSetPullUpDown( pinB, PI_PUD_UP );
     // monitor encoder level changes
-    gpioSetAlertFunc( pinA, callback );
-    gpioSetAlertFunc( pinB, callback );
+    gpioSetAlertFuncEx( pinA, callback, user );
+    gpioSetAlertFuncEx( pinB, callback, user );
 }
 
 /*
-float Gpio::getRpm()
-{
-    // TODO: the rpm value appears to stop updating above a certain speed:
-    // investigate whether we are still getting called back, or does the rotary
-    // encoder need to be driven more slowly (i.e. lower the gearing)?
-    //
-    // Ticks are in microseconds
-    return  60'000'000 /
-    ( averageTickDelta * m_rotaryEncoderPulsesPerRevolution * m_rotaryEncoderGearing );
-}
-
-float Gpio::getPositionDegrees()
-{
-    // There will be latency in this as the pigpio thread which calls back to
-    // the callback in the anonymous namespace above only does so approx once
-    // per millisecond (it batches up the callbacks and calls us maybe thirty
-    // times per batch). So this shouldn't be relied upon - use the
-    // callbackAtPositionDegrees() function which extrapolates out based on
-    // previous data.
-
-    // TODO - probably remove this function?
-
-    return 360.f * ( tickCount / pulsesPerSpindleRevolution )
-}
-
-RotationDirection Gpio::getRotationDirection()
-{
-    return direction;
-}
-
-void Gpio::storeCurrentSpindlePosition()
-{
-
-}
-
-void  Gpio::callbackAtPositionDegrees(
-    float targetDegrees,
-    std::function<void()> cb
-    )
-{
-    // Because there is a latency on the callback (the pigpio
-    // library batches up the callbacks), we interpolate here
-    // for better accuracy. We set the target degrees, wait for
-    // the tick for the last time we hit that position, then
-    // calculate how long we need to wait, then block for that
-    // time, then callback.
-    cb();
-}
 */
 
 void Gpio::delayMicroSeconds( long usecs )
