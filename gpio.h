@@ -35,9 +35,10 @@ public:
     float getRpm() override;
     float getPositionDegrees() override;
     RotationDirection getRotationDirection() override;
-    // Blocks until spingle is at position:
-    void  callbackAtPositionDegrees(
-        float, // targetDegrees,
+    void storeCurrentSpindlePosition();
+    // Blocks until spindle is at position:
+    void  callbackAtPosition(
+        uint32_t tick
         std::function<void()> cb
         ) override;
     void delayMicroSeconds( long usecs ) override;

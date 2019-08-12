@@ -20,6 +20,7 @@ uint32_t tickDiffTotal{ 0 };
 mgo::RotationDirection direction;
 float averageTickDelta{ 0.f };
 bool firstCalls{ true };
+float pulsesPerSpindleRevolution;
 
 void callback( int pin, int level, uint32_t tick )
 {
@@ -68,11 +69,12 @@ void callback( int pin, int level, uint32_t tick )
     if( pin == pinA && level == 1 )
     {
         ++tickCount;
-        if( tickCount == 1000 ) // arbitrary bucket size
+        if( tickCount == static_cast<int>( pulsesPerSpindleRevolution ) )
         {
             tickCount = 0;
-            averageTickDelta = tickDiffTotal / 1000.f;
-            tickDiffTotal = 0;
+            averageTickDelta =
+                tickDiffTotal / pulsesPerSpindleRevolution;
+k            tickDiffTotal = 0;
         }
         tickDiffTotal += tick - lastTick; // don't need to worry about wrap
         lastTick = tick;
@@ -106,6 +108,8 @@ Gpio::Gpio(
 
     pinA = rotaryEncoderPinA;
     pinB = rotaryEncoderPinB;
+    pulsesPerSpindleRevolution =
+        rotaryEncoderGearing * rotaryEncoderPulsesPerRevolution;
 
     // Set up callbacks for rotary encoder
     gpioSetMode(m_rotaryEncoderPinA, PI_INPUT);
@@ -155,7 +159,7 @@ float Gpio::getPositionDegrees()
 
     // TODO - probably remove this function?
 
-    return 0.f;
+    return 360.f * ( tickCount / pulsesPerSpindleRevolution )
 }
 
 RotationDirection Gpio::getRotationDirection()
@@ -163,12 +167,22 @@ RotationDirection Gpio::getRotationDirection()
     return direction;
 }
 
+void Gpio::storeCurrentSpindlePosition()
+{
+    
+}
+
 void  Gpio::callbackAtPositionDegrees(
-    float, // targetDegrees,
+    float targetDegrees,
     std::function<void()> cb
     )
 {
-    // TODO
+    // Because there is a latency on the callback (the pigpio
+    // library batches up the callbacks), we interpolate here
+    // for better accuracy. We set the target degrees, wait for
+    // the tick for the last time we hit that position, then
+    // calculate how long we need to wait, then block for that
+    // time, then callback.
     cb();
 }
 

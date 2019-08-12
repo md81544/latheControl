@@ -34,7 +34,8 @@ public:
     // Support for rotary encoder:
     virtual float getRpm() = 0;
     virtual float getPositionDegrees() = 0;
-    virtual void  callbackAtPositionDegrees( float, std::function<void()> ) = 0;
+    virtual void  storeCurrentSpindlePosition() = 0;
+    virtual void  callbackAtPosition( uint32_t, std::function<void()> ) = 0;
     virtual RotationDirection getRotationDirection() = 0;
     // TODO
     // General:

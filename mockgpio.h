@@ -72,8 +72,12 @@ public:
         return RotationDirection::normal;
     }
 
-    void  callbackAtPositionDegrees(
-        float, // targetDegrees,
+    void storeCurrentSpindlePosition()
+    {
+    }
+
+    void  callbackAtPosition(
+        uint32_t, // tick count
         std::function<void()> cb
         )
     {
