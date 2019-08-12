@@ -84,7 +84,7 @@ public:
         void* userData
         ) override
     {
-        auto t = std::thread( [&]()
+        auto t = std::thread( [=]()
             {
                 using namespace std::chrono;
                 for(;;)

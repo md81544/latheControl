@@ -82,7 +82,6 @@ float RotaryEncoder::getRpm()
     // encoder need to be driven more slowly (i.e. lower the gearing)?
     //
     // Ticks are in microseconds
-    return 1.f;
     return  60'000'000 /
         ( m_averageTickDelta * m_pulsesPerRev * m_gearing );
 }
