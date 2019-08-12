@@ -7,8 +7,15 @@
 namespace mgo
 {
 
+enum class RotationDirection
+{
+    normal,
+    reversed
+};
+
 class RotaryEncoder
 {
+public:
     RotaryEncoder(
         IGpio&  gpio,
         int     pinA,
@@ -17,26 +24,47 @@ class RotaryEncoder
         float   gearing
         )
         :
+        m_gpio( gpio ),
+        m_pinA( pinA ),
+        m_pinB( pinB ),
         m_pulsesPerRev( pulsesPerRev ),
         m_gearing( gearing)
     {
-        // set up the callbacks
+        m_pulsesPerSpindleRev = m_pulsesPerRev * m_gearing;
+
+        m_gpio.setRotaryEncoderCallback(
+            m_pinA,
+            m_pinB,
+            staticCallback
+            );
     }
     static void staticCallback(
         int      pin,
         int      level,
         uint32_t tick,
-        void*    kuser
+        void*    user
         );
     void callback(
         int      pin,
         int      level,
         uint32_t tick
         );
-public:
 private:
-    int     m_pulsesPerRev;
-    float   m_gearing;
+    IGpio&   m_gpio;
+    int      m_pinA;
+    int      m_pinB;
+    int      m_levelA;
+    int      m_levelB;
+    int      m_lastPin{ 0 };
+    int      m_pulsesPerRev; // of RE
+    float    m_pulsesPerSpindleRev;
+    float    m_gearing;
+    bool     m_warmingUp{ true };
+    uint32_t m_lastTick;
+    uint32_t m_tickCount{ 0 };
+    uint32_t m_tickDiffTotal{ 0 };
+    float    m_averageTickDelta{ 0.f };
+    RotationDirection m_direction;
 };
 
 } // end namespace

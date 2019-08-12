@@ -7,7 +7,7 @@ void RotaryEncoder::staticCallback(
     int      pin,
     int      level,
     uint32_t tick,
-    void*    kuser
+    void*    user
     )
 {
     RotaryEncoder* self = reinterpret_cast<RotaryEncoder*>(user);
@@ -20,58 +20,58 @@ void RotaryEncoder::callback(
     uint32_t tick
     )
 {
-    if ( firstCalls )
+    if ( m_warmingUp )
     {
         // We ignnore the first few calls until we can
         // set the previous tick
-        if( pin == painA && level == 1 )
+        if( pin == m_pinA && level == 1 )
         {
-            lastTick = tick;
-            firstCalls = false;
+            m_lastTick = tick;
+            m_warmingUp = false;
         }
         return;
     }
 
     // Check rotation periodically
-    if( tickCount == 0 )
+    if( m_tickCount == 0 )
     {
-        if ( pin == pinA )
+        if ( pin == m_pinA )
         {
-            levelA = level;
+            m_levelA = level;
         }
         else
         {
-            levelB = level;
+            m_levelB = level;
         }
 
-        if ( pin != lastPin) // debounce
+        if ( pin != m_lastPin) // debounce
         {
-            lastPin = pin;
-            if ( pin == pinA && level == 1 )
+            m_lastPin = pin;
+            if ( pin == m_pinA && level == 1 )
             {
-                if ( levelB ) direction = RotationDirection::normal;
+                if ( m_levelB ) m_direction = RotationDirection::normal;
             }
-            else if ( pin == pinB && level == 1 )
+            else if ( pin == m_pinB && level == 1 )
             {
-                if (levelA) direction = RotationDirection::reversed;
+                if ( m_levelA ) m_direction = RotationDirection::reversed;
             }
         }
     }
 
     // Note - we only count one pin's pulses, and measure from
     // rising edge to next rising edge
-    if( pin == pinA && level == 1 )
+    if( pin == m_pinA && level == 1 )
     {
-        ++tickCount;
-        if( tickCount == static_cast<int>( pulsesPerSpindleRevolution ) )
+        ++m_tickCount;
+        if( m_tickCount == static_cast<uint32_t>( m_pulsesPerSpindleRev ) )
         {
-            tickCount = 0;
-            averageTickDelta =
-                tickDiffTotal / pulsesPerSpindleRevolution;
-k            tickDiffTotal = 0;
+            m_tickCount = 0;
+            m_averageTickDelta =
+                m_tickDiffTotal / m_pulsesPerSpindleRev;
+            m_tickDiffTotal = 0;
         }
-        tickDiffTotal += tick - lastTick; // don't need to worry about wrap
-        lastTick = tick;
+        m_tickDiffTotal += tick - m_lastTick; // don't need to worry about wrap
+        m_lastTick = tick;
     }
 }
 

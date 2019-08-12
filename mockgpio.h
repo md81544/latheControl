@@ -52,36 +52,18 @@ public:
         }
     }
 
-    virtual void  setRotaryEncoderGearing( float gearing )
+    void setRotaryEncoderCallback(
+        int, // pinA
+        int, // pinB
+        std::function<void(
+            int      pin,
+            int      level,
+            uint32_t tick,
+            void*    user
+            )> // callback
+        ) override
     {
-        m_gearing = gearing;
-    }
-
-    float getRpm() override
-    {
-        return m_gearing * 1'000.f;
-    }
-
-    float getPositionDegrees() override
-    {
-        return 0.f;
-    }
-
-    RotationDirection getRotationDirection() override
-    {
-        return RotationDirection::normal;
-    }
-
-    void storeCurrentSpindlePosition()
-    {
-    }
-
-    void  callbackAtPosition(
-        uint32_t, // tick count
-        std::function<void()> cb
-        )
-    {
-        cb();
+        // TODO set up a thread to callback regularly
     }
 
     void delayMicroSeconds( long usecs ) override

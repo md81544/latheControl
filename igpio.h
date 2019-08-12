@@ -16,12 +16,6 @@ enum class PinState
     low
 };
 
-enum class RotationDirection
-{
-    normal,
-    reversed
-};
-
 // concrete classes can initialise / terminate
 // the GPIO library in their ctors / dtors
 
@@ -32,12 +26,16 @@ public:
     virtual void setStepPin( PinState ) = 0;
     virtual void setReversePin( PinState ) = 0;
     // Support for rotary encoder:
-    virtual float getRpm() = 0;
-    virtual float getPositionDegrees() = 0;
-    virtual void  storeCurrentSpindlePosition() = 0;
-    virtual void  callbackAtPosition( uint32_t, std::function<void()> ) = 0;
-    virtual RotationDirection getRotationDirection() = 0;
-    // TODO
+    virtual void setRotaryEncoderCallback(
+        int pinA,
+        int pinB,
+        std::function<void(
+            int      pin,
+            int      level,
+            uint32_t tick,
+            void*    user
+            )> callback
+        ) = 0;
     // General:
     virtual void delayMicroSeconds( long ) = 0;
 };

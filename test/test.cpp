@@ -123,12 +123,6 @@ TEST_CASE( "Change target step while busy" )
 TEST_CASE( "Rotary Encoder RPM" )
 {
     mgo::MockGpio gpio( false );
-    // getRpm returns data from a rotary encoder which
-    // is attached to the spindle
-    float rpm = gpio.getRpm();
-    REQUIRE( rpm == 1'000.f );
-    gpio.setRotaryEncoderGearing( 0.5f );
-    rpm = gpio.getRpm();
-    REQUIRE( rpm == 500.f );
+    // TODO
 }
 

@@ -23,32 +23,25 @@ class Gpio : public IGpio
 public:
     Gpio(
         int   stepPin,
-        int   reversePin,
-        int   rotaryEncoderPulsesPerRevolution,
-        float rotaryEncoderGearing,
-        int   rotaryEncoderPinA,
-        int   rotaryEncoderPinB
+        int   reversePin
         );
     virtual ~Gpio();
     void setStepPin( PinState ) override;
     void setReversePin( PinState ) override;
-    float getRpm() override;
-    float getPositionDegrees() override;
-    RotationDirection getRotationDirection() override;
-    void storeCurrentSpindlePosition();
-    // Blocks until spindle is at position:
-    void  callbackAtPosition(
-        uint32_t tick
-        std::function<void()> cb
+    void setRotaryEncoderCallback(
+        int pinA,
+        int pinB,
+        std::function<void(
+            int      pin,
+            int      level,
+            uint32_t tick,
+            void*    user
+            )> callback
         ) override;
     void delayMicroSeconds( long usecs ) override;
 private:
     int m_stepPin;
     int m_reversePin;
-    int m_rotaryEncoderPulsesPerRevolution; // this is per *R*E* revolution
-    float m_rotaryEncoderGearing;
-    int m_rotaryEncoderPinA;
-    int m_rotaryEncoderPinB;
 };
 
 } // end namespace

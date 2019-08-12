@@ -1,5 +1,5 @@
 #include "gpio.h"
-
+/*
 namespace
 {
 
@@ -82,44 +82,22 @@ k            tickDiffTotal = 0;
 }
 
 } // end anonymous namespace
+*/
 
 namespace mgo
 {
 
 Gpio::Gpio(
     int   stepPin,
-    int   reversePin,
-    int   rotaryEncoderPulsesPerRevolution,
-    float rotaryEncoderGearing,
-    int   rotaryEncoderPinA,
-    int   rotaryEncoderPinB
+    int   reversePin
     )
     :   m_stepPin( stepPin ),
-        m_reversePin( reversePin ),
-        m_rotaryEncoderPulsesPerRevolution( rotaryEncoderPulsesPerRevolution ),
-        m_rotaryEncoderGearing( rotaryEncoderGearing ),
-        m_rotaryEncoderPinA( rotaryEncoderPinA ),
-        m_rotaryEncoderPinB( rotaryEncoderPinB )
+        m_reversePin( reversePin )
 {
     if ( gpioInitialise() < 0 )
     {
         throw GpioException( "Could not initialise pigpio library" );
     }
-
-    pinA = rotaryEncoderPinA;
-    pinB = rotaryEncoderPinB;
-    pulsesPerSpindleRevolution =
-        rotaryEncoderGearing * rotaryEncoderPulsesPerRevolution;
-
-    // Set up callbacks for rotary encoder
-    gpioSetMode(m_rotaryEncoderPinA, PI_INPUT);
-    gpioSetMode(m_rotaryEncoderPinB, PI_INPUT);
-    // pull up is needed as encoder common is grounded
-    gpioSetPullUpDown(m_rotaryEncoderPinA, PI_PUD_UP);
-    gpioSetPullUpDown(m_rotaryEncoderPinB, PI_PUD_UP);
-    // monitor encoder level changes
-    gpioSetAlertFunc(m_rotaryEncoderPinA, callback );
-    gpioSetAlertFunc(m_rotaryEncoderPinB, callback );
 }
 
 Gpio::~Gpio()
@@ -137,6 +115,29 @@ void Gpio::setReversePin( PinState state )
     gpioWrite( m_reversePin, state == PinState::high ? 1 : 0 );
 }
 
+void Gpio::setRotaryEncoderCallback(
+    int pinA,
+    int pinB,
+    std::function<void(
+        int      pin,
+        int      level,
+        uint32_t tick,
+        void*    user
+        )> callback
+    )
+{
+    // Set up callbacks for rotary encoder
+    gpioSetMode( pinA, PI_INPUT );
+    gpioSetMode( pinB, PI_INPUT );
+    // pull up is needed as encoder common is grounded
+    gpioSetPullUpDown( pinA, PI_PUD_UP );
+    gpioSetPullUpDown( pinB, PI_PUD_UP );
+    // monitor encoder level changes
+    gpioSetAlertFunc( pinA, callback );
+    gpioSetAlertFunc( pinB, callback );
+}
+
+/*
 float Gpio::getRpm()
 {
     // TODO: the rpm value appears to stop updating above a certain speed:
@@ -169,7 +170,7 @@ RotationDirection Gpio::getRotationDirection()
 
 void Gpio::storeCurrentSpindlePosition()
 {
-    
+
 }
 
 void  Gpio::callbackAtPositionDegrees(
@@ -185,6 +186,7 @@ void  Gpio::callbackAtPositionDegrees(
     // time, then callback.
     cb();
 }
+*/
 
 void Gpio::delayMicroSeconds( long usecs )
 {
