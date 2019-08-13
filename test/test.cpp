@@ -1,6 +1,7 @@
 #include "mockgpio.h"
 #include "steppermotor.h"
 #include "rotaryencoder.h"
+#include "log.h"
 
 #define CATCH_CONFIG_MAIN
 #include "catch.hpp"
@@ -123,6 +124,7 @@ TEST_CASE( "Change target step while busy" )
 
 TEST_CASE( "Rotary Encoder RPM" )
 {
+    INIT_MGOLOG( "test.log" );
     mgo::MockGpio gpio( false );
     mgo::RotaryEncoder re(
         gpio,
@@ -131,7 +133,7 @@ TEST_CASE( "Rotary Encoder RPM" )
         2000,
         35.f / 30.f
         );
-    gpio.delayMicroSeconds( 100'000 ); // give it a chance to "warm up"
-    REQUIRE( re.getRpm() == 54 );
+    gpio.delayMicroSeconds( 1'000'000 ); // give it a chance to "warm up"
+    REQUIRE( re.getRpm() > 0.f);
 }
 

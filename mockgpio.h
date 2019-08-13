@@ -98,7 +98,7 @@ public:
                             getTick(),
                             userData
                             );
-                        std::this_thread::sleep_for( microseconds( 20 ) );
+                        std::this_thread::sleep_for( microseconds( 1 ) );
                         if( m_terminate ) break;
                         callback(
                             pinB,
@@ -106,7 +106,7 @@ public:
                             getTick(),
                             userData
                             );
-                        std::this_thread::sleep_for( microseconds( 20 ) );
+                        std::this_thread::sleep_for( microseconds( 1 ) );
                         if( m_terminate ) break;
                         callback(
                             pinA,
@@ -114,7 +114,7 @@ public:
                             getTick(),
                             userData
                             );
-                        std::this_thread::sleep_for( microseconds( 20 ) );
+                        std::this_thread::sleep_for( microseconds( 1 ) );
                         if( m_terminate ) break;
                         callback(
                             pinB,
@@ -122,7 +122,7 @@ public:
                             getTick(),
                             userData
                             );
-                        std::this_thread::sleep_for( microseconds( 20 ) );
+                        std::this_thread::sleep_for( microseconds( 1 ) );
                     }
                     catch( const std::exception& e )
                     {

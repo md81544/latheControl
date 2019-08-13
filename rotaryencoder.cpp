@@ -1,4 +1,5 @@
 #include "rotaryencoder.h"
+#include "log.h"
 
 namespace mgo
 {
@@ -71,8 +72,9 @@ void RotaryEncoder::callback(
             m_tickDiffTotal = 0;
         }
         m_tickDiffTotal += tick - m_lastTick; // don't need to worry about wrap
-        m_lastTick = tick;
     }
+
+    m_lastTick = tick;
 }
 
 float RotaryEncoder::getRpm()
@@ -82,6 +84,9 @@ float RotaryEncoder::getRpm()
     // encoder need to be driven more slowly (i.e. lower the gearing)?
     //
     // Ticks are in microseconds
+    MGOLOG( "m_averageTickDelta = " << m_averageTickDelta );
+    MGOLOG( "m_pulsesPerRev = " << m_pulsesPerRev );
+    MGOLOG( "m_gearing = " << m_gearing );
     return  60'000'000 /
         ( m_averageTickDelta * m_pulsesPerRev * m_gearing );
 }
