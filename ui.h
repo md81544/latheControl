@@ -3,6 +3,7 @@
 #include "igpio.h"
 #include "curses.h"
 #include "steppermotor.h"
+#include "rotaryencoder.h"
 
 #include <memory>
 #include <string>
@@ -40,6 +41,7 @@ private:
     int m_keyPressed{ 0 }; // for debugging
     mgo::Curses::Window m_wnd;
     std::unique_ptr<mgo::StepperMotor> m_motor;
+    std::unique_ptr<mgo::RotaryEncoder> m_rotaryEncoder;
 };
 
 } // end namespace

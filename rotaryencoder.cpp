@@ -66,10 +66,10 @@ void RotaryEncoder::callback(
         ++m_tickCount;
         if( m_tickCount == static_cast<uint32_t>( m_pulsesPerSpindleRev ) )
         {
-            m_tickCount = 0;
             m_averageTickDelta =
                 m_tickDiffTotal / m_pulsesPerSpindleRev;
             m_tickDiffTotal = 0;
+            m_tickCount = 0;
         }
         m_tickDiffTotal += tick - m_lastTick; // don't need to worry about wrap
     }
@@ -84,11 +84,10 @@ float RotaryEncoder::getRpm()
     // encoder need to be driven more slowly (i.e. lower the gearing)?
     //
     // Ticks are in microseconds
-    MGOLOG( "m_averageTickDelta = " << m_averageTickDelta );
-    MGOLOG( "m_pulsesPerRev = " << m_pulsesPerRev );
-    MGOLOG( "m_gearing = " << m_gearing );
-    return  60'000'000 /
-        ( m_averageTickDelta * m_pulsesPerRev * m_gearing );
+    auto rpm = 60'000'000.f /
+        ( m_averageTickDelta * m_pulsesPerSpindleRev * m_gearing );
+    MGOLOG( "RPM = " << rpm );
+    return rpm;
 }
 
 float RotaryEncoder::getPositionDegrees()

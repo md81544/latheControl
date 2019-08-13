@@ -36,3 +36,4 @@ els
 # Other
 tags
 *.log
+.vscode

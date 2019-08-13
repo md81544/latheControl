@@ -40,9 +40,10 @@ namespace mgo
 //   to "T" so we start in a known position?
 
 Ui::Ui( IGpio& gpio )
-    : m_gpio( gpio )
+    :   m_gpio( gpio )
 {
     m_motor = std::make_unique<mgo::StepperMotor>( m_gpio, 1'000 );
+    m_rotaryEncoder = std::make_unique<mgo::RotaryEncoder>( m_gpio, 23, 24, 2000, 35.f/30.f );
 }
 
 void Ui::run()
@@ -357,6 +358,11 @@ void Ui::updateDisplay()
         m_wnd << std::setw(12) << std::left
             << cnv( m_memory.at( n ) );
     }
+
+    m_wnd << "\n\n";
+    m_wnd.setColour( Colours::greenOnBlack );
+    m_wnd.clearToEol();
+    m_wnd << "RPM: " << m_rotaryEncoder->getRpm() << "\n";
 
     // Uncomment for debug / getting key codes:
     // m_wnd << "\n\n";
