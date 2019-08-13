@@ -85,8 +85,7 @@ float RotaryEncoder::getRpm()
     //
     // Ticks are in microseconds
     auto rpm = 60'000'000.f /
-        ( m_averageTickDelta * m_pulsesPerSpindleRev * m_gearing );
-    MGOLOG( "RPM = " << rpm );
+        ( m_averageTickDelta * m_pulsesPerSpindleRev );
     return rpm;
 }
 
