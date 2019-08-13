@@ -5,6 +5,7 @@
 #endif
 
 #include "ui.h"
+#include "log.h"
 
 #include <iostream>
 
@@ -12,6 +13,9 @@ int main()
 {
     try
     {
+        INIT_MGOLOG( "els.log" );
+        MGOLOG( "Program started" );
+
         #ifdef FAKE
             mgo::MockGpio gpio( false );
         #else
