@@ -363,6 +363,8 @@ void Ui::updateDisplay()
     m_wnd.setColour( Colours::greenOnBlack );
     m_wnd.clearToEol();
     m_wnd << "RPM: " << m_rotaryEncoder->getRpm() << "\n";
+    m_wnd.clearToEol();
+    m_wnd << "Pos: " << m_rotaryEncoder->getPositionDegrees() << "°\n";
 
     // Uncomment for debug / getting key codes:
     // m_wnd << "\n\n";

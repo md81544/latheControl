@@ -150,3 +150,40 @@ TEST_CASE( "Rotary Encoder Position Callback" )
     re.callbackAtZeroDegrees([&](){ called = true; });
     REQUIRE( called == true );
 }
+
+TEST_CASE( "Rotary Encoder Check Repeatable Position Start" )
+{
+    INIT_MGOLOG( "test.log" );
+    mgo::MockGpio gpio( false );
+    mgo::RotaryEncoder re(
+        gpio,
+        23,
+        24,
+        2000,
+        35.f / 30.f
+        );
+    float pos1{ 0.f };
+    re.callbackAtZeroDegrees([&]()
+        {
+            // getPostionDegrees() would have latency in real life
+            // but the mock gpio calls back without batching
+            pos1 = re.getPositionDegrees();
+        }
+        );
+    gpio.delayMicroSeconds( 100'000 );
+    float pos2{ 0.f };
+    re.callbackAtZeroDegrees([&]()
+        {
+            pos2 = re.getPositionDegrees();
+        }
+        );
+    CHECK( pos1 == pos2 );
+    gpio.delayMicroSeconds( 100'000 );
+    float pos3{ 0.f };
+    re.callbackAtZeroDegrees([&]()
+        {
+            pos3 = re.getPositionDegrees();
+        }
+        );
+    REQUIRE( pos2 == pos3 );
+}

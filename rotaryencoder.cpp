@@ -33,7 +33,7 @@ void RotaryEncoder::callback(
         return;
     }
 
-    // Check rotation periodically
+    // Check rotation direction periodically
     if( m_tickCount == 0 )
     {
         if ( pin == m_pinA )
@@ -79,9 +79,9 @@ void RotaryEncoder::callback(
             m_lastZeroDegreesTick = tick;
         }
         m_tickDiffTotal += tick - m_lastTick; // don't need to worry about wrap
+        m_lastTick = tick;
     }
 
-    m_lastTick = tick;
 }
 
 float RotaryEncoder::getRpm()
@@ -101,11 +101,11 @@ float RotaryEncoder::getPositionDegrees()
     // There will be latency in this as the pigpio thread which calls back to
     // the callback in the anonymous namespace above only does so approx once
     // per millisecond (it batches up the callbacks and calls us maybe thirty
-    // times per batch). So this shouldn't be relied upon - use the
+    // times per batch). So this shouldn't be relied upon* - use the
     // callbackAtPositionDegrees() function which extrapolates out based on
     // previous data.
 
-    // TODO - probably remove this function?
+    // * But it's useful for unit testing :)
 
     return 360.f * ( m_tickCount / m_pulsesPerSpindleRev );
 }
