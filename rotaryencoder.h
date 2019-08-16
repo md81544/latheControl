@@ -4,6 +4,8 @@
 
 #include "igpio.h"
 
+#include <atomic>
+
 namespace mgo
 {
 
@@ -56,9 +58,7 @@ public:
     float getRpm();
     float getPositionDegrees();
     RotationDirection getRotationDirection();
-    void  storeCurrentPosition();
-    void  callbackAtPosition(
-        uint32_t position,
+    void  callbackAtZeroDegrees(
         std::function<void()> cb
         );
 
@@ -74,6 +74,7 @@ private:
     float    m_gearing;
     bool     m_warmingUp{ true };
     uint32_t m_lastTick;
+    std::atomic<uint32_t> m_lastZeroDegreesTick{ 0 }; // TODO other members need to be atomic too
     uint32_t m_tickCount{ 0 };
     uint32_t m_tickDiffTotal{ 0 };
     float    m_averageTickDelta{ 0.f };

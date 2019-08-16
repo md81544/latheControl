@@ -124,7 +124,6 @@ TEST_CASE( "Change target step while busy" )
 
 TEST_CASE( "Rotary Encoder RPM" )
 {
-    INIT_MGOLOG( "test.log" );
     mgo::MockGpio gpio( false );
     mgo::RotaryEncoder re(
         gpio,
@@ -133,7 +132,21 @@ TEST_CASE( "Rotary Encoder RPM" )
         2000,
         35.f / 30.f
         );
-    gpio.delayMicroSeconds( 1'000'000 ); // give it a chance to "warm up"
+    gpio.delayMicroSeconds( 300'000 ); // give it a chance to "warm up"
     REQUIRE( re.getRpm() > 0.f);
 }
 
+TEST_CASE( "Rotary Encoder Position Callback" )
+{
+    mgo::MockGpio gpio( false );
+    mgo::RotaryEncoder re(
+        gpio,
+        23,
+        24,
+        2000,
+        35.f / 30.f
+        );
+    bool called = false;
+    re.callbackAtZeroDegrees([&](){ called = true; });
+    REQUIRE( called == true );
+}

@@ -40,6 +40,7 @@ public:
         void* userData
         ) override;
     void delayMicroSeconds( long usecs ) override;
+    uint32_t getTick() override;
 private:
     int m_stepPin;
     int m_reversePin;

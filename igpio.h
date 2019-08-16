@@ -39,6 +39,7 @@ public:
         ) = 0;
     // General:
     virtual void delayMicroSeconds( long ) = 0;
+    virtual uint32_t getTick() = 0;
 };
 
 } // end namespace

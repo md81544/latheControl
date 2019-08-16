@@ -63,4 +63,9 @@ void Gpio::delayMicroSeconds( long usecs )
     gpioDelay( usecs );
 }
 
+uint32_t Gpio::getTick()
+{
+    return gpioTick();
+}
+
 } // end namespace

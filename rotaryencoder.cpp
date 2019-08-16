@@ -70,6 +70,13 @@ void RotaryEncoder::callback(
                 m_tickDiffTotal / m_pulsesPerSpindleRev;
             m_tickDiffTotal = 0;
             m_tickCount = 0;
+            // We remember what the tick was at the last zero degrees position
+            // (we arbitrarily call the start position zero) so we can extrappolate
+            // out to the next one for accurate starting when waiting to cut a
+            // thread. Owing to the latency on the callbaks, it's not sufficient
+            // to simply wait for the next zero-degree tick. With the 1 ms latency,
+            // this could result in an inaccuracy of up to 6° at 1,000 prm.
+            m_lastZeroDegreesTick = tick;
         }
         m_tickDiffTotal += tick - m_lastTick; // don't need to worry about wrap
     }
@@ -108,22 +115,22 @@ RotationDirection RotaryEncoder::getRotationDirection()
     return m_direction;
 }
 
-void RotaryEncoder::storeCurrentPosition()
-{
-
-}
-
-void  RotaryEncoder::callbackAtPosition(
-    uint32_t /* position */,
+void  RotaryEncoder::callbackAtZeroDegrees(
     std::function<void()> cb
     )
 {
+    // We just need to start threading operations at a
+    // repeatable rotational position each time, so we
+    // arbitrarily choose zero.
     // Because there is a latency on the callback (the pigpio
     // library batches up the callbacks), we interpolate here
-    // for better accuracy. We set the target degrees, wait for
-    // the tick for the last time we hit that position, then
-    // calculate how long we need to wait, then block for that
-    // time, then callback.
+    // for better accuracy.
+    while( m_lastZeroDegreesTick == 0 ); // spin if the last pos isn't set yet
+    uint32_t timeForOneRevolution = m_averageTickDelta * m_pulsesPerSpindleRev;
+    uint32_t targetTick = m_lastZeroDegreesTick + timeForOneRevolution;
+    while( m_gpio.getTick() > targetTick ) targetTick += timeForOneRevolution;
+    // Now spin until we get to the right time
+    while( m_gpio.getTick() < targetTick);
     cb();
 }
 } // end namespace
