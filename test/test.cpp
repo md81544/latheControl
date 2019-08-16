@@ -53,7 +53,7 @@ TEST_CASE( "Move then move again" )
     REQUIRE( motor.getCurrentStep() == 150 );
 }
 
-TEST_CASE( "Test forward and reverse" )
+TEST_CASE( "Forward and reverse" )
 {
     mgo::MockGpio gpio( false );
     mgo::StepperMotor motor( gpio, 1'000 );
@@ -81,7 +81,7 @@ TEST_CASE( "Check direction" )
     REQUIRE( motor.getDirection() == mgo::Direction::forward );
 }
 
-TEST_CASE( "Test RPM" )
+TEST_CASE( "Stepper RPM" )
 {
     mgo::MockGpio gpio( false );
     mgo::StepperMotor motor( gpio, 1'000 );
@@ -98,7 +98,7 @@ TEST_CASE( "Test RPM" )
     REQUIRE( motor.getDelay() == 30'000 );
 }
 
-TEST_CASE( "Test RPM Limits" )
+TEST_CASE( "Stepper RPM Limits" )
 {
     mgo::MockGpio gpio( false );
     mgo::StepperMotor motor( gpio, 1'000 );
