@@ -29,12 +29,13 @@ public:
     virtual void setRotaryEncoderCallback(
         int pinA,
         int pinB,
-        std::function<void(
-            int      pin,
-            int      level,
-            uint32_t tick,
-            void*    userData
-            )> callback,
+        void (*callback)(int,int,uint32_t, void*),
+        //std::function<void(
+        //    int      pin,
+        //    int      level,
+        //    uint32_t tick,
+        //    void*    userData
+        //    )> callback,
         void* userData
         ) = 0;
     // General:

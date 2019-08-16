@@ -36,12 +36,13 @@ void Gpio::setReversePin( PinState state )
 void Gpio::setRotaryEncoderCallback(
     int pinA,
     int pinB,
-    std::function<void(
-        int      pin,
-        int      level,
-        uint32_t tick,
-        void*    user
-        )> callback,
+    void (*callback)( int, int, uint32_t, void* ),
+    //std::function<void(
+    //    int      pin,
+    //    int      level,
+    //    uint32_t tick,
+    //    void*    user
+    //    )> callback,
     void* user
     )
 {

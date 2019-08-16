@@ -10,6 +10,9 @@
 namespace mgo
 {
 
+//typedef void (*eventFuncEx_t)
+//   (int event, int level, uint32_t tick, void *userdata);
+
 class GpioException: public std::runtime_error
 {
 public:
@@ -31,16 +34,17 @@ public:
     void setRotaryEncoderCallback(
         int pinA,
         int pinB,
-        std::function<void(
-            int      pin,
-            int      level,
-            uint32_t tick,
-            void*    user
-            )> callback,
+        void (*callback)( int, int, uint32_t, void* ),
+        //std::function<void(
+        //    int      pin,
+        //    int      level,
+        //    uint32_t tick,
+        //    void*    user
+        //    )> callback,
         void* userData
         ) override;
     void delayMicroSeconds( long usecs ) override;
-    uint32_t getTick() override;
+    uint32_t getTick();
 private:
     int m_stepPin;
     int m_reversePin;
