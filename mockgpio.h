@@ -21,7 +21,7 @@ namespace mgo
 class MockGpio : public IGpio
 {
 public:
-    MockGpio( bool printDiags )
+    explicit MockGpio( bool printDiags )
         : m_print( printDiags )
     {
         print( "Initialising GPIO library" );
@@ -80,7 +80,6 @@ public:
     void setRotaryEncoderCallback(
         int pinA,
         int pinB,
-        //std::function<void( int, int, uint32_t, void* )> callback,
         void (*callback)(int, int, uint32_t, void*),
         void* userData
         ) override

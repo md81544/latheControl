@@ -11,7 +11,7 @@ namespace mgo
 class Logger
 {
 public:
-    Logger(const std::string& filename);
+    explicit Logger(const std::string& filename);
     ~Logger();
 
     void Log(
@@ -38,19 +38,19 @@ extern Logger* g_logger;
     mgo::g_logger = new mgo::Logger( filename_ );
 
 
-#define MGOLOG( Message_ )                                          \
-    do {                                                            \
-    if (mgo::g_logger) {                                       \
-    mgo::g_logger->Log( static_cast<std::ostringstream &>(     \
-        std::ostringstream().flush() << Message_ ).str(),           \
-        __FUNCTION__, __FILE__, __LINE__ );                         \
+#define MGOLOG( Message_ )                                    \
+    do {                                                      \
+    if (mgo::g_logger) {                                      \
+    mgo::g_logger->Log( static_cast<std::ostringstream &>(    \
+        std::ostringstream().flush() << Message_ ).str(),     \
+        __FUNCTION__, __FILE__, __LINE__ );                   \
     } } while(0)
 
 // Use MGOLOG_DEBUG if you want to have logging be a NoOp in Release mode
 #ifdef NDEBUG
-#define MGOLOG_DEBUG( _ )                                       \
-    do                                                          \
-    {                                                           \
+#define MGOLOG_DEBUG( _ )                                     \
+    do                                                        \
+    {                                                         \
     } while ( 0 );
 #else
 #define MGOLOG_DEBUG( Message_ ) MGOLOG( Message_ )

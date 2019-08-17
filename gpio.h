@@ -35,16 +35,10 @@ public:
         int pinA,
         int pinB,
         void (*callback)( int, int, uint32_t, void* ),
-        //std::function<void(
-        //    int      pin,
-        //    int      level,
-        //    uint32_t tick,
-        //    void*    user
-        //    )> callback,
         void* userData
         ) override;
     void delayMicroSeconds( long usecs ) override;
-    uint32_t getTick();
+    uint32_t getTick() override;
 private:
     int m_stepPin;
     int m_reversePin;

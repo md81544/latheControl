@@ -19,7 +19,7 @@ class Ui
     // at a later stage.
 
 public:
-    Ui( IGpio& gpio );
+    explicit Ui( IGpio& gpio );
     // run() is the main loop. When this returns,
     // the application can quit.
     void run();

@@ -4,8 +4,7 @@
 // to allow mocking out the hardware
 // interface to allow the StepperMotor
 // class to be used for tests
-
-#include <functional>
+#include <stdint.h>
 
 namespace mgo
 {
@@ -29,13 +28,7 @@ public:
     virtual void setRotaryEncoderCallback(
         int pinA,
         int pinB,
-        void (*callback)(int,int,uint32_t, void*),
-        //std::function<void(
-        //    int      pin,
-        //    int      level,
-        //    uint32_t tick,
-        //    void*    userData
-        //    )> callback,
+        void (*callback)( int, int, uint32_t, void* ),
         void* userData
         ) = 0;
     // General:

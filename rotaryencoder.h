@@ -5,6 +5,7 @@
 #include "igpio.h"
 
 #include <atomic>
+#include <functional>
 
 namespace mgo
 {
