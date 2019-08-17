@@ -142,11 +142,11 @@ void Ui::processKeyPress()
             }
             case 82:  // R
             {
+                m_motor->stop();
+                m_motor->wait();
+                m_status = "returning";
                 m_rotaryEncoder->callbackAtZeroDegrees([&]()
                     {
-                        m_motor->stop();
-                        m_motor->wait();
-                        m_status = "returning";
                         m_moving = true;
                         m_targetStep = m_memory.at( m_currentMemory );
                     }
