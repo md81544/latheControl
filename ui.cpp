@@ -58,7 +58,8 @@ void Ui::run()
     m_wnd << "Square brackets [ ] select memory store to use\n";
     m_wnd << "M to remember position, and R to return to it (shift-F "
              "for fast return)\n";
-    m_wnd << "Escape or Q to quit\n";
+    m_wnd << "P to cycle through thread pitches\n";
+    m_wnd << "Escape or Q to quit\n\n";
     m_wnd.setBlocking( Input::nonBlocking );
     while( ! m_quit )
     {
@@ -110,8 +111,9 @@ void Ui::processKeyPress()
                 m_quit = true;
                 break;
             }
-            case 259:
+            case 259: // Up arrow
             {
+                if( m_threadPitchIndex != 0 ) break;
                 if( m_speed < 20 )
                 {
                     m_speed = 20;
@@ -122,8 +124,9 @@ void Ui::processKeyPress()
                 }
                 break;
             }
-            case 258:
+            case 258: // Down arrow
             {
+                if( m_threadPitchIndex != 0 ) break;
                 if( m_speed > 20 )
                 {
                     m_speed -= 20;
@@ -140,8 +143,33 @@ void Ui::processKeyPress()
                 m_memory.at( m_currentMemory ) = m_motor->getCurrentStep();
                 break;
             }
-            case 82:  // R
+            case 112:  // p
             {
+                ++m_threadPitchIndex;
+                if( m_threadPitchIndex >= threadPitches.size() )
+                {
+                    m_threadPitchIndex = 0;
+                }
+                break;
+            }
+            case 80:  // P
+            {
+                if( m_threadPitchIndex == 0 )
+                {
+                    m_threadPitchIndex = threadPitches.size() - 1;
+                }
+                else
+                {
+                    --m_threadPitchIndex;
+                }
+                break;
+            }
+            case 82:  // R
+            case 114: // r
+            {
+                // We always start at the same rotational position: it's
+                // required for thread cutting, but doesn't impact
+                // anything if we're just turning down, so we always do it.
                 m_motor->stop();
                 m_motor->wait();
                 m_status = "returning";
@@ -151,15 +179,6 @@ void Ui::processKeyPress()
                         m_targetStep = m_memory.at( m_currentMemory );
                     }
                     );
-                break;
-            }
-            case 114: // r
-            {
-                m_motor->stop();
-                m_motor->wait();
-                m_status = "returning";
-                m_moving = true;
-                m_targetStep = m_memory.at( m_currentMemory );
                 break;
             }
             case 260: // Left arrow
@@ -229,62 +248,62 @@ void Ui::processKeyPress()
 
             case 265: // F1
             {
-                m_speed = 20;
+                if( m_threadPitchIndex == 0 ) m_speed = 20;
                 break;
             }
             case 266: // F2
             {
-                m_speed = 40;
+                if( m_threadPitchIndex == 0 ) m_speed = 40;
                 break;
             }
             case 267: // F3
             {
-                m_speed = 80;
+                if( m_threadPitchIndex == 0 ) m_speed = 80;
                 break;
             }
             case 268: // F4
             {
-                m_speed = 120;
+                if( m_threadPitchIndex == 0 ) m_speed = 120;
                 break;
             }
             case 269: // F5
             {
-                m_speed = 200;
+                if( m_threadPitchIndex == 0 ) m_speed = 200;
                 break;
             }
             case 270: // F6
             {
-                m_speed = 300;
+                if( m_threadPitchIndex == 0 ) m_speed = 300;
                 break;
             }
             case 271: // F7
             {
-                m_speed = 400;
+                if( m_threadPitchIndex == 0 ) m_speed = 400;
                 break;
             }
             case 272: // F8
             {
-                m_speed = 500;
+                if( m_threadPitchIndex == 0 ) m_speed = 500;
                 break;
             }
             case 273: // F9
             {
-                m_speed = 600;
+                if( m_threadPitchIndex == 0 ) m_speed = 600;
                 break;
             }
             case 274: // F10
             {
-                m_speed = 700;
+                if( m_threadPitchIndex == 0 ) m_speed = 700;
                 break;
             }
             case 275: // F11
             {
-                m_speed = 800;
+                if( m_threadPitchIndex == 0 ) m_speed = 800;
                 break;
             }
             case 276: // F12
             {
-                m_speed = 900;
+                if( m_threadPitchIndex == 0 ) m_speed = 900;
                 break;
             }
 
@@ -343,14 +362,19 @@ void Ui::updateDisplay()
     if ( m_targetStep == INF_LEFT  ) targetString = "<----";
     if ( m_targetStep == INF_RIGHT ) targetString = "---->";
 
-    m_wnd.move( 7, 0 );
+    m_wnd.move( 8, 0 );
     m_wnd.setColour( Colours::yellowOnBlack );
     m_wnd.clearToEol();
     m_wnd << "Status:   "  << std::setw(3) << std::left << m_speed << " rpm   ";
     m_wnd << m_status << "\n";
     m_wnd.clearToEol();
     m_wnd << "Target:   " << targetString << ", current: "
-        << cnv( m_motor->getCurrentStep() ) << "\n\n";
+        << cnv( m_motor->getCurrentStep() ) << "\n";
+    m_wnd.clearToEol();
+    m_wnd << "Pitch:    " << threadPitches.at( m_threadPitchIndex ).pitchMm
+        << " mm (" << threadPitches.at( m_threadPitchIndex ).name << ")\n";
+    m_wnd.clearToEol();
+    m_wnd << "RPM:      " << m_rotaryEncoder->getRpm() << "\n\n";
 
     // Memory labels
     m_wnd.clearToEol();
@@ -370,19 +394,6 @@ void Ui::updateDisplay()
         m_wnd << std::setw(12) << std::left
             << cnv( m_memory.at( n ) );
     }
-
-    m_wnd << "\n\n";
-    m_wnd.setColour( Colours::greenOnBlack );
-    m_wnd.clearToEol();
-    m_wnd << "RPM: " << m_rotaryEncoder->getRpm() << "\n";
-    m_wnd.clearToEol();
-    m_wnd << "Pos: " << m_rotaryEncoder->getPositionDegrees() << "°\n";
-
-    // Uncomment for debug / getting key codes:
-    // m_wnd << "\n\n";
-    // m_wnd.setColour( Colours::greenOnBlack );
-    // m_wnd.clearToEol();
-    // m_wnd << "Keypress: " << m_keyPressed << "\n";
 
     m_wnd.refresh();
 }
