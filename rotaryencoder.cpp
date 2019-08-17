@@ -21,6 +21,13 @@ void RotaryEncoder::callback(
     uint32_t tick
     )
 {
+    if ( pin == m_lastPin )
+    {
+        // debounce
+        return;
+    }
+    m_lastPin = pin;
+
     if ( m_warmingUp )
     {
         // We ignnore the first few calls until we can
@@ -33,30 +40,23 @@ void RotaryEncoder::callback(
         return;
     }
 
-    // Check rotation direction periodically
-    if( m_tickCount == 0 )
+    // Check rotation
+    if ( pin == m_pinA )
     {
-        if ( pin == m_pinA )
-        {
-            m_levelA = level;
-        }
-        else
-        {
-            m_levelB = level;
-        }
+        m_levelA = level;
+    }
+    else
+    {
+        m_levelB = level;
+    }
 
-        if ( pin != m_lastPin) // debounce
-        {
-            m_lastPin = pin;
-            if ( pin == m_pinA && level == 1 )
-            {
-                if ( m_levelB ) m_direction = RotationDirection::normal;
-            }
-            else if ( pin == m_pinB && level == 1 )
-            {
-                if ( m_levelA ) m_direction = RotationDirection::reversed;
-            }
-        }
+    if ( pin == m_pinA && level == 1 )
+    {
+        if ( m_levelB ) m_direction = RotationDirection::normal;
+    }
+    else if ( pin == m_pinB && level == 1 )
+    {
+        if ( m_levelA ) m_direction = RotationDirection::reversed;
     }
 
     // Note - we only count one pin's pulses, and measure from
@@ -106,6 +106,9 @@ float RotaryEncoder::getPositionDegrees()
     // previous data.
 
     // * But it's useful for unit testing :)
+
+    // TODO this only works in one direction currently, we need to
+    // take rotation direction into account
 
     return 360.f * ( m_tickCount / m_pulsesPerSpindleRev );
 }

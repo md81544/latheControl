@@ -80,7 +80,8 @@ public:
     void setRotaryEncoderCallback(
         int pinA,
         int pinB,
-        std::function<void( int, int, uint32_t, void* )> callback,
+        //std::function<void( int, int, uint32_t, void* )> callback,
+        void (*callback)(int, int, uint32_t, void*),
         void* userData
         ) override
     {

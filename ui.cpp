@@ -141,6 +141,18 @@ void Ui::processKeyPress()
                 break;
             }
             case 82:  // R
+            {
+                m_rotaryEncoder->callbackAtZeroDegrees([&]()
+                    {
+                        m_motor->stop();
+                        m_motor->wait();
+                        m_status = "returning";
+                        m_moving = true;
+                        m_targetStep = m_memory.at( m_currentMemory );
+                    }
+                    );
+                break;
+            }
             case 114: // r
             {
                 m_motor->stop();
