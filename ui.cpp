@@ -389,7 +389,8 @@ void Ui::updateDisplay()
     m_wnd << "Pitch:    " << threadPitches.at( m_threadPitchIndex ).pitchMm
         << " mm (" << threadPitches.at( m_threadPitchIndex ).name << ")\n";
     m_wnd.clearToEol();
-    m_wnd << "RPM:      " << m_rotaryEncoder->getRpm() << "\n\n";
+    m_wnd << "RPM:      " << m_rotaryEncoder->getRpm() << "\n";
+    m_wnd << "Tick:     " << m_rotaryEncoder->getTickCount() << "\n\n";
 
     // Memory labels
     m_wnd.clearToEol();
