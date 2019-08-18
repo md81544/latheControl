@@ -12,6 +12,7 @@ struct ThreadPitch
     float pitchMm;
 };
 
+// TODO these should come from a config file
 const std::vector<ThreadPitch> threadPitches{
         { "Off",                0.f   },
         { "Coarse, M3",         0.5f  },

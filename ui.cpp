@@ -75,7 +75,14 @@ void Ui::run()
             // We are cutting threads, so the stepper motor's speed
             // is dependent on the spindle's RPM and the thread pitch.
             float pitch = threadPitches.at( m_threadPitchIndex ).pitchMm;
+            // because my stepper motor / leadscrew does one mm per
+            // revolution, there is a direct correlation between spindle
+            // rpm and stepper motor rpm for a 1mm thread pitch.
             m_speed = pitch * m_rotaryEncoder->getRpm();
+            // TODO, this is very slightly too low (i.e. the thread
+            // pitch in real life comes out about .05mm too low
+            // for a 1.5mm pitch. So either my stepper motor speed is
+            // off a bit, or the rpm of the spindle is slightly wrong..?
             m_motor->setRpm( m_speed );
         }
         

@@ -26,6 +26,7 @@ StepperMotor::StepperMotor(
         for(;;)
         {
             int delay;
+            uint32_t startTick = m_gpio.getTick();
             {   // scope for lock_guard
                 // When in this scope we can assume all member
                 // variables can be written and read from freely
@@ -77,7 +78,9 @@ StepperMotor::StepperMotor(
             // We always perform the second delay regardless of
             // whether we're stepping, to give the main thread a
             // chance to grab the mutex if needed
-            m_gpio.delayMicroSeconds( delay );
+
+            // Spin until we get to the right time
+            while( m_gpio.getTick() - startTick < static_cast<uint32_t>( 2 * delay ) );
         }
     } // thread end
     );
@@ -128,7 +131,7 @@ void StepperMotor::setRpm( double rpm )
     // TODO - it so happens that one RPM is one mm per minute
     // for my leadscrew and gearing - but this function should
     // be to set a specific feed rate in mm per second or minute.
-    
+
     // m_delay (in µsecs) is used twice per thread loop
     std::lock_guard<std::mutex> mtx( m_mtx );
     if ( rpm < 0.1 )

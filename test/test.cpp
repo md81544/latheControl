@@ -115,7 +115,6 @@ TEST_CASE( "Change target step while busy" )
     mgo::StepperMotor motor( gpio, 1'000 );
     motor.setRpm( 2'000 );
     motor.goToStep( 1'000 );
-    gpio.delayMicroSeconds( 1'000 );
     motor.goToStep( 2'000 );
     motor.wait();
     // Check the second "go to" was ignored
@@ -149,41 +148,4 @@ TEST_CASE( "Rotary Encoder Position Callback" )
     bool called = false;
     re.callbackAtZeroDegrees([&](){ called = true; });
     REQUIRE( called == true );
-}
-
-TEST_CASE( "Rotary Encoder Check Repeatable Position Start" )
-{
-    INIT_MGOLOG( "test.log" );
-    mgo::MockGpio gpio( false );
-    mgo::RotaryEncoder re(
-        gpio,
-        23,
-        24,
-        2000,
-        35.f / 30.f
-        );
-    float pos1{ 0.f };
-    re.callbackAtZeroDegrees([&]()
-        {
-            // getPostionDegrees() would have latency in real life
-            // but the mock gpio calls back without batching
-            pos1 = re.getPositionDegrees();
-        }
-        );
-    gpio.delayMicroSeconds( 100'000 );
-    float pos2{ 0.f };
-    re.callbackAtZeroDegrees([&]()
-        {
-            pos2 = re.getPositionDegrees();
-        }
-        );
-    CHECK( pos1 == pos2 );
-    gpio.delayMicroSeconds( 100'000 );
-    float pos3{ 0.f };
-    re.callbackAtZeroDegrees([&]()
-        {
-            pos3 = re.getPositionDegrees();
-        }
-        );
-    REQUIRE( pos2 == pos3 );
 }
