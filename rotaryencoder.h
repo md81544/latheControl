@@ -62,7 +62,6 @@ public:
     void  callbackAtZeroDegrees(
         std::function<void()> cb
         );
-    uint32_t getTickCount(){ return m_tickCount; }
 
 private:
     IGpio&   m_gpio;
