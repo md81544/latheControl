@@ -76,7 +76,6 @@ void Ui::run()
             // is dependent on the spindle's RPM and the thread pitch.
             float pitch = threadPitches.at( m_threadPitchIndex ).pitchMm;
             m_speed = pitch * m_rotaryEncoder->getRpm();
-            m_speed *= 1.041666666666666666666f; // TODO fudge factor!!
             m_motor->setRpm( m_speed );
         }
         
