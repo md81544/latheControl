@@ -34,12 +34,12 @@ private:
     bool  m_moving{ false };
     bool  m_quit{ false };
     long  m_targetStep{ 0 };
-    int   m_speed{ 100 };
+    float m_speed{ 100.f };
     int   m_oldSpeed{ 100 };
     bool  m_fastReturning{ false };
     std::vector<long> m_memory{ 0, 0, 0, 0 };
     std::size_t m_currentMemory{ 0 };
-    int m_keyPressed{ 0 }; // for debugging
+    int m_keyPressed{ 0 };
     mgo::Curses::Window m_wnd;
     std::unique_ptr<mgo::StepperMotor> m_motor;
     std::unique_ptr<mgo::RotaryEncoder> m_rotaryEncoder;

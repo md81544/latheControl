@@ -1,4 +1,5 @@
 #include "ui.h"
+#include "log.h"
 
 #include <cmath>
 #include <iomanip>
@@ -65,7 +66,19 @@ void Ui::run()
     {
         processKeyPress();
 
-        m_motor->setRpm( m_speed );
+        if( m_threadPitchIndex == 0 )
+        {
+            m_motor->setRpm( m_speed );
+        }
+        else
+        {
+            // We are cutting threads, so the stepper motor's speed
+            // is dependent on the spindle's RPM and the thread pitch.
+            float pitch = threadPitches.at( m_threadPitchIndex ).pitchMm;
+            m_speed = pitch * m_rotaryEncoder->getRpm();
+            m_motor->setRpm( m_speed );
+        }
+        
         if( !m_moving )
         {
             m_motor->stop();
@@ -365,7 +378,8 @@ void Ui::updateDisplay()
     m_wnd.move( 8, 0 );
     m_wnd.setColour( Colours::yellowOnBlack );
     m_wnd.clearToEol();
-    m_wnd << "Status:   "  << std::setw(3) << std::left << m_speed << " rpm   ";
+    m_wnd << "Status:   "  << std::setw(3) << std::left << static_cast<int>( m_speed )
+        << " rpm   ";
     m_wnd << m_status << "\n";
     m_wnd.clearToEol();
     m_wnd << "Target:   " << targetString << ", current: "
