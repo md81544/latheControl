@@ -128,6 +128,7 @@ void  RotaryEncoder::callbackAtZeroDegrees(
     // Because there is a latency on the callback (the pigpio
     // library batches up the callbacks), we interpolate here
     // for better accuracy.
+    if( m_warmingUp ) return; // spindle not running?
     while( m_lastZeroDegreesTick == 0 ); // spin if the last pos isn't set yet
     uint32_t timeForOneRevolution = m_averageTickDelta * m_pulsesPerSpindleRev;
     uint32_t targetTick = m_lastZeroDegreesTick + timeForOneRevolution;
