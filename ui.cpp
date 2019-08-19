@@ -419,7 +419,7 @@ void Ui::updateDisplay()
     m_wnd.refresh();
 }
 
-void Ui::highlightCheck( size_t memoryLocation )
+void Ui::highlightCheck( std::size_t memoryLocation )
 {
     using namespace mgo::Curses;
     if ( memoryLocation == m_currentMemory )

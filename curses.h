@@ -50,7 +50,7 @@ private:
     std::ostringstream m_oss;
     WINDOW* m_handle;
     WINDOW* m_borderHandle{nullptr};
-    static size_t m_instanceCount;
+    static std::size_t m_instanceCount;
 
     template <typename T>
     friend Window& operator<<(Window& win, T t);

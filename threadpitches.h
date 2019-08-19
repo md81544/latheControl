@@ -13,6 +13,9 @@ struct ThreadPitch
 };
 
 // TODO these should come from a config file
+// The file should also have major and minor diameters
+// to display to aid the user, for both male and female?
+// See, for e.g., https://www.newmantools.com/tech/threadm.htm
 const std::vector<ThreadPitch> threadPitches{
         { "Off",                0.f   },
         { "Coarse, M3",         0.5f  },

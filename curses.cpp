@@ -1,6 +1,6 @@
 #include "curses.h"
 
-size_t mgo::Curses::Window::m_instanceCount = 0;
+std::size_t mgo::Curses::Window::m_instanceCount = 0;
 
 #include <cassert>
 #include <stdexcept>

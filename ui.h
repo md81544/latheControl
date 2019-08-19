@@ -26,7 +26,7 @@ public:
     void run();
 private:
     void processKeyPress();
-    void highlightCheck( size_t memoryLocation );
+    void highlightCheck( std::size_t memoryLocation );
     void updateDisplay();
     IGpio& m_gpio;
 

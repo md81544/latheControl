@@ -15,13 +15,13 @@ all: $(BINARY)
 $(BINARY): $(SOURCES)
 	$(CC) $(CFLAGS) $(SOURCES) -o $(BINARY) $(LIBS) -lpigpio
 	ctags -R --c++-kinds=+p --fields=+iaS
-	cppcheck -q --enable=all $(SOURCES)
+	cppcheck -q $(SOURCES)
 
 # Make binary without need for pigpio lib for testing UI
 fake: $(SOURCES)
 	$(CC) -DFAKE $(CFLAGS) $(FAKESOURCES) -o $(BINARY) $(LIBS)
 	ctags -R --c++-kinds=+p --fields=+iaS
-	cppcheck -q --enable=all $(SOURCES)
+	cppcheck -q $(SOURCES)
 
 clean:
 	rm -f $(BINARY)
