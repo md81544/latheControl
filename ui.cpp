@@ -174,6 +174,7 @@ void Ui::processKeyPress()
                 }
                 break;
             }
+            case 10:  // ENTER
             case 82:  // R
             case 114: // r
             {
