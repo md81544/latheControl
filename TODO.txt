@@ -1,0 +1,17 @@
+Read thread pitch data from config file
+
+Just have two "main" memories for target and return with hotkeys which
+just go to these two ('C'ut and 'R'eturn, perhaps?)
+
+Automate threading operations (or all?) to automatically return after the
+target step has been reached and a key is pressed
+
+Investigate RPM stopping above a certain rotational speed (maybe need
+to revisit gearing of rotary encoder)
+
+Rotary encoder doesn't currently do anything with rotation direction,
+so getPositionDegrees() fails to take into account manual back-rotation
+of the chuck/spindle
+
+Split UI into model and view components now it's getting more complex
+to allow easier migration to a graphic UI in future (perhaps)

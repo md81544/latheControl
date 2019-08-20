@@ -34,12 +34,6 @@ std::string cnv( int steps )
 namespace mgo
 {
 
-// TODO:
-//   T (tailstock) - mandatory set before operation
-//   C (chuck) - mandatory set before operation
-//   Add a "shutdown" command at the end to return
-//   to "T" so we start in a known position?
-
 Ui::Ui( IGpio& gpio )
     :   m_gpio( gpio )
 {
@@ -79,10 +73,6 @@ void Ui::run()
             // revolution, there is a direct correlation between spindle
             // rpm and stepper motor rpm for a 1mm thread pitch.
             m_speed = pitch * m_rotaryEncoder->getRpm();
-            // TODO, this is very slightly too low (i.e. the thread
-            // pitch in real life comes out about .05mm too low
-            // for a 1.5mm pitch. So either my stepper motor speed is
-            // off a bit, or the rpm of the spindle is slightly wrong..?
             m_motor->setRpm( m_speed );
         }
         
@@ -184,6 +174,7 @@ void Ui::processKeyPress()
                 }
                 break;
             }
+            case 10:  // ENTER
             case 82:  // R
             case 114: // r
             {
@@ -203,6 +194,12 @@ void Ui::processKeyPress()
             }
             case 260: // Left arrow
             {
+                // Same key will cancel if we're already moving
+                if ( m_moving )
+                {
+                    m_moving = false;
+                    break;
+                }
                 if ( m_moving && m_targetStep < m_motor->getCurrentStep() )
                 {
                     m_motor->stop();
@@ -215,6 +212,12 @@ void Ui::processKeyPress()
             }
             case 261: // Right arrow
             {
+                // Same key will cancel if we're already moving
+                if ( m_moving )
+                {
+                    m_moving = false;
+                    break;
+                }
                 if ( m_moving && m_targetStep > m_motor->getCurrentStep() )
                 {
                     m_motor->stop();
@@ -385,17 +388,17 @@ void Ui::updateDisplay()
     m_wnd.move( 8, 0 );
     m_wnd.setColour( Colours::yellowOnBlack );
     m_wnd.clearToEol();
-    m_wnd << "Status:   "  << std::setw(3) << std::left << static_cast<int>( m_speed )
-        << " rpm   ";
+    m_wnd << "Tool speed:  "  << std::setw(3) << std::left << static_cast<int>( m_speed )
+        << " mm/min.   ";
     m_wnd << m_status << "\n";
     m_wnd.clearToEol();
-    m_wnd << "Target:   " << targetString << ", current: "
+    m_wnd << "Target:      " << targetString << ", current: "
         << cnv( m_motor->getCurrentStep() ) << "\n";
     m_wnd.clearToEol();
-    m_wnd << "Pitch:    " << threadPitches.at( m_threadPitchIndex ).pitchMm
+    m_wnd << "Pitch:       " << threadPitches.at( m_threadPitchIndex ).pitchMm
         << " mm (" << threadPitches.at( m_threadPitchIndex ).name << ")\n";
     m_wnd.clearToEol();
-    m_wnd << "RPM:      " << m_rotaryEncoder->getRpm() << "\n\n";
+    m_wnd << "Spindle RPM: " << m_rotaryEncoder->getRpm() << "\n\n";
 
     // Memory labels
     m_wnd.clearToEol();
