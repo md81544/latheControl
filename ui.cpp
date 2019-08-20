@@ -194,6 +194,12 @@ void Ui::processKeyPress()
             }
             case 260: // Left arrow
             {
+                // Same key will cancel if we're already moving
+                if ( m_moving )
+                {
+                    m_moving = false;
+                    break;
+                }
                 if ( m_moving && m_targetStep < m_motor->getCurrentStep() )
                 {
                     m_motor->stop();
@@ -206,6 +212,12 @@ void Ui::processKeyPress()
             }
             case 261: // Right arrow
             {
+                // Same key will cancel if we're already moving
+                if ( m_moving )
+                {
+                    m_moving = false;
+                    break;
+                }
                 if ( m_moving && m_targetStep > m_motor->getCurrentStep() )
                 {
                     m_motor->stop();
