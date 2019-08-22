@@ -398,7 +398,7 @@ void Ui::updateDisplay()
     m_wnd << "Pitch:       " << threadPitches.at( m_threadPitchIndex ).pitchMm
         << " mm (" << threadPitches.at( m_threadPitchIndex ).name << ")\n";
     m_wnd.clearToEol();
-    m_wnd << "Spindle RPM: " << m_rotaryEncoder->getRpm() << "\n\n";
+    m_wnd << "Spindle RPM: " << static_cast<int>( m_rotaryEncoder->getRpm() ) << "\n\n";
 
     // Memory labels
     m_wnd.clearToEol();
