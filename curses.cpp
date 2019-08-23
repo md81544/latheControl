@@ -62,7 +62,8 @@ mgo::Curses::Window::Window()
     ::init_pair( static_cast<short>(Colours::greenOnBlack),  COLOR_GREEN,  COLOR_BLACK );
     ::init_pair( static_cast<short>(Colours::redOnBlack),    COLOR_RED,    COLOR_BLACK );
     ::init_pair( static_cast<short>(Colours::yellowOnBlack), COLOR_YELLOW, COLOR_BLACK );
-    ::init_pair( static_cast<short>(Colours::whiteOnBlack),  COLOR_WHITE, COLOR_BLACK );
+    ::init_pair( static_cast<short>(Colours::whiteOnBlack),  COLOR_WHITE,  COLOR_BLACK );
+    ::init_pair( static_cast<short>(Colours::cyanOnBlack),   COLOR_CYAN,   COLOR_BLACK );
     ::attron(COLOR_PAIR( Colours::greenOnBlack ));
     ::raw();
     ::keypad( stdscr, TRUE );

@@ -23,7 +23,8 @@ enum class Colours : short int
     greenOnBlack = 1,
     redOnBlack,
     yellowOnBlack,
-    whiteOnBlack
+    whiteOnBlack,
+    cyanOnBlack
 };
 
 class Window

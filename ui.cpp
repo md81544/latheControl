@@ -395,9 +395,19 @@ void Ui::updateDisplay()
     m_wnd << "Target:      " << targetString << ", current: "
         << cnv( m_motor->getCurrentStep() ) << "\n";
     m_wnd.clearToEol();
-    m_wnd << "Pitch:       " << threadPitches.at( m_threadPitchIndex ).pitchMm
-        << " mm (" << threadPitches.at( m_threadPitchIndex ).name << ")\n";
-    m_wnd.clearToEol();
+    ThreadPitch tp = threadPitches.at( m_threadPitchIndex );
+    m_wnd << "Pitch:       " << tp.pitchMm << " mm (" << tp.name << ")\n";
+    if( m_threadPitchIndex != 0 )
+    {
+        m_wnd.setColour( Colours::cyanOnBlack );
+        m_wnd.clearToEol();
+        m_wnd << "    ( Male   OD: " << tp.maleOd << " mm, cut: " << tp.cutDepthMale << " mm )\n";
+        m_wnd.clearToEol();
+        m_wnd << "    ( Female ID: " << tp.femaleId << " mm, cut: " << tp.cutDepthFemale
+            << " mm )\n";
+        m_wnd.clearToEol();
+        m_wnd.setColour( Colours::yellowOnBlack );
+    }
     m_wnd << "Spindle RPM: " << static_cast<int>( m_rotaryEncoder->getRpm() ) << "\n\n";
 
     // Memory labels
@@ -417,6 +427,13 @@ void Ui::updateDisplay()
         highlightCheck( n );
         m_wnd << std::setw(12) << std::left
             << cnv( m_memory.at( n ) );
+    }
+
+    // Clear a few extra lines as pitch information can push things up/down
+    for( int n = 0; n < 4; ++n )
+    {
+        m_wnd << "\n";
+        m_wnd.clearToEol();
     }
 
     m_wnd.refresh();
