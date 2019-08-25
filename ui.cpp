@@ -130,7 +130,7 @@ void Ui::processKeyPress()
                 }
                 else
                 {
-                    if( m_speed < 900 ) m_speed += 20;
+                    if( m_speed < 600 ) m_speed += 20;
                 }
                 break;
             }
@@ -281,17 +281,17 @@ void Ui::processKeyPress()
             }
             case 267: // F3
             {
-                if( m_threadPitchIndex == 0 ) m_speed = 80;
+                if( m_threadPitchIndex == 0 ) m_speed = 100;
                 break;
             }
             case 268: // F4
             {
-                if( m_threadPitchIndex == 0 ) m_speed = 120;
+                if( m_threadPitchIndex == 0 ) m_speed = 200;
                 break;
             }
             case 269: // F5
             {
-                if( m_threadPitchIndex == 0 ) m_speed = 200;
+                if( m_threadPitchIndex == 0 ) m_speed = 250;
                 break;
             }
             case 270: // F6
@@ -301,32 +301,32 @@ void Ui::processKeyPress()
             }
             case 271: // F7
             {
-                if( m_threadPitchIndex == 0 ) m_speed = 400;
+                if( m_threadPitchIndex == 0 ) m_speed = 350;
                 break;
             }
             case 272: // F8
             {
-                if( m_threadPitchIndex == 0 ) m_speed = 500;
+                if( m_threadPitchIndex == 0 ) m_speed = 400;
                 break;
             }
             case 273: // F9
             {
-                if( m_threadPitchIndex == 0 ) m_speed = 600;
+                if( m_threadPitchIndex == 0 ) m_speed = 450;
                 break;
             }
             case 274: // F10
             {
-                if( m_threadPitchIndex == 0 ) m_speed = 700;
+                if( m_threadPitchIndex == 0 ) m_speed = 500;
                 break;
             }
             case 275: // F11
             {
-                if( m_threadPitchIndex == 0 ) m_speed = 800;
+                if( m_threadPitchIndex == 0 ) m_speed = 550;
                 break;
             }
             case 276: // F12
             {
-                if( m_threadPitchIndex == 0 ) m_speed = 900;
+                if( m_threadPitchIndex == 0 ) m_speed = 600;
                 break;
             }
 
@@ -334,7 +334,7 @@ void Ui::processKeyPress()
             {
                 // Fast return to point
                 m_oldSpeed = m_speed;
-                m_speed = 900;
+                m_speed = 600;
                 m_fastReturning = true;
                 m_motor->stop();
                 m_motor->wait();
