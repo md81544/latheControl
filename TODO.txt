@@ -1,6 +1,6 @@
 Read thread pitch data from config file
 
-Simulate the feed in of the tool at 45° by progressively starting a
+Simulate the feed in of the tool at 29.5° by progressively starting a
 thread cut a little earlier each time to ensure (somehow) forward
 offset matches inward offset
 
