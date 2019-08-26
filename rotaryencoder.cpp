@@ -135,10 +135,10 @@ void  RotaryEncoder::callbackAtZeroDegrees(
         m_lastZeroDegreesTick + ( timeForOneRevolution - m_advanceValueMicroseconds );
     while( m_gpio.getTick() > targetTick )
     {
-        targetTick += ( timeForOneRevolution - m_advanceValueMicroseconds );
+        targetTick += timeForOneRevolution;
     }
     // Now spin until we get to the right time
-    while( m_gpio.getTick() < targetTick);
+    while( m_gpio.getTick() < targetTick );
     cb();
 }
 } // end namespace
