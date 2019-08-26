@@ -1,11 +1,5 @@
 Read thread pitch data from config file
 
-Prevent carriage movement above a certain speed (currently if the
-spindle isn't moving, there's a bug which means a massively
-fast speed is calculated if threading is on.
-
-Use "T" to turn threading on and off and "P" to change the value
-
 Simulate the feed in of the tool at 29.5° by progressively starting a
 thread cut a little earlier each time to ensure (somehow) forward
 offset matches inward offset (probably will need to be a manual key

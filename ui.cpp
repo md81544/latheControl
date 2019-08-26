@@ -73,10 +73,15 @@ void Ui::run()
             // revolution, there is a direct correlation between spindle
             // rpm and stepper motor rpm for a 1mm thread pitch.
             m_speed = pitch * m_rotaryEncoder->getRpm();
+            if( m_speed > MAX_MOTOR_SPEED )
+            {
+                m_speed = MAX_MOTOR_SPEED;
+                m_moving = false;
+            }
             m_motor->setRpm( m_speed );
         }
         
-        if( !m_moving )
+        if( ! m_moving )
         {
             m_motor->stop();
         }
