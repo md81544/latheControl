@@ -198,10 +198,20 @@ void Ui::processKeyPress()
                 // The use should feed in 0.1mm, then press this
                 // key to cause an advance of 0.05658mm, i.e. 0.05658
                 // revolutions, so we need to advance the callback by
-                m_threadCutAdvanceCount += 0.1;
-                m_rotaryEncoder->increaseAdvanceValueMicroseconds(
-                    ( 1'000'000.f / ( m_speed / 60.f) ) * 0.05658f
+                ++m_threadCutAdvanceCount;
+                m_rotaryEncoder->setAdvanceValueMicroseconds(
+                    m_threadCutAdvanceCount *
+                    ( ( 1'000'000.f / ( m_speed / 60.f) ) * 0.05658f )
                     );
+                break;
+            }
+            case 124: // | (pipe, i.e. shift backslash
+            {
+                // decrement the cut advance count
+                if( m_threadCutAdvanceCount > 0 )
+                {
+                    --m_threadCutAdvanceCount;
+                }
                 break;
             }
             case 10:  // ENTER
@@ -431,7 +441,7 @@ void Ui::updateDisplay()
         ThreadPitch tp = threadPitches.at( m_threadPitchIndex );
         m_wnd.clearToEol();
         m_wnd << "Pitch:       " << tp.pitchMm << " mm (" << tp.name << ")\n";
-        m_wnd << "Current cut: " << m_threadCutAdvanceCount << " mm\n";
+        m_wnd << "Current cut: " << m_threadCutAdvanceCount / 10.f << " mm\n";
         m_wnd.setColour( Colours::cyanOnBlack );
         m_wnd.clearToEol();
         m_wnd << "    ( Male   OD: " << tp.maleOd << " mm, cut: " << tp.cutDepthMale << " mm )\n";
@@ -443,6 +453,7 @@ void Ui::updateDisplay()
     }
 
     m_wnd << "\n";
+    // uncomment for keycodes m_wnd << m_keyPressed << "\n";
 
     // Memory labels
     m_wnd.clearToEol();

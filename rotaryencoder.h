@@ -64,9 +64,9 @@ public:
         std::function<void()> cb
         );
 
-    void increaseAdvanceValueMicroseconds( float value )
+    void setAdvanceValueMicroseconds( float value )
     {
-        m_advanceValueMicroseconds += value;
+        m_advanceValueMicroseconds = value;
     }
 
 private:

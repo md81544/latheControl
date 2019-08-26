@@ -13,7 +13,7 @@
 namespace mgo
 {
 
-const float MAX_MOTOR_SPEED = 600.f;
+const float MAX_MOTOR_SPEED = 700.f;
 
 class Ui
 {
@@ -47,7 +47,7 @@ private:
     std::unique_ptr<mgo::RotaryEncoder> m_rotaryEncoder;
     std::size_t m_threadPitchIndex{ 0 };
     bool    m_threadCuttingOn{ false };
-    float   m_threadCutAdvanceCount{ 0 };
+    int     m_threadCutAdvanceCount{ 0 };
 };
 
 } // end namespace
