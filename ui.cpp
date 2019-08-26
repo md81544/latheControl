@@ -53,14 +53,14 @@ void Ui::run()
     m_wnd << "Square brackets [ ] select memory store to use\n";
     m_wnd << "M to remember position, and R to return to it (shift-F "
              "for fast return)\n";
-    m_wnd << "P to cycle through thread pitches\n";
+    m_wnd << "T - toggle thread cutting mode, P to choose thread pitch\n";
     m_wnd << "Escape or Q to quit\n\n";
     m_wnd.setBlocking( Input::nonBlocking );
     while( ! m_quit )
     {
         processKeyPress();
 
-        if( m_threadPitchIndex == 0 || m_fastReturning )
+        if( ! m_threadCuttingOn || m_fastReturning )
         {
             m_motor->setRpm( m_speed );
         }
@@ -123,20 +123,20 @@ void Ui::processKeyPress()
             }
             case 259: // Up arrow
             {
-                if( m_threadPitchIndex != 0 ) break;
+                if( m_threadCuttingOn ) break;
                 if( m_speed < 20 )
                 {
                     m_speed = 20;
                 }
                 else
                 {
-                    if( m_speed < 600 ) m_speed += 20;
+                    if( m_speed < MAX_MOTOR_SPEED ) m_speed += 20;
                 }
                 break;
             }
             case 258: // Down arrow
             {
-                if( m_threadPitchIndex != 0 ) break;
+                if( m_threadCuttingOn ) break;
                 if( m_speed > 20 )
                 {
                     m_speed -= 20;
@@ -153,8 +153,17 @@ void Ui::processKeyPress()
                 m_memory.at( m_currentMemory ) = m_motor->getCurrentStep();
                 break;
             }
+            case 84:   // T
+            case 116:  // t
+            {
+                // Toggle threading on/off
+                m_threadCuttingOn = ! m_threadCuttingOn;
+                break;
+            }
             case 112:  // p
             {
+                if ( ! m_threadCuttingOn ) break;
+                // change threading pitch up
                 ++m_threadPitchIndex;
                 if( m_threadPitchIndex >= threadPitches.size() )
                 {
@@ -162,8 +171,10 @@ void Ui::processKeyPress()
                 }
                 break;
             }
-            case 80:  // P
+            case 80:  // P change thread pitch
             {
+                if ( ! m_threadCuttingOn ) break;
+                // change threading pitch down
                 if( m_threadPitchIndex == 0 )
                 {
                     m_threadPitchIndex = threadPitches.size() - 1;
@@ -271,62 +282,62 @@ void Ui::processKeyPress()
 
             case 265: // F1
             {
-                if( m_threadPitchIndex == 0 ) m_speed = 20;
+                if( ! m_threadCuttingOn ) m_speed = 20;
                 break;
             }
             case 266: // F2
             {
-                if( m_threadPitchIndex == 0 ) m_speed = 40;
+                if( ! m_threadCuttingOn ) m_speed = 40;
                 break;
             }
             case 267: // F3
             {
-                if( m_threadPitchIndex == 0 ) m_speed = 100;
+                if( ! m_threadCuttingOn ) m_speed = 100;
                 break;
             }
             case 268: // F4
             {
-                if( m_threadPitchIndex == 0 ) m_speed = 200;
+                if( ! m_threadCuttingOn ) m_speed = 200;
                 break;
             }
             case 269: // F5
             {
-                if( m_threadPitchIndex == 0 ) m_speed = 250;
+                if( ! m_threadCuttingOn ) m_speed = 250;
                 break;
             }
             case 270: // F6
             {
-                if( m_threadPitchIndex == 0 ) m_speed = 300;
+                if( ! m_threadCuttingOn ) m_speed = 300;
                 break;
             }
             case 271: // F7
             {
-                if( m_threadPitchIndex == 0 ) m_speed = 350;
+                if( ! m_threadCuttingOn ) m_speed = 350;
                 break;
             }
             case 272: // F8
             {
-                if( m_threadPitchIndex == 0 ) m_speed = 400;
+                if( ! m_threadCuttingOn ) m_speed = 400;
                 break;
             }
             case 273: // F9
             {
-                if( m_threadPitchIndex == 0 ) m_speed = 450;
+                if( ! m_threadCuttingOn ) m_speed = 450;
                 break;
             }
             case 274: // F10
             {
-                if( m_threadPitchIndex == 0 ) m_speed = 500;
+                if( ! m_threadCuttingOn ) m_speed = 500;
                 break;
             }
             case 275: // F11
             {
-                if( m_threadPitchIndex == 0 ) m_speed = 550;
+                if( ! m_threadCuttingOn ) m_speed = 550;
                 break;
             }
             case 276: // F12
             {
-                if( m_threadPitchIndex == 0 ) m_speed = 600;
+                if( ! m_threadCuttingOn ) m_speed = MAX_MOTOR_SPEED;
                 break;
             }
 
@@ -334,7 +345,7 @@ void Ui::processKeyPress()
             {
                 // Fast return to point
                 m_oldSpeed = m_speed;
-                m_speed = 600;
+                m_speed = MAX_MOTOR_SPEED;
                 m_fastReturning = true;
                 m_motor->stop();
                 m_motor->wait();
@@ -395,10 +406,12 @@ void Ui::updateDisplay()
     m_wnd << "Target:      " << targetString << ", current: "
         << cnv( m_motor->getCurrentStep() ) << "\n";
     m_wnd.clearToEol();
-    ThreadPitch tp = threadPitches.at( m_threadPitchIndex );
-    m_wnd << "Pitch:       " << tp.pitchMm << " mm (" << tp.name << ")\n";
-    if( m_threadPitchIndex != 0 )
+    m_wnd << "Spindle RPM: " << static_cast<int>( m_rotaryEncoder->getRpm() ) << "\n";
+    if( m_threadCuttingOn )
     {
+        ThreadPitch tp = threadPitches.at( m_threadPitchIndex );
+        m_wnd.clearToEol();
+        m_wnd << "Pitch:       " << tp.pitchMm << " mm (" << tp.name << ")\n";
         m_wnd.setColour( Colours::cyanOnBlack );
         m_wnd.clearToEol();
         m_wnd << "    ( Male   OD: " << tp.maleOd << " mm, cut: " << tp.cutDepthMale << " mm )\n";
@@ -408,7 +421,8 @@ void Ui::updateDisplay()
         m_wnd.clearToEol();
         m_wnd.setColour( Colours::yellowOnBlack );
     }
-    m_wnd << "Spindle RPM: " << static_cast<int>( m_rotaryEncoder->getRpm() ) << "\n\n";
+
+    m_wnd << "\n";
 
     // Memory labels
     m_wnd.clearToEol();

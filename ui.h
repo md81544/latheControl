@@ -13,6 +13,8 @@
 namespace mgo
 {
 
+const float MAX_MOTOR_SPEED = 600.f;
+
 class Ui
 {
     // As it's such a simple interface, we don't separate
@@ -44,6 +46,7 @@ private:
     std::unique_ptr<mgo::StepperMotor> m_motor;
     std::unique_ptr<mgo::RotaryEncoder> m_rotaryEncoder;
     std::size_t m_threadPitchIndex{ 0 };
+    bool m_threadCuttingOn{ false };
 };
 
 } // end namespace
