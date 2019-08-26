@@ -1,10 +1,5 @@
 Read thread pitch data from config file
 
-Simulate the feed in of the tool at 29.5° by progressively starting a
-thread cut a little earlier each time to ensure (somehow) forward
-offset matches inward offset (probably will need to be a manual key
-press)
-
 Just have two "main" memories for target and return with hotkeys which
 just go to these two ('C'ut and 'R'eturn, perhaps?)
 

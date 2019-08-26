@@ -59,9 +59,15 @@ public:
     float getRpm();
     float getPositionDegrees();
     RotationDirection getRotationDirection();
+
     void  callbackAtZeroDegrees(
         std::function<void()> cb
         );
+
+    void increaseAdvanceValueMicroseconds( float value )
+    {
+        m_advanceValueMicroseconds += value;
+    }
 
 private:
     IGpio&   m_gpio;
@@ -80,6 +86,7 @@ private:
     uint32_t m_tickDiffTotal{ 0 };
     float    m_averageTickDelta{ 0.f };
     RotationDirection m_direction;
+    float    m_advanceValueMicroseconds{ 0.f };
 };
 
 } // end namespace

@@ -54,6 +54,7 @@ void Ui::run()
     m_wnd << "M to remember position, and R to return to it (shift-F "
              "for fast return)\n";
     m_wnd << "T - toggle thread cutting mode, P to choose thread pitch\n";
+    m_wnd << "\\ - advance thread cut by 0.05mm (suitable for 0.1mm in-feed\n";
     m_wnd << "Escape or Q to quit\n\n";
     m_wnd.setBlocking( Input::nonBlocking );
     while( ! m_quit )
@@ -188,6 +189,19 @@ void Ui::processKeyPress()
                 {
                     --m_threadPitchIndex;
                 }
+                break;
+            }
+            case 92:  // \ (backslash)
+            {
+                // causes the cut to start a fraction earlier
+                // next time, this simulates feeding in at 29.5°
+                // The use should feed in 0.1mm, then press this
+                // key to cause an advance of 0.05658mm, i.e. 0.05658
+                // revolutions, so we need to advance the callback by
+                m_threadCutAdvanceCount += 0.1;
+                m_rotaryEncoder->increaseAdvanceValueMicroseconds(
+                    ( 1'000'000.f / ( m_speed / 60.f) ) * 0.05658f
+                    );
                 break;
             }
             case 10:  // ENTER
@@ -401,7 +415,7 @@ void Ui::updateDisplay()
     if ( m_targetStep == INF_LEFT  ) targetString = "<----";
     if ( m_targetStep == INF_RIGHT ) targetString = "---->";
 
-    m_wnd.move( 8, 0 );
+    m_wnd.move( 9, 0 );
     m_wnd.setColour( Colours::yellowOnBlack );
     m_wnd.clearToEol();
     m_wnd << "Tool speed:  "  << std::setw(3) << std::left << static_cast<int>( m_speed )
@@ -417,6 +431,7 @@ void Ui::updateDisplay()
         ThreadPitch tp = threadPitches.at( m_threadPitchIndex );
         m_wnd.clearToEol();
         m_wnd << "Pitch:       " << tp.pitchMm << " mm (" << tp.name << ")\n";
+        m_wnd << "Current cut: " << m_threadCutAdvanceCount << " mm\n";
         m_wnd.setColour( Colours::cyanOnBlack );
         m_wnd.clearToEol();
         m_wnd << "    ( Male   OD: " << tp.maleOd << " mm, cut: " << tp.cutDepthMale << " mm )\n";
@@ -449,7 +464,7 @@ void Ui::updateDisplay()
     }
 
     // Clear a few extra lines as pitch information can push things up/down
-    for( int n = 0; n < 4; ++n )
+    for( int n = 0; n < 6; ++n )
     {
         m_wnd << "\n";
         m_wnd.clearToEol();

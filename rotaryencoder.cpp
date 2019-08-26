@@ -131,8 +131,12 @@ void  RotaryEncoder::callbackAtZeroDegrees(
     if( m_warmingUp ) return; // spindle not running?
     while( m_lastZeroDegreesTick == 0 ); // spin if the last pos isn't set yet
     uint32_t timeForOneRevolution = m_averageTickDelta * m_pulsesPerSpindleRev;
-    uint32_t targetTick = m_lastZeroDegreesTick + timeForOneRevolution;
-    while( m_gpio.getTick() > targetTick ) targetTick += timeForOneRevolution;
+    uint32_t targetTick =
+        m_lastZeroDegreesTick + ( timeForOneRevolution - m_advanceValueMicroseconds );
+    while( m_gpio.getTick() > targetTick )
+    {
+        targetTick += ( timeForOneRevolution - m_advanceValueMicroseconds );
+    }
     // Now spin until we get to the right time
     while( m_gpio.getTick() < targetTick);
     cb();
