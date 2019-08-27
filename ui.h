@@ -6,6 +6,7 @@
 #include "rotaryencoder.h"
 #include "threadpitches.h"
 
+#include <cmath>
 #include <memory>
 #include <string>
 #include <vector>
@@ -13,7 +14,10 @@
 namespace mgo
 {
 
+// TODO these need to be in a config file
 const float MAX_MOTOR_SPEED = 700.f;
+const float INFEED = 0.05f; // mm
+const float SIDEFEED = INFEED * std::tan( 0.5148721f ); // 29.5° in radians
 
 class Ui
 {

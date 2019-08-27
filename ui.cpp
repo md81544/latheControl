@@ -44,6 +44,7 @@ Ui::Ui( IGpio& gpio )
 void Ui::run()
 {
     using namespace mgo::Curses;
+
     m_motor->setRpm( m_speed );
 
     m_wnd.cursor( Cursor::off );
@@ -54,7 +55,8 @@ void Ui::run()
     m_wnd << "M to remember position, and R to return to it (shift-F "
              "for fast return)\n";
     m_wnd << "T - toggle thread cutting mode, P to choose thread pitch\n";
-    m_wnd << "\\ - advance thread cut by 0.05mm (suitable for 0.1mm in-feed\n";
+    m_wnd << "\\ - advance thread cut by " << std::setprecision(2) << SIDEFEED
+          << "mm (suitable for " << std::setprecision(2) << INFEED << "mm in-feed\n";
     m_wnd << "Escape or Q to quit\n\n";
     m_wnd.setBlocking( Input::nonBlocking );
     while( ! m_quit )
@@ -103,7 +105,7 @@ void Ui::run()
         updateDisplay();
         // Small delay just to avoid the loop spinning
         // at full speed
-        m_gpio.delayMicroSeconds( 5'000 );
+        m_gpio.delayMicroSeconds( 1'000 );
     }
 }
 
@@ -195,13 +197,10 @@ void Ui::processKeyPress()
             {
                 // causes the cut to start a fraction earlier
                 // next time, this simulates feeding in at 29.5°
-                // The use should feed in 0.1mm, then press this
-                // key to cause an advance of 0.05658mm, i.e. 0.05658
-                // revolutions, so we need to advance the callback by
                 ++m_threadCutAdvanceCount;
                 m_rotaryEncoder->setAdvanceValueMicroseconds(
                     m_threadCutAdvanceCount *
-                    ( ( 1'000'000.f / ( m_speed / 60.f) ) * 0.05658f )
+                    ( ( 1'000'000.f / ( m_speed / 60.f) ) * SIDEFEED )
                     );
                 break;
             }
@@ -441,7 +440,7 @@ void Ui::updateDisplay()
         ThreadPitch tp = threadPitches.at( m_threadPitchIndex );
         m_wnd.clearToEol();
         m_wnd << "Pitch:       " << tp.pitchMm << " mm (" << tp.name << ")\n";
-        m_wnd << "Current cut: " << m_threadCutAdvanceCount / 10.f << " mm\n";
+        m_wnd << "Current cut: " << m_threadCutAdvanceCount * INFEED << " mm\n";
         m_wnd.setColour( Colours::cyanOnBlack );
         m_wnd.clearToEol();
         m_wnd << "    ( Male   OD: " << tp.maleOd << " mm, cut: " << tp.cutDepthMale << " mm )\n";
