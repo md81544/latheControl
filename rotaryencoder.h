@@ -34,6 +34,9 @@ public:
         m_gearing( gearing)
     {
         m_pulsesPerSpindleRev = m_pulsesPerRev * m_gearing;
+        m_revolutionsPerLeapTick = 1.f /
+            ( m_pulsesPerSpindleRev - static_cast<int>( m_pulsesPerSpindleRev));
+        m_leapTickCountdown = m_revolutionsPerLeapTick;
 
         m_gpio.setRotaryEncoderCallback(
             m_pinA,
@@ -92,6 +95,10 @@ private:
     float    m_averageTickDelta{ 0.f };
     RotationDirection m_direction;
     float    m_advanceValueMicroseconds{ 0.f };
+    // Values to deal with a non-integer number of ticks per
+    // spindle revolution (owing to gearing)
+    int      m_leapTickCountdown;
+    int      m_revolutionsPerLeapTick;
 };
 
 } // end namespace

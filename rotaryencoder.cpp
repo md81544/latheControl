@@ -30,7 +30,7 @@ void RotaryEncoder::callback(
 
     if ( m_warmingUp )
     {
-        // We ignnore the first few calls until we can
+        // We ignore the first few calls until we can
         // set the previous tick
         if( pin == m_pinA && level == 1 )
         {
@@ -64,16 +64,31 @@ void RotaryEncoder::callback(
     if( pin == m_pinA && level == 1 )
     {
         ++m_tickCount;
-        if( m_tickCount == static_cast<uint32_t>( m_pulsesPerSpindleRev ) )
+        // TODO because of gearing, we have a non-integer number of pulses
+        // per spindle revolution which means as it stands, over five minutes,
+        // our zero position will be off by about 90°. This can be addressed
+        // by altering the gearing, or by countering this in code with the
+        // "leap tick" approach below.
+        uint32_t zeroTick = static_cast<uint32_t>( m_pulsesPerSpindleRev );
+        if( m_leapTickCountdown == 1 )
         {
+            ++zeroTick;
+        }
+        if( m_tickCount == zeroTick )
+        {
+            --m_leapTickCountdown;
+            if( m_leapTickCountdown == 0 )
+            {
+                m_leapTickCountdown = m_revolutionsPerLeapTick;
+            }
             m_averageTickDelta =
                 m_tickDiffTotal / m_pulsesPerSpindleRev;
             m_tickDiffTotal = 0;
             m_tickCount = 0;
             // We remember what the tick was at the last zero degrees position
-            // (we arbitrarily call the start position zero) so we can extrappolate
+            // (we arbitrarily call the start position zero) so we can extrapolate
             // out to the next one for accurate starting when waiting to cut a
-            // thread. Owing to the latency on the callbaks, it's not sufficient
+            // thread. Owing to the latency on the callbacks, it's not sufficient
             // to simply wait for the next zero-degree tick. With the 1 ms latency,
             // this could result in an inaccuracy of up to 6° at 1,000 prm.
             m_lastZeroDegreesTick = tick;
