@@ -131,7 +131,7 @@ TEST_CASE( "Rotary Encoder RPM" )
         2000,
         35.f / 30.f
         );
-    gpio.delayMicroSeconds( 300'000 ); // give it a chance to "warm up"
+    while( re.warmingUp() ) gpio.delayMicroSeconds( 1'000 );
     REQUIRE( re.getRpm() > 0.f);
 }
 
@@ -146,6 +146,8 @@ TEST_CASE( "Rotary Encoder Position Callback" )
         35.f / 30.f
         );
     bool called = false;
+    while( re.warmingUp() ) gpio.delayMicroSeconds( 1'000 );
     re.callbackAtZeroDegrees([&](){ called = true; });
+    REQUIRE( re.warmingUp() == false );
     REQUIRE( called == true );
 }

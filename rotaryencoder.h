@@ -69,6 +69,11 @@ public:
         m_advanceValueMicroseconds = value;
     }
 
+    bool warmingUp()
+    {
+        return m_warmingUp;
+    }
+
 private:
     IGpio&   m_gpio;
     int      m_pinA;

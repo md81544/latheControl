@@ -49,10 +49,10 @@ void Ui::run()
 
     m_wnd.cursor( Cursor::off );
     m_wnd << "Up/down (or Fn keys) to set speed\n";
-    m_wnd << "Left and right arrow to move, comma and stop to nudge\n";
+    m_wnd << "Left and right arrow to move, comma and full stop to nudge\n";
     m_wnd << "Space to stop\n";
     m_wnd << "Square brackets [ ] select memory store to use\n";
-    m_wnd << "M to remember position, and R to return to it (shift-F "
+    m_wnd << "M to remember position, and Enter to return to it (shift-F "
              "for fast return)\n";
     m_wnd << "T - toggle thread cutting mode, P to choose thread pitch\n";
     m_wnd << "\\ - advance thread cut by " << std::setprecision(2) << SIDEFEED
