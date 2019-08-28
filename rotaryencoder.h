@@ -31,11 +31,15 @@ public:
         m_pinA( pinA ),
         m_pinB( pinB ),
         m_pulsesPerRev( pulsesPerRev ),
-        m_gearing( gearing)
+        m_gearing( gearing ),
+        m_revolutionsPerLeapTick( 0 )
     {
         m_pulsesPerSpindleRev = m_pulsesPerRev * m_gearing;
-        m_revolutionsPerLeapTick = 1.f /
-            ( m_pulsesPerSpindleRev - static_cast<int>( m_pulsesPerSpindleRev));
+        float remainder = m_pulsesPerSpindleRev - static_cast<int>( m_pulsesPerSpindleRev );
+        if( remainder > 0.01f )
+        {
+            m_revolutionsPerLeapTick = 1.f / remainder;
+        }
         m_leapTickCountdown = m_revolutionsPerLeapTick;
 
         m_gpio.setRotaryEncoderCallback(
