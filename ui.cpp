@@ -240,11 +240,6 @@ void Ui::processKeyPress()
                     m_moving = false;
                     break;
                 }
-                if ( m_moving && m_targetStep < m_motor->getCurrentStep() )
-                {
-                    m_motor->stop();
-                    m_motor->wait();
-                }
                 m_status = "moving left";
                 m_moving = true;
                 m_targetStep = INF_LEFT;
@@ -257,11 +252,6 @@ void Ui::processKeyPress()
                 {
                     m_moving = false;
                     break;
-                }
-                if ( m_moving && m_targetStep > m_motor->getCurrentStep() )
-                {
-                    m_motor->stop();
-                    m_motor->wait();
                 }
                 m_status = "moving right";
                 m_moving = true;
