@@ -84,8 +84,7 @@ void RotaryEncoder::callback(
                     m_leapTickCountdown = m_revolutionsPerLeapTick;
                 }
             }
-            m_averageTickDelta =
-                m_tickDiffTotal / m_pulsesPerSpindleRev;
+            m_averageTickDelta = m_tickDiffTotal / static_cast<float>( zeroTick );
             m_tickDiffTotal = 0;
             m_tickCount = 0;
             // We remember what the tick was at the last zero degrees position

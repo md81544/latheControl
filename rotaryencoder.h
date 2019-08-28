@@ -3,6 +3,7 @@
 // encoder which measures the lathe's spindle rotation.
 
 #include "igpio.h"
+#include "log.h"
 
 #include <atomic>
 #include <functional>
@@ -39,6 +40,7 @@ public:
         if( remainder > 0.01f )
         {
             m_revolutionsPerLeapTick = 1.f / remainder;
+            MGOLOG( "Revolutions per leap tick = " << m_revolutionsPerLeapTick );
         }
         m_leapTickCountdown = m_revolutionsPerLeapTick;
 
