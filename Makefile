@@ -15,7 +15,6 @@ all: $(BINARY)
 $(BINARY): $(SOURCES)
 	$(CC) $(CFLAGS) $(SOURCES) -o $(BINARY) $(LIBS) -lpigpio
 	ctags -R --c++-kinds=+p --fields=+iaS
-	cppcheck -q $(SOURCES)
 
 # Make binary without need for pigpio lib for testing UI
 fake: $(SOURCES)
