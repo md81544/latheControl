@@ -40,6 +40,7 @@ public:
     void run();
 private:
     void processKeyPress();
+    void processJoystick();
     void highlightCheck( std::size_t memoryLocation );
     void updateDisplay();
     IGpio& m_gpio;
