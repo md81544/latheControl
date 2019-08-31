@@ -39,7 +39,6 @@ Joystick::Joystick( const std::string& deviceName )
                             std::lock_guard<std::mutex> mtx( m_mutex );
                             m_buttonStates[ event.number ] = 
                                 event.value ? ButtonState::pressed : ButtonState::released;
-                            MGOLOG( event.value );
                             break;
                         }
                         case JS_EVENT_AXIS:
