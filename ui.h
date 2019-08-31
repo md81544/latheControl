@@ -5,6 +5,7 @@
 #include "steppermotor.h"
 #include "rotaryencoder.h"
 #include "threadpitches.h"
+#include "joystick.h"
 
 #include <cmath>
 #include <limits>
@@ -59,6 +60,7 @@ private:
     std::size_t m_threadPitchIndex{ 0 };
     bool    m_threadCuttingOn{ false };
     int     m_threadCutAdvanceCount{ 0 };
+    mgo::Joystick m_joystick;
 };
 
 } // end namespace
