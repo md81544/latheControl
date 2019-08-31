@@ -3,14 +3,10 @@
 
 #include <cmath>
 #include <iomanip>
-#include <limits>
 #include <sstream>
 
 namespace
 {
-
-const int INF_RIGHT = std::numeric_limits<int>::min();
-const int INF_LEFT  = std::numeric_limits<int>::max(); 
 
 // This converts steps to real-world units.
 // We can also negate the value depending
@@ -218,6 +214,7 @@ void Ui::processKeyPress()
             case 82:  // R
             case 114: // r
             {
+                if( m_memory.at( m_currentMemory ) == INF_RIGHT ) break;
                 // We always start at the same rotational position: it's
                 // required for thread cutting, but doesn't impact
                 // anything if we're just turning down, so we always do it.
@@ -363,6 +360,7 @@ void Ui::processKeyPress()
             case 102: // f
             case 70:  // F
             {
+                if( m_memory.at( m_currentMemory ) == INF_RIGHT ) break;
                 // Fast return to point
                 m_oldSpeed = m_speed;
                 m_speed = MAX_MOTOR_SPEED;
@@ -461,8 +459,14 @@ void Ui::updateDisplay()
     for ( int n = 0; n < 4; ++n )
     {
         highlightCheck( n );
-        m_wnd << std::setw(12) << std::left
-            << cnv( m_memory.at( n ) );
+        if ( m_memory.at( n ) != INF_RIGHT )
+        {
+            m_wnd << std::setw(12) << std::left << cnv( m_memory.at( n ) );
+        }
+        else
+        {
+            m_wnd << std::setw(12) << "not set";
+        }
     }
 
     // Clear a few extra lines as pitch information can push things up/down

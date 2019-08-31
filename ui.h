@@ -7,6 +7,7 @@
 #include "threadpitches.h"
 
 #include <cmath>
+#include <limits>
 #include <memory>
 #include <string>
 #include <vector>
@@ -14,9 +15,15 @@
 namespace mgo
 {
 
+const int INF_RIGHT = std::numeric_limits<int>::min();
+const int INF_LEFT  = std::numeric_limits<int>::max();
+
 // TODO these need to be in a config file
 const float MAX_MOTOR_SPEED = 700.f;
 const float INFEED = 0.05f; // mm
+// This should be constexpr, but std::tan (and other maths
+// functions) aren't constexpr and have side effects -- they
+// set errno.
 const float SIDEFEED = INFEED * std::tan( 0.5148721f ); // 29.5° in radians
 
 class Ui
@@ -43,7 +50,7 @@ private:
     float   m_speed{ 100.f };
     int     m_oldSpeed{ 100 };
     bool    m_fastReturning{ false };
-    std::vector<long> m_memory{ 0, 0, 0, 0 };
+    std::vector<long> m_memory{ INF_RIGHT, INF_RIGHT, INF_RIGHT, INF_RIGHT };
     std::size_t m_currentMemory{ 0 };
     int m_keyPressed{ 0 };
     mgo::Curses::Window m_wnd;
