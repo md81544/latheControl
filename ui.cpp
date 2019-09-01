@@ -409,25 +409,44 @@ void Ui::processKeyPress()
 
 void Ui::processJoystick()
 {
+    static bool previouslyMoving = false;
     auto as = m_joystick.getAxisState( 0 );
     // arbitrarily I'm using 1024 as the dead zone
     // my stick's axis zero only reports 0 or ±32768
     if( as.x < 1024 && as.x > -1024 )
     {
-        m_status = "stopped";
-        m_moving = false;
+        if( previouslyMoving )
+        {
+            m_status = "stopped";
+            m_moving = false;
+            previouslyMoving = false;
+        }           
     }
     else if( as.x > 1024 )
     {
         m_status = "moving right";
         m_moving = true;
         m_targetStep = INF_RIGHT;
+        previouslyMoving = true;
     }
     else if( as.x < -1024 )
     {
         m_status = "moving left";
         m_moving = true;
         m_targetStep = INF_LEFT;
+        previouslyMoving = true;
+    }
+    if( as.y < 1024 && as.y > -1024 )
+    {
+        // Do nothing at the moment
+    }
+    else if( as.y > 1024 )
+    {
+        if( ! m_threadCuttingOn ) m_speed = 10;
+    }
+    else if( as.y < -1024 )
+    {
+        if( ! m_threadCuttingOn ) m_speed = 350;
     }
 }
 
