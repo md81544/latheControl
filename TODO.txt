@@ -17,3 +17,7 @@ of the chuck/spindle
 
 Split UI into model and view components now it's getting more complex
 to allow easier migration to a graphic UI in future (perhaps)
+
+Consider adding support for some form of switch / sensor to prevent
+carriage movement outside of specific points (or mandate position
+checks at start-up to do this in software onlu?)
