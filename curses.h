@@ -2,12 +2,11 @@
 
 // Simple wrapper for ncurses.
 
-#include <ncurses.h>
-
+#include <curses.h>
 #include <sstream>
-#include <tuple>
-#include <unordered_map>
-#include <memory>
+#include <string>
+#include <tuple> 
+
 
 namespace mgo
 {

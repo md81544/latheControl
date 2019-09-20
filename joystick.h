@@ -1,12 +1,12 @@
 #pragma once
 
-#include <linux/joystick.h>
-
 #include <atomic>
+#include <iosfwd>
+#include <map>
 #include <mutex>
 #include <string>
 #include <thread>
-#include <map>
+
 
 // My joystick has a lever which is an axis, but doesn't have
 // potentiometers, so just returns -32767 or +32767 or zero

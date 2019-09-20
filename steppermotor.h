@@ -1,14 +1,13 @@
 #pragma once
 
-#include "igpio.h"
-
 #include <atomic>
-#include <memory>
-#include <thread>
 #include <mutex>
+#include <thread>
 
 namespace mgo
 {
+
+class IGpio;
 
 enum class Direction
 {

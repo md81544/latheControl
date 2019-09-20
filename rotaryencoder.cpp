@@ -1,5 +1,4 @@
 #include "rotaryencoder.h"
-#include "log.h"
 
 namespace mgo
 {

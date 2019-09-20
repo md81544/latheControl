@@ -1,20 +1,22 @@
 #pragma once
 
-#include "igpio.h"
 #include "curses.h"
-#include "steppermotor.h"
-#include "rotaryencoder.h"
-#include "threadpitches.h"
 #include "joystick.h"
+#include "rotaryencoder.h"
+#include "steppermotor.h"
 
 #include <cmath>
+#include <iosfwd>
 #include <limits>
 #include <memory>
 #include <string>
 #include <vector>
 
+
 namespace mgo
 {
+
+class IGpio;
 
 const int INF_RIGHT = std::numeric_limits<int>::min();
 const int INF_LEFT  = std::numeric_limits<int>::max();

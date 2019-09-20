@@ -1,13 +1,13 @@
 #include "joystick.h"
-
 #include "log.h"
 
-#include <sys/types.h>
-#include <sys/stat.h>
+#include <bits/stdint-uintn.h>
 #include <fcntl.h>
+#include <linux/joystick.h>
+#include <sys/ioctl.h>
 #include <unistd.h>
-
 #include <chrono>
+#include <utility>
 
 namespace mgo
 {

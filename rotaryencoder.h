@@ -5,8 +5,10 @@
 #include "igpio.h"
 #include "log.h"
 
+#include <bits/stdint-uintn.h>
 #include <atomic>
 #include <functional>
+#include <ostream>
 
 namespace mgo
 {

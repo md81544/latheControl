@@ -1,6 +1,7 @@
 #include "steppermotor.h"
+#include "igpio.h"
 
-#include <cassert>
+#include <bits/stdint-uintn.h>
 #include <cmath>
 
 namespace mgo

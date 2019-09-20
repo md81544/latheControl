@@ -1,9 +1,11 @@
 #include "ui.h"
-#include "log.h"
+#include "igpio.h"
+#include "threadpitches.h"  // for ThreadPitch, threadPitches
 
-#include <cmath>
+#include <stdlib.h>
 #include <iomanip>
 #include <sstream>
+
 
 namespace
 {
@@ -442,11 +444,11 @@ void Ui::processJoystick()
     }
     else if( as.y > 1024 )
     {
-        if( ! m_threadCuttingOn ) m_speed = 10;
+        if( ! m_threadCuttingOn ) m_speed = 40;
     }
     else if( as.y < -1024 )
     {
-        if( ! m_threadCuttingOn ) m_speed = 350;
+        if( ! m_threadCuttingOn ) m_speed = 400;
     }
 }
 
