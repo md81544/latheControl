@@ -54,7 +54,7 @@ void Ui::run()
              "for fast return)\n";
     m_wnd << "T - toggle thread cutting mode, P to choose thread pitch\n";
     m_wnd << "\\ - advance thread cut by " << std::setprecision(2) << SIDEFEED
-          << "mm (suitable for " << std::setprecision(2) << INFEED << "mm in-feed\n";
+          << "mm (suitable for " << std::setprecision(2) << INFEED << "mm in-feed)\n";
     m_wnd << "Escape or Q to quit\n\n";
     m_wnd.setBlocking( Input::nonBlocking );
     while( ! m_quit )
@@ -388,6 +388,8 @@ void Ui::processKeyPress()
                 break;
             }
             case 42: // asterisk, shutdown
+            // Note the command /sbin/poweroff should be made passwordless
+            // in the /etc/sudoers files
             {
                 #ifndef FAKE
                 m_motor->stop();
@@ -395,7 +397,7 @@ void Ui::processKeyPress()
                 m_moving = false;
                 m_quit = true;
                 m_motor.reset();
-                system( "sudo shutdown -h now" );
+                system( "sudo /sbin/poweroff" );
                 #endif
                 break;
             }
