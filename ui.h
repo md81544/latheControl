@@ -3,7 +3,7 @@
 #include "curses.h"
 #include "joystick.h"
 #include "rotaryencoder.h"
-#include "steppermotor.h"
+#include "stepperControl/steppermotor.h"
 
 #include <cmath>
 #include <iosfwd>

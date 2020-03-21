@@ -1,5 +1,5 @@
-#include "mockgpio.h"
-#include "steppermotor.h"
+#include "stepperControl/mockgpio.h"
+#include "stepperControl/steppermotor.h"
 #include "rotaryencoder.h"
 #include "log.h"
 

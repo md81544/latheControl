@@ -1,7 +1,7 @@
 #ifdef FAKE
-#include "mockgpio.h"
+#include "stepperControl/mockgpio.h"
 #else
-#include "gpio.h"
+#include "stepperControl/gpio.h"
 #endif
 
 #include "ui.h"

@@ -1,5 +1,5 @@
 #include "ui.h"
-#include "igpio.h"
+#include "stepperControl/igpio.h"
 #include "threadpitches.h"  // for ThreadPitch, threadPitches
 
 #include <stdlib.h>
