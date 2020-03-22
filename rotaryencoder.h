@@ -5,8 +5,8 @@
 #include "stepperControl/igpio.h"
 #include "log.h"
 
-#include <bits/stdint-uintn.h>
 #include <atomic>
+#include <cstdint>
 #include <functional>
 #include <ostream>
 

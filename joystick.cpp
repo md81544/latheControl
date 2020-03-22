@@ -1,7 +1,7 @@
 #include "joystick.h"
 #include "log.h"
 
-#include <bits/stdint-uintn.h>
+#include <cstdint>
 #include <fcntl.h>
 #include <linux/joystick.h>
 #include <sys/ioctl.h>

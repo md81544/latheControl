@@ -1,11 +1,11 @@
 #include "log.h"
 
-#include <bits/types/time_t.h>
-#include <time.h>
 #include <chrono>
+#include <cstdint>
 #include <iomanip>
 #include <ratio>
 #include <stdexcept>
+#include <time.h>
 
 
 namespace
