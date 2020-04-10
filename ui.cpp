@@ -388,7 +388,7 @@ void Ui::processKeyPress()
                 break;
             }
             case 42: // asterisk, shutdown
-            // Note the command /sbin/poweroff should be made passwordless
+            // Note the command used for shutdown should be made passwordless
             // in the /etc/sudoers files
             {
                 #ifndef FAKE
@@ -397,7 +397,7 @@ void Ui::processKeyPress()
                 m_moving = false;
                 m_quit = true;
                 m_motor.reset();
-                system( "sudo /sbin/poweroff" );
+                system( "sudo systemctl poweroff --no-block" );
                 #endif
                 break;
             }
