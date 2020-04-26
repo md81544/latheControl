@@ -35,7 +35,7 @@ namespace mgo
 Ui::Ui( IGpio& gpio )
     :   m_gpio( gpio )
 {
-    m_motor = std::make_unique<mgo::StepperMotor>( m_gpio, 1'000 );
+    m_motor = std::make_unique<mgo::StepperMotor>( m_gpio, 8, 7, 1'000 );
     m_rotaryEncoder = std::make_unique<mgo::RotaryEncoder>( m_gpio, 23, 24, 2000, 35.f/30.f );
 }
 
