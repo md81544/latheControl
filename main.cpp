@@ -19,7 +19,7 @@ int main()
         #ifdef FAKE
             mgo::MockGpio gpio( false );
         #else
-            mgo::Gpio gpio();
+            mgo::Gpio gpio;
         #endif
 
         mgo::Ui ui( gpio );
