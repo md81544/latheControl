@@ -37,7 +37,7 @@ Joystick::Joystick( const std::string& deviceName )
                         case JS_EVENT_BUTTON:
                         {
                             std::lock_guard<std::mutex> mtx( m_mutex );
-                            m_buttonStates[ event.number ] = 
+                            m_buttonStates[ event.number ] =
                                 event.value ? ButtonState::pressed : ButtonState::released;
                             break;
                         }

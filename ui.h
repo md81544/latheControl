@@ -31,9 +31,10 @@ const float SIDEFEED = INFEED * std::tan( 0.5148721f ); // 29.5° in radians
 
 class Ui
 {
-    // As it's such a simple interface, we don't separate
-    // "model" data from interface. This may be revisited
-    // at a later stage.
+    // Currently (as it started off so simply) we mix model with view
+    // in this class. Now complexity is growing this will soon be split
+    // into a proper view and model classes so the UI can very independently
+    // (intention soon is to have an SFML-based graphical UI)
 
 public:
     explicit Ui( IGpio& gpio );

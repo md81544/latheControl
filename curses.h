@@ -5,7 +5,7 @@
 #include <curses.h>
 #include <sstream>
 #include <string>
-#include <tuple> 
+#include <tuple>
 
 
 namespace mgo

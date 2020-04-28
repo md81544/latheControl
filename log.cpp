@@ -47,7 +47,7 @@ std::string NowAsString()
 #ifdef _WIN32
     struct tm tmStruct;
     gmtime_s(&tmStruct, &time);
-    // Uncomment the next line and remove the following three if 
+    // Uncomment the next line and remove the following three if
     // using g++ 5 or greater
     // oss << std::put_time( &tmStruct, "%Y%m%d-%H:%M:%S" );
     char buf[ 64 + 1 ];
@@ -56,7 +56,7 @@ std::string NowAsString()
 #else
     struct tm* tmStruct;
     tmStruct = gmtime( &time );
-    // Uncomment the next line and remove the following three if 
+    // Uncomment the next line and remove the following three if
     // using g++ 5 or greater
     //oss << std::put_time( tmStruct, "%Y%m%d-%H:%M:%S" );
     char buf[ 64 + 1 ];

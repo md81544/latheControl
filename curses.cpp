@@ -187,5 +187,4 @@ void mgo::Curses::Window::setColour( Colours pair )
 {
     printOss(); // write out any existing text
     ::attron(COLOR_PAIR( pair ) | A_BOLD );
-    
 }

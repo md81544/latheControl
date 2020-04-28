@@ -82,7 +82,7 @@ void Ui::run()
             }
             m_motor->setRpm( m_speed );
         }
-        
+
         if( ! m_moving )
         {
             m_motor->stop();
@@ -424,7 +424,7 @@ void Ui::processJoystick()
             m_status = "stopped";
             m_moving = false;
             previouslyMoving = false;
-        }           
+        }
     }
     else if( as.x > 1024 )
     {
