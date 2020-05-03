@@ -86,11 +86,6 @@ void Ui::run()
             m_zAxisMotor->setRpm( m_zSpeed );
         }
 
-        if( ! m_xMoving )
-        {
-            m_xAxisMotor->stop();
-        }
-
         if( ! m_zMoving )
         {
             m_zAxisMotor->stop();
@@ -143,8 +138,13 @@ void Ui::processKeyPress()
                 m_xMoving = ! m_xMoving;
                 if( m_xMoving )
                 {
-                    m_xAxisMotor->goToStep( INF_LEFT );
+                    m_xAxisMotor->goToStep( INF_RIGHT );
                 }
+                else
+                {
+                    m_xAxisMotor->stop();
+                }
+                
                 break;
             }
             // Cross-slide support is currently just for testing
@@ -153,8 +153,13 @@ void Ui::processKeyPress()
                 m_xMoving = ! m_xMoving;
                 if( m_xMoving )
                 {
-                    m_xAxisMotor->goToStep( INF_RIGHT );
+                    m_xAxisMotor->goToStep( INF_LEFT );
                 }
+                else
+                {
+                    m_xAxisMotor->stop();
+                }
+                
                 break;
             }
             // Cross-slide support is currently just for testing
@@ -165,11 +170,19 @@ void Ui::processKeyPress()
                     m_xSpeed -= 10.f;
                     m_xAxisMotor->setRpm( m_xSpeed );
                 }
+                else if( m_xSpeed > 2.f )
+                {
+                    m_xSpeed -= 2.f;
+                }
                 break;
             }
             // Cross-slide support is currently just for testing
             case 99:  // c
             {
+                if( m_xSpeed < 10.f )
+                {
+                    m_xSpeed = 0.f;
+                }
                 if( m_xSpeed < 240.f )
                 {
                     m_xSpeed += 10.f;
