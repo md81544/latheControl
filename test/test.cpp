@@ -9,7 +9,7 @@
 TEST_CASE( "Step once" )
 {
     mgo::MockGpio gpio( false );
-    mgo::StepperMotor motor( gpio, 0, 0, 1'000 );
+    mgo::StepperMotor motor( gpio, 0, 0, 0, 1'000, 1.0 );
     motor.goToStep( 3 );
     motor.wait();
 
@@ -19,7 +19,7 @@ TEST_CASE( "Step once" )
 TEST_CASE( "Stop motor" )
 {
     mgo::MockGpio gpio( false );
-    mgo::StepperMotor motor( gpio, 0, 0, 1'000 );
+    mgo::StepperMotor motor( gpio, 0, 0, 0, 1'000, 1.0 );
     // High number of steps:
     motor.goToStep( 1'000'000 );
     gpio.delayMicroSeconds( 1'000 );
@@ -33,7 +33,7 @@ TEST_CASE( "Stop motor" )
 TEST_CASE( "Stop stopped motor" )
 {
     mgo::MockGpio gpio( false );
-    mgo::StepperMotor motor( gpio, 0, 0, 1'000 );
+    mgo::StepperMotor motor( gpio, 0, 0, 0, 1'000, 1.0 );
     motor.stop();
     motor.wait();
     REQUIRE( ! motor.isRunning() );
@@ -42,7 +42,7 @@ TEST_CASE( "Stop stopped motor" )
 TEST_CASE( "Move then move again" )
 {
     mgo::MockGpio gpio( false );
-    mgo::StepperMotor motor( gpio, 0, 0, 1'000 );
+    mgo::StepperMotor motor( gpio, 0, 0, 0, 1'000, 1.0 );
     motor.goToStep( 50 );
     motor.wait();
     motor.goToStep( 100 );
@@ -56,7 +56,7 @@ TEST_CASE( "Move then move again" )
 TEST_CASE( "Forward and reverse" )
 {
     mgo::MockGpio gpio( false );
-    mgo::StepperMotor motor( gpio, 0, 0, 1'000 );
+    mgo::StepperMotor motor( gpio, 0, 0, 0, 1'000, 1.0 );
     motor.goToStep( 100 );
     motor.wait();
     REQUIRE( motor.getCurrentStep() == 100 );
@@ -68,7 +68,7 @@ TEST_CASE( "Forward and reverse" )
 TEST_CASE( "Check direction" )
 {
     mgo::MockGpio gpio( false );
-    mgo::StepperMotor motor( gpio, 0, 0, 1'000 );
+    mgo::StepperMotor motor( gpio, 0, 0, 0, 1'000, 1.0 );
     REQUIRE( motor.getDirection() == mgo::Direction::forward );
     motor.goToStep( 100 );
     motor.wait();
@@ -84,7 +84,7 @@ TEST_CASE( "Check direction" )
 TEST_CASE( "Stepper RPM" )
 {
     mgo::MockGpio gpio( false );
-    mgo::StepperMotor motor( gpio, 0, 0, 1'000 );
+    mgo::StepperMotor motor( gpio, 0, 0, 0, 1'000, 1.0 );
     motor.setRpm( 60 );
     // That's one revolution per second, and we've set steps per
     // revolution to be 1000, so delay (which is used TWICE per
@@ -101,7 +101,7 @@ TEST_CASE( "Stepper RPM" )
 TEST_CASE( "Stepper RPM Limits" )
 {
     mgo::MockGpio gpio( false );
-    mgo::StepperMotor motor( gpio, 0, 0, 1'000 );
+    mgo::StepperMotor motor( gpio, 0, 0, 0, 1'000, 1.0 );
     motor.setRpm( 0 );
     motor.goToStep( 10 ); // Shouldn't take infinite time :)
     motor.wait();
@@ -112,7 +112,7 @@ TEST_CASE( "Stepper RPM Limits" )
 TEST_CASE( "Change target step while busy" )
 {
     mgo::MockGpio gpio( false );
-    mgo::StepperMotor motor( gpio, 0, 0, 1'000 );
+    mgo::StepperMotor motor( gpio, 0, 0, 0, 1'000, 1.0 );
     motor.setRpm( 2'000 );
     motor.goToStep( 1'000 );
     motor.goToStep( 2'000 );

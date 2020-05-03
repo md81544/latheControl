@@ -10,13 +10,9 @@
 namespace
 {
 
-// This converts steps to real-world units.
-// We can also negate the value depending
-// on motor orientation (on a lathe the z-
-// axis decreases in value towards the chuck)
-std::string cnv( int steps )
+std::string cnv( const mgo::StepperMotor* motor, long step )
 {
-    double mm = steps * -0.001;
+    double mm = motor->getPosition( step );
     if( std::abs( mm ) < 0.001 )
     {
         mm = 0.0;
@@ -27,6 +23,11 @@ std::string cnv( int steps )
     return oss.str();
 }
 
+std::string cnv( const mgo::StepperMotor* motor )
+{
+    return cnv( motor, motor->getCurrentStep() );
+}
+
 } // end anonymous namespace
 
 namespace mgo
@@ -35,7 +36,8 @@ namespace mgo
 Ui::Ui( IGpio& gpio )
     :   m_gpio( gpio )
 {
-    m_motor = std::make_unique<mgo::StepperMotor>( m_gpio, 8, 7, 1'000 );
+    // TODO: currently ignoring enable pin
+    m_motor = std::make_unique<mgo::StepperMotor>( m_gpio, 8, 7, 0, 1'000, -0.001 );
     m_rotaryEncoder = std::make_unique<mgo::RotaryEncoder>( m_gpio, 23, 24, 2000, 35.f/30.f );
 }
 
@@ -457,7 +459,7 @@ void Ui::processJoystick()
 void Ui::updateDisplay()
 {
     using namespace mgo::Curses;
-    std::string targetString = cnv( m_targetStep );
+    std::string targetString = cnv( m_motor.get() );
 
     if ( m_targetStep == INF_LEFT  ) targetString = "<----";
     if ( m_targetStep == INF_RIGHT ) targetString = "---->";
@@ -470,7 +472,7 @@ void Ui::updateDisplay()
     m_wnd << m_status << "\n";
     m_wnd.clearToEol();
     m_wnd << "Target:      " << targetString << ", current: "
-        << cnv( m_motor->getCurrentStep() ) << "\n";
+        << cnv( m_motor.get() ) << "\n";
     m_wnd.clearToEol();
     m_wnd << "Spindle RPM: " << static_cast<int>( m_rotaryEncoder->getRpm() ) << "\n";
     if( m_threadCuttingOn )
@@ -509,7 +511,7 @@ void Ui::updateDisplay()
         highlightCheck( n );
         if ( m_memory.at( n ) != INF_RIGHT )
         {
-            m_wnd << std::setw(12) << std::left << cnv( m_memory.at( n ) );
+            m_wnd << std::setw(12) << std::left << cnv( m_motor.get(), m_memory.at( n ) );
         }
         else
         {
