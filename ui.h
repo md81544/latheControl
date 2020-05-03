@@ -52,7 +52,7 @@ private:
     bool    m_quit{ false };
     long    m_targetStep{ 0 };
     float   m_zSpeed{ 100.f };
-    float   m_xSpeed{ 120.f };
+    float   m_xSpeed{ 60.f };
     float   m_oldZSpeed{ 100.f };
     bool    m_fastReturning{ false };
     std::vector<long> m_memory{ INF_RIGHT, INF_RIGHT, INF_RIGHT, INF_RIGHT };

@@ -160,9 +160,9 @@ void Ui::processKeyPress()
             // Cross-slide support is currently just for testing
             case 67:  // shift-C
             {
-                if( m_xSpeed > 60.f )
+                if( m_xSpeed > 10.f )
                 {
-                    m_xSpeed -= 60.f;
+                    m_xSpeed -= 10.f;
                     m_xAxisMotor->setRpm( m_xSpeed );
                 }
                 break;
@@ -170,9 +170,9 @@ void Ui::processKeyPress()
             // Cross-slide support is currently just for testing
             case 99:  // c
             {
-                if( m_xSpeed < 2400.f )
+                if( m_xSpeed < 240.f )
                 {
-                    m_xSpeed += 60.f;
+                    m_xSpeed += 10.f;
                     m_xAxisMotor->setRpm( m_xSpeed );
                 }
                 break;
