@@ -51,8 +51,9 @@ private:
     bool    m_xMoving{ false };
     bool    m_quit{ false };
     long    m_targetStep{ 0 };
-    float   m_speed{ 100.f };
-    int     m_oldSpeed{ 100 };
+    float   m_zSpeed{ 100.f };
+    float   m_xSpeed{ 120.f };
+    float   m_oldZSpeed{ 100.f };
     bool    m_fastReturning{ false };
     std::vector<long> m_memory{ INF_RIGHT, INF_RIGHT, INF_RIGHT, INF_RIGHT };
     std::size_t m_currentMemory{ 0 };

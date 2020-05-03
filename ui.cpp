@@ -46,8 +46,8 @@ void Ui::run()
 {
     using namespace mgo::Curses;
 
-    m_zAxisMotor->setRpm( m_speed );
-    m_xAxisMotor->setRpm( 60.0 );
+    m_zAxisMotor->setRpm( m_zSpeed );
+    m_xAxisMotor->setRpm( m_xSpeed );
 
     m_wnd.cursor( Cursor::off );
     m_wnd << "Up/down (or Fn keys) to set speed\n";
@@ -67,7 +67,7 @@ void Ui::run()
 
         if( ! m_threadCuttingOn || m_fastReturning )
         {
-            m_zAxisMotor->setRpm( m_speed );
+            m_zAxisMotor->setRpm( m_zSpeed );
         }
         else
         {
@@ -77,13 +77,13 @@ void Ui::run()
             // because my stepper motor / leadscrew does one mm per
             // revolution, there is a direct correlation between spindle
             // rpm and stepper motor rpm for a 1mm thread pitch.
-            m_speed = pitch * m_rotaryEncoder->getRpm();
-            if( m_speed > MAX_MOTOR_SPEED )
+            m_zSpeed = pitch * m_rotaryEncoder->getRpm();
+            if( m_zSpeed > MAX_MOTOR_SPEED )
             {
-                m_speed = MAX_MOTOR_SPEED;
+                m_zSpeed = MAX_MOTOR_SPEED;
                 m_zMoving = false;
             }
-            m_zAxisMotor->setRpm( m_speed );
+            m_zAxisMotor->setRpm( m_zSpeed );
         }
 
         if( ! m_xMoving )
@@ -105,7 +105,7 @@ void Ui::run()
             m_status = "stopped";
             if( m_fastReturning )
             {
-                m_speed = m_oldSpeed;
+                m_zSpeed = m_oldZSpeed;
                 m_fastReturning = false;
             }
         }
@@ -147,6 +147,7 @@ void Ui::processKeyPress()
                 }
                 break;
             }
+            // Cross-slide support is currently just for testing
             case 120:  // x
             {
                 m_xMoving = ! m_xMoving;
@@ -156,29 +157,49 @@ void Ui::processKeyPress()
                 }
                 break;
             }
+            // Cross-slide support is currently just for testing
+            case 67:  // shift-C
+            {
+                if( m_xSpeed > 60.f )
+                {
+                    m_xSpeed -= 60.f;
+                    m_xAxisMotor->setRpm( m_xSpeed );
+                }
+                break;
+            }
+            // Cross-slide support is currently just for testing
+            case 99:  // c
+            {
+                if( m_xSpeed < 2400.f )
+                {
+                    m_xSpeed += 60.f;
+                    m_xAxisMotor->setRpm( m_xSpeed );
+                }
+                break;
+            }
             case 259: // Up arrow
             {
                 if( m_threadCuttingOn ) break;
-                if( m_speed < 20 )
+                if( m_zSpeed < 20 )
                 {
-                    m_speed = 20;
+                    m_zSpeed = 20;
                 }
                 else
                 {
-                    if( m_speed < MAX_MOTOR_SPEED ) m_speed += 20;
+                    if( m_zSpeed < MAX_MOTOR_SPEED ) m_zSpeed += 20;
                 }
                 break;
             }
             case 258: // Down arrow
             {
                 if( m_threadCuttingOn ) break;
-                if( m_speed > 20 )
+                if( m_zSpeed > 20 )
                 {
-                    m_speed -= 20;
+                    m_zSpeed -= 20;
                 }
                 else
                 {
-                    if (m_speed > 1) --m_speed;
+                    if (m_zSpeed) --m_zSpeed;
                 }
                 break;
             }
@@ -227,7 +248,7 @@ void Ui::processKeyPress()
                 ++m_threadCutAdvanceCount;
                 m_rotaryEncoder->setAdvanceValueMicroseconds(
                     m_threadCutAdvanceCount *
-                    ( ( 1'000'000.f / ( m_speed / 60.f) ) * SIDEFEED )
+                    ( ( 1'000'000.f / ( m_zSpeed / 60.f) ) * SIDEFEED )
                     );
                 break;
             }
@@ -328,62 +349,62 @@ void Ui::processKeyPress()
 
             case 265: // F1
             {
-                if( ! m_threadCuttingOn ) m_speed = 20;
+                if( ! m_threadCuttingOn ) m_zSpeed = 20;
                 break;
             }
             case 266: // F2
             {
-                if( ! m_threadCuttingOn ) m_speed = 40;
+                if( ! m_threadCuttingOn ) m_zSpeed = 40;
                 break;
             }
             case 267: // F3
             {
-                if( ! m_threadCuttingOn ) m_speed = 100;
+                if( ! m_threadCuttingOn ) m_zSpeed = 100;
                 break;
             }
             case 268: // F4
             {
-                if( ! m_threadCuttingOn ) m_speed = 200;
+                if( ! m_threadCuttingOn ) m_zSpeed = 200;
                 break;
             }
             case 269: // F5
             {
-                if( ! m_threadCuttingOn ) m_speed = 250;
+                if( ! m_threadCuttingOn ) m_zSpeed = 250;
                 break;
             }
             case 270: // F6
             {
-                if( ! m_threadCuttingOn ) m_speed = 300;
+                if( ! m_threadCuttingOn ) m_zSpeed = 300;
                 break;
             }
             case 271: // F7
             {
-                if( ! m_threadCuttingOn ) m_speed = 350;
+                if( ! m_threadCuttingOn ) m_zSpeed = 350;
                 break;
             }
             case 272: // F8
             {
-                if( ! m_threadCuttingOn ) m_speed = 400;
+                if( ! m_threadCuttingOn ) m_zSpeed = 400;
                 break;
             }
             case 273: // F9
             {
-                if( ! m_threadCuttingOn ) m_speed = 450;
+                if( ! m_threadCuttingOn ) m_zSpeed = 450;
                 break;
             }
             case 274: // F10
             {
-                if( ! m_threadCuttingOn ) m_speed = 500;
+                if( ! m_threadCuttingOn ) m_zSpeed = 500;
                 break;
             }
             case 275: // F11
             {
-                if( ! m_threadCuttingOn ) m_speed = 550;
+                if( ! m_threadCuttingOn ) m_zSpeed = 550;
                 break;
             }
             case 276: // F12
             {
-                if( ! m_threadCuttingOn ) m_speed = MAX_MOTOR_SPEED;
+                if( ! m_threadCuttingOn ) m_zSpeed = MAX_MOTOR_SPEED;
                 break;
             }
 
@@ -392,8 +413,8 @@ void Ui::processKeyPress()
             {
                 if( m_memory.at( m_currentMemory ) == INF_RIGHT ) break;
                 // Fast return to point
-                m_oldSpeed = m_speed;
-                m_speed = MAX_MOTOR_SPEED;
+                m_oldZSpeed = m_zSpeed;
+                m_zSpeed = MAX_MOTOR_SPEED;
                 m_fastReturning = true;
                 m_zAxisMotor->stop();
                 m_zAxisMotor->wait();
@@ -428,10 +449,11 @@ void Ui::processKeyPress()
                 #endif
                 break;
             }
-            default:
+            default: // e.g. space bar (32) to stop all motors
             {
                 m_status = "stopped";
                 m_zMoving = false;
+                m_xMoving = false;
                 break;
             }
         }
@@ -449,14 +471,15 @@ void Ui::updateDisplay()
     m_wnd.move( 9, 0 );
     m_wnd.setColour( Colours::yellowOnBlack );
     m_wnd.clearToEol();
-    m_wnd << "Tool speed:  "  << std::setw(3) << std::left << static_cast<int>( m_speed )
+    m_wnd << "Tool speed:  "  << std::setw(3) << std::left << static_cast<int>( m_zSpeed )
         << " mm/min.   ";
     m_wnd << m_status << "\n";
     m_wnd.clearToEol();
     m_wnd << "Target:      " << targetString << ", current: "
         << cnv( m_zAxisMotor.get() ) << "\n";
     m_wnd.clearToEol();
-    m_wnd << "X: " << cnv( m_xAxisMotor.get() ) << "\n";
+    m_wnd << "X: " << cnv( m_xAxisMotor.get() ) << "  " << static_cast<int>(m_xSpeed) << " rpm ";
+    m_wnd << " [m_xMoving = " << m_xMoving << ", is running = " << m_xAxisMotor->isRunning() << "]\n"; // DEBUG
     m_wnd.clearToEol();
     m_wnd << "Spindle RPM: " << static_cast<int>( m_rotaryEncoder->getRpm() ) << "\n";
     if( m_threadCuttingOn )
