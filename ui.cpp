@@ -37,7 +37,8 @@ Ui::Ui( IGpio& gpio )
     :   m_gpio( gpio )
 {
     // TODO: currently ignoring enable pin
-    m_motor = std::make_unique<mgo::StepperMotor>( m_gpio, 8, 7, 0, 1'000, -0.001 );
+    m_zAxisMotor = std::make_unique<mgo::StepperMotor>( m_gpio, 8, 7, 0, 1'000, -0.001 );
+    m_xAxisMotor = std::make_unique<mgo::StepperMotor>( m_gpio, 20, 21, 0, 800, 1.0 / 2'400.0 );
     m_rotaryEncoder = std::make_unique<mgo::RotaryEncoder>( m_gpio, 23, 24, 2000, 35.f/30.f );
 }
 
@@ -45,7 +46,8 @@ void Ui::run()
 {
     using namespace mgo::Curses;
 
-    m_motor->setRpm( m_speed );
+    m_zAxisMotor->setRpm( m_speed );
+    m_xAxisMotor->setRpm( 60.0 );
 
     m_wnd.cursor( Cursor::off );
     m_wnd << "Up/down (or Fn keys) to set speed\n";
@@ -62,11 +64,10 @@ void Ui::run()
     while( ! m_quit )
     {
         processKeyPress();
-        processJoystick();
 
         if( ! m_threadCuttingOn || m_fastReturning )
         {
-            m_motor->setRpm( m_speed );
+            m_zAxisMotor->setRpm( m_speed );
         }
         else
         {
@@ -80,22 +81,27 @@ void Ui::run()
             if( m_speed > MAX_MOTOR_SPEED )
             {
                 m_speed = MAX_MOTOR_SPEED;
-                m_moving = false;
+                m_zMoving = false;
             }
-            m_motor->setRpm( m_speed );
+            m_zAxisMotor->setRpm( m_speed );
         }
 
-        if( ! m_moving )
+        if( ! m_xMoving )
         {
-            m_motor->stop();
+            m_xAxisMotor->stop();
+        }
+
+        if( ! m_zMoving )
+        {
+            m_zAxisMotor->stop();
         }
         else
         {
-            m_motor->goToStep( m_targetStep );
+            m_zAxisMotor->goToStep( m_targetStep );
         }
-        if ( !m_motor->isRunning() )
+        if ( !m_zAxisMotor->isRunning() )
         {
-            m_moving = false;
+            m_zMoving = false;
             m_status = "stopped";
             if( m_fastReturning )
             {
@@ -127,8 +133,27 @@ void Ui::processKeyPress()
             case 113: // q
             case 27:  // Esc
             {
-                m_moving = false;
+                m_zMoving = false;
                 m_quit = true;
+                break;
+            }
+            // Cross-slide support is currently just for testing
+            case 88:   // X (shift-x)
+            {
+                m_xMoving = ! m_xMoving;
+                if( m_xMoving )
+                {
+                    m_xAxisMotor->goToStep( INF_LEFT );
+                }
+                break;
+            }
+            case 120:  // x
+            {
+                m_xMoving = ! m_xMoving;
+                if( m_xMoving )
+                {
+                    m_xAxisMotor->goToStep( INF_RIGHT );
+                }
                 break;
             }
             case 259: // Up arrow
@@ -160,7 +185,7 @@ void Ui::processKeyPress()
             case 77:  // M
             case 109: // m
             {
-                m_memory.at( m_currentMemory ) = m_motor->getCurrentStep();
+                m_memory.at( m_currentMemory ) = m_zAxisMotor->getCurrentStep();
                 break;
             }
             case 84:   // T
@@ -223,12 +248,12 @@ void Ui::processKeyPress()
                 // We always start at the same rotational position: it's
                 // required for thread cutting, but doesn't impact
                 // anything if we're just turning down, so we always do it.
-                m_motor->stop();
-                m_motor->wait();
+                m_zAxisMotor->stop();
+                m_zAxisMotor->wait();
                 m_status = "returning";
                 m_rotaryEncoder->callbackAtZeroDegrees([&]()
                     {
-                        m_moving = true;
+                        m_zMoving = true;
                         m_targetStep = m_memory.at( m_currentMemory );
                     }
                     );
@@ -237,49 +262,49 @@ void Ui::processKeyPress()
             case 260: // Left arrow
             {
                 // Same key will cancel if we're already moving
-                if ( m_moving )
+                if ( m_zMoving )
                 {
-                    m_moving = false;
+                    m_zMoving = false;
                     break;
                 }
                 m_status = "moving left";
-                m_moving = true;
+                m_zMoving = true;
                 m_targetStep = INF_LEFT;
                 break;
             }
             case 261: // Right arrow
             {
                 // Same key will cancel if we're already moving
-                if ( m_moving )
+                if ( m_zMoving )
                 {
-                    m_moving = false;
+                    m_zMoving = false;
                     break;
                 }
                 m_status = "moving right";
-                m_moving = true;
+                m_zMoving = true;
                 m_targetStep = INF_RIGHT;
                 break;
             }
             case 44: // comma (<) - nudge left
             {
-                if ( m_moving )
+                if ( m_zMoving )
                 {
-                    m_motor->stop();
-                    m_motor->wait();
+                    m_zAxisMotor->stop();
+                    m_zAxisMotor->wait();
                 }
-                m_moving = true;
-                m_targetStep = m_motor->getCurrentStep() + 25;
+                m_zMoving = true;
+                m_targetStep = m_zAxisMotor->getCurrentStep() + 25;
                 break;
             }
             case 46: // full stop (>) - nudge right
             {
-                if ( m_moving )
+                if ( m_zMoving )
                 {
-                    m_motor->stop();
-                    m_motor->wait();
+                    m_zAxisMotor->stop();
+                    m_zAxisMotor->wait();
                 }
-                m_moving = true;
-                m_targetStep = m_motor->getCurrentStep() - 25;
+                m_zMoving = true;
+                m_targetStep = m_zAxisMotor->getCurrentStep() - 25;
                 break;
             }
             case 91: // [
@@ -370,10 +395,10 @@ void Ui::processKeyPress()
                 m_oldSpeed = m_speed;
                 m_speed = MAX_MOTOR_SPEED;
                 m_fastReturning = true;
-                m_motor->stop();
-                m_motor->wait();
+                m_zAxisMotor->stop();
+                m_zAxisMotor->wait();
                 m_status = "fast returning";
-                m_moving = true;
+                m_zMoving = true;
                 m_targetStep = m_memory.at( m_currentMemory );
                 break;
             }
@@ -383,10 +408,10 @@ void Ui::processKeyPress()
                 // Zeroing can be confusing unless we
                 // force a stop (i.e. the motor might start
                 // as we are no longer at the target position)
-                m_motor->stop();
+                m_zAxisMotor->stop();
                 m_targetStep = 0;
-                m_motor->zeroPosition();
-                m_moving = false;
+                m_zAxisMotor->zeroPosition();
+                m_zMoving = false;
                 break;
             }
             case 42: // asterisk, shutdown
@@ -394,11 +419,11 @@ void Ui::processKeyPress()
             // in the /etc/sudoers files
             {
                 #ifndef FAKE
-                m_motor->stop();
-                m_motor->wait();
-                m_moving = false;
+                m_zAxisMotor->stop();
+                m_zAxisMotor->wait();
+                m_zMoving = false;
                 m_quit = true;
-                m_motor.reset();
+                m_zAxisMotor.reset();
                 system( "sudo systemctl poweroff --no-block" );
                 #endif
                 break;
@@ -406,60 +431,17 @@ void Ui::processKeyPress()
             default:
             {
                 m_status = "stopped";
-                m_moving = false;
+                m_zMoving = false;
                 break;
             }
         }
     }
 }
 
-void Ui::processJoystick()
-{
-    static bool previouslyMoving = false;
-    auto as = m_joystick.getAxisState( 0 );
-    // arbitrarily I'm using 1024 as the dead zone
-    // my stick's axis zero only reports 0 or ±32768
-    if( as.x < 1024 && as.x > -1024 )
-    {
-        if( previouslyMoving )
-        {
-            m_status = "stopped";
-            m_moving = false;
-            previouslyMoving = false;
-        }
-    }
-    else if( as.x > 1024 )
-    {
-        m_status = "moving right";
-        m_moving = true;
-        m_targetStep = INF_RIGHT;
-        previouslyMoving = true;
-    }
-    else if( as.x < -1024 )
-    {
-        m_status = "moving left";
-        m_moving = true;
-        m_targetStep = INF_LEFT;
-        previouslyMoving = true;
-    }
-    if( as.y < 1024 && as.y > -1024 )
-    {
-        // Do nothing at the moment
-    }
-    else if( as.y > 1024 )
-    {
-        if( ! m_threadCuttingOn ) m_speed = 40;
-    }
-    else if( as.y < -1024 )
-    {
-        if( ! m_threadCuttingOn ) m_speed = 400;
-    }
-}
-
 void Ui::updateDisplay()
 {
     using namespace mgo::Curses;
-    std::string targetString = cnv( m_motor.get() );
+    std::string targetString = cnv( m_zAxisMotor.get() );
 
     if ( m_targetStep == INF_LEFT  ) targetString = "<----";
     if ( m_targetStep == INF_RIGHT ) targetString = "---->";
@@ -472,7 +454,9 @@ void Ui::updateDisplay()
     m_wnd << m_status << "\n";
     m_wnd.clearToEol();
     m_wnd << "Target:      " << targetString << ", current: "
-        << cnv( m_motor.get() ) << "\n";
+        << cnv( m_zAxisMotor.get() ) << "\n";
+    m_wnd.clearToEol();
+    m_wnd << "X: " << cnv( m_xAxisMotor.get() ) << "\n";
     m_wnd.clearToEol();
     m_wnd << "Spindle RPM: " << static_cast<int>( m_rotaryEncoder->getRpm() ) << "\n";
     if( m_threadCuttingOn )
@@ -511,7 +495,7 @@ void Ui::updateDisplay()
         highlightCheck( n );
         if ( m_memory.at( n ) != INF_RIGHT )
         {
-            m_wnd << std::setw(12) << std::left << cnv( m_motor.get(), m_memory.at( n ) );
+            m_wnd << std::setw(12) << std::left << cnv( m_zAxisMotor.get(), m_memory.at( n ) );
         }
         else
         {
