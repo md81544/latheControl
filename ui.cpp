@@ -135,31 +135,27 @@ void Ui::processKeyPress()
             // Cross-slide support is currently just for testing
             case 88:   // X (shift-x)
             {
-                m_xMoving = ! m_xMoving;
-                if( m_xMoving )
-                {
-                    m_xAxisMotor->goToStep( INF_RIGHT );
-                }
-                else
+                if( m_xAxisMotor->isRunning() )
                 {
                     m_xAxisMotor->stop();
                 }
-                
+                else
+                {
+                    m_xAxisMotor->goToStep( INF_RIGHT );
+                }
                 break;
             }
             // Cross-slide support is currently just for testing
             case 120:  // x
             {
-                m_xMoving = ! m_xMoving;
-                if( m_xMoving )
-                {
-                    m_xAxisMotor->goToStep( INF_LEFT );
-                }
-                else
+                if( m_xAxisMotor->isRunning() )
                 {
                     m_xAxisMotor->stop();
                 }
-                
+                else
+                {
+                    m_xAxisMotor->goToStep( INF_LEFT );
+                }
                 break;
             }
             // Cross-slide support is currently just for testing
@@ -188,6 +184,18 @@ void Ui::processKeyPress()
                     m_xSpeed += 10.f;
                     m_xAxisMotor->setRpm( m_xSpeed );
                 }
+                break;
+            }
+            // Cross-slide support is currently just for testin
+            case 68:  // D - nudge in
+            case 100: // d - nudge in
+            {
+                if ( m_xAxisMotor->isRunning() )
+                {
+                    m_xAxisMotor->stop();
+                    m_xAxisMotor->wait();
+                }
+                m_xAxisMotor->goToStep( m_xAxisMotor->getCurrentStep() + 60 );
                 break;
             }
             case 259: // Up arrow
@@ -446,6 +454,8 @@ void Ui::processKeyPress()
                 m_targetStep = 0;
                 m_zAxisMotor->zeroPosition();
                 m_zMoving = false;
+                m_xAxisMotor->stop();
+                m_xAxisMotor->zeroPosition();
                 break;
             }
             case 42: // asterisk, shutdown
@@ -456,8 +466,9 @@ void Ui::processKeyPress()
                 m_zAxisMotor->stop();
                 m_zAxisMotor->wait();
                 m_zMoving = false;
+                m_xAxisMotor->stop();
+                m_xAxisMotor->wait();
                 m_quit = true;
-                m_zAxisMotor.reset();
                 system( "sudo systemctl poweroff --no-block" );
                 #endif
                 break;
@@ -466,7 +477,7 @@ void Ui::processKeyPress()
             {
                 m_status = "stopped";
                 m_zMoving = false;
-                m_xMoving = false;
+                m_xAxisMotor->stop();
                 break;
             }
         }
@@ -491,8 +502,7 @@ void Ui::updateDisplay()
     m_wnd << "Target:      " << targetString << ", current: "
         << cnv( m_zAxisMotor.get() ) << "\n";
     m_wnd.clearToEol();
-    m_wnd << "X: " << cnv( m_xAxisMotor.get() ) << "  " << static_cast<int>(m_xSpeed) << " rpm ";
-    m_wnd << " [m_xMoving = " << m_xMoving << ", is running = " << m_xAxisMotor->isRunning() << "]\n"; // DEBUG
+    m_wnd << "X: " << cnv( m_xAxisMotor.get() ) << "  " << static_cast<int>(m_xSpeed) << " rpm \n";
     m_wnd.clearToEol();
     m_wnd << "Spindle RPM: " << static_cast<int>( m_rotaryEncoder->getRpm() ) << "\n";
     if( m_threadCuttingOn )

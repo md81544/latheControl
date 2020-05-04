@@ -48,7 +48,6 @@ private:
 
     std::string m_status{ "stopped" };
     bool    m_zMoving{ false };
-    bool    m_xMoving{ false };
     bool    m_quit{ false };
     long    m_targetStep{ 0 };
     float   m_zSpeed{ 100.f };
