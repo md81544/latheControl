@@ -186,7 +186,7 @@ void Ui::processKeyPress()
                 }
                 break;
             }
-            // Cross-slide support is currently just for testin
+            // Cross-slide support is currently just for testing
             case 68:  // D - nudge in
             case 100: // d - nudge in
             {
