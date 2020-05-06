@@ -16,6 +16,7 @@ public:
     // keypresses should be returned as ASCII codes. Should not block.
     virtual int getInput() = 0;
     virtual void updateDisplay( const Model& ) = 0;
+    virtual ~IView(){};
 };
 
 } // namespace mgo

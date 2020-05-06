@@ -28,6 +28,7 @@ const float SIDEFEED = INFEED * std::tan( 0.5148721f ); // 29.5° in radians
 
 struct Model
 {
+    Model( IGpio& gpio ) : m_gpio(gpio) {}
     IGpio& m_gpio;
     std::string m_status{ "stopped" };
     bool    m_zMoving{ false };

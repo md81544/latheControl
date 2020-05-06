@@ -1,5 +1,6 @@
 #pragma once
 
+#include "curses.h"
 #include "iview.h"
 
 namespace mgo
@@ -9,10 +10,15 @@ class Model;
 
 class ViewCurses : public IView
 {
-    virtual void initialise() override;
-    virtual void close() override;
-    virtual int getInput() override;
-    virtual void updateDisplay( const Model& ) override;
+public:
+    void initialise() override;
+    void close() override;
+    int  getInput() override;
+    void updateDisplay( const Model& ) override;
+    // non-overrides:
+    void highlightCheck( const Model& model, std::size_t memoryLocation );
+private:
+    mgo::Curses::Window m_wnd;
 };
 
 } // namespace mgo

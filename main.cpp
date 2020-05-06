@@ -4,13 +4,15 @@
 #include "stepperControl/gpio.h"
 #endif
 
-#include "ui.h"
+#include "controller.h"
 #include "log.h"
 
 #include <iostream>
 
 int main()
 {
+    // TODO command line processing - to switch view from 
+    // curses to SFML for example
     try
     {
         INIT_MGOLOG( "els.log" );
@@ -22,9 +24,8 @@ int main()
             mgo::Gpio gpio;
         #endif
 
-        mgo::Ui ui( gpio );
-        ui.run();
-
+        mgo::Controller controller( gpio );
+        controller.run();
 
         return 0;
     }
