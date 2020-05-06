@@ -1,3 +1,7 @@
+Abstract out "view" to enable switch to SFML
+
+Need to implement code to deal with backlash
+
 Read thread pitch data from config file
 
 Remove all unicorn initialisation
@@ -14,9 +18,6 @@ to revisit gearing of rotary encoder)
 Rotary encoder doesn't currently do anything with rotation direction,
 so getPositionDegrees() fails to take into account manual back-rotation
 of the chuck/spindle
-
-Split UI into model and view components now it's getting more complex
-to allow easier migration to a graphic UI in future (perhaps)
 
 Consider adding support for some form of switch / sensor to prevent
 carriage movement outside of specific points (or mandate position
