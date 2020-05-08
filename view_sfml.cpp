@@ -79,7 +79,7 @@ int convertKeyCode( sf::Keyboard::Key sfKey )
 
 void ViewSfml::initialise()
 {
-    #ifdef FAK
+    #ifdef FAKE
         // run in a window in "fake" mode for manual testing
     m_window = std::make_unique<sf::RenderWindow>(
         sf::VideoMode(1024, 600, 32), "Electronic Lead Screw" );
