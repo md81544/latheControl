@@ -79,10 +79,14 @@ int convertKeyCode( sf::Keyboard::Key sfKey )
 
 void ViewSfml::initialise()
 {
+    #ifdef FAK
+        // run in a window in "fake" mode for manual testing
     m_window = std::make_unique<sf::RenderWindow>(
-        sf::VideoMode(1024, 600, 32), "Electronic Lead Screw");
-        // TODO - make fullscreen configurable?
-        //sf::VideoMode(1024, 600, 32), "Electronic Lead Screw", sf::Style::Fullscreen);
+        sf::VideoMode(1024, 600, 32), "Electronic Lead Screw" );
+    #else
+    m_window = std::make_unique<sf::RenderWindow>(
+        sf::VideoMode::getDesktopMode(), "Electronic Lead Screw", sf::Style::Fullscreen);
+    #endif
     m_font = std::make_unique<sf::Font>();
     if (!m_font->loadFromFile("./DroidSansMono.ttf"))
     {
