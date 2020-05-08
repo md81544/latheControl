@@ -1,6 +1,6 @@
 CC      = g++
 CFLAGS  = -std=c++14 -O3 -Wall -Wextra -Wpedantic -Werror -g
-LIBS = -lncurses -pthread
+LIBS = -lncurses -pthread -lsfml-graphics -lsfml-window -lsfml-system
 
 SOURCES := $(wildcard *.cpp stepperControl/*.cpp)
 FAKESOURCES := $(shell ls *.cpp stepperControl/*.cpp | grep -v gpio.cpp)

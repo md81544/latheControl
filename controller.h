@@ -11,13 +11,13 @@ class IView;
 class Controller
 {
 public:
-    explicit Controller( IGpio& gpio );
+    explicit Controller( Model* model );
     // run() is the main loop. When this returns,
     // the application can quit.
     void run();
     void processKeyPress();
 private:
-    Model m_model;
+    Model* m_model; // non-owning
     std::unique_ptr<IView> m_view;
 };
 
