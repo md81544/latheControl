@@ -3,8 +3,7 @@
 #include "model.h"
 #include "threadpitches.h"
 
-
-#include <iomanip>
+#include <fmt/format.h>
 
 namespace mgo
 {
@@ -19,10 +18,7 @@ std::string cnv( const mgo::StepperMotor* motor, long step )
     {
         mm = 0.0;
     }
-    std::ostringstream oss;
-    oss.precision(3);
-    oss << std::fixed << mm << " mm";
-    return oss.str();
+    return fmt::format( "{:.3f} mm", mm );
 }
 
 std::string cnv( const mgo::StepperMotor* motor )

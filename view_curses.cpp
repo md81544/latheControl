@@ -4,7 +4,7 @@
 #include "model.h"
 #include "threadpitches.h"
 
-#include <iomanip>
+#include <fmt/format.h>
 
 namespace mgo
 {
@@ -19,10 +19,7 @@ std::string cnv( const mgo::StepperMotor* motor, long step )
     {
         mm = 0.0;
     }
-    std::ostringstream oss;
-    oss.precision(3);
-    oss << std::fixed << mm << " mm";
-    return oss.str();
+    return fmt::format( "{:.3f} mm", mm );
 }
 
 std::string cnv( const mgo::StepperMotor* motor )
@@ -43,8 +40,8 @@ void ViewCurses::initialise()
     m_wnd << "M remembers pos, and Enter returns to it (F "
              "for fast return)\n";
     m_wnd << "T - toggle thread cutting mode, P to choose thread pitch\n";
-    m_wnd << "\\ - advance thread cut by " << std::setprecision(2) << SIDEFEED
-          << "mm (suitable for " << std::setprecision(2) << INFEED << "mm in-feed)\n";
+    m_wnd << fmt::format( "\\ - advance thread cut by {:.2f} mm (suitable "
+                          "for {:.2f} mm in-feed)\n", SIDEFEED, INFEED );
     m_wnd << "Escape or Q to quit\n\n";
     m_wnd.setBlocking( Input::nonBlocking );
 }
@@ -71,9 +68,7 @@ void ViewCurses::updateDisplay( const Model& model )
     m_wnd.move( 9, 0 );
     m_wnd.setColour( Colours::yellowOnBlack );
     m_wnd.clearToEol();
-    m_wnd << "Tool speed:  "  << std::setw(3) << std::left << static_cast<int>( model.m_zSpeed )
-        << " mm/min.   ";
-    m_wnd << model.m_status << "\n";
+    m_wnd << fmt::format( "Tool speed:  {:<3.0f} mm/min   {}\n",  model.m_zSpeed, model.m_status );
     m_wnd.clearToEol();
     m_wnd << "Target:      " << targetString << ", current: "
         << cnv( model.m_zAxisMotor.get() ) << "\n";
@@ -104,9 +99,8 @@ void ViewCurses::updateDisplay( const Model& model )
     m_wnd.clearToEol();
     for ( int n = 0; n < 4; ++n )
     {
-        std::string label = "Memory " + std::to_string( n + 1 );
         highlightCheck( model, n );
-        m_wnd << std::setw(12) << label;
+        m_wnd << fmt::format( "Memory {:<5}", n + 1 );
     }
     m_wnd << "\n";
 
@@ -117,11 +111,11 @@ void ViewCurses::updateDisplay( const Model& model )
         highlightCheck( model, n );
         if ( model.m_memory.at( n ) != INF_RIGHT )
         {
-            m_wnd << std::setw(12) << std::left << cnv( model.m_zAxisMotor.get(), model.m_memory.at( n ) );
+            m_wnd << fmt::format( "{:<12}", cnv( model.m_zAxisMotor.get(), model.m_memory.at( n ) ) );
         }
         else
         {
-            m_wnd << std::setw(12) << "not set";
+            m_wnd << "not set     ";
         }
     }
 
