@@ -18,7 +18,7 @@ std::string cnv( const mgo::StepperMotor* motor, long step )
     {
         mm = 0.0;
     }
-    return fmt::format( "{:.3f} mm", mm );
+    return fmt::format( "{: .3f} mm", mm );
 }
 
 std::string cnv( const mgo::StepperMotor* motor )
@@ -26,13 +26,18 @@ std::string cnv( const mgo::StepperMotor* motor )
     return cnv( motor, motor->getCurrentStep() );
 }
 
-int convertKeyCode( sf::Keyboard::Key sfKey )
+int convertKeyCode( sf::Event event )
 {
+    int sfKey = event.key.code;
     // Letters
     if( sfKey >= sf::Keyboard::A && sfKey <= sf::Keyboard::Z )
     {
         // A is defined in SFML's enum as zero
-        return 65 + sfKey;
+        if( event.key.shift )
+        {
+            return 65 + sfKey;
+        }
+        return 97 + sfKey;
     }
     // Function keys
     if( sfKey >= sf::Keyboard::F1 && sfKey <= sf::Keyboard::F15 )
@@ -88,9 +93,13 @@ void ViewSfml::initialise()
     {
        throw std::runtime_error("Could not load TTF font");
     }
-    m_txtZPosition = std::make_unique<sf::Text>("", *m_font, 50 );
-    m_txtZPosition->setPosition( { 20, 10 });
-    m_txtZPosition->setFillColor( sf::Color::Green );
+    m_txtZ = std::make_unique<sf::Text>("", *m_font, 50 );
+    m_txtZ->setPosition( { 20, 10 });
+    m_txtZ->setFillColor( sf::Color::Green );
+
+    m_txtX = std::make_unique<sf::Text>("", *m_font, 50 );
+    m_txtX->setPosition( { 20, 70 });
+    m_txtX->setFillColor( sf::Color::Green );
 }
 
 void ViewSfml::close()
@@ -104,8 +113,7 @@ int  ViewSfml::getInput()
     m_window->pollEvent( event );
     if( event.type == sf::Event::KeyPressed )
     {
-        MGOLOG( std::to_string( event.key.code ) );
-        return convertKeyCode( event.key.code );
+        return convertKeyCode( event );
     }
     return -1;
 }
@@ -115,10 +123,19 @@ void ViewSfml::updateDisplay( const Model& model )
     std::string t = cnv( model.m_zAxisMotor.get() );
     // TODO
     m_window->clear();
-    m_txtZPosition->setString( "Z: " + std::to_string( model.m_keyPressed ));
-    m_window->draw( *m_txtZPosition );
+    updateTextFromModel( model );
+    m_window->draw( *m_txtZ );
+    m_window->draw( *m_txtX );
     m_window->display();
     
 }
+
+void ViewSfml::updateTextFromModel( const Model& model )
+{
+    // Updates all the text objects with data in the model
+    m_txtZ->setString( fmt::format( "Z: {}", cnv( model.m_zAxisMotor.get() ) ) );
+    m_txtX->setString( fmt::format( "X: {}", cnv( model.m_xAxisMotor.get() ) ) );
+}
+
 
 } // namespace mgo
