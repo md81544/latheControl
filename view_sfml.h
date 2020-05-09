@@ -23,8 +23,14 @@ private:
     std::unique_ptr<sf::RenderWindow> m_window;
     std::unique_ptr<sf::Font> m_font;
     // Text objects:
-    std::unique_ptr<sf::Text> m_txtZ;
-    std::unique_ptr<sf::Text> m_txtX;
+    std::unique_ptr<sf::Text> m_txtZPos;
+    std::unique_ptr<sf::Text> m_txtZSpeed;
+    std::unique_ptr<sf::Text> m_txtXPos;
+    std::unique_ptr<sf::Text> m_txtXSpeed;
+    std::unique_ptr<sf::Text> m_txtRpm;
+
+    std::vector<std::unique_ptr<sf::Text>> m_txtMemoryLabel;
+    std::vector<std::unique_ptr<sf::Text>> m_txtMemoryValue;
 };
 
 } // namespace mgo

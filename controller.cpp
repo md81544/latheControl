@@ -196,7 +196,7 @@ void Controller::processKeyPress()
                 }
                 else
                 {
-                    if ( m_model->m_zSpeed ) --m_model->m_zSpeed;
+                    if ( m_model->m_zSpeed > 1 ) --m_model->m_zSpeed;
                 }
                 break;
             }
