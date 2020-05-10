@@ -132,6 +132,10 @@ void ViewSfml::initialise()
         m_txtMemoryValue.push_back( std::move( val ) );
     }
 
+    m_txtStatus = std::make_unique<sf::Text>("", *m_font, 20 );
+    m_txtStatus->setPosition( { 20, 550 });
+    m_txtStatus->setFillColor( sf::Color::Green );
+
 }
 
 void ViewSfml::close()
@@ -161,6 +165,7 @@ void ViewSfml::updateDisplay( const Model& model )
     m_window->draw( *m_txtXPos );
     m_window->draw( *m_txtXSpeed );
     m_window->draw( *m_txtRpm );
+    m_window->draw( *m_txtStatus );
     for( std::size_t n = 0; n < m_txtMemoryLabel.size(); ++n )
     {
         m_window->draw( *m_txtMemoryLabel.at( n ) );
@@ -178,7 +183,11 @@ void ViewSfml::updateTextFromModel( const Model& model )
     m_txtXPos->setString( fmt::format( "X: {}", cnv( model.m_xAxisMotor.get() ) ) );
     m_txtXSpeed->setString( fmt::format( "{:<3}  mm/min", model.m_xSpeed ) );
     m_txtRpm->setString( fmt::format( "C:  {:<4}  rpm", static_cast<int>( model.m_rotaryEncoder->getRpm() ) ) );
-    // TODO memory values
+    m_txtStatus->setString( fmt::format( "Status: {}    Debug: keypress={}",
+            model.m_status,
+            model.m_keyPressed
+            )
+        );
     for( std::size_t n = 0; n < m_txtMemoryLabel.size(); ++n )
     {
         if( model.m_currentMemory == n )

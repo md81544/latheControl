@@ -28,6 +28,7 @@ private:
     std::unique_ptr<sf::Text> m_txtXPos;
     std::unique_ptr<sf::Text> m_txtXSpeed;
     std::unique_ptr<sf::Text> m_txtRpm;
+    std::unique_ptr<sf::Text> m_txtStatus;
 
     std::vector<std::unique_ptr<sf::Text>> m_txtMemoryLabel;
     std::vector<std::unique_ptr<sf::Text>> m_txtMemoryValue;
