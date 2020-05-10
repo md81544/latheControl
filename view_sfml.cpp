@@ -50,8 +50,9 @@ int convertKeyCode( sf::Event event )
     {
         case sf::Keyboard::Return:
             return 10;
-        case sf::Keyboard::Multiply: // *
-            return 42;
+        case sf::Keyboard::Num8:
+            if( event.key.shift ) return 42;
+            break;
         case sf::Keyboard::LBracket: // [
             return 91;
         case sf::Keyboard::RBracket: // ]

@@ -5,8 +5,25 @@
 #include "view_sfml.h"
 #include "threadpitches.h"  // for ThreadPitch, threadPitches
 
+#include <chrono>
+
 namespace mgo
 {
+
+namespace
+{
+
+void yieldSleep( std::chrono::microseconds microsecs )
+{
+    auto start = std::chrono::high_resolution_clock::now();
+    auto end = start + microsecs;
+    while( std::chrono::high_resolution_clock::now() < end )
+    {
+        std::this_thread::yield();
+    }
+}
+
+} // end anonymous namespace
 
 Controller::Controller( Model* model )
     : m_model( model )
@@ -82,9 +99,8 @@ void Controller::run()
 
         m_view->updateDisplay( *m_model );
 
-        // Small delay just to avoid the loop spinning
-        // at full speed
-        m_model->m_gpio.delayMicroSeconds( 1'000 );
+        // Small delay just to avoid the UI loop spinning
+        yieldSleep( std::chrono::microseconds( 100'000 ) );
     }
 }
 
