@@ -98,35 +98,35 @@ void ViewSfml::initialise()
     {
        throw std::runtime_error("Could not load TTF font");
     }
-    m_txtZPos = std::make_unique<sf::Text>("", *m_font, 50 );
+    m_txtZPos = std::make_unique<sf::Text>("", *m_font, 60 );
     m_txtZPos->setPosition( { 20, 10 });
     m_txtZPos->setFillColor( sf::Color::Green );
 
-    m_txtZSpeed = std::make_unique<sf::Text>("", *m_font, 30 );
-    m_txtZSpeed->setPosition( { 440, 30 });
-    m_txtZSpeed->setFillColor( { 128, 128, 128 } );
+    m_txtZSpeed = std::make_unique<sf::Text>("", *m_font, 40 );
+    m_txtZSpeed->setPosition( { 550, 30 });
+    m_txtZSpeed->setFillColor( { 209, 209, 50 } );
 
-    m_txtXPos = std::make_unique<sf::Text>("", *m_font, 50 );
+    m_txtXPos = std::make_unique<sf::Text>("", *m_font, 60 );
     m_txtXPos->setPosition( { 20, 70 });
     m_txtXPos->setFillColor( sf::Color::Green );
 
-    m_txtXSpeed = std::make_unique<sf::Text>("", *m_font, 30 );
-    m_txtXSpeed->setPosition( { 440, 90 });
-    m_txtXSpeed->setFillColor( { 128, 128, 128 } );
+    m_txtXSpeed = std::make_unique<sf::Text>("", *m_font, 40 );
+    m_txtXSpeed->setPosition( { 550, 90 });
+    m_txtXSpeed->setFillColor( { 209, 209, 50 } );
 
-    m_txtRpm = std::make_unique<sf::Text>("", *m_font, 50 );
+    m_txtRpm = std::make_unique<sf::Text>("", *m_font, 60 );
     m_txtRpm->setPosition( { 20, 130 });
     m_txtRpm->setFillColor( sf::Color::Green );
 
     for( int n = 0; n < 4; ++n )
     {
-        auto lbl = std::make_unique<sf::Text>("", *m_font, 24 );
-        lbl->setPosition( { 10.f + n * 160.f, 210 });
+        auto lbl = std::make_unique<sf::Text>("", *m_font, 30 );
+        lbl->setPosition( { 10.f + n * 200.f, 225 });
         lbl->setFillColor( { 128, 128, 128 } );
         lbl->setString( fmt::format( " Memory {}", n + 1 ) );
         m_txtMemoryLabel.push_back( std::move(lbl) );
-        auto val = std::make_unique<sf::Text>("", *m_font, 24 );
-        val->setPosition( { 10.f + n * 160.f, 235 });
+        auto val = std::make_unique<sf::Text>("", *m_font, 30 );
+        val->setPosition( { 10.f + n * 200.f, 255 });
         val->setFillColor( { 128, 128, 128 } );
         val->setString( " not set" );
         m_txtMemoryValue.push_back( std::move( val ) );
@@ -179,9 +179,9 @@ void ViewSfml::updateTextFromModel( const Model& model )
 {
     // Updates all the text objects with data in the model
     m_txtZPos->setString( fmt::format( "Z: {}", cnv( model.m_zAxisMotor.get() ) ) );
-    m_txtZSpeed->setString( fmt::format( "{:<3}  mm/min", model.m_zSpeed ) );
+    m_txtZSpeed->setString( fmt::format( "{:<3} mm/min", model.m_zSpeed ) );
     m_txtXPos->setString( fmt::format( "X: {}", cnv( model.m_xAxisMotor.get() ) ) );
-    m_txtXSpeed->setString( fmt::format( "{:<3}  mm/min", model.m_xSpeed ) );
+    m_txtXSpeed->setString( fmt::format( "{:<3} mm/min", model.m_xSpeed ) );
     m_txtRpm->setString( fmt::format( "C:  {:<4}  rpm", static_cast<int>( model.m_rotaryEncoder->getRpm() ) ) );
     m_txtStatus->setString( fmt::format( "Status: {}    Debug: keypress={}",
             model.m_status,
