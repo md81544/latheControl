@@ -100,7 +100,7 @@ void Controller::run()
         m_view->updateDisplay( *m_model );
 
         // Small delay just to avoid the UI loop spinning
-        yieldSleep( std::chrono::microseconds( 100'000 ) );
+        yieldSleep( std::chrono::microseconds( 50'000 ) );
     }
 }
 

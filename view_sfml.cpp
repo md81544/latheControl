@@ -92,6 +92,7 @@ void ViewSfml::initialise()
     m_window = std::make_unique<sf::RenderWindow>(
         sf::VideoMode::getDesktopMode(), "Electronic Lead Screw", sf::Style::Fullscreen);
     #endif
+    m_window->setKeyRepeatEnabled( false );
     m_font = std::make_unique<sf::Font>();
     if (!m_font->loadFromFile("./DroidSansMono.ttf"))
     {
