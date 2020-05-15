@@ -19,7 +19,8 @@ const int INF_RIGHT = std::numeric_limits<int>::min();
 const int INF_LEFT  = std::numeric_limits<int>::max();
 
 // TODO these need to be in a config file
-constexpr float MAX_MOTOR_SPEED = 700.f;
+constexpr float MAX_Z_MOTOR_SPEED = 700.f;
+constexpr float MAX_X_MOTOR_SPEED = 240.f;
 constexpr float INFEED = 0.05f; // mm
 // The large number below is tan 29.5°
 // (Cannot use std::tan in constexpr owing to side effects)

@@ -39,6 +39,11 @@ int convertKeyCode( sf::Event event )
         }
         return 97 + sfKey;
     }
+    // Number keys
+    if( sfKey >= sf::Keyboard::Num0 && sfKey <= sf::Keyboard::Num9 )
+    {
+        return 22 + sfKey;
+    }
     // Function keys
     if( sfKey >= sf::Keyboard::F1 && sfKey <= sf::Keyboard::F15 )
     {
@@ -72,6 +77,10 @@ int convertKeyCode( sf::Event event )
         case sf::Keyboard::BackSlash:
             if( event.key.shift ) return 124;
             return 92;
+        case sf::Keyboard::Dash:
+            return 45;
+        case sf::Keyboard::Equal:
+            return 61;
         case sf::Keyboard::Space:
             return 32;
         default:
@@ -93,6 +102,7 @@ void ViewSfml::initialise()
         sf::VideoMode::getDesktopMode(), "Electronic Lead Screw", sf::Style::Fullscreen);
     #endif
     m_window->setKeyRepeatEnabled( false );
+    m_window->setMouseCursorVisible( false );
     m_font = std::make_unique<sf::Font>();
     if (!m_font->loadFromFile("./DroidSansMono.ttf"))
     {
@@ -183,7 +193,7 @@ void ViewSfml::updateTextFromModel( const Model& model )
     m_txtXPos->setString( fmt::format( "X: {}", cnv( model.m_xAxisMotor.get() ) ) );
     m_txtXSpeed->setString( fmt::format( "{:<3} mm/min", model.m_xSpeed ) );
     m_txtRpm->setString( fmt::format( "C:  {:<4}  rpm", static_cast<int>( model.m_rotaryEncoder->getRpm() ) ) );
-    m_txtStatus->setString( fmt::format( "Status: {}    Debug: keypress={}",
+    m_txtStatus->setString( fmt::format( "Status: {}    Debug: last keycode={}",
             model.m_status,
             model.m_keyPressed
             )
