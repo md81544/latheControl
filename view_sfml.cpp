@@ -42,6 +42,11 @@ int convertKeyCode( sf::Event event )
     // Number keys
     if( sfKey >= sf::Keyboard::Num0 && sfKey <= sf::Keyboard::Num9 )
     {
+        // Check for shift-8 (asterisk)
+        if( sfKey == sf::Keyboard::Num8 && event.key.shift )
+        {
+            return 42;
+        }
         return 22 + sfKey;
     }
     // Function keys
@@ -55,9 +60,6 @@ int convertKeyCode( sf::Event event )
     {
         case sf::Keyboard::Return:
             return 10;
-        case sf::Keyboard::Num8:
-            if( event.key.shift ) return 42;
-            break;
         case sf::Keyboard::LBracket: // [
             return 91;
         case sf::Keyboard::RBracket: // ]
@@ -131,12 +133,12 @@ void ViewSfml::initialise()
     for( int n = 0; n < 4; ++n )
     {
         auto lbl = std::make_unique<sf::Text>("", *m_font, 30 );
-        lbl->setPosition( { 10.f + n * 200.f, 225 });
+        lbl->setPosition( { 4.f + n * 200.f, 225 });
         lbl->setFillColor( { 128, 128, 128 } );
         lbl->setString( fmt::format( " Memory {}", n + 1 ) );
         m_txtMemoryLabel.push_back( std::move(lbl) );
         auto val = std::make_unique<sf::Text>("", *m_font, 30 );
-        val->setPosition( { 10.f + n * 200.f, 255 });
+        val->setPosition( { 4.f + n * 200.f, 255 });
         val->setFillColor( { 128, 128, 128 } );
         val->setString( " not set" );
         m_txtMemoryValue.push_back( std::move( val ) );
@@ -146,6 +148,9 @@ void ViewSfml::initialise()
     m_txtStatus->setPosition( { 20, 550 });
     m_txtStatus->setFillColor( sf::Color::Green );
 
+    m_txtTaperAngle = std::make_unique<sf::Text>( "", *m_font, 25 );
+    m_txtTaperAngle->setPosition( { 20, 320 } );
+    m_txtTaperAngle->setFillColor( sf::Color::Yellow );
 }
 
 void ViewSfml::close()
@@ -181,6 +186,10 @@ void ViewSfml::updateDisplay( const Model& model )
         m_window->draw( *m_txtMemoryLabel.at( n ) );
         m_window->draw( *m_txtMemoryValue.at( n ) );
     }
+    if( model.m_taperModeOn )
+    {
+        m_window->draw( *m_txtTaperAngle );
+    }
     m_window->display();
     
 }
@@ -192,7 +201,8 @@ void ViewSfml::updateTextFromModel( const Model& model )
     m_txtZSpeed->setString( fmt::format( "{:<3} mm/min", model.m_zSpeed ) );
     m_txtXPos->setString( fmt::format( "X: {}", cnv( model.m_xAxisMotor.get() ) ) );
     m_txtXSpeed->setString( fmt::format( "{:<3} mm/min", model.m_xSpeed ) );
-    m_txtRpm->setString( fmt::format( "C:  {:<4}  rpm", static_cast<int>( model.m_rotaryEncoder->getRpm() ) ) );
+    m_txtRpm->setString( fmt::format( "C:  {:<4}  rpm", 
+        static_cast<int>( model.m_rotaryEncoder->getRpm() ) ) );
     m_txtStatus->setString( fmt::format( "Status: {}    Debug: last keycode={}",
             model.m_status,
             model.m_keyPressed
@@ -216,6 +226,11 @@ void ViewSfml::updateTextFromModel( const Model& model )
                 fmt::format( "{:<12}", cnv( model.m_zAxisMotor.get(), model.m_memory.at( n ) ) )
                 );
         }
+    }
+    if( model.m_taperModeOn )
+    {
+        m_txtTaperAngle->setString( fmt::format( "Taper angle (degrees from centre): {:.3f}", 
+            model.m_taperAngle ) );
     }
 }
 

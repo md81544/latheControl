@@ -19,6 +19,7 @@ public:
 private:
     Model* m_model; // non-owning
     std::unique_ptr<IView> m_view;
+    void stopAllMotors();
 };
 
 } // end namespace

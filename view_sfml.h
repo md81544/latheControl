@@ -22,13 +22,17 @@ public:
 private:
     std::unique_ptr<sf::RenderWindow> m_window;
     std::unique_ptr<sf::Font> m_font;
-    // Text objects:
+
+    // Main text items which are always displayed:
     std::unique_ptr<sf::Text> m_txtZPos;
     std::unique_ptr<sf::Text> m_txtZSpeed;
     std::unique_ptr<sf::Text> m_txtXPos;
     std::unique_ptr<sf::Text> m_txtXSpeed;
     std::unique_ptr<sf::Text> m_txtRpm;
     std::unique_ptr<sf::Text> m_txtStatus;
+
+    // Text items which are displayed sometimes:
+    std::unique_ptr<sf::Text> m_txtTaperAngle;
 
     std::vector<std::unique_ptr<sf::Text>> m_txtMemoryLabel;
     std::vector<std::unique_ptr<sf::Text>> m_txtMemoryValue;

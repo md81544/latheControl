@@ -42,14 +42,17 @@ struct Model
     bool        m_zMoving{ false };
     bool        m_quit{ false };
     long        m_targetStep{ 0 };
-    float       m_zSpeed{ 100.f };
-    float       m_xSpeed{ 60.f };
-    float       m_oldZSpeed{ 100.f };
+    float       m_zSpeed{ 40.f };
+    float       m_xSpeed{ 40.f };
+    float       m_oldZSpeed{ 40.f };
     bool        m_fastReturning{ false };
     int         m_keyPressed{ 0 };
     bool        m_threadCuttingOn{ false };
     int         m_threadCutAdvanceCount{ 0 };
+    float       m_taperAngle{ 0.f };
     bool        m_useSfml{ false };
+    bool        m_threadingModeOn{ false };
+    bool        m_taperModeOn{ false };
 };
 
 } // end namespace

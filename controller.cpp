@@ -437,11 +437,9 @@ void Controller::processKeyPress()
                 // Zeroing can be confusing unless we
                 // force a stop (i.e. the motor might start
                 // as we are no longer at the target position)
-                m_model->m_zAxisMotor->stop();
+                stopAllMotors();
                 m_model->m_targetStep = 0;
                 m_model->m_zAxisMotor->zeroPosition();
-                m_model->m_zMoving = false;
-                m_model->m_xAxisMotor->stop();
                 m_model->m_xAxisMotor->zeroPosition();
                 break;
             }
@@ -450,25 +448,45 @@ void Controller::processKeyPress()
             // in the /etc/sudoers files
             {
                 #ifndef FAKE
-                m_model->m_zAxisMotor->stop();
-                m_model->m_zAxisMotor->wait();
-                m_model->m_zMoving = false;
-                m_model->m_xAxisMotor->stop();
-                m_model->m_xAxisMotor->wait();
+                stopAllMotors();
                 m_model->m_quit = true;
                 system( "sudo systemctl poweroff --no-block" );
                 #endif
                 break;
             }
+            case 266:// F2, taper mode
+            {
+                // Since modes require text input, all motor activity
+                // is stopped
+                stopAllMotors();
+                m_model->m_taperModeOn = true;
+                m_model->m_threadingModeOn = false;
+                break;
+            }
+            case 267:// F3, threading mode
+            {
+                stopAllMotors();
+                m_model->m_threadingModeOn = true;
+                m_model->m_taperModeOn = false;
+                break;
+            }
             default: // e.g. space bar (32) to stop all motors
             {
-                m_model->m_status = "stopped";
-                m_model->m_zMoving = false;
-                m_model->m_xAxisMotor->stop();
+                stopAllMotors();
                 break;
             }
         }
     }
+}
+
+void Controller::stopAllMotors()
+{
+    m_model->m_status = "stopped";
+    m_model->m_zAxisMotor->stop();
+    m_model->m_zAxisMotor->wait();
+    m_model->m_zMoving = false;
+    m_model->m_xAxisMotor->stop();
+    m_model->m_xAxisMotor->wait();
 }
 
 } // end namespace
