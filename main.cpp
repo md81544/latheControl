@@ -27,9 +27,9 @@ int main( int argc, char* argv[] )
 
         mgo::Model model( gpio );
 
-        if( argc > 1 && std::string( argv[1] ) == "--sfml" )
+        if( argc > 1 && std::string( argv[1] ) == "--tui" )
         {
-            model.m_useSfml = true;
+            model.m_useSfml = false;
         }
 
         mgo::Controller controller( &model );

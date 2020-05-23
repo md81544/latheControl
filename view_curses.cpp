@@ -62,18 +62,19 @@ void ViewCurses::updateDisplay( const Model& model )
     using namespace mgo::Curses;
     std::string targetString = cnv( model.m_zAxisMotor.get() );
 
-    if ( model.m_targetStep == INF_LEFT  ) targetString = "<----";
-    if ( model.m_targetStep == INF_RIGHT ) targetString = "---->";
+    if ( model.m_zAxisMotor->getTargetStep() == INF_LEFT  ) targetString = "<----";
+    if ( model.m_zAxisMotor->getTargetStep() == INF_RIGHT ) targetString = "---->";
 
     m_wnd.move( 9, 0 );
     m_wnd.setColour( Colours::yellowOnBlack );
     m_wnd.clearToEol();
-    m_wnd << fmt::format( "Tool speed:  {:<3.0f} mm/min   {}\n",  model.m_zSpeed, model.m_status );
+    m_wnd << fmt::format( "Tool speed:  {:<3.0f} mm/min   {}\n",  model.m_zAxisMotor->getRpm(), model.m_status );
     m_wnd.clearToEol();
     m_wnd << "Target:      " << targetString << ", current: "
         << cnv( model.m_zAxisMotor.get() ) << "\n";
     m_wnd.clearToEol();
-    m_wnd << "X: " << cnv( model.m_xAxisMotor.get() ) << "  " << static_cast<int>(model.m_xSpeed) << " rpm \n";
+    m_wnd << "X: " << cnv( model.m_xAxisMotor.get() ) << "  "
+        << static_cast<int>( model.m_xAxisMotor->getRpm() ) << " rpm \n";
     m_wnd.clearToEol();
     m_wnd << "Spindle RPM: " << static_cast<int>( model.m_rotaryEncoder->getRpm() ) << "\n";
     if( model.m_threadCuttingOn )

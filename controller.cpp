@@ -1,9 +1,11 @@
 #include "controller.h"
 
+#include "fmt/format.h"
+#include "log.h"
 #include "stepperControl/igpio.h"
+#include "threadpitches.h"  // for ThreadPitch, threadPitches
 #include "view_curses.h"
 #include "view_sfml.h"
-#include "threadpitches.h"  // for ThreadPitch, threadPitches
 
 #include <chrono>
 
@@ -50,18 +52,14 @@ Controller::Controller( Model* model )
 
 void Controller::run()
 {
-    m_model->m_zAxisMotor->setRpm( m_model->m_zSpeed );
-    m_model->m_xAxisMotor->setRpm( m_model->m_xSpeed );
+    m_model->m_zAxisMotor->setRpm( 40.f );
+    m_model->m_xAxisMotor->setRpm( 40.f );
 
     while( ! m_model->m_quit )
     {
         processKeyPress();
 
-        if( ! m_model->m_threadCuttingOn || m_model->m_fastReturning )
-        {
-            m_model->m_zAxisMotor->setRpm( m_model->m_zSpeed );
-        }
-        else
+        if( m_model->m_threadCuttingOn )
         {
             // We are cutting threads, so the stepper motor's speed
             // is dependent on the spindle's RPM and the thread pitch.
@@ -69,34 +67,25 @@ void Controller::run()
             // because my stepper motor / leadscrew does one mm per
             // revolution, there is a direct correlation between spindle
             // rpm and stepper motor rpm for a 1mm thread pitch.
-            m_model->m_zSpeed = pitch * m_model->m_rotaryEncoder->getRpm();
-            if( m_model->m_zSpeed > MAX_Z_MOTOR_SPEED )
+            float speed = pitch * m_model->m_rotaryEncoder->getRpm();
+            if( speed > MAX_Z_MOTOR_SPEED )
             {
-                m_model->m_zSpeed = MAX_Z_MOTOR_SPEED;
-                m_model->m_zMoving = false;
+                m_model->m_zAxisMotor->stop();
+                m_model->m_zAxisMotor->wait();
+                // TODO warning message
             }
-            m_model->m_zAxisMotor->setRpm( m_model->m_zSpeed );
+            m_model->m_zAxisMotor->setRpm( speed );
         }
 
-        if( ! m_model->m_zMoving )
+        if ( ! m_model->m_zAxisMotor->isRunning() )
         {
-            m_model->m_zAxisMotor->stop();
-        }
-        else
-        {
-            m_model->m_zAxisMotor->goToStep( m_model->m_targetStep );
-        }
-        if ( !m_model->m_zAxisMotor->isRunning() )
-        {
-            m_model->m_zMoving = false;
             m_model->m_status = "stopped";
             if( m_model->m_fastReturning )
             {
-                m_model->m_zSpeed = m_model->m_oldZSpeed;
+                m_model->m_zAxisMotor->setRpm( m_model->m_oldZSpeed );
                 m_model->m_fastReturning = false;
             }
         }
-
         m_view->updateDisplay( *m_model );
 
         // Small delay just to avoid the UI loop spinning
@@ -120,7 +109,7 @@ void Controller::processKeyPress()
             case 113: // q
             case 27:  // Esc
             {
-                m_model->m_zMoving = false;
+                stopAllMotors();
                 m_model->m_quit = true;
                 break;
             }
@@ -153,28 +142,26 @@ void Controller::processKeyPress()
             // Cross-slide support is currently just for testing
             case 67:  // shift-C
             {
-                if( m_model->m_xSpeed > 10.f )
+                if( m_model->m_xAxisMotor->getRpm() > 10.0 )
                 {
-                    m_model->m_xSpeed -= 10.f;
-                    m_model->m_xAxisMotor->setRpm( m_model->m_xSpeed );
+                    m_model->m_xAxisMotor->setRpm( m_model->m_xAxisMotor->getRpm() -10.0 );
                 }
-                else if( m_model->m_xSpeed > 2.f )
+                else if( m_model->m_xAxisMotor->getRpm() > 2.0 )
                 {
-                    m_model->m_xSpeed -= 2.f;
+                    m_model->m_xAxisMotor->setRpm( m_model->m_xAxisMotor->getRpm() -2.0 );
                 }
                 break;
             }
             // Cross-slide support is currently just for testing
             case 99:  // c
             {
-                if( m_model->m_xSpeed < 10.f )
+                if( m_model->m_xAxisMotor->getRpm() < 10.0 )
                 {
-                    m_model->m_xSpeed = 0.f;
+                    m_model->m_xAxisMotor->setRpm( 0.0 );
                 }
-                if( m_model->m_xSpeed < 240.f )
+                if( m_model->m_xAxisMotor->getRpm() < 240.0 )
                 {
-                    m_model->m_xSpeed += 10.f;
-                    m_model->m_xAxisMotor->setRpm( m_model->m_xSpeed );
+                    m_model->m_xAxisMotor->setRpm( m_model->m_xAxisMotor->getRpm() + 10.0 );
                 }
                 break;
             }
@@ -187,32 +174,38 @@ void Controller::processKeyPress()
                     m_model->m_xAxisMotor->stop();
                     m_model->m_xAxisMotor->wait();
                 }
-                m_model->m_xAxisMotor->goToStep( m_model->m_xAxisMotor->getCurrentStep() + 60 );
+                m_model->m_xAxisMotor->goToStep( m_model->m_xAxisMotor->getCurrentStep() + 60.0 );
                 break;
             }
             case 61: // = (i.e. plus)
             {
                 if( m_model->m_threadCuttingOn ) break;
-                if( m_model->m_zSpeed < 20 )
+                if( m_model->m_zAxisMotor->getRpm() < 20.0 )
                 {
-                    m_model->m_zSpeed = 20;
+                    m_model->m_zAxisMotor->setRpm( 20.0 );
                 }
                 else
                 {
-                    if( m_model->m_zSpeed < MAX_Z_MOTOR_SPEED ) m_model->m_zSpeed += 20;
+                    if( m_model->m_zAxisMotor->getRpm() < MAX_Z_MOTOR_SPEED )
+                    {   
+                        m_model->m_zAxisMotor->setRpm( m_model->m_zAxisMotor->getRpm() + 20.0 );
+                    }
                 }
                 break;
             }
             case 45: // minus
             {
                 if( m_model->m_threadCuttingOn ) break;
-                if( m_model->m_zSpeed > 20 )
+                if( m_model->m_zAxisMotor->getRpm() > 20 )
                 {
-                    m_model->m_zSpeed -= 20;
+                    m_model->m_zAxisMotor->setRpm( m_model->m_zAxisMotor->getRpm() - 20.0 );
                 }
                 else
                 {
-                    if ( m_model->m_zSpeed > 1 ) --m_model->m_zSpeed;
+                    if ( m_model->m_zAxisMotor->getRpm() > 1 )
+                    {
+                        m_model->m_zAxisMotor->setRpm( m_model->m_zAxisMotor->getRpm() - 1.0 );
+                    }
                 }
                 break;
             }
@@ -262,7 +255,7 @@ void Controller::processKeyPress()
                 ++m_model->m_threadCutAdvanceCount;
                 m_model->m_rotaryEncoder->setAdvanceValueMicroseconds(
                     m_model->m_threadCutAdvanceCount *
-                    ( ( 1'000'000.f / ( m_model->m_zSpeed / 60.f) ) * SIDEFEED )
+                    ( ( 1'000'000.f / ( m_model->m_zAxisMotor->getRpm() / 60.f) ) * SIDEFEED )
                     );
                 break;
             }
@@ -288,8 +281,8 @@ void Controller::processKeyPress()
                 m_model->m_status = "returning";
                 m_model->m_rotaryEncoder->callbackAtZeroDegrees([&]()
                     {
-                        m_model->m_zMoving = true;
-                        m_model->m_targetStep = m_model->m_memory.at( m_model->m_currentMemory );
+                        m_model->m_zAxisMotor->goToStep(
+                            m_model->m_memory.at( m_model->m_currentMemory ) ); 
                     }
                     );
                 break;
@@ -321,49 +314,46 @@ void Controller::processKeyPress()
             case 260: // Left arrow
             {
                 // Same key will cancel if we're already moving
-                if ( m_model->m_zMoving )
+                if ( m_model->m_zAxisMotor->isRunning() )
                 {
-                    m_model->m_zMoving = false;
+                    m_model->m_zAxisMotor->stop();
+                    m_model->m_zAxisMotor->wait();
                     break;
                 }
                 m_model->m_status = "moving left";
-                m_model->m_zMoving = true;
-                m_model->m_targetStep = INF_LEFT;
+                m_model->m_zAxisMotor->goToStep( INF_LEFT );
                 break;
             }
             case 261: // Right arrow
             {
                 // Same key will cancel if we're already moving
-                if ( m_model->m_zMoving )
+                if ( m_model->m_zAxisMotor->isRunning() )
                 {
-                    m_model->m_zMoving = false;
+                    m_model->m_zAxisMotor->stop();
                     break;
                 }
                 m_model->m_status = "moving right";
-                m_model->m_zMoving = true;
-                m_model->m_targetStep = INF_RIGHT;
+                m_model->m_zAxisMotor->goToStep( INF_RIGHT );
                 break;
             }
             case 44: // comma (<) - nudge left
             {
-                if ( m_model->m_zMoving )
+                if ( m_model->m_zAxisMotor->isRunning() )
                 {
                     m_model->m_zAxisMotor->stop();
                     m_model->m_zAxisMotor->wait();
                 }
-                m_model->m_zMoving = true;
-                m_model->m_targetStep = m_model->m_zAxisMotor->getCurrentStep() + 25;
+                m_model->m_zAxisMotor->goToStep( m_model->m_zAxisMotor->getCurrentStep() + 25L );
                 break;
             }
             case 46: // full stop (>) - nudge right
             {
-                if ( m_model->m_zMoving )
+                if ( m_model->m_zAxisMotor->isRunning() )
                 {
                     m_model->m_zAxisMotor->stop();
                     m_model->m_zAxisMotor->wait();
                 }
-                m_model->m_zMoving = true;
-                m_model->m_targetStep = m_model->m_zAxisMotor->getCurrentStep() - 25;
+                m_model->m_zAxisMotor->goToStep( m_model->m_zAxisMotor->getCurrentStep() - 25L );
                 break;
             }
             case 91: // [
@@ -383,12 +373,12 @@ void Controller::processKeyPress()
                 break;
             }
 
-            // Speed presets with number keys 1-4
+            // Speed presets with number keys 1-5
             case 49: // 1
             {
                 if( ! m_model->m_threadCuttingOn )
                 {
-                    m_model->m_zSpeed = 20.f;
+                    m_model->m_zAxisMotor->setRpm( 20.f );
                 }
                 break;
             }
@@ -396,7 +386,7 @@ void Controller::processKeyPress()
             {
                 if( ! m_model->m_threadCuttingOn )
                 {
-                    m_model->m_zSpeed = 40.f;
+                    m_model->m_zAxisMotor->setRpm( 40.f );
                 }
                 break;
             }
@@ -404,7 +394,7 @@ void Controller::processKeyPress()
             {
                 if( ! m_model->m_threadCuttingOn )
                 {
-                    m_model->m_zSpeed = 250.f;
+                    m_model->m_zAxisMotor->setRpm( 100.f );
                 }
                 break;
             }
@@ -412,33 +402,36 @@ void Controller::processKeyPress()
             {
                 if( ! m_model->m_threadCuttingOn )
                 {
-                    m_model->m_zSpeed = MAX_Z_MOTOR_SPEED;
+                    m_model->m_zAxisMotor->setRpm( 250.f );
+                }
+                break;
+            }
+            case 53: // 5
+            {
+                if( ! m_model->m_threadCuttingOn )
+                {
+                    m_model->m_zAxisMotor->setRpm( MAX_Z_MOTOR_SPEED );
                 }
                 break;
             }
             case 102: // f
             case 70:  // F
             {
-                if( m_model->m_memory.at( m_model->m_currentMemory ) == INF_RIGHT ) break;
                 // Fast return to point
-                m_model->m_oldZSpeed = m_model->m_zSpeed;
-                m_model->m_zSpeed = MAX_Z_MOTOR_SPEED;
+                if( m_model->m_memory.at( m_model->m_currentMemory ) == INF_RIGHT ) break;
+                if( m_model->m_fastReturning ) break;
+                m_model->m_oldZSpeed = m_model->m_zAxisMotor->getRpm();
                 m_model->m_fastReturning = true;
                 m_model->m_zAxisMotor->stop();
                 m_model->m_zAxisMotor->wait();
+                m_model->m_zAxisMotor->setRpm( m_model->m_zAxisMotor->getMaxRpm() );
                 m_model->m_status = "fast returning";
-                m_model->m_zMoving = true;
-                m_model->m_targetStep = m_model->m_memory.at( m_model->m_currentMemory );
+                m_model->m_zAxisMotor->goToStep( m_model->m_memory.at( m_model->m_currentMemory ) );
                 break;
             }
             case 122: // z
             case 90:  // Z
             {
-                // Zeroing can be confusing unless we
-                // force a stop (i.e. the motor might start
-                // as we are no longer at the target position)
-                stopAllMotors();
-                m_model->m_targetStep = 0;
                 m_model->m_zAxisMotor->zeroPosition();
                 m_model->m_xAxisMotor->zeroPosition();
                 break;
@@ -470,6 +463,12 @@ void Controller::processKeyPress()
                 m_model->m_taperModeOn = false;
                 break;
             }
+            case 268:// F4, set-up mode
+            {
+                stopAllMotors();
+                // TODO - backlash compensation
+                break;
+            }
             default: // e.g. space bar (32) to stop all motors
             {
                 stopAllMotors();
@@ -481,12 +480,11 @@ void Controller::processKeyPress()
 
 void Controller::stopAllMotors()
 {
-    m_model->m_status = "stopped";
     m_model->m_zAxisMotor->stop();
-    m_model->m_zAxisMotor->wait();
-    m_model->m_zMoving = false;
     m_model->m_xAxisMotor->stop();
+    m_model->m_zAxisMotor->wait();
     m_model->m_xAxisMotor->wait();
+    m_model->m_status = "stopped";
 }
 
 } // end namespace
