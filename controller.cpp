@@ -44,6 +44,9 @@ Controller::Controller( Model* model )
     // TODO: currently ignoring enable pin
     m_model->m_zAxisMotor = std::make_unique<mgo::StepperMotor>(
         m_model->m_gpio, 8, 7, 0, 1'000, -0.001, MAX_Z_MOTOR_SPEED );
+    // My X-Axis motor is set to 800 steps per revolution and the gearing
+    // is 3:1 so 2,400 steps make one revolution of the X-axis handwheel,
+    // which would be 1mm of travel. TODO: this should be settable in config
     m_model->m_xAxisMotor = std::make_unique<mgo::StepperMotor>(
         m_model->m_gpio, 20, 21, 0, 800, 1.0 / 2'400.0, MAX_X_MOTOR_SPEED );
     m_model->m_rotaryEncoder = std::make_unique<mgo::RotaryEncoder>(
@@ -52,8 +55,8 @@ Controller::Controller( Model* model )
 
 void Controller::run()
 {
-    m_model->m_zAxisMotor->setRpm( 40.f );
-    m_model->m_xAxisMotor->setRpm( 40.f );
+    m_model->m_zAxisMotor->setSpeed( 40.f );
+    m_model->m_xAxisMotor->setSpeed( 40.f );
 
     while( ! m_model->m_quit )
     {
@@ -142,26 +145,26 @@ void Controller::processKeyPress()
             // Cross-slide support is currently just for testing
             case 67:  // shift-C
             {
-                if( m_model->m_xAxisMotor->getRpm() > 10.0 )
+                if( m_model->m_xAxisMotor->getSpeed() > 10.0 )
                 {
-                    m_model->m_xAxisMotor->setRpm( m_model->m_xAxisMotor->getRpm() -10.0 );
+                    m_model->m_xAxisMotor->setSpeed( m_model->m_xAxisMotor->getSpeed() -10.0 );
                 }
-                else if( m_model->m_xAxisMotor->getRpm() > 2.0 )
+                else if( m_model->m_xAxisMotor->getSpeed() > 2.0 )
                 {
-                    m_model->m_xAxisMotor->setRpm( m_model->m_xAxisMotor->getRpm() -2.0 );
+                    m_model->m_xAxisMotor->setSpeed( m_model->m_xAxisMotor->getSpeed() -2.0 );
                 }
                 break;
             }
             // Cross-slide support is currently just for testing
             case 99:  // c
             {
-                if( m_model->m_xAxisMotor->getRpm() < 10.0 )
+                if( m_model->m_xAxisMotor->getSpeed() < 10.0 )
                 {
-                    m_model->m_xAxisMotor->setRpm( 0.0 );
+                    m_model->m_xAxisMotor->setSpeed( 0.0 );
                 }
-                if( m_model->m_xAxisMotor->getRpm() < 240.0 )
+                if( m_model->m_xAxisMotor->getSpeed() < 240.0 )
                 {
-                    m_model->m_xAxisMotor->setRpm( m_model->m_xAxisMotor->getRpm() + 10.0 );
+                    m_model->m_xAxisMotor->setSpeed( m_model->m_xAxisMotor->getSpeed() + 10.0 );
                 }
                 break;
             }

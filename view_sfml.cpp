@@ -198,9 +198,9 @@ void ViewSfml::updateTextFromModel( const Model& model )
 {
     // Updates all the text objects with data in the model
     m_txtZPos->setString( fmt::format( "Z: {}", cnv( model.m_zAxisMotor.get() ) ) );
-    m_txtZSpeed->setString( fmt::format( "{:<3} mm/min", model.m_zAxisMotor->getRpm() ) );
+    m_txtZSpeed->setString( fmt::format( "{:<.1f} mm/min", model.m_zAxisMotor->getSpeed() ) );
     m_txtXPos->setString( fmt::format( "X: {}", cnv( model.m_xAxisMotor.get() ) ) );
-    m_txtXSpeed->setString( fmt::format( "{:<3} mm/min", model.m_xAxisMotor->getRpm() ) );
+    m_txtXSpeed->setString( fmt::format( "{:<.1f} mm/min", model.m_xAxisMotor->getSpeed() ) );
     m_txtRpm->setString( fmt::format( "C:  {:<4}  rpm", 
         static_cast<int>( model.m_rotaryEncoder->getRpm() ) ) );
     m_txtStatus->setString( fmt::format( "Status: {}    Debug: last keycode={}",
