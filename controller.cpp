@@ -117,41 +117,15 @@ void Controller::processKeyPress()
                 break;
             }
             // Cross-slide support is currently just for testing
-            case 88:   // X (shift-x)
-            {
-                if( m_model->m_xAxisMotor->isRunning() )
-                {
-                    m_model->m_xAxisMotor->stop();
-                }
-                else
-                {
-                    m_model->m_xAxisMotor->goToStep( INF_RIGHT );
-                }
-                break;
-            }
-            // Cross-slide support is currently just for testing
-            case 120:  // x
-            {
-                if( m_model->m_xAxisMotor->isRunning() )
-                {
-                    m_model->m_xAxisMotor->stop();
-                }
-                else
-                {
-                    m_model->m_xAxisMotor->goToStep( INF_LEFT );
-                }
-                break;
-            }
-            // Cross-slide support is currently just for testing
             case 67:  // shift-C
             {
-                if( m_model->m_xAxisMotor->getSpeed() > 10.0 )
+                if( m_model->m_xAxisMotor->getSpeed() > 10.1 )
                 {
-                    m_model->m_xAxisMotor->setSpeed( m_model->m_xAxisMotor->getSpeed() -10.0 );
+                    m_model->m_xAxisMotor->setSpeed( m_model->m_xAxisMotor->getSpeed() - 10.0 );
                 }
-                else if( m_model->m_xAxisMotor->getSpeed() > 2.0 )
+                else if( m_model->m_xAxisMotor->getSpeed() > 2.1 )
                 {
-                    m_model->m_xAxisMotor->setSpeed( m_model->m_xAxisMotor->getSpeed() -2.0 );
+                    m_model->m_xAxisMotor->setSpeed( m_model->m_xAxisMotor->getSpeed() - 2.0 );
                 }
                 break;
             }
@@ -160,9 +134,9 @@ void Controller::processKeyPress()
             {
                 if( m_model->m_xAxisMotor->getSpeed() < 10.0 )
                 {
-                    m_model->m_xAxisMotor->setSpeed( 0.0 );
+                    m_model->m_xAxisMotor->setSpeed( 10.0 );
                 }
-                if( m_model->m_xAxisMotor->getSpeed() < 240.0 )
+                else if( m_model->m_xAxisMotor->getSpeed() < 240.0 )
                 {
                     m_model->m_xAxisMotor->setSpeed( m_model->m_xAxisMotor->getSpeed() + 10.0 );
                 }

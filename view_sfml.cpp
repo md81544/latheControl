@@ -160,10 +160,20 @@ void ViewSfml::close()
 
 int  ViewSfml::getInput()
 {
+    static sf::Keyboard::Key lastKey = sf::Keyboard::F15;
+    static sf::Clock clock;
+    static sf::Int32 lastTime = 0;
     sf::Event event;
     m_window->pollEvent( event );
     if( event.type == sf::Event::KeyPressed )
     {
+        if( lastKey == event.key.code && clock.getElapsedTime().asMilliseconds() - lastTime < 250 )
+        {
+            // Debounce
+            return -1;
+        }
+        lastKey = event.key.code;
+        lastTime = clock.getElapsedTime().asMilliseconds();
         return convertKeyCode( event );
     }
     return -1;
