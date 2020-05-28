@@ -77,7 +77,7 @@ void ViewCurses::updateDisplay( const Model& model )
         << static_cast<int>( model.m_xAxisMotor->getRpm() ) << " rpm \n";
     m_wnd.clearToEol();
     m_wnd << "Spindle RPM: " << static_cast<int>( model.m_rotaryEncoder->getRpm() ) << "\n";
-    if( model.m_threadCuttingOn )
+    if( model.m_currentMode == Mode::Threading )
     {
         ThreadPitch tp = threadPitches.at( model.m_threadPitchIndex );
         m_wnd.clearToEol();

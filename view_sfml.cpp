@@ -85,6 +85,8 @@ int convertKeyCode( sf::Event event )
             return 61;
         case sf::Keyboard::Space:
             return 32;
+        case sf::Keyboard::Escape:
+            return 27;
         default:
             return -1;
     }
@@ -148,9 +150,17 @@ void ViewSfml::initialise()
     m_txtStatus->setPosition( { 20, 550 });
     m_txtStatus->setFillColor( sf::Color::Green );
 
+    m_txtMode = std::make_unique<sf::Text>( "", *m_font, 25 );
+    m_txtMode->setPosition( { 20, 320 } );
+    m_txtMode->setFillColor( sf::Color::Yellow );
+
     m_txtTaperAngle = std::make_unique<sf::Text>( "", *m_font, 25 );
-    m_txtTaperAngle->setPosition( { 20, 320 } );
+    m_txtTaperAngle->setPosition( { 20, 350 } );
     m_txtTaperAngle->setFillColor( sf::Color::Yellow );
+
+    m_txtWarning = std::make_unique<sf::Text>("", *m_font, 20 );
+    m_txtWarning->setPosition( { 640, 550 });
+    m_txtWarning->setFillColor( sf::Color::Red );
 }
 
 void ViewSfml::close()
@@ -191,17 +201,21 @@ void ViewSfml::updateDisplay( const Model& model )
     m_window->draw( *m_txtXSpeed );
     m_window->draw( *m_txtRpm );
     m_window->draw( *m_txtStatus );
+    m_window->draw( *m_txtWarning );
     for( std::size_t n = 0; n < m_txtMemoryLabel.size(); ++n )
     {
         m_window->draw( *m_txtMemoryLabel.at( n ) );
         m_window->draw( *m_txtMemoryValue.at( n ) );
+    }
+    if( model.m_currentMode != Mode::None )
+    {
+        m_window->draw( *m_txtMode );
     }
     if( model.m_taperModeOn )
     {
         m_window->draw( *m_txtTaperAngle );
     }
     m_window->display();
-    
 }
 
 void ViewSfml::updateTextFromModel( const Model& model )
@@ -211,13 +225,15 @@ void ViewSfml::updateTextFromModel( const Model& model )
     m_txtZSpeed->setString( fmt::format( "{:<.1f} mm/min", model.m_zAxisMotor->getSpeed() ) );
     m_txtXPos->setString( fmt::format( "X: {}", cnv( model.m_xAxisMotor.get() ) ) );
     m_txtXSpeed->setString( fmt::format( "{:<.1f} mm/min", model.m_xAxisMotor->getSpeed() ) );
-    m_txtRpm->setString( fmt::format( "C:  {:<4}  rpm", 
+    m_txtRpm->setString( fmt::format( "C:  {:<4}  rpm",
         static_cast<int>( model.m_rotaryEncoder->getRpm() ) ) );
     m_txtStatus->setString( fmt::format( "Status: {}    Debug: last keycode={}",
             model.m_status,
             model.m_keyPressed
             )
         );
+    m_txtWarning->setString( model.m_warning );
+
     for( std::size_t n = 0; n < m_txtMemoryLabel.size(); ++n )
     {
         if( model.m_currentMemory == n )
@@ -235,6 +251,38 @@ void ViewSfml::updateTextFromModel( const Model& model )
             m_txtMemoryValue.at( n )->setString(
                 fmt::format( "{:<12}", cnv( model.m_zAxisMotor.get(), model.m_memory.at( n ) ) )
                 );
+        }
+    }
+    switch( model.m_currentMode )
+    {
+        case Mode::Help:
+        {
+            m_txtMode->setString( "Help" );
+            break;
+        }
+        case Mode::Setup:
+        {
+            m_txtMode->setString( "Setup" );
+            break;
+        }
+        case Mode::Taper:
+        {
+            m_txtMode->setString( "Taper" );
+            break;
+        }
+        case Mode::Threading:
+        {
+            m_txtMode->setString( "Thread" );
+            break;
+        }
+        case Mode::None:
+        {
+            m_txtMode->setString( "" );
+            break;
+        }
+        default:
+        {
+            assert( false );
         }
     }
     if( model.m_taperModeOn )

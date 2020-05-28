@@ -30,8 +30,10 @@ private:
     std::unique_ptr<sf::Text> m_txtXSpeed;
     std::unique_ptr<sf::Text> m_txtRpm;
     std::unique_ptr<sf::Text> m_txtStatus;
+    std::unique_ptr<sf::Text> m_txtWarning;
 
     // Text items which are displayed sometimes:
+    std::unique_ptr<sf::Text> m_txtMode;
     std::unique_ptr<sf::Text> m_txtTaperAngle;
 
     std::vector<std::unique_ptr<sf::Text>> m_txtMemoryLabel;

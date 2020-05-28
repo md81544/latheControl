@@ -1,6 +1,7 @@
 #include "controller.h"
 
 #include "fmt/format.h"
+#include "keycodes.h"
 #include "log.h"
 #include "stepperControl/igpio.h"
 #include "threadpitches.h"  // for ThreadPitch, threadPitches
@@ -38,7 +39,7 @@ Controller::Controller( Model* model )
     {
         m_view = std::make_unique<ViewCurses>();
     }
-    
+
     m_view->initialise();
 
     // TODO: currently ignoring enable pin
@@ -62,7 +63,7 @@ void Controller::run()
     {
         processKeyPress();
 
-        if( m_model->m_threadCuttingOn )
+        if( m_model->m_currentMode == Mode::Threading )
         {
             // We are cutting threads, so the stepper motor's speed
             // is dependent on the spindle's RPM and the thread pitch.
@@ -75,7 +76,11 @@ void Controller::run()
             {
                 m_model->m_zAxisMotor->stop();
                 m_model->m_zAxisMotor->wait();
-                // TODO warning message
+                m_model->m_warning = "RPM too high for threading";
+            }
+            else
+            {
+                m_model->m_warning = "";
             }
             m_model->m_zAxisMotor->setRpm( speed );
         }
@@ -92,32 +97,32 @@ void Controller::run()
         m_view->updateDisplay( *m_model );
 
         // Small delay just to avoid the UI loop spinning
-        yieldSleep( std::chrono::microseconds( 50'000 ) );
+        yieldSleep( std::chrono::microseconds( 100'000 ) );
     }
 }
 
 void Controller::processKeyPress()
 {
     int t = m_view->getInput();
-    if( t != -1 )
+    t = checkKeyAllowedForMode( t );
+    if( t != key::None )
     {
         m_model->m_keyPressed = t;
         switch( m_model->m_keyPressed )
         {
-            case -1:
+            case key::None:
             {
                 break;
             }
-            case 81:  // Q
-            case 113: // q
-            case 27:  // Esc
+            case key::Q:
+            case key::q:
             {
                 stopAllMotors();
                 m_model->m_quit = true;
                 break;
             }
             // Cross-slide support is currently just for testing
-            case 67:  // shift-C
+            case key::C: // upper case, i.e. shift-c
             {
                 if( m_model->m_xAxisMotor->getSpeed() > 10.1 )
                 {
@@ -130,7 +135,7 @@ void Controller::processKeyPress()
                 break;
             }
             // Cross-slide support is currently just for testing
-            case 99:  // c
+            case key::c:
             {
                 if( m_model->m_xAxisMotor->getSpeed() < 10.0 )
                 {
@@ -143,8 +148,9 @@ void Controller::processKeyPress()
                 break;
             }
             // Cross-slide support is currently just for testing
-            case 68:  // D - nudge in
-            case 100: // d - nudge in
+            // Nudge in
+            case key::D:
+            case key::d:
             {
                 if ( m_model->m_xAxisMotor->isRunning() )
                 {
@@ -154,9 +160,9 @@ void Controller::processKeyPress()
                 m_model->m_xAxisMotor->goToStep( m_model->m_xAxisMotor->getCurrentStep() + 60.0 );
                 break;
             }
-            case 61: // = (i.e. plus)
+            case key::EQUALS: // (i.e. plus)
             {
-                if( m_model->m_threadCuttingOn ) break;
+                if( m_model->m_currentMode == Mode::Threading ) break; // TODO this check should be in checkKeyAllowedForMode
                 if( m_model->m_zAxisMotor->getRpm() < 20.0 )
                 {
                     m_model->m_zAxisMotor->setRpm( 20.0 );
@@ -164,15 +170,15 @@ void Controller::processKeyPress()
                 else
                 {
                     if( m_model->m_zAxisMotor->getRpm() < MAX_Z_MOTOR_SPEED )
-                    {   
+                    {
                         m_model->m_zAxisMotor->setRpm( m_model->m_zAxisMotor->getRpm() + 20.0 );
                     }
                 }
                 break;
             }
-            case 45: // minus
+            case key::MINUS:
             {
-                if( m_model->m_threadCuttingOn ) break;
+                if( m_model->m_currentMode == Mode::Threading ) break;
                 if( m_model->m_zAxisMotor->getRpm() > 20 )
                 {
                     m_model->m_zAxisMotor->setRpm( m_model->m_zAxisMotor->getRpm() - 20.0 );
@@ -186,23 +192,31 @@ void Controller::processKeyPress()
                 }
                 break;
             }
-            case 77:  // M
-            case 109: // m
+            case key::m:
+            case key::M:
             {
                 m_model->m_memory.at( m_model->m_currentMemory ) =
                     m_model->m_zAxisMotor->getCurrentStep();
                 break;
             }
-            case 84:   // T
-            case 116:  // t
+            case key::t:
+            case key::T:
             {
-                // Toggle threading on/off
-                m_model->m_threadCuttingOn = ! m_model->m_threadCuttingOn;
+                // Toggle threading on/off, deprecated, now use function key (TODO remove)
+                stopAllMotors();
+                if( m_model->m_currentMode == Mode::Threading )
+                {
+                    m_model->m_currentMode = Mode::None;
+                }
+                else
+                {
+                    m_model->m_currentMode = Mode::Threading;
+                }
                 break;
             }
-            case 112:  // p
+            case key::p:
             {
-                if ( ! m_model->m_threadCuttingOn ) break;
+                if ( m_model->m_currentMode != Mode::Threading ) break;
                 // change threading pitch up
                 ++m_model->m_threadPitchIndex;
                 if( m_model->m_threadPitchIndex >= threadPitches.size() )
@@ -211,9 +225,9 @@ void Controller::processKeyPress()
                 }
                 break;
             }
-            case 80:  // P change thread pitch
+            case key::P:
             {
-                if ( ! m_model->m_threadCuttingOn ) break;
+                if ( m_model->m_currentMode != Mode::Threading ) break;
                 // change threading pitch down
                 if( m_model->m_threadPitchIndex == 0 )
                 {
@@ -225,7 +239,7 @@ void Controller::processKeyPress()
                 }
                 break;
             }
-            case 92:  // \ (backslash)
+            case key::BACKSLASH:
             {
                 // causes the cut to start a fraction earlier
                 // next time, this simulates feeding in at 29.5°
@@ -236,7 +250,7 @@ void Controller::processKeyPress()
                     );
                 break;
             }
-            case 124: // | (pipe, i.e. shift backslash
+            case key::PIPE: // i.e. shift backslash
             {
                 // decrement the cut advance count
                 if( m_model->m_threadCutAdvanceCount > 0 )
@@ -245,9 +259,9 @@ void Controller::processKeyPress()
                 }
                 break;
             }
-            case 10:  // ENTER
-            case 82:  // R
-            case 114: // r
+            case key::ENTER:
+            case key::r:
+            case key::R:
             {
                 if( m_model->m_memory.at( m_model->m_currentMemory ) == INF_RIGHT ) break;
                 // We always start at the same rotational position: it's
@@ -264,7 +278,7 @@ void Controller::processKeyPress()
                     );
                 break;
             }
-            case 259: // Up arrow
+            case key::UP:
             {
                 if( m_model->m_xAxisMotor->isRunning() )
                 {
@@ -276,7 +290,7 @@ void Controller::processKeyPress()
                 }
                 break;
             }
-            case 258: // Down arrow
+            case key::DOWN:
             {
                 if( m_model->m_xAxisMotor->isRunning() )
                 {
@@ -288,7 +302,7 @@ void Controller::processKeyPress()
                 }
                 break;
             }
-            case 260: // Left arrow
+            case key::LEFT:
             {
                 // Same key will cancel if we're already moving
                 if ( m_model->m_zAxisMotor->isRunning() )
@@ -301,7 +315,7 @@ void Controller::processKeyPress()
                 m_model->m_zAxisMotor->goToStep( INF_LEFT );
                 break;
             }
-            case 261: // Right arrow
+            case key::RIGHT:
             {
                 // Same key will cancel if we're already moving
                 if ( m_model->m_zAxisMotor->isRunning() )
@@ -313,7 +327,7 @@ void Controller::processKeyPress()
                 m_model->m_zAxisMotor->goToStep( INF_RIGHT );
                 break;
             }
-            case 44: // comma (<) - nudge left
+            case key::COMMA: // (<) - nudge left
             {
                 if ( m_model->m_zAxisMotor->isRunning() )
                 {
@@ -323,7 +337,7 @@ void Controller::processKeyPress()
                 m_model->m_zAxisMotor->goToStep( m_model->m_zAxisMotor->getCurrentStep() + 25L );
                 break;
             }
-            case 46: // full stop (>) - nudge right
+            case key::FULLSTOP: // (>) - nudge right
             {
                 if ( m_model->m_zAxisMotor->isRunning() )
                 {
@@ -333,7 +347,7 @@ void Controller::processKeyPress()
                 m_model->m_zAxisMotor->goToStep( m_model->m_zAxisMotor->getCurrentStep() - 25L );
                 break;
             }
-            case 91: // [
+            case key::LBRACKET: // [
             {
                 if( m_model->m_currentMemory > 0 )
                 {
@@ -341,7 +355,7 @@ void Controller::processKeyPress()
                 }
                 break;
             }
-            case 93: // ]
+            case key::RBRACKET: // ]
             {
                 if( m_model->m_currentMemory < m_model->m_memory.size() - 1 )
                 {
@@ -351,48 +365,48 @@ void Controller::processKeyPress()
             }
 
             // Speed presets with number keys 1-5
-            case 49: // 1
+            case key::ONE:
             {
-                if( ! m_model->m_threadCuttingOn )
+                if( m_model->m_currentMode != Mode::Threading )
                 {
                     m_model->m_zAxisMotor->setRpm( 20.f );
                 }
                 break;
             }
-            case 50: // 2
+            case key::TWO:
             {
-                if( ! m_model->m_threadCuttingOn )
+                if( m_model->m_currentMode != Mode::Threading )
                 {
                     m_model->m_zAxisMotor->setRpm( 40.f );
                 }
                 break;
             }
-            case 51: // 3
+            case key::THREE:
             {
-                if( ! m_model->m_threadCuttingOn )
+                if( m_model->m_currentMode != Mode::Threading )
                 {
                     m_model->m_zAxisMotor->setRpm( 100.f );
                 }
                 break;
             }
-            case 52: // 4
+            case key::FOUR:
             {
-                if( ! m_model->m_threadCuttingOn )
+                if( m_model->m_currentMode != Mode::Threading )
                 {
                     m_model->m_zAxisMotor->setRpm( 250.f );
                 }
                 break;
             }
-            case 53: // 5
+            case key::FIVE:
             {
-                if( ! m_model->m_threadCuttingOn )
+                if( m_model->m_currentMode != Mode::Threading )
                 {
                     m_model->m_zAxisMotor->setRpm( MAX_Z_MOTOR_SPEED );
                 }
                 break;
             }
-            case 102: // f
-            case 70:  // F
+            case key::f:
+            case key::F:
             {
                 // Fast return to point
                 if( m_model->m_memory.at( m_model->m_currentMemory ) == INF_RIGHT ) break;
@@ -406,14 +420,14 @@ void Controller::processKeyPress()
                 m_model->m_zAxisMotor->goToStep( m_model->m_memory.at( m_model->m_currentMemory ) );
                 break;
             }
-            case 122: // z
-            case 90:  // Z
+            case key::z:
+            case key::Z:
             {
                 m_model->m_zAxisMotor->zeroPosition();
                 m_model->m_xAxisMotor->zeroPosition();
                 break;
             }
-            case 42: // asterisk, shutdown
+            case key::ASTERISK: // shutdown
             // Note the command used for shutdown should be made passwordless
             // in the /etc/sudoers files
             {
@@ -424,35 +438,45 @@ void Controller::processKeyPress()
                 #endif
                 break;
             }
-            case 266:// F2, taper mode
+            case key::F1: // help mode
             {
-                // Since modes require text input, all motor activity
-                // is stopped
-                stopAllMotors();
-                m_model->m_taperModeOn = true;
-                m_model->m_threadingModeOn = false;
+                changeMode( Mode::Help );
                 break;
             }
-            case 267:// F3, threading mode
+            case key::F2: // setup mode
             {
-                stopAllMotors();
-                m_model->m_threadingModeOn = true;
-                m_model->m_taperModeOn = false;
+                changeMode( Mode::Setup );
                 break;
             }
-            case 268:// F4, set-up mode
+            case key::F3: // threading mode
             {
-                stopAllMotors();
-                // TODO - backlash compensation
+                changeMode( Mode::Threading );
                 break;
             }
-            default: // e.g. space bar (32) to stop all motors
+            case key::F4: // taper mode
+            {
+                changeMode( Mode::Taper );
+                break;
+            }
+            case key::ESC: // return to normal mode
+            {
+                changeMode( Mode::None );
+                break;
+            }
+            default: // e.g. space bar to stop all motors
             {
                 stopAllMotors();
                 break;
             }
         }
     }
+}
+
+void Controller::changeMode( Mode mode )
+{
+    stopAllMotors();
+    m_model->m_warning = "";
+    m_model->m_currentMode = mode;
 }
 
 void Controller::stopAllMotors()
@@ -462,6 +486,45 @@ void Controller::stopAllMotors()
     m_model->m_zAxisMotor->wait();
     m_model->m_xAxisMotor->wait();
     m_model->m_status = "stopped";
+}
+
+int Controller::checkKeyAllowedForMode( int key )
+{
+    // The mode means some keys are ignored, for instance in
+    // threading, you cannot change the speed of the z-axis as
+    // that would affect the thread pitch
+    // Always allow certain keys:
+    if( key == key::q  ||
+        key == key::Q  ||
+        key == key::F1 ||
+        key == key::F2 ||
+        key == key::F3 ||
+        key == key::F4 ||
+        key == key::ESC
+        )
+    {
+        return key;
+    }
+    switch( m_model->m_currentMode )
+    {
+        case Mode::None:
+            return key;
+        case Mode::Help:
+            if( key == key::ENTER || key == key::ESC || key == key::Q || key == key::q ) return key;
+            return -1;
+        case Mode::Setup:
+            if( key == key::ENTER || key == key::ESC || key == key::Q || key == key::q ) return key;
+            return -1;
+        case Mode::Taper:
+            if( key == key::ENTER || key == key::ESC || key == key::Q || key == key::q ) return key;
+            return -1;
+        case Mode::Threading:
+            if( key == key::ENTER || key == key::ESC || key == key::Q || key == key::q ) return key;
+            return -1;
+        default:
+            // unhandled mode
+            assert( false );
+    }
 }
 
 } // end namespace
