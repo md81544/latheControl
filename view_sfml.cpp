@@ -3,6 +3,7 @@
 #include "model.h"
 #include "threadpitches.h"
 
+#include <cassert>
 #include <fmt/format.h>
 
 namespace mgo
@@ -87,6 +88,8 @@ int convertKeyCode( sf::Event event )
             return 32;
         case sf::Keyboard::Escape:
             return 27;
+        case sf::Keyboard::BackSpace:
+            return 8;
         default:
             return -1;
     }
@@ -154,13 +157,17 @@ void ViewSfml::initialise()
     m_txtMode->setPosition( { 20, 320 } );
     m_txtMode->setFillColor( sf::Color::Yellow );
 
-    m_txtTaperAngle = std::make_unique<sf::Text>( "", *m_font, 25 );
-    m_txtTaperAngle->setPosition( { 20, 350 } );
-    m_txtTaperAngle->setFillColor( sf::Color::Yellow );
+    m_txtTaperAngleInput = std::make_unique<sf::Text>( "", *m_font, 25 );
+    m_txtTaperAngleInput->setPosition( { 20, 350 } );
+    m_txtTaperAngleInput->setFillColor( sf::Color::Yellow );
 
     m_txtWarning = std::make_unique<sf::Text>("", *m_font, 20 );
-    m_txtWarning->setPosition( { 640, 550 });
+    m_txtWarning->setPosition( { 500, 520 });
     m_txtWarning->setFillColor( sf::Color::Red );
+
+    m_txtTaperAngle= std::make_unique<sf::Text>("", *m_font, 20 );
+    m_txtTaperAngle->setPosition( { 20, 520 });
+    m_txtTaperAngle->setFillColor( { 252, 165, 3 } );
 }
 
 void ViewSfml::close()
@@ -202,6 +209,10 @@ void ViewSfml::updateDisplay( const Model& model )
     m_window->draw( *m_txtRpm );
     m_window->draw( *m_txtStatus );
     m_window->draw( *m_txtWarning );
+    if( model.m_taperAngle != 0.f )
+    {
+        m_window->draw( *m_txtTaperAngle );
+    }
     for( std::size_t n = 0; n < m_txtMemoryLabel.size(); ++n )
     {
         m_window->draw( *m_txtMemoryLabel.at( n ) );
@@ -211,9 +222,9 @@ void ViewSfml::updateDisplay( const Model& model )
     {
         m_window->draw( *m_txtMode );
     }
-    if( model.m_taperModeOn )
+    if( model.m_currentMode == Mode::Taper ) 
     {
-        m_window->draw( *m_txtTaperAngle );
+        m_window->draw( *m_txtTaperAngleInput );
     }
     m_window->display();
 }
@@ -233,6 +244,10 @@ void ViewSfml::updateTextFromModel( const Model& model )
             )
         );
     m_txtWarning->setString( model.m_warning );
+    if( model.m_taperAngle != 0.f )
+    {
+        m_txtTaperAngle->setString( fmt::format( "Taper Angle: {}", model.m_taperAngle ) );
+    }
 
     for( std::size_t n = 0; n < m_txtMemoryLabel.size(); ++n )
     {
@@ -268,6 +283,8 @@ void ViewSfml::updateTextFromModel( const Model& model )
         case Mode::Taper:
         {
             m_txtMode->setString( "Taper" );
+            m_txtTaperAngleInput->setString( fmt::format( "Taper angle (degrees from centre): {}_", 
+                model.m_input ) );
             break;
         }
         case Mode::Threading:
@@ -284,11 +301,6 @@ void ViewSfml::updateTextFromModel( const Model& model )
         {
             assert( false );
         }
-    }
-    if( model.m_taperModeOn )
-    {
-        m_txtTaperAngle->setString( fmt::format( "Taper angle (degrees from centre): {:.3f}", 
-            model.m_taperAngle ) );
     }
 }
 

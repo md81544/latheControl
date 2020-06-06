@@ -1,13 +1,14 @@
-Abstract out "view" to enable switch to SFML
-
 Need to implement code to deal with backlash
 
+Taper mode
+
+Threading mode in SFML
+
+Setup mode
+
+Help mode
+
 Read thread pitch data from config file
-
-Remove all unicorn initialisation
-
-Just have two "main" memories for target and return with hotkeys which
-just go to these two ('C'ut and 'R'eturn, perhaps?)
 
 Automate threading operations (or all?) to automatically return after the
 target step has been reached and a key is pressed

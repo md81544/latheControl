@@ -8,6 +8,7 @@
 #include "view_curses.h"
 #include "view_sfml.h"
 
+#include <cassert>
 #include <chrono>
 
 namespace mgo
@@ -63,6 +64,11 @@ void Controller::run()
     {
         processKeyPress();
 
+        if( m_model->m_taperAngle != 0.f )
+        {
+            syncXMotorPosition();
+        }
+
         if( m_model->m_currentMode == Mode::Threading )
         {
             // We are cutting threads, so the stepper motor's speed
@@ -85,12 +91,37 @@ void Controller::run()
             m_model->m_zAxisMotor->setRpm( speed );
         }
 
+        if( m_model->m_currentMode == Mode::Taper )
+        {
+            if( m_model->m_input.empty() )
+            {
+                m_model->m_taperAngle = 0.f;
+            }
+            else
+            {
+                try
+                {
+                    m_model->m_taperAngle = std::stof( m_model->m_input );
+                    if( m_model->m_taperAngle > 90.f )
+                    {
+                        m_model->m_taperAngle = 90.f;
+                        m_model->m_input = "90.0";
+                    }
+                }
+                catch( const std::exception& )
+                {
+                    m_model->m_taperAngle = 0.f;
+                    m_model->m_input = "";
+                }
+            }
+        }
+
         if ( ! m_model->m_zAxisMotor->isRunning() )
         {
             m_model->m_status = "stopped";
             if( m_model->m_fastReturning )
             {
-                m_model->m_zAxisMotor->setRpm( m_model->m_oldZSpeed );
+                m_model->m_zAxisMotor->setRpm( m_model->m_previousZSpeed );
                 m_model->m_fastReturning = false;
             }
         }
@@ -105,6 +136,7 @@ void Controller::processKeyPress()
 {
     int t = m_view->getInput();
     t = checkKeyAllowedForMode( t );
+    t = processInputKeys( t );
     if( t != key::None )
     {
         m_model->m_keyPressed = t;
@@ -260,8 +292,6 @@ void Controller::processKeyPress()
                 break;
             }
             case key::ENTER:
-            case key::r:
-            case key::R:
             {
                 if( m_model->m_memory.at( m_model->m_currentMemory ) == INF_RIGHT ) break;
                 // We always start at the same rotational position: it's
@@ -411,7 +441,7 @@ void Controller::processKeyPress()
                 // Fast return to point
                 if( m_model->m_memory.at( m_model->m_currentMemory ) == INF_RIGHT ) break;
                 if( m_model->m_fastReturning ) break;
-                m_model->m_oldZSpeed = m_model->m_zAxisMotor->getRpm();
+                m_model->m_previousZSpeed = m_model->m_zAxisMotor->getRpm();
                 m_model->m_fastReturning = true;
                 m_model->m_zAxisMotor->stop();
                 m_model->m_zAxisMotor->wait();
@@ -476,6 +506,14 @@ void Controller::changeMode( Mode mode )
 {
     stopAllMotors();
     m_model->m_warning = "";
+    if( mode == Mode::Taper && m_model->m_taperAngle != 0.f )
+    {
+        m_model->m_input = std::to_string( m_model->m_taperAngle );
+    }
+    else
+    {
+        m_model->m_input = "";
+    }
     m_model->m_currentMode = mode;
 }
 
@@ -517,6 +555,8 @@ int Controller::checkKeyAllowedForMode( int key )
             return -1;
         case Mode::Taper:
             if( key == key::ENTER || key == key::ESC || key == key::Q || key == key::q ) return key;
+            if( key >= key::ZERO && key <= key::NINE ) return key;
+            if( key == key::FULLSTOP || key == key::BACKSPACE ) return key;
             return -1;
         case Mode::Threading:
             if( key == key::ENTER || key == key::ESC || key == key::Q || key == key::q ) return key;
@@ -525,6 +565,56 @@ int Controller::checkKeyAllowedForMode( int key )
             // unhandled mode
             assert( false );
     }
+}
+
+int Controller::processInputKeys( int key )
+{
+    // If we are in a "mode" then certain keys (e.g. the number keys) are used for input
+    // so are processed here before allowing them to fall through to the main key processing
+    if( m_model->m_currentMode == Mode::Taper )
+    {
+        if( key >= key::ZERO && key <= key::NINE )
+        {
+            m_model->m_input += static_cast<char>( key );
+            return -1;
+        }
+        if( key == key::FULLSTOP )
+        {
+            if( m_model->m_input.find( "." ) == std::string::npos )
+            {
+                m_model->m_input += static_cast<char>( key );
+            }
+            return -1;
+        }
+        if( key == key::BACKSPACE )
+        {
+            m_model->m_input.pop_back();
+            return -1;
+        }
+        if( key == key::ENTER )
+        {
+            m_model->m_currentMode = Mode::None;
+            return -1;
+        }
+    }
+    return key;
+}
+
+void Controller::syncXMotorPosition()
+{
+    static double previousZPosition = std::numeric_limits<double>::max();
+    if( previousZPosition == std::numeric_limits<double>::max() )
+    {
+        previousZPosition = m_model->m_zAxisMotor->getPosition();
+        return;
+    }
+    double currentZPosition = m_model->m_zAxisMotor->getPosition();
+    double currentXPosition = m_model->m_xAxisMotor->getPosition();
+    double zDelta = previousZPosition - currentZPosition;
+    double newXPosition = currentXPosition -
+        (std::tan( m_model->m_taperAngle * 0.0174533 ) * zDelta );
+    m_model->m_xAxisMotor->setPosition( newXPosition );
+    previousZPosition = currentZPosition;
 }
 
 } // end namespace

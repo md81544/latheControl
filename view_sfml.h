@@ -31,10 +31,11 @@ private:
     std::unique_ptr<sf::Text> m_txtRpm;
     std::unique_ptr<sf::Text> m_txtStatus;
     std::unique_ptr<sf::Text> m_txtWarning;
+    std::unique_ptr<sf::Text> m_txtTaperAngle;
 
     // Text items which are displayed sometimes:
     std::unique_ptr<sf::Text> m_txtMode;
-    std::unique_ptr<sf::Text> m_txtTaperAngle;
+    std::unique_ptr<sf::Text> m_txtTaperAngleInput;
 
     std::vector<std::unique_ptr<sf::Text>> m_txtMemoryLabel;
     std::vector<std::unique_ptr<sf::Text>> m_txtMemoryValue;

@@ -6,7 +6,7 @@
 namespace mgo
 {
 
-class Model;
+struct Model;
 
 class ViewCurses : public IView
 {

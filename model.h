@@ -51,14 +51,14 @@ struct Model
     std::size_t m_threadPitchIndex{ 0 };
     std::string m_status{ "stopped" };
     std::string m_warning;
+    std::string m_input; // general-purpose string for user-entered data
     bool        m_quit{ false };
-    float       m_oldZSpeed{ 40.f };
+    float       m_previousZSpeed{ 40.f };
     bool        m_fastReturning{ false };
     int         m_keyPressed{ 0 };
     int         m_threadCutAdvanceCount{ 0 };
     float       m_taperAngle{ 0.f };
     bool        m_useSfml{ true };
-    bool        m_taperModeOn{ false };
     Mode        m_currentMode{ Mode::None };
 };
 

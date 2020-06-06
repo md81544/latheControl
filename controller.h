@@ -22,6 +22,8 @@ private:
     void stopAllMotors();
     int checkKeyAllowedForMode( int key );
     void changeMode( Mode mode );
+    int processInputKeys( int key );
+    void syncXMotorPosition();
 };
 
 } // end namespace

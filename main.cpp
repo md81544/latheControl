@@ -12,8 +12,6 @@
 
 int main( int argc, char* argv[] )
 {
-    // TODO command line processing - to switch view from 
-    // curses to SFML for example
     try
     {
         INIT_MGOLOG( "els.log" );

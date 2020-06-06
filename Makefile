@@ -1,5 +1,5 @@
 CC      = g++
-CFLAGS  = -std=c++14 -O3 -Wall -Wextra -Wpedantic -Werror -g
+CFLAGS  = -std=c++17 -O3 -Wall -Wextra -Wpedantic -Werror -g
 LIBS = -lncurses -lfmt -pthread -lsfml-graphics -lsfml-window -lsfml-system
 
 SOURCES := $(wildcard *.cpp stepperControl/*.cpp)
