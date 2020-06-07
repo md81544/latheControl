@@ -16,7 +16,6 @@ struct ThreadPitch
     float cutDepthFemale;
 };
 
-// TODO these should come from a config file
 const std::vector<ThreadPitch> threadPitches{
         { "Coarse, M3",    0.5f,   3.f, 0.306f,   2.459f,   0.234f },
         { "Coarse, M3.5",  0.6f,  3.5f, 0.368f,   2.850f,   0.282f },

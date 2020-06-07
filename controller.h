@@ -24,6 +24,9 @@ private:
     void changeMode( Mode mode );
     int processInputKeys( int key );
     void syncXMotorPosition();
+    // Cache of config values for speed
+    double m_zMaxMotorSpeed;
+    double m_xMaxMotorSpeed;
 };
 
 } // end namespace

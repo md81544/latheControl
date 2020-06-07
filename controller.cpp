@@ -41,16 +41,19 @@ Controller::Controller( Model* model )
         m_view = std::make_unique<ViewCurses>();
     }
 
+    m_zMaxMotorSpeed = m_model->m_config->readDouble( "zMaxMotorSpeed", 700.0 );
+    m_xMaxMotorSpeed = m_model->m_config->readDouble( "xMaxMotorSpeed", 360.0 );
+
     m_view->initialise();
 
     // TODO: currently ignoring enable pin
     m_model->m_zAxisMotor = std::make_unique<mgo::StepperMotor>(
-        m_model->m_gpio, 8, 7, 0, 1'000, -0.001, MAX_Z_MOTOR_SPEED );
+        m_model->m_gpio, 8, 7, 0, 1'000, -0.001, m_zMaxMotorSpeed );
     // My X-Axis motor is set to 800 steps per revolution and the gearing
     // is 3:1 so 2,400 steps make one revolution of the X-axis handwheel,
     // which would be 1mm of travel. TODO: this should be settable in config
     m_model->m_xAxisMotor = std::make_unique<mgo::StepperMotor>(
-        m_model->m_gpio, 20, 21, 0, 800, 1.0 / 2'400.0, MAX_X_MOTOR_SPEED );
+        m_model->m_gpio, 20, 21, 0, 800, 1.0 / 2'400.0, m_xMaxMotorSpeed );
     m_model->m_rotaryEncoder = std::make_unique<mgo::RotaryEncoder>(
         m_model->m_gpio, 23, 24, 2000, 35.f/30.f );
 }
@@ -78,7 +81,7 @@ void Controller::run()
             // revolution, there is a direct correlation between spindle
             // rpm and stepper motor rpm for a 1mm thread pitch.
             float speed = pitch * m_model->m_rotaryEncoder->getRpm();
-            if( speed > MAX_Z_MOTOR_SPEED )
+            if( speed > m_zMaxMotorSpeed )
             {
                 m_model->m_zAxisMotor->stop();
                 m_model->m_zAxisMotor->wait();
@@ -173,7 +176,7 @@ void Controller::processKeyPress()
                 {
                     m_model->m_xAxisMotor->setSpeed( 10.0 );
                 }
-                else if( m_model->m_xAxisMotor->getSpeed() < MAX_X_MOTOR_SPEED )
+                else if( m_model->m_xAxisMotor->getSpeed() < m_xMaxMotorSpeed )
                 {
                     m_model->m_xAxisMotor->setSpeed( m_model->m_xAxisMotor->getSpeed() + 10.0 );
                 }
@@ -212,7 +215,7 @@ void Controller::processKeyPress()
                 }
                 else
                 {
-                    if( m_model->m_zAxisMotor->getRpm() < MAX_Z_MOTOR_SPEED )
+                    if( m_model->m_zAxisMotor->getRpm() < m_zMaxMotorSpeed )
                     {
                         m_model->m_zAxisMotor->setRpm( m_model->m_zAxisMotor->getRpm() + 20.0 );
                     }
@@ -446,7 +449,7 @@ void Controller::processKeyPress()
             {
                 if( m_model->m_currentMode != Mode::Threading )
                 {
-                    m_model->m_zAxisMotor->setRpm( MAX_Z_MOTOR_SPEED );
+                    m_model->m_zAxisMotor->setRpm( m_zMaxMotorSpeed );
                 }
                 break;
             }
@@ -487,7 +490,7 @@ void Controller::processKeyPress()
             {
                 if( m_model->m_currentMode != Mode::Threading )
                 {
-                    m_model->m_xAxisMotor->setRpm( MAX_Z_MOTOR_SPEED );
+                    m_model->m_xAxisMotor->setRpm( m_zMaxMotorSpeed );
                 }
                 break;
             }
@@ -671,7 +674,7 @@ int Controller::processInputKeys( int key )
 
 void Controller::syncXMotorPosition()
 {
-    m_model->m_xAxisMotor->setSpeed( MAX_X_MOTOR_SPEED );
+    m_model->m_xAxisMotor->setSpeed( m_xMaxMotorSpeed );
     static double startZPosition = std::numeric_limits<double>::max();
     static double startXPosition = std::numeric_limits<double>::max();
     static double previousZPosition = std::numeric_limits<double>::max();

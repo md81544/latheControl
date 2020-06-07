@@ -7,6 +7,7 @@
 #include "controller.h"
 #include "log.h"
 #include "model.h"
+#include "configreader.h"
 
 #include <iostream>
 
@@ -29,6 +30,8 @@ int main( int argc, char* argv[] )
         {
             model.m_useSfml = false;
         }
+
+        model.m_config = std::make_unique<mgo::ConfigReader>( "els.cfg" );
 
         mgo::Controller controller( &model );
         controller.run();
