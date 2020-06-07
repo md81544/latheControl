@@ -179,10 +179,9 @@ void Controller::processKeyPress()
                 }
                 break;
             }
-            // Cross-slide support is currently just for testing
-            // Nudge in
-            case key::D:
-            case key::d:
+            // Nudge in X axis
+            case key::W:
+            case key::w:
             {
                 if ( m_model->m_xAxisMotor->isRunning() )
                 {
@@ -190,6 +189,18 @@ void Controller::processKeyPress()
                     m_model->m_xAxisMotor->wait();
                 }
                 m_model->m_xAxisMotor->goToStep( m_model->m_xAxisMotor->getCurrentStep() + 60.0 );
+                break;
+            }
+            // Nudge out X axis
+            case key::S:
+            case key::s:
+            {
+                if ( m_model->m_xAxisMotor->isRunning() )
+                {
+                    m_model->m_xAxisMotor->stop();
+                    m_model->m_xAxisMotor->wait();
+                }
+                m_model->m_xAxisMotor->goToStep( m_model->m_xAxisMotor->getCurrentStep() - 60.0 );
                 break;
             }
             case key::EQUALS: // (i.e. plus)
@@ -357,6 +368,8 @@ void Controller::processKeyPress()
                 m_model->m_zAxisMotor->goToStep( INF_RIGHT );
                 break;
             }
+            case key::a:
+            case key::A:
             case key::COMMA: // (<) - nudge left
             {
                 if ( m_model->m_zAxisMotor->isRunning() )
@@ -367,6 +380,8 @@ void Controller::processKeyPress()
                 m_model->m_zAxisMotor->goToStep( m_model->m_zAxisMotor->getCurrentStep() + 25L );
                 break;
             }
+            case key::d:
+            case key::D:
             case key::FULLSTOP: // (>) - nudge right
             {
                 if ( m_model->m_zAxisMotor->isRunning() )
@@ -394,7 +409,7 @@ void Controller::processKeyPress()
                 break;
             }
 
-            // Speed presets with number keys 1-5
+            // Speed presets for Z with number keys 1-5
             case key::ONE:
             {
                 if( m_model->m_currentMode != Mode::Threading )
@@ -435,6 +450,47 @@ void Controller::processKeyPress()
                 }
                 break;
             }
+            // Speed presets for X with number keys 6-0
+            case key::SIX:
+            {
+                if( m_model->m_currentMode != Mode::Threading )
+                {
+                    m_model->m_xAxisMotor->setRpm( 30.f );
+                }
+                break;
+            }
+            case key::SEVEN:
+            {
+                if( m_model->m_currentMode != Mode::Threading )
+                {
+                    m_model->m_xAxisMotor->setRpm( 60.f );
+                }
+                break;
+            }
+            case key::EIGHT:
+            {
+                if( m_model->m_currentMode != Mode::Threading )
+                {
+                    m_model->m_xAxisMotor->setRpm( 120.f );
+                }
+                break;
+            }
+            case key::NINE:
+            {
+                if( m_model->m_currentMode != Mode::Threading )
+                {
+                    m_model->m_xAxisMotor->setRpm( 240.f );
+                }
+                break;
+            }
+            case key::ZERO:
+            {
+                if( m_model->m_currentMode != Mode::Threading )
+                {
+                    m_model->m_xAxisMotor->setRpm( MAX_Z_MOTOR_SPEED );
+                }
+                break;
+            }
             case key::f:
             case key::F:
             {
@@ -445,7 +501,16 @@ void Controller::processKeyPress()
                 m_model->m_fastReturning = true;
                 m_model->m_zAxisMotor->stop();
                 m_model->m_zAxisMotor->wait();
-                m_model->m_zAxisMotor->setRpm( m_model->m_zAxisMotor->getMaxRpm() );
+                // If we are tapering, we need to set a speed the x-axis motor can keep up with
+                // if the angle is steep
+                if( m_model->m_taperAngle > 5.f ) // arbitrary figure :)
+                {
+                    m_model->m_zAxisMotor->setRpm( 100.f );
+                }
+                else
+                {
+                    m_model->m_zAxisMotor->setRpm( m_model->m_zAxisMotor->getMaxRpm() );
+                }
                 m_model->m_status = "fast returning";
                 m_model->m_zAxisMotor->goToStep( m_model->m_memory.at( m_model->m_currentMemory ) );
                 break;
