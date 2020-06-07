@@ -556,7 +556,7 @@ int Controller::checkKeyAllowedForMode( int key )
         case Mode::Taper:
             if( key == key::ENTER || key == key::ESC || key == key::Q || key == key::q ) return key;
             if( key >= key::ZERO && key <= key::NINE ) return key;
-            if( key == key::FULLSTOP || key == key::BACKSPACE ) return key;
+            if( key == key::FULLSTOP || key == key::BACKSPACE || key == key::DELETE ) return key;
             return -1;
         case Mode::Threading:
             if( key == key::ENTER || key == key::ESC || key == key::Q || key == key::q ) return key;
@@ -585,6 +585,10 @@ int Controller::processInputKeys( int key )
                 m_model->m_input += static_cast<char>( key );
             }
             return -1;
+        }
+        if( key == key::DELETE )
+        {
+            m_model->m_input = "";
         }
         if( key == key::BACKSPACE )
         {

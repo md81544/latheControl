@@ -90,6 +90,8 @@ int convertKeyCode( sf::Event event )
             return 27;
         case sf::Keyboard::BackSpace:
             return 8;
+        case sf::Keyboard::Delete:
+            return 127;
         default:
             return -1;
     }
@@ -321,7 +323,7 @@ void ViewSfml::updateTextFromModel( const Model& model )
             m_txtMisc3->setString( "" );
             m_txtMisc4->setString( "" );
             m_txtMisc5->setString( "" );
-            m_txtWarning->setString( "Press Esc to exit taper entry" );
+            m_txtWarning->setString( "Press Del to clear, and Enter or Esc to exit taper entry" );
             break;
         }
         case Mode::Threading:
