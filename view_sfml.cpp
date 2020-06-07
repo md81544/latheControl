@@ -157,16 +157,32 @@ void ViewSfml::initialise()
     m_txtMode->setPosition( { 20, 320 } );
     m_txtMode->setFillColor( sf::Color::Yellow );
 
-    m_txtTaperAngleInput = std::make_unique<sf::Text>( "", *m_font, 25 );
-    m_txtTaperAngleInput->setPosition( { 20, 350 } );
-    m_txtTaperAngleInput->setFillColor( sf::Color::Yellow );
+    m_txtMisc1 = std::make_unique<sf::Text>( "", *m_font, 25 );
+    m_txtMisc1->setPosition( { 20, 350 } );
+    m_txtMisc1->setFillColor( sf::Color::White );
+
+    m_txtMisc2 = std::make_unique<sf::Text>( "", *m_font, 25 );
+    m_txtMisc2->setPosition( { 20, 380 } );
+    m_txtMisc2->setFillColor( sf::Color::White );
+
+    m_txtMisc3 = std::make_unique<sf::Text>( "", *m_font, 25 );
+    m_txtMisc3->setPosition( { 20, 410 } );
+    m_txtMisc3->setFillColor( sf::Color::White );
+
+    m_txtMisc4 = std::make_unique<sf::Text>( "", *m_font, 25 );
+    m_txtMisc4->setPosition( { 20, 440 } );
+    m_txtMisc4->setFillColor( sf::Color::White );
+
+    m_txtMisc5 = std::make_unique<sf::Text>( "", *m_font, 25 );
+    m_txtMisc5->setPosition( { 20, 470 } );
+    m_txtMisc5->setFillColor( sf::Color::White );
 
     m_txtWarning = std::make_unique<sf::Text>("", *m_font, 20 );
-    m_txtWarning->setPosition( { 500, 520 });
+    m_txtWarning->setPosition( { 20, 510 });
     m_txtWarning->setFillColor( sf::Color::Red );
 
-    m_txtTaperAngle= std::make_unique<sf::Text>("", *m_font, 20 );
-    m_txtTaperAngle->setPosition( { 20, 520 });
+    m_txtTaperAngle= std::make_unique<sf::Text>("", *m_font, 30 );
+    m_txtTaperAngle->setPosition( { 550, 160 });
     m_txtTaperAngle->setFillColor( { 252, 165, 3 } );
 }
 
@@ -222,9 +238,13 @@ void ViewSfml::updateDisplay( const Model& model )
     {
         m_window->draw( *m_txtMode );
     }
-    if( model.m_currentMode == Mode::Taper ) 
+    if( model.m_currentMode != Mode::None )
     {
-        m_window->draw( *m_txtTaperAngleInput );
+        m_window->draw( *m_txtMisc1 );
+        m_window->draw( *m_txtMisc2 );
+        m_window->draw( *m_txtMisc3 );
+        m_window->draw( *m_txtMisc4 );
+        m_window->draw( *m_txtMisc5 );
     }
     m_window->display();
 }
@@ -273,28 +293,56 @@ void ViewSfml::updateTextFromModel( const Model& model )
         case Mode::Help:
         {
             m_txtMode->setString( "Help" );
+            m_txtMisc1->setString( "Modes: F2: Setup, F3: Threading, F4: Taper" );
+            m_txtMisc2->setString( "Z axis speed: 1-5, X axis speed: 6-0" );
+            m_txtMisc3->setString( "Square brackets select memory store to use" );
+            m_txtMisc4->setString( "M remembers position, Enter returns to it. (F for fast return)" );
+            m_txtMisc5->setString( "Space to stop all motors." );
+            m_txtWarning->setString( "Press Esc to exit help" );
             break;
         }
         case Mode::Setup:
         {
             m_txtMode->setString( "Setup" );
+            m_txtMisc1->setString( "" );
+            m_txtMisc2->setString( "" );
+            m_txtMisc3->setString( "" );
+            m_txtMisc4->setString( "" );
+            m_txtMisc5->setString( "" );
+            m_txtWarning->setString( "Press Esc to exit setup" );
             break;
         }
         case Mode::Taper:
         {
             m_txtMode->setString( "Taper" );
-            m_txtTaperAngleInput->setString( fmt::format( "Taper angle (degrees from centre): {}_", 
+            m_txtMisc1->setString( fmt::format( "Taper angle (degrees from centre): {}_",
                 model.m_input ) );
+            m_txtMisc2->setString( "" );
+            m_txtMisc3->setString( "" );
+            m_txtMisc4->setString( "" );
+            m_txtMisc5->setString( "" );
+            m_txtWarning->setString( "Press Esc to exit taper entry" );
             break;
         }
         case Mode::Threading:
         {
             m_txtMode->setString( "Thread" );
+            m_txtMisc1->setString( "" );
+            m_txtMisc2->setString( "" );
+            m_txtMisc3->setString( "" );
+            m_txtMisc4->setString( "" );
+            m_txtMisc5->setString( "" );
+            m_txtWarning->setString( "Press Esc to exit thread entry" );
             break;
         }
         case Mode::None:
         {
             m_txtMode->setString( "" );
+            m_txtMisc1->setString( "" );
+            m_txtMisc2->setString( "" );
+            m_txtMisc3->setString( "" );
+            m_txtMisc4->setString( "" );
+            m_txtMisc5->setString( "" );
             break;
         }
         default:

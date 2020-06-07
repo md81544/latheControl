@@ -62,12 +62,12 @@ void Controller::run()
 
     while( ! m_model->m_quit )
     {
-        processKeyPress();
-
         if( m_model->m_taperAngle != 0.f )
         {
             syncXMotorPosition();
         }
+
+        processKeyPress();
 
         if( m_model->m_currentMode == Mode::Threading )
         {
@@ -128,7 +128,7 @@ void Controller::run()
         m_view->updateDisplay( *m_model );
 
         // Small delay just to avoid the UI loop spinning
-        yieldSleep( std::chrono::microseconds( 100'000 ) );
+        yieldSleep( std::chrono::microseconds( 50'000 ) );
     }
 }
 
@@ -173,7 +173,7 @@ void Controller::processKeyPress()
                 {
                     m_model->m_xAxisMotor->setSpeed( 10.0 );
                 }
-                else if( m_model->m_xAxisMotor->getSpeed() < 240.0 )
+                else if( m_model->m_xAxisMotor->getSpeed() < MAX_X_MOTOR_SPEED )
                 {
                     m_model->m_xAxisMotor->setSpeed( m_model->m_xAxisMotor->getSpeed() + 10.0 );
                 }
@@ -602,16 +602,26 @@ int Controller::processInputKeys( int key )
 
 void Controller::syncXMotorPosition()
 {
+    m_model->m_xAxisMotor->setSpeed( MAX_X_MOTOR_SPEED );
+    static double startZPosition = std::numeric_limits<double>::max();
+    static double startXPosition = std::numeric_limits<double>::max();
     static double previousZPosition = std::numeric_limits<double>::max();
-    if( previousZPosition == std::numeric_limits<double>::max() )
+    if( startZPosition == std::numeric_limits<double>::max() )
     {
-        previousZPosition = m_model->m_zAxisMotor->getPosition();
+        startZPosition = m_model->m_zAxisMotor->getPosition();
+        startXPosition = m_model->m_xAxisMotor->getPosition();
         return;
     }
     double currentZPosition = m_model->m_zAxisMotor->getPosition();
-    double currentXPosition = m_model->m_xAxisMotor->getPosition();
-    double zDelta = previousZPosition - currentZPosition;
-    double newXPosition = currentXPosition -
+    if( currentZPosition == previousZPosition )
+    {
+        // we appear to have stopped, so store a new start position
+        startZPosition = m_model->m_zAxisMotor->getPosition();
+        startXPosition = m_model->m_xAxisMotor->getPosition();
+        return;
+    }
+    double zDelta = startZPosition - currentZPosition;
+    double newXPosition = startXPosition -
         (std::tan( m_model->m_taperAngle * 0.0174533 ) * zDelta );
     m_model->m_xAxisMotor->setPosition( newXPosition );
     previousZPosition = currentZPosition;

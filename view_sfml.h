@@ -35,7 +35,11 @@ private:
 
     // Text items which are displayed sometimes:
     std::unique_ptr<sf::Text> m_txtMode;
-    std::unique_ptr<sf::Text> m_txtTaperAngleInput;
+    std::unique_ptr<sf::Text> m_txtMisc1;
+    std::unique_ptr<sf::Text> m_txtMisc2;
+    std::unique_ptr<sf::Text> m_txtMisc3;
+    std::unique_ptr<sf::Text> m_txtMisc4;
+    std::unique_ptr<sf::Text> m_txtMisc5;
 
     std::vector<std::unique_ptr<sf::Text>> m_txtMemoryLabel;
     std::vector<std::unique_ptr<sf::Text>> m_txtMemoryValue;
