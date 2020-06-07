@@ -227,10 +227,15 @@ void ViewSfml::updateDisplay( const Model& model )
     m_window->draw( *m_txtRpm );
     m_window->draw( *m_txtStatus );
     m_window->draw( *m_txtWarning );
-    if( model.m_taperAngle != 0.f )
+    if( model.m_taperingOn )
     {
-        m_window->draw( *m_txtTaperAngle );
+        m_txtTaperAngle->setFillColor( sf::Color::Red );
     }
+    else
+    {
+        m_txtTaperAngle->setFillColor( { 64, 64, 64 });
+    }
+    m_window->draw( *m_txtTaperAngle );
     for( std::size_t n = 0; n < m_txtMemoryLabel.size(); ++n )
     {
         m_window->draw( *m_txtMemoryLabel.at( n ) );

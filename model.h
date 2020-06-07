@@ -56,6 +56,7 @@ struct Model
     int         m_keyPressed{ 0 };
     int         m_threadCutAdvanceCount{ 0 };
     float       m_taperAngle{ 0.f };
+    bool        m_taperingOn{ false };
     bool        m_useSfml{ true };
     Mode        m_currentMode{ Mode::None };
     std::unique_ptr<mgo::ConfigReader> m_config;

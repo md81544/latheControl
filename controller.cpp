@@ -65,7 +65,7 @@ void Controller::run()
 
     while( ! m_model->m_quit )
     {
-        if( m_model->m_taperAngle != 0.f )
+        if( m_model->m_taperingOn )
         {
             syncXMotorPosition();
         }
@@ -248,16 +248,7 @@ void Controller::processKeyPress()
             case key::t:
             case key::T:
             {
-                // Toggle threading on/off, deprecated, now use function key (TODO remove)
-                stopAllMotors();
-                if( m_model->m_currentMode == Mode::Threading )
-                {
-                    m_model->m_currentMode = Mode::None;
-                }
-                else
-                {
-                    m_model->m_currentMode = Mode::Threading;
-                }
+                m_model->m_taperingOn = ! m_model->m_taperingOn;
                 break;
             }
             case key::p:
@@ -521,6 +512,7 @@ void Controller::processKeyPress()
             case key::z:
             case key::Z:
             {
+                m_model->m_taperingOn = false; // avoid unwanted movement
                 m_model->m_zAxisMotor->zeroPosition();
                 m_model->m_xAxisMotor->zeroPosition();
                 break;
