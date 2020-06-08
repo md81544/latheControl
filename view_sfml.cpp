@@ -311,11 +311,15 @@ void ViewSfml::updateTextFromModel( const Model& model )
         case Mode::Setup:
         {
             m_txtMode->setString( "Setup" );
-            m_txtMisc1->setString( "" );
-            m_txtMisc2->setString( "" );
-            m_txtMisc3->setString( "" );
+            m_txtMisc1->setString( "This mode allows you to determine backlash compensation" );
+            m_txtMisc2->setString( "Use a dial indicator to find number of steps backlash per axis" );
+            m_txtMisc3->setString( "REMEMBER to unset any previous-set backlash figures in config!" );
             m_txtMisc4->setString( "" );
-            m_txtMisc5->setString( "" );
+            m_txtMisc5->setString( fmt::format("Z step: {}   X step: {}",
+                    model.m_zAxisMotor->getCurrentStep(),
+                    model.m_xAxisMotor->getCurrentStep()
+                    )
+                );
             m_txtWarning->setString( "Press Esc to exit setup" );
             break;
         }
@@ -325,7 +329,7 @@ void ViewSfml::updateTextFromModel( const Model& model )
             m_txtMisc1->setString( fmt::format( "Taper angle (degrees from centre): {}_",
                 model.m_input ) );
             m_txtMisc2->setString( "" );
-            m_txtMisc3->setString( "" );
+            m_txtMisc3->setString( "Remember to use 'T' to turn tapering on / off" );
             m_txtMisc4->setString( "" );
             m_txtMisc5->setString( "" );
             m_txtWarning->setString( "Press Del to clear, and Enter or Esc to exit taper entry" );

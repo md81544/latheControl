@@ -151,3 +151,32 @@ TEST_CASE( "Rotary Encoder Position Callback" )
     REQUIRE( re.warmingUp() == false );
     REQUIRE( called == true );
 }
+
+TEST_CASE( "Check backlash compensation" )
+{
+    mgo::MockGpio gpio( false );
+    mgo::StepperMotor motor( gpio, 0, 0, 0, 1'000, 1.0, 10'000.0 );
+    // Set backlash compensation. This sets our backlash slop to be ten
+    // steps which means if we move one step in a positive manner the
+    // motor should really have to move eleven "real" steps
+    motor.setBacklashCompensation( 10, 0 );
+    motor.goToStep( 1 );
+    motor.wait();
+    REQUIRE( motor.getCurrentStep() == 1 );
+    REQUIRE( motor.getCurrentStepWithoutBacklashCompensation() == 11 );
+
+    // Now we are at the far end of the backlash "window" so moving the next
+    // one step should only move one "real" step
+    motor.goToStep( 2 );
+    motor.wait();
+    REQUIRE( motor.getCurrentStep() == 2 );
+    REQUIRE( motor.getCurrentStepWithoutBacklashCompensation() == 12 );
+
+    // Now as we are pushed up against one end of the backlash window, if
+    // we want to move BACK one step, the motor will actually need to do
+    // another eleven steps:
+    motor.goToStep( 1 );
+    motor.wait();
+    REQUIRE( motor.getCurrentStep() == 1 );
+    REQUIRE( motor.getCurrentStepWithoutBacklashCompensation() == 1 );
+}

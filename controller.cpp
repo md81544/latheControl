@@ -56,6 +56,23 @@ Controller::Controller( Model* model )
         m_model->m_gpio, 20, 21, 0, 800, 1.0 / 2'400.0, m_xMaxMotorSpeed );
     m_model->m_rotaryEncoder = std::make_unique<mgo::RotaryEncoder>(
         m_model->m_gpio, 23, 24, 2000, 35.f/30.f );
+
+    // We need to ensure that the motors are in a known position with regard to
+    // backlash - which means moving them initially by the amount of
+    // configured backlash compensation to ensure any backlash is taken up
+    // This initial movement will be small but this could cause an issue if
+    // the tool is against work already - maybe TODO something here?
+    unsigned long zBacklashCompensation =
+        m_model->m_config->readLong( "ZAxisBacklashCompensationSteps", 0 );
+    unsigned long xBacklashCompensation =
+        m_model->m_config->readLong( "XAxisBacklashCompensationSteps", 0 );
+    m_model->m_zAxisMotor->goToStep( zBacklashCompensation );
+    m_model->m_zAxisMotor->setBacklashCompensation( zBacklashCompensation, zBacklashCompensation );
+    m_model->m_xAxisMotor->goToStep( xBacklashCompensation );
+    m_model->m_xAxisMotor->setBacklashCompensation( xBacklashCompensation, xBacklashCompensation );
+    // re-zero after that:
+    m_model->m_zAxisMotor->zeroPosition();
+    m_model->m_xAxisMotor->zeroPosition();
 }
 
 void Controller::run()
@@ -535,6 +552,9 @@ void Controller::processKeyPress()
             }
             case key::F2: // setup mode
             {
+                m_model->m_taperingOn = false;
+                m_model->m_zAxisMotor->setSpeed( 0.2f );
+                m_model->m_xAxisMotor->setSpeed( 0.1f );
                 changeMode( Mode::Setup );
                 break;
             }
@@ -612,6 +632,11 @@ int Controller::checkKeyAllowedForMode( int key )
             return -1;
         case Mode::Setup:
             if( key == key::ENTER || key == key::ESC || key == key::Q || key == key::q ) return key;
+            if( key == key::LEFT || key == key::RIGHT || key == key::UP || key == key::DOWN )
+            {
+                return key;
+            }
+            if( key == key::SPACE ) return key;
             return -1;
         case Mode::Taper:
             if( key == key::ENTER || key == key::ESC || key == key::Q || key == key::q ) return key;

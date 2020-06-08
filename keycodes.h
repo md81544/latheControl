@@ -27,6 +27,7 @@ constexpr int ASTERISK  = 42;
 constexpr int ESC       = 27;
 constexpr int BACKSPACE = 8;
 constexpr int DELETE    = 127;
+constexpr int SPACE     = 32;
 
 constexpr int F1  = 265;
 constexpr int F2  = 266;
