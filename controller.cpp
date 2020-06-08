@@ -70,6 +70,8 @@ Controller::Controller( Model* model )
     m_model->m_zAxisMotor->setBacklashCompensation( zBacklashCompensation, zBacklashCompensation );
     m_model->m_xAxisMotor->goToStep( xBacklashCompensation );
     m_model->m_xAxisMotor->setBacklashCompensation( xBacklashCompensation, xBacklashCompensation );
+    m_model->m_zAxisMotor->wait();
+    m_model->m_xAxisMotor->wait();
     // re-zero after that:
     m_model->m_zAxisMotor->zeroPosition();
     m_model->m_xAxisMotor->zeroPosition();
@@ -553,8 +555,8 @@ void Controller::processKeyPress()
             case key::F2: // setup mode
             {
                 m_model->m_taperingOn = false;
-                m_model->m_zAxisMotor->setSpeed( 0.2f );
-                m_model->m_xAxisMotor->setSpeed( 0.1f );
+                m_model->m_zAxisMotor->setSpeed( 0.8f );
+                m_model->m_xAxisMotor->setSpeed( 1.f );
                 changeMode( Mode::Setup );
                 break;
             }
