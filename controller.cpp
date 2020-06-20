@@ -279,10 +279,22 @@ void Controller::processKeyPress()
                 m_model->m_zAxisMotor->stop();
                 m_model->m_zAxisMotor->wait();
                 m_model->m_status = "returning";
+                // Before we make the move at zero degrees, we want to ensure any potential
+                // backlash is compensated, so we move one step towards the target first
+                if( m_model->m_memory.at( m_model->m_currentMemory ) <
+                    m_model->m_zAxisMotor->getCurrentStep() )
+                {
+                    m_model->m_zAxisMotor->goToStep( m_model->m_zAxisMotor->getCurrentStep() -1 );
+                }
+                else
+                {
+                    m_model->m_zAxisMotor->goToStep( m_model->m_zAxisMotor->getCurrentStep() +1 );
+                }
+                m_model->m_zAxisMotor->wait();
                 m_model->m_rotaryEncoder->callbackAtZeroDegrees([&]()
                     {
                         m_model->m_zAxisMotor->goToStep(
-                            m_model->m_memory.at( m_model->m_currentMemory ) ); 
+                            m_model->m_memory.at( m_model->m_currentMemory ) );
                     }
                     );
                 break;
