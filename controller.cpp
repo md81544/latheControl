@@ -534,6 +534,11 @@ void Controller::processKeyPress()
                 m_model->m_taperingOn = false; // avoid unwanted movement
                 m_model->m_zAxisMotor->zeroPosition();
                 m_model->m_xAxisMotor->zeroPosition();
+                // Zeroing will invalidate any memorised positions, so we clear them
+                for( auto& m : m_model->m_memory )
+                {
+                    m = INF_RIGHT;
+                }
                 break;
             }
             case key::ASTERISK: // shutdown

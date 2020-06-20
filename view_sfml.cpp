@@ -288,7 +288,11 @@ void ViewSfml::updateTextFromModel( const Model& model )
             m_txtMemoryLabel.at( n )->setFillColor( { 100, 100, 100 } );
             m_txtMemoryValue.at( n )->setFillColor( { 100, 100, 100 } );
         }
-        if ( model.m_memory.at( n ) != INF_RIGHT )
+        if ( model.m_memory.at( n ) == INF_RIGHT )
+        {
+            m_txtMemoryValue.at( n )->setString( " not set" );
+        }
+        else
         {
             m_txtMemoryValue.at( n )->setString(
                 fmt::format( "{:<12}", cnv( model.m_zAxisMotor.get(), model.m_memory.at( n ) ) )
