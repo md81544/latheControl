@@ -82,7 +82,7 @@ void ViewCurses::updateDisplay( const Model& model )
         ThreadPitch tp = threadPitches.at( model.m_threadPitchIndex );
         m_wnd.clearToEol();
         m_wnd << "Pitch:       " << tp.pitchMm << " mm (" << tp.name << ")\n";
-        m_wnd << "Current cut: " << model.m_threadCutAdvanceCount * INFEED << " mm\n";
+        m_wnd << "\n";
         m_wnd.setColour( Colours::cyanOnBlack );
         m_wnd.clearToEol();
         m_wnd << "    ( Male   OD: " << tp.maleOd << " mm, cut: " << tp.cutDepthMale << " mm )\n";

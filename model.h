@@ -47,6 +47,7 @@ struct Model
     std::vector<long> m_memory{ INF_RIGHT, INF_RIGHT, INF_RIGHT, INF_RIGHT };
     std::size_t m_currentMemory{ 0 };
     std::size_t m_threadPitchIndex{ 0 };
+    bool        m_threadingOn{ false };
     std::string m_status{ "stopped" };
     std::string m_warning;
     std::string m_input; // general-purpose string for user-entered data
@@ -54,7 +55,6 @@ struct Model
     float       m_previousZSpeed{ 40.f };
     bool        m_fastReturning{ false };
     int         m_keyPressed{ 0 };
-    int         m_threadCutAdvanceCount{ 0 };
     float       m_taperAngle{ 0.f };
     bool        m_taperingOn{ false };
     bool        m_useSfml{ true };

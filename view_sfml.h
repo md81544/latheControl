@@ -41,6 +41,8 @@ private:
     std::unique_ptr<sf::Text> m_txtMisc4;
     std::unique_ptr<sf::Text> m_txtMisc5;
 
+    std::unique_ptr<sf::Text> m_txtNotification;
+
     std::vector<std::unique_ptr<sf::Text>> m_txtMemoryLabel;
     std::vector<std::unique_ptr<sf::Text>> m_txtMemoryValue;
 };

@@ -91,7 +91,7 @@ void Controller::run()
 
         processKeyPress();
 
-        if( m_model->m_currentMode == Mode::Threading )
+        if( m_model->m_threadingOn )
         {
             // We are cutting threads, so the stepper motor's speed
             // is dependent on the spindle's RPM and the thread pitch.
@@ -268,51 +268,6 @@ void Controller::processKeyPress()
             case key::T:
             {
                 m_model->m_taperingOn = ! m_model->m_taperingOn;
-                break;
-            }
-            case key::p:
-            {
-                if ( m_model->m_currentMode != Mode::Threading ) break;
-                // change threading pitch up
-                ++m_model->m_threadPitchIndex;
-                if( m_model->m_threadPitchIndex >= threadPitches.size() )
-                {
-                    m_model->m_threadPitchIndex = 0;
-                }
-                break;
-            }
-            case key::P:
-            {
-                if ( m_model->m_currentMode != Mode::Threading ) break;
-                // change threading pitch down
-                if( m_model->m_threadPitchIndex == 0 )
-                {
-                    m_model->m_threadPitchIndex = threadPitches.size() - 1;
-                }
-                else
-                {
-                    --m_model->m_threadPitchIndex;
-                }
-                break;
-            }
-            case key::BACKSLASH:
-            {
-                // causes the cut to start a fraction earlier
-                // next time, this simulates feeding in at 29.5°
-                ++m_model->m_threadCutAdvanceCount;
-                m_model->m_rotaryEncoder->setAdvanceValueMicroseconds(
-                    m_model->m_threadCutAdvanceCount *
-                    ( ( 1'000'000.f / ( m_model->m_zAxisMotor->getRpm() / 60.f) ) * SIDEFEED )
-                    );
-                break;
-            }
-            case key::PIPE: // i.e. shift backslash
-            {
-                // decrement the cut advance count
-                if( m_model->m_threadCutAdvanceCount > 0 )
-                {
-                    --m_model->m_threadCutAdvanceCount;
-                }
                 break;
             }
             case key::ENTER:
@@ -602,6 +557,10 @@ void Controller::changeMode( Mode mode )
         m_model->m_input = "";
     }
     m_model->m_currentMode = mode;
+    if( mode == Mode::Threading )
+    {
+        m_model->m_threadingOn = true;
+    }
 }
 
 void Controller::stopAllMotors()
@@ -652,6 +611,7 @@ int Controller::checkKeyAllowedForMode( int key )
             return -1;
         case Mode::Threading:
             if( key == key::ENTER || key == key::ESC || key == key::Q || key == key::q ) return key;
+            if( key == key::UP || key == key::DOWN || key == key::DELETE ) return key;
             return -1;
         default:
             // unhandled mode
@@ -691,6 +651,39 @@ int Controller::processInputKeys( int key )
         {
             m_model->m_currentMode = Mode::None;
             return -1;
+        }
+    }
+    if(  m_model->m_currentMode == Mode::Threading )
+    {
+        if( key == key::UP )
+        {
+            if( m_model->m_threadPitchIndex == 0 )
+            {
+                m_model->m_threadPitchIndex = threadPitches.size() - 1;
+            }
+            else
+            {
+                --m_model->m_threadPitchIndex;
+            }
+            return -1;
+        }
+        if( key == key::DOWN )
+        {
+            if( m_model->m_threadPitchIndex == threadPitches.size() - 1 )
+            {
+                m_model->m_threadPitchIndex = 0;
+            }
+            else
+            {
+                ++m_model->m_threadPitchIndex;
+            }
+            return -1;
+        }
+        if( key == key::DELETE )
+        {
+            m_model->m_threadingOn = false;
+            // Reset motor speed to something sane
+            m_model->m_zAxisMotor->setSpeed( 40.f );
         }
     }
     return key;

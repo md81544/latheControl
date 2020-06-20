@@ -1,5 +1,9 @@
 Storing X-axis positions?
 
+Check whether backlash compensation will interfere with threading -
+it's conceivable the extra steps might throw off the start at
+zero degrees?
+
 Threading mode in SFML
 
 Automate threading operations (or all?) to automatically return after the
@@ -14,4 +18,4 @@ of the chuck/spindle
 
 Consider adding support for some form of switch / sensor to prevent
 carriage movement outside of specific points (or mandate position
-checks at start-up to do this in software onlu?)
+checks at start-up to do this in software only?)

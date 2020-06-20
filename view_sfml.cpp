@@ -186,6 +186,10 @@ void ViewSfml::initialise()
     m_txtTaperAngle= std::make_unique<sf::Text>("", *m_font, 30 );
     m_txtTaperAngle->setPosition( { 550, 160 });
     m_txtTaperAngle->setFillColor( { 252, 165, 3 } );
+
+    m_txtNotification = std::make_unique<sf::Text>("", *m_font, 25 );
+    m_txtNotification->setPosition( { 860, 45 });
+    m_txtNotification->setFillColor( sf::Color::Red );
 }
 
 void ViewSfml::close()
@@ -227,6 +231,7 @@ void ViewSfml::updateDisplay( const Model& model )
     m_window->draw( *m_txtRpm );
     m_window->draw( *m_txtStatus );
     m_window->draw( *m_txtWarning );
+    m_window->draw( *m_txtNotification );
     if( model.m_taperingOn )
     {
         m_txtTaperAngle->setFillColor( sf::Color::Red );
@@ -299,6 +304,16 @@ void ViewSfml::updateTextFromModel( const Model& model )
                 );
         }
     }
+
+    if( model.m_threadingOn )
+    {
+        m_txtNotification->setString( "THREADING" );
+    }
+    else
+    {
+        m_txtNotification->setString( "" );
+    }
+
     switch( model.m_currentMode )
     {
         case Mode::Help:
@@ -342,11 +357,14 @@ void ViewSfml::updateTextFromModel( const Model& model )
         case Mode::Threading:
         {
             m_txtMode->setString( "Thread" );
-            m_txtMisc1->setString( "" );
-            m_txtMisc2->setString( "" );
-            m_txtMisc3->setString( "" );
+            ThreadPitch tp = threadPitches.at( model.m_threadPitchIndex );
+            m_txtMisc1->setString( fmt::format( "Thread required: {}", tp.name ) );
+            m_txtMisc2->setString(
+                fmt::format( "Male   OD: {} mm, cut: {} mm", tp.maleOd, tp.cutDepthMale ) );
+            m_txtMisc3->setString(
+                fmt::format( "Female ID: {} mm, cut: {} mm", tp.femaleId, tp.cutDepthFemale ) );
             m_txtMisc4->setString( "" );
-            m_txtMisc5->setString( "" );
+            m_txtMisc5->setString( "Press Up/Down to change. Press del to turn off threading." );
             m_txtWarning->setString( "Press Esc to exit thread entry" );
             break;
         }
