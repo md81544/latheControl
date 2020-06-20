@@ -1,5 +1,5 @@
 CC      = g++
-CFLAGS  = -std=c++17 -O3 -Wall -Wextra -Wpedantic -Werror -g
+CFLAGS  = -std=c++17 -Wall -Wextra -Wpedantic -Werror -g
 LIBS = -lncurses -lfmt -pthread -lsfml-graphics -lsfml-window -lsfml-system
 
 SOURCES := $(wildcard *.cpp stepperControl/*.cpp)
@@ -13,7 +13,7 @@ all: $(BINARY)
 
 
 $(BINARY): $(SOURCES)
-	$(CC) $(CFLAGS) $(SOURCES) -o $(BINARY) $(LIBS) -lpigpio
+	$(CC) -O3 $(CFLAGS) $(SOURCES) -o $(BINARY) $(LIBS) -lpigpio
 	ctags -R --c++-kinds=+p --fields=+iaS
 
 # Make binary without need for pigpio lib for testing UI

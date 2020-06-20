@@ -1,13 +1,6 @@
-Need to implement code to deal with backlash in
-    (a) stepper motor code
-    (b) the controller needs to ensure we start in at known position w.r.t.
-        backlash - by moving the motor back by the number of steps backlash
-        is determined to be, then setting the backlash compensation number for
-        that motor
+Storing X-axis positions?
 
 Threading mode in SFML
-
-Setup mode
 
 Automate threading operations (or all?) to automatically return after the
 target step has been reached and a key is pressed

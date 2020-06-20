@@ -42,7 +42,7 @@ Controller::Controller( Model* model )
     }
 
     m_zMaxMotorSpeed = m_model->m_config->readDouble( "zMaxMotorSpeed", 700.0 );
-    m_xMaxMotorSpeed = m_model->m_config->readDouble( "xMaxMotorSpeed", 360.0 );
+    m_xMaxMotorSpeed = m_model->m_config->readDouble( "xMaxMotorSpeed", 720.0 );
 
     m_view->initialise();
 
@@ -500,7 +500,7 @@ void Controller::processKeyPress()
             {
                 if( m_model->m_currentMode != Mode::Threading )
                 {
-                    m_model->m_xAxisMotor->setRpm( m_zMaxMotorSpeed );
+                    m_model->m_xAxisMotor->setRpm( m_xMaxMotorSpeed );
                 }
                 break;
             }
