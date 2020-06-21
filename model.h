@@ -32,7 +32,14 @@ enum class Mode
     Help,
     Setup,
     Threading,
-    Taper
+    Taper,
+    XRetractSetup
+};
+
+enum class XRetractionDirection
+{
+    Outwards,   // towards operator
+    Inwards     // away from operator (when boring)
 };
 
 struct Model
@@ -62,6 +69,11 @@ struct Model
     // Stores current function, i.e. whether tapering or threading is on
     // we use the same enum class as "mode"
     Mode        m_enabledFunction{ Mode::None };
+
+    XRetractionDirection    m_xRetractionDirection;
+    // Used to store position to return to after retract:
+    long                    m_xOldPosition;
+    bool                    m_xRetracted{ false };
 };
 
 } // end namespace

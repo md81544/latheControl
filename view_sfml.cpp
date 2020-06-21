@@ -142,7 +142,7 @@ void ViewSfml::initialise()
         auto lbl = std::make_unique<sf::Text>("", *m_font, 30 );
         lbl->setPosition( { 4.f + n * 200.f, 225 });
         lbl->setFillColor( { 128, 128, 128 } );
-        lbl->setString( fmt::format( " Memory {}", n + 1 ) );
+        lbl->setString( fmt::format( " Z Mem {}", n + 1 ) );
         m_txtMemoryLabel.push_back( std::move(lbl) );
         auto val = std::make_unique<sf::Text>("", *m_font, 30 );
         val->setPosition( { 4.f + n * 200.f, 255 });
@@ -190,6 +190,11 @@ void ViewSfml::initialise()
     m_txtNotification = std::make_unique<sf::Text>("", *m_font, 25 );
     m_txtNotification->setPosition( { 860, 45 });
     m_txtNotification->setFillColor( sf::Color::Red );
+
+    m_txtXRetract = std::make_unique<sf::Text>("", *m_font, 25 );
+    m_txtXRetract->setPosition( { 860, 105 });
+    m_txtXRetract->setFillColor( sf::Color::Red );
+    m_txtXRetract->setString( "-X RTRCT" );
 }
 
 void ViewSfml::close()
@@ -235,6 +240,10 @@ void ViewSfml::updateDisplay( const Model& model )
     if( model.m_enabledFunction == Mode::Taper )
     {
         m_window->draw( *m_txtTaperAngle );
+    }
+    if( model.m_xRetractionDirection == XRetractionDirection::Inwards )
+    {
+        m_window->draw( *m_txtXRetract );
     }
     for( std::size_t n = 0; n < m_txtMemoryLabel.size(); ++n )
     {
@@ -317,7 +326,7 @@ void ViewSfml::updateTextFromModel( const Model& model )
         case Mode::Help:
         {
             m_txtMode->setString( "Help" );
-            m_txtMisc1->setString( "Modes: F2: Setup, F3: Threading, F4: Taper" );
+            m_txtMisc1->setString( "Modes: F2: Setup, F3: Threading, F4: Taper, F5: X Retract Setup" );
             m_txtMisc2->setString( "Z axis speed: 1-5, X axis speed: 6-0" );
             m_txtMisc3->setString( "Square brackets select memory store to use" );
             m_txtMisc4->setString( "M remembers position, Enter returns to it. (F for fast return)" );
@@ -366,6 +375,24 @@ void ViewSfml::updateTextFromModel( const Model& model )
             m_txtWarning->setString( "Enter to keep enabled, Esc to disable" );
             break;
         }
+        case Mode::XRetractSetup:
+        {
+            m_txtMode->setString(  "X Axis retraction mode" );
+            m_txtMisc1->setString( "Normal X retraction is 2mm outwards" );
+            m_txtMisc2->setString( "If you're boring, this should be the other way" );
+            m_txtMisc3->setString( "Current setting: " );
+            if( model.m_xRetractionDirection == XRetractionDirection::Inwards )
+            {
+                m_txtMisc4->setString( "Inwards (i.e. away from you, for boring)" );
+            }
+            else
+            {
+                m_txtMisc4->setString( "Normal (i.e. towards you)" );
+            }
+            m_txtMisc5->setString( "(Press up / down to change" );
+            m_txtWarning->setString( "Enter to close screen" );
+            break;
+        }
         case Mode::None:
         {
             m_txtMode->setString(  "" );
@@ -374,6 +401,7 @@ void ViewSfml::updateTextFromModel( const Model& model )
             m_txtMisc3->setString( "" );
             m_txtMisc4->setString( "" );
             m_txtMisc5->setString( "" );
+            m_txtWarning->setString( "" );
             break;
         }
         default:

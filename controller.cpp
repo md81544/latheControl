@@ -489,6 +489,34 @@ void Controller::processKeyPress()
                 m_model->m_zAxisMotor->goToStep( m_model->m_memory.at( m_model->m_currentMemory ) );
                 break;
             }
+            case key::r:
+            case key::R:
+            {
+                // X retraction
+                if( m_model->m_xAxisMotor->isRunning() ) return;
+                if( m_model->m_xRetracted )
+                {
+                    // Return
+                    m_model->m_xAxisMotor->goToStep( m_model->m_xOldPosition );
+                    m_model->m_xRetracted = false;
+                }
+                else
+                {
+                    // TODO the steps for retraction should be derived from the figure we
+                    // use to construct the motor in the first place, which in turn should
+                    // come from config
+                    m_model->m_xOldPosition = m_model->m_xAxisMotor->getCurrentStep();
+                    int direction = -1;
+                    if( m_model->m_xRetractionDirection == XRetractionDirection::Inwards )
+                    {
+                        direction = 1;
+                    }
+                    m_model->m_xAxisMotor->goToStep(
+                        m_model->m_xAxisMotor->getCurrentStep() + 4'800 * direction );
+                    m_model->m_xRetracted = true;
+                }
+                break;
+            }
             case key::z:
             case key::Z:
             {
@@ -537,6 +565,11 @@ void Controller::processKeyPress()
             case key::F4: // taper mode
             {
                 changeMode( Mode::Taper );
+                break;
+            }
+            case key::F5: // X retraction setup
+            {
+                changeMode( Mode::XRetractSetup );
                 break;
             }
             case key::ESC: // return to normal mode
@@ -594,6 +627,7 @@ int Controller::checkKeyAllowedForMode( int key )
         key == key::F2 ||
         key == key::F3 ||
         key == key::F4 ||
+        key == key::F5 ||
         key == key::ESC||
         key == key::ENTER
         )
@@ -618,6 +652,9 @@ int Controller::checkKeyAllowedForMode( int key )
             if( key == key::FULLSTOP || key == key::BACKSPACE || key == key::DELETE ) return key;
             return -1;
         case Mode::Threading:
+            if( key == key::UP || key == key::DOWN ) return key;
+            return -1;
+        case Mode::XRetractSetup:
             if( key == key::UP || key == key::DOWN ) return key;
             return -1;
         default:
@@ -688,6 +725,20 @@ int Controller::processInputKeys( int key )
             // fall through...
         }
     }
+    if(  m_model->m_currentDisplayMode == Mode::XRetractSetup )
+    {
+        if( key == key::UP )
+        {
+            m_model->m_xRetractionDirection = XRetractionDirection::Inwards;
+            return -1;
+        }
+        if( key == key::DOWN )
+        {
+            m_model->m_xRetractionDirection = XRetractionDirection::Outwards;
+            return -1;
+        }
+    }
+
     if( m_model->m_currentDisplayMode != Mode::None && key == key::ENTER )
     {
         m_model->m_currentDisplayMode = Mode::None;
