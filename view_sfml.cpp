@@ -185,7 +185,7 @@ void ViewSfml::initialise()
 
     m_txtTaperAngle= std::make_unique<sf::Text>("", *m_font, 30 );
     m_txtTaperAngle->setPosition( { 550, 160 });
-    m_txtTaperAngle->setFillColor( { 252, 165, 3 } );
+    m_txtTaperAngle->setFillColor( sf::Color::Red );
 
     m_txtNotification = std::make_unique<sf::Text>("", *m_font, 25 );
     m_txtNotification->setPosition( { 860, 45 });
@@ -232,25 +232,20 @@ void ViewSfml::updateDisplay( const Model& model )
     m_window->draw( *m_txtStatus );
     m_window->draw( *m_txtWarning );
     m_window->draw( *m_txtNotification );
-    if( model.m_taperingOn )
+    if( model.m_enabledFunction == Mode::Taper )
     {
-        m_txtTaperAngle->setFillColor( sf::Color::Red );
+        m_window->draw( *m_txtTaperAngle );
     }
-    else
-    {
-        m_txtTaperAngle->setFillColor( { 64, 64, 64 });
-    }
-    m_window->draw( *m_txtTaperAngle );
     for( std::size_t n = 0; n < m_txtMemoryLabel.size(); ++n )
     {
         m_window->draw( *m_txtMemoryLabel.at( n ) );
         m_window->draw( *m_txtMemoryValue.at( n ) );
     }
-    if( model.m_currentMode != Mode::None )
+    if( model.m_currentDisplayMode != Mode::None )
     {
         m_window->draw( *m_txtMode );
     }
-    if( model.m_currentMode != Mode::None )
+    if( model.m_currentDisplayMode != Mode::None )
     {
         m_window->draw( *m_txtMisc1 );
         m_window->draw( *m_txtMisc2 );
@@ -276,7 +271,7 @@ void ViewSfml::updateTextFromModel( const Model& model )
             )
         );
     m_txtWarning->setString( model.m_warning );
-    if( model.m_taperAngle != 0.f )
+    if( model.m_enabledFunction == Mode::Taper )
     {
         m_txtTaperAngle->setString( fmt::format( "Taper Angle: {}", model.m_taperAngle ) );
     }
@@ -305,16 +300,19 @@ void ViewSfml::updateTextFromModel( const Model& model )
         }
     }
 
-    if( model.m_threadingOn )
+    switch( model.m_enabledFunction )
     {
-        m_txtNotification->setString( "THREADING" );
-    }
-    else
-    {
-        m_txtNotification->setString( "" );
+        case Mode::Threading:
+            m_txtNotification->setString( "THREADING" );
+            break;
+        case Mode::Taper:
+            m_txtNotification->setString( "TAPERING" );
+            break;
+        default:
+            m_txtNotification->setString( "" );
     }
 
-    switch( model.m_currentMode )
+    switch( model.m_currentDisplayMode )
     {
         case Mode::Help:
         {
@@ -348,10 +346,10 @@ void ViewSfml::updateTextFromModel( const Model& model )
             m_txtMisc1->setString( fmt::format( "Taper angle (degrees from centre): {}_",
                 model.m_input ) );
             m_txtMisc2->setString( "" );
-            m_txtMisc3->setString( "Remember to use 'T' to turn tapering on / off" );
+            m_txtMisc3->setString( "" );
             m_txtMisc4->setString( "" );
             m_txtMisc5->setString( "" );
-            m_txtWarning->setString( "Press Del to clear, and Enter or Esc to exit taper entry" );
+            m_txtWarning->setString( "Enter to keep enabled, Esc to disable, Del to clear" );
             break;
         }
         case Mode::Threading:
@@ -364,13 +362,13 @@ void ViewSfml::updateTextFromModel( const Model& model )
             m_txtMisc3->setString(
                 fmt::format( "Female ID: {} mm, cut: {} mm", tp.femaleId, tp.cutDepthFemale ) );
             m_txtMisc4->setString( "" );
-            m_txtMisc5->setString( "Press Up/Down to change. Press del to turn off threading." );
-            m_txtWarning->setString( "Press Esc to exit thread entry" );
+            m_txtMisc5->setString( "Press Up/Down to change." );
+            m_txtWarning->setString( "Enter to keep enabled, Esc to disable" );
             break;
         }
         case Mode::None:
         {
-            m_txtMode->setString( "" );
+            m_txtMode->setString(  "" );
             m_txtMisc1->setString( "" );
             m_txtMisc2->setString( "" );
             m_txtMisc3->setString( "" );

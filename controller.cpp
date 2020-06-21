@@ -84,14 +84,14 @@ void Controller::run()
 
     while( ! m_model->m_quit )
     {
-        if( m_model->m_taperingOn )
+        if( m_model->m_enabledFunction == Mode::Taper )
         {
             syncXMotorPosition();
         }
 
         processKeyPress();
 
-        if( m_model->m_threadingOn )
+        if( m_model->m_enabledFunction == Mode::Threading )
         {
             // We are cutting threads, so the stepper motor's speed
             // is dependent on the spindle's RPM and the thread pitch.
@@ -113,7 +113,7 @@ void Controller::run()
             m_model->m_zAxisMotor->setRpm( speed );
         }
 
-        if( m_model->m_currentMode == Mode::Taper )
+        if( m_model->m_currentDisplayMode == Mode::Taper )
         {
             if( m_model->m_input.empty() )
             {
@@ -227,7 +227,7 @@ void Controller::processKeyPress()
             }
             case key::EQUALS: // (i.e. plus)
             {
-                if( m_model->m_currentMode == Mode::Threading ) break; // TODO this check should be in checkKeyAllowedForMode
+                if( m_model->m_enabledFunction == Mode::Threading ) break; 
                 if( m_model->m_zAxisMotor->getRpm() < 20.0 )
                 {
                     m_model->m_zAxisMotor->setRpm( 20.0 );
@@ -243,7 +243,7 @@ void Controller::processKeyPress()
             }
             case key::MINUS:
             {
-                if( m_model->m_currentMode == Mode::Threading ) break;
+                if( m_model->m_enabledFunction == Mode::Threading ) break;
                 if( m_model->m_zAxisMotor->getRpm() > 20 )
                 {
                     m_model->m_zAxisMotor->setRpm( m_model->m_zAxisMotor->getRpm() - 20.0 );
@@ -262,12 +262,6 @@ void Controller::processKeyPress()
             {
                 m_model->m_memory.at( m_model->m_currentMemory ) =
                     m_model->m_zAxisMotor->getCurrentStep();
-                break;
-            }
-            case key::t:
-            case key::T:
-            {
-                m_model->m_taperingOn = ! m_model->m_taperingOn;
                 break;
             }
             case key::ENTER:
@@ -392,7 +386,7 @@ void Controller::processKeyPress()
             // Speed presets for Z with number keys 1-5
             case key::ONE:
             {
-                if( m_model->m_currentMode != Mode::Threading )
+                if( m_model->m_currentDisplayMode != Mode::Threading )
                 {
                     m_model->m_zAxisMotor->setRpm( 20.f );
                 }
@@ -400,7 +394,7 @@ void Controller::processKeyPress()
             }
             case key::TWO:
             {
-                if( m_model->m_currentMode != Mode::Threading )
+                if( m_model->m_currentDisplayMode != Mode::Threading )
                 {
                     m_model->m_zAxisMotor->setRpm( 40.f );
                 }
@@ -408,7 +402,7 @@ void Controller::processKeyPress()
             }
             case key::THREE:
             {
-                if( m_model->m_currentMode != Mode::Threading )
+                if( m_model->m_currentDisplayMode != Mode::Threading )
                 {
                     m_model->m_zAxisMotor->setRpm( 100.f );
                 }
@@ -416,7 +410,7 @@ void Controller::processKeyPress()
             }
             case key::FOUR:
             {
-                if( m_model->m_currentMode != Mode::Threading )
+                if( m_model->m_currentDisplayMode != Mode::Threading )
                 {
                     m_model->m_zAxisMotor->setRpm( 250.f );
                 }
@@ -424,7 +418,7 @@ void Controller::processKeyPress()
             }
             case key::FIVE:
             {
-                if( m_model->m_currentMode != Mode::Threading )
+                if( m_model->m_currentDisplayMode != Mode::Threading )
                 {
                     m_model->m_zAxisMotor->setRpm( m_zMaxMotorSpeed );
                 }
@@ -433,7 +427,7 @@ void Controller::processKeyPress()
             // Speed presets for X with number keys 6-0
             case key::SIX:
             {
-                if( m_model->m_currentMode != Mode::Threading )
+                if( m_model->m_currentDisplayMode != Mode::Threading )
                 {
                     m_model->m_xAxisMotor->setRpm( 30.f );
                 }
@@ -441,7 +435,7 @@ void Controller::processKeyPress()
             }
             case key::SEVEN:
             {
-                if( m_model->m_currentMode != Mode::Threading )
+                if( m_model->m_currentDisplayMode != Mode::Threading )
                 {
                     m_model->m_xAxisMotor->setRpm( 60.f );
                 }
@@ -449,7 +443,7 @@ void Controller::processKeyPress()
             }
             case key::EIGHT:
             {
-                if( m_model->m_currentMode != Mode::Threading )
+                if( m_model->m_currentDisplayMode != Mode::Threading )
                 {
                     m_model->m_xAxisMotor->setRpm( 120.f );
                 }
@@ -457,7 +451,7 @@ void Controller::processKeyPress()
             }
             case key::NINE:
             {
-                if( m_model->m_currentMode != Mode::Threading )
+                if( m_model->m_currentDisplayMode != Mode::Threading )
                 {
                     m_model->m_xAxisMotor->setRpm( 240.f );
                 }
@@ -465,7 +459,7 @@ void Controller::processKeyPress()
             }
             case key::ZERO:
             {
-                if( m_model->m_currentMode != Mode::Threading )
+                if( m_model->m_currentDisplayMode != Mode::Threading )
                 {
                     m_model->m_xAxisMotor->setRpm( m_xMaxMotorSpeed );
                 }
@@ -498,7 +492,10 @@ void Controller::processKeyPress()
             case key::z:
             case key::Z:
             {
-                m_model->m_taperingOn = false; // avoid unwanted movement
+                if( m_model->m_enabledFunction == Mode::Taper )
+                {
+                    m_model->m_enabledFunction = Mode::None; // avoid unwanted movement
+                }
                 m_model->m_zAxisMotor->zeroPosition();
                 m_model->m_xAxisMotor->zeroPosition();
                 // Zeroing will invalidate any memorised positions, so we clear them
@@ -526,7 +523,7 @@ void Controller::processKeyPress()
             }
             case key::F2: // setup mode
             {
-                m_model->m_taperingOn = false;
+                m_model->m_enabledFunction = Mode::None;
                 m_model->m_zAxisMotor->setSpeed( 0.8f );
                 m_model->m_xAxisMotor->setSpeed( 1.f );
                 changeMode( Mode::Setup );
@@ -560,18 +557,19 @@ void Controller::changeMode( Mode mode )
 {
     stopAllMotors();
     m_model->m_warning = "";
-    if( mode == Mode::Taper && m_model->m_taperAngle != 0.f )
+    m_model->m_currentDisplayMode = mode;
+    m_model->m_enabledFunction = mode;
+
+    if( mode == Mode::Taper )
     {
-        m_model->m_input = std::to_string( m_model->m_taperAngle );
-    }
-    else
-    {
-        m_model->m_input = "";
-    }
-    m_model->m_currentMode = mode;
-    if( mode == Mode::Threading )
-    {
-        m_model->m_threadingOn = true;
+        if( m_model->m_taperAngle != 0.f )
+        {
+            m_model->m_input = std::to_string( m_model->m_taperAngle );
+        }
+        else
+        {
+            m_model->m_input = "";
+        }
     }
 }
 
@@ -596,20 +594,19 @@ int Controller::checkKeyAllowedForMode( int key )
         key == key::F2 ||
         key == key::F3 ||
         key == key::F4 ||
-        key == key::ESC
+        key == key::ESC||
+        key == key::ENTER
         )
     {
         return key;
     }
-    switch( m_model->m_currentMode )
+    switch( m_model->m_currentDisplayMode )
     {
         case Mode::None:
             return key;
         case Mode::Help:
-            if( key == key::ENTER || key == key::ESC || key == key::Q || key == key::q ) return key;
-            return -1;
+            return key;
         case Mode::Setup:
-            if( key == key::ENTER || key == key::ESC || key == key::Q || key == key::q ) return key;
             if( key == key::LEFT || key == key::RIGHT || key == key::UP || key == key::DOWN )
             {
                 return key;
@@ -617,13 +614,11 @@ int Controller::checkKeyAllowedForMode( int key )
             if( key == key::SPACE ) return key;
             return -1;
         case Mode::Taper:
-            if( key == key::ENTER || key == key::ESC || key == key::Q || key == key::q ) return key;
             if( key >= key::ZERO && key <= key::NINE ) return key;
             if( key == key::FULLSTOP || key == key::BACKSPACE || key == key::DELETE ) return key;
             return -1;
         case Mode::Threading:
-            if( key == key::ENTER || key == key::ESC || key == key::Q || key == key::q ) return key;
-            if( key == key::UP || key == key::DOWN || key == key::DELETE ) return key;
+            if( key == key::UP || key == key::DOWN ) return key;
             return -1;
         default:
             // unhandled mode
@@ -635,7 +630,7 @@ int Controller::processInputKeys( int key )
 {
     // If we are in a "mode" then certain keys (e.g. the number keys) are used for input
     // so are processed here before allowing them to fall through to the main key processing
-    if( m_model->m_currentMode == Mode::Taper )
+    if( m_model->m_currentDisplayMode == Mode::Taper )
     {
         if( key >= key::ZERO && key <= key::NINE )
         {
@@ -659,13 +654,8 @@ int Controller::processInputKeys( int key )
             m_model->m_input.pop_back();
             return -1;
         }
-        if( key == key::ENTER )
-        {
-            m_model->m_currentMode = Mode::None;
-            return -1;
-        }
     }
-    if(  m_model->m_currentMode == Mode::Threading )
+    if(  m_model->m_currentDisplayMode == Mode::Threading )
     {
         if( key == key::UP )
         {
@@ -691,12 +681,17 @@ int Controller::processInputKeys( int key )
             }
             return -1;
         }
-        if( key == key::DELETE )
+        if( key == key::ESC )
         {
-            m_model->m_threadingOn = false;
             // Reset motor speed to something sane
             m_model->m_zAxisMotor->setSpeed( 40.f );
+            // fall through...
         }
+    }
+    if( m_model->m_currentDisplayMode != Mode::None && key == key::ENTER )
+    {
+        m_model->m_currentDisplayMode = Mode::None;
+        return -1;
     }
     return key;
 }

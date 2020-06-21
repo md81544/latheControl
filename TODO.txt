@@ -1,5 +1,8 @@
 Storing X-axis positions?
 
+Need to be able to enter a negative angle for tapering (think boring
+an internal morse taper, for example)
+
 Check whether backlash compensation will interfere with threading -
 it's conceivable the extra steps might throw off the start at
 zero degrees?

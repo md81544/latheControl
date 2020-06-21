@@ -47,7 +47,6 @@ struct Model
     std::vector<long> m_memory{ INF_RIGHT, INF_RIGHT, INF_RIGHT, INF_RIGHT };
     std::size_t m_currentMemory{ 0 };
     std::size_t m_threadPitchIndex{ 0 };
-    bool        m_threadingOn{ false };
     std::string m_status{ "stopped" };
     std::string m_warning;
     std::string m_input; // general-purpose string for user-entered data
@@ -56,10 +55,13 @@ struct Model
     bool        m_fastReturning{ false };
     int         m_keyPressed{ 0 };
     float       m_taperAngle{ 0.f };
-    bool        m_taperingOn{ false };
     bool        m_useSfml{ true };
-    Mode        m_currentMode{ Mode::None };
     std::unique_ptr<mgo::ConfigReader> m_config;
+    // Stores the current function displayed on the screen:
+    Mode        m_currentDisplayMode{ Mode::None };
+    // Stores current function, i.e. whether tapering or threading is on
+    // we use the same enum class as "mode"
+    Mode        m_enabledFunction{ Mode::None };
 };
 
 } // end namespace
