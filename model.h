@@ -74,6 +74,8 @@ struct Model
     // Used to store position to return to after retract:
     long                    m_xOldPosition;
     bool                    m_xRetracted{ false };
+    float                   m_previousXSpeed{ 40.f };
+    bool                    m_fastRetracting{ false };
 };
 
 } // end namespace

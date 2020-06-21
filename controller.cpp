@@ -147,6 +147,17 @@ void Controller::run()
                 m_model->m_fastReturning = false;
             }
         }
+
+        if ( ! m_model->m_xAxisMotor->isRunning() )
+        {
+            if( m_model->m_fastRetracting )
+            {
+                m_model->m_xAxisMotor->setRpm( m_model->m_previousXSpeed );
+                m_model->m_fastRetracting = false;
+                m_model->m_xRetracted = false;
+            }
+        }
+
         m_view->updateDisplay( *m_model );
 
         // Small delay just to avoid the UI loop spinning
@@ -227,7 +238,7 @@ void Controller::processKeyPress()
             }
             case key::EQUALS: // (i.e. plus)
             {
-                if( m_model->m_enabledFunction == Mode::Threading ) break; 
+                if( m_model->m_enabledFunction == Mode::Threading ) break;
                 if( m_model->m_zAxisMotor->getRpm() < 20.0 )
                 {
                     m_model->m_zAxisMotor->setRpm( 20.0 );
@@ -476,8 +487,8 @@ void Controller::processKeyPress()
                 m_model->m_zAxisMotor->stop();
                 m_model->m_zAxisMotor->wait();
                 // If we are tapering, we need to set a speed the x-axis motor can keep up with
-                // if the angle is steep
-                if( m_model->m_taperAngle > 5.f ) // arbitrary figure :)
+                // if the angle is steep. We choose an arbitrary 5.f for the angle
+                if( m_model->m_taperAngle > 5.f && m_model->m_enabledFunction == Mode::Taper )
                 {
                     m_model->m_zAxisMotor->setRpm( 100.f );
                 }
@@ -498,7 +509,7 @@ void Controller::processKeyPress()
                 {
                     // Return
                     m_model->m_xAxisMotor->goToStep( m_model->m_xOldPosition );
-                    m_model->m_xRetracted = false;
+                    m_model->m_fastRetracting = true;
                 }
                 else
                 {
@@ -506,6 +517,8 @@ void Controller::processKeyPress()
                     // use to construct the motor in the first place, which in turn should
                     // come from config
                     m_model->m_xOldPosition = m_model->m_xAxisMotor->getCurrentStep();
+                    m_model->m_previousXSpeed = m_model->m_xAxisMotor->getRpm();
+                    m_model->m_xAxisMotor->setRpm( 300.f );
                     int direction = -1;
                     if( m_model->m_xRetractionDirection == XRetractionDirection::Inwards )
                     {
