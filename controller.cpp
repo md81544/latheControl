@@ -634,6 +634,12 @@ int Controller::checkKeyAllowedForMode( int key )
     {
         return key;
     }
+    // Don't allow any x movement when retracted
+    if( m_model->m_xRetracted && ( key == key::UP || key == key::DOWN || key == key::W
+        || key == key::w || key == key::s || key == key::S ) )
+    {
+        return -1;
+    }
     switch( m_model->m_currentDisplayMode )
     {
         case Mode::None:
@@ -749,7 +755,7 @@ int Controller::processInputKeys( int key )
 
 void Controller::syncXMotorPosition()
 {
-    m_model->m_xAxisMotor->setSpeed( m_xMaxMotorSpeed );
+    m_model->m_xAxisMotor->setSpeed( m_xMaxMotorSpeed * 0.5 );
     static double startZPosition = std::numeric_limits<double>::max();
     static double startXPosition = std::numeric_limits<double>::max();
     static double previousZPosition = std::numeric_limits<double>::max();

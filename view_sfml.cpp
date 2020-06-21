@@ -191,10 +191,15 @@ void ViewSfml::initialise()
     m_txtNotification->setPosition( { 860, 45 });
     m_txtNotification->setFillColor( sf::Color::Red );
 
-    m_txtXRetract = std::make_unique<sf::Text>("", *m_font, 25 );
-    m_txtXRetract->setPosition( { 860, 105 });
-    m_txtXRetract->setFillColor( sf::Color::Red );
-    m_txtXRetract->setString( "-X RTRCT" );
+    m_txtXRetracted = std::make_unique<sf::Text>("", *m_font, 25 );
+    m_txtXRetracted->setPosition( { 860, 105 });
+    m_txtXRetracted->setFillColor( sf::Color::Red );
+    m_txtXRetracted->setString( "RETRACTED" );
+
+    m_txtXRetractDirection = std::make_unique<sf::Text>("", *m_font, 25 );
+    m_txtXRetractDirection->setPosition( { 860, 165 });
+    m_txtXRetractDirection->setFillColor( sf::Color::Red );
+    m_txtXRetractDirection->setString( "-X RTRCT" );
 }
 
 void ViewSfml::close()
@@ -243,7 +248,11 @@ void ViewSfml::updateDisplay( const Model& model )
     }
     if( model.m_xRetractionDirection == XRetractionDirection::Inwards )
     {
-        m_window->draw( *m_txtXRetract );
+        m_window->draw( *m_txtXRetractDirection );
+    }
+    if( model.m_xRetracted )
+    {
+        m_window->draw( *m_txtXRetracted );
     }
     for( std::size_t n = 0; n < m_txtMemoryLabel.size(); ++n )
     {
