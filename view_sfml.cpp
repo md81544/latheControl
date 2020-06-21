@@ -291,7 +291,7 @@ void ViewSfml::updateTextFromModel( const Model& model )
     m_txtWarning->setString( model.m_warning );
     if( model.m_enabledFunction == Mode::Taper )
     {
-        m_txtTaperAngle->setString( fmt::format( "Taper Angle: {}", model.m_taperAngle ) );
+        m_txtTaperAngle->setString( fmt::format( "Angle: {}", model.m_taperAngle ) );
     }
 
     for( std::size_t n = 0; n < m_txtMemoryLabel.size(); ++n )
@@ -364,7 +364,7 @@ void ViewSfml::updateTextFromModel( const Model& model )
             m_txtMisc1->setString( fmt::format( "Taper angle (degrees from centre): {}_",
                 model.m_input ) );
             m_txtMisc2->setString( "" );
-            m_txtMisc3->setString( "" );
+            m_txtMisc3->setString( "MT1 = 1.4287, MT2 = 1.4307, MT3 = 1.4377, MT4 = 1.4876" );
             m_txtMisc4->setString( "" );
             m_txtMisc5->setString( "" );
             m_txtWarning->setString( "Enter to keep enabled, Esc to disable, Del to clear" );

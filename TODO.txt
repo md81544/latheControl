@@ -1,7 +1,3 @@
-
-Need to be able to enter a negative angle for tapering (think boring
-an internal morse taper, for example)
-
 Automate threading operations (or all?) to automatically return after the
 target step has been reached and a key is pressed
 

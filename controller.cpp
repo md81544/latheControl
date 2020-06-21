@@ -121,19 +121,22 @@ void Controller::run()
             }
             else
             {
-                try
+                if( m_model->m_input != "-" )
                 {
-                    m_model->m_taperAngle = std::stof( m_model->m_input );
-                    if( m_model->m_taperAngle > 90.f )
+                    try
                     {
-                        m_model->m_taperAngle = 90.f;
-                        m_model->m_input = "90.0";
+                        m_model->m_taperAngle = std::stof( m_model->m_input );
+                        if( m_model->m_taperAngle > 90.f )
+                        {
+                            m_model->m_taperAngle = 90.f;
+                            m_model->m_input = "90.0";
+                        }
                     }
-                }
-                catch( const std::exception& )
-                {
-                    m_model->m_taperAngle = 0.f;
-                    m_model->m_input = "";
+                    catch( const std::exception& )
+                    {
+                        m_model->m_taperAngle = 0.f;
+                        m_model->m_input = "";
+                    }
                 }
             }
         }
@@ -669,6 +672,7 @@ int Controller::checkKeyAllowedForMode( int key )
         case Mode::Taper:
             if( key >= key::ZERO && key <= key::NINE ) return key;
             if( key == key::FULLSTOP || key == key::BACKSPACE || key == key::DELETE ) return key;
+            if( key == key::MINUS ) return key;
             return -1;
         case Mode::Threading:
             if( key == key::UP || key == key::DOWN ) return key;
@@ -709,6 +713,10 @@ int Controller::processInputKeys( int key )
         {
             m_model->m_input.pop_back();
             return -1;
+        }
+        if( key == key::MINUS && m_model->m_input.empty() )
+        {
+            m_model->m_input = "-";
         }
     }
     if(  m_model->m_currentDisplayMode == Mode::Threading )
