@@ -776,7 +776,7 @@ int Controller::processInputKeys( int key )
 
 void Controller::syncXMotorPosition()
 {
-    m_model->m_xAxisMotor->setSpeed( m_xMaxMotorSpeed * 0.5 );
+    m_model->m_xAxisMotor->setSpeed( 100.f );
     static double startZPosition = std::numeric_limits<double>::max();
     static double startXPosition = std::numeric_limits<double>::max();
     static double previousZPosition = std::numeric_limits<double>::max();
