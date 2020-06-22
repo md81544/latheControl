@@ -1,7 +1,7 @@
 # electronicLeadScrew
 Code for controlling a lathe's lead screw with a stepper motor
 
-As this repository contains a submodule now, use "git clone --recurse-submodules <repo URL>" to clone it
+As this repository contains a submodule now, use `git clone --recurse-submodules <repo URL>` to clone it
 
 ## Running the program
 Run the program with real-time scheduling, for example:
