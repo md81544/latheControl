@@ -189,9 +189,9 @@ void Controller::processKeyPress()
                 m_model->m_quit = true;
                 break;
             }
-            // Cross-slide support is currently just for testing
             case key::C: // upper case, i.e. shift-c
             {
+                // X-axis speed decrease
                 if( m_model->m_xAxisMotor->getSpeed() > 10.1 )
                 {
                     m_model->m_xAxisMotor->setSpeed( m_model->m_xAxisMotor->getSpeed() - 10.0 );
@@ -202,9 +202,9 @@ void Controller::processKeyPress()
                 }
                 break;
             }
-            // Cross-slide support is currently just for testing
             case key::c:
             {
+                // X-axis speed increase
                 if( m_model->m_xAxisMotor->getSpeed() < 10.0 )
                 {
                     m_model->m_xAxisMotor->setSpeed( 10.0 );
@@ -538,7 +538,7 @@ void Controller::processKeyPress()
             {
                 if( m_model->m_enabledFunction == Mode::Taper )
                 {
-                    m_model->m_enabledFunction = Mode::None; // avoid unwanted movement
+                    changeMode( Mode::None );
                 }
                 m_model->m_zAxisMotor->zeroPosition();
                 m_model->m_xAxisMotor->zeroPosition();
@@ -547,6 +547,17 @@ void Controller::processKeyPress()
                 {
                     m = INF_RIGHT;
                 }
+                break;
+            }
+            case key::x:
+            case key::X:
+            {
+                // Zero just X-axis
+                if( m_model->m_enabledFunction == Mode::Taper )
+                {
+                    changeMode( Mode::None );
+                }
+                m_model->m_xAxisMotor->zeroPosition();
                 break;
             }
             case key::ASTERISK: // shutdown
@@ -586,6 +597,11 @@ void Controller::processKeyPress()
             case key::F5: // X retraction setup
             {
                 changeMode( Mode::XRetractSetup );
+                break;
+            }
+            case key::F6: // X retraction setup
+            {
+                changeMode( Mode::XRadiusSetup );
                 break;
             }
             case key::ESC: // return to normal mode
@@ -669,16 +685,18 @@ int Controller::checkKeyAllowedForMode( int key )
             }
             if( key == key::SPACE ) return key;
             return -1;
-        case Mode::Taper:
-            if( key >= key::ZERO && key <= key::NINE ) return key;
-            if( key == key::FULLSTOP || key == key::BACKSPACE || key == key::DELETE ) return key;
-            if( key == key::MINUS ) return key;
-            return -1;
         case Mode::Threading:
             if( key == key::UP || key == key::DOWN ) return key;
             return -1;
         case Mode::XRetractSetup:
             if( key == key::UP || key == key::DOWN ) return key;
+            return -1;
+        // Any modes that have numerical input:
+        case Mode::XRadiusSetup:
+        case Mode::Taper:
+            if( key >= key::ZERO && key <= key::NINE ) return key;
+            if( key == key::FULLSTOP || key == key::BACKSPACE || key == key::DELETE ) return key;
+            if( key == key::MINUS ) return key;
             return -1;
         default:
             // unhandled mode

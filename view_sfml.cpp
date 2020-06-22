@@ -388,7 +388,7 @@ void ViewSfml::updateTextFromModel( const Model& model )
         {
             m_txtMode->setString(  "X Axis retraction mode" );
             m_txtMisc1->setString( "Normal X retraction is 2mm outwards" );
-            m_txtMisc2->setString( "If you're boring, this should be the other way" );
+            m_txtMisc2->setString( "In a boring operation, retraction should be INWARDS." );
             m_txtMisc3->setString( "Current setting: " );
             if( model.m_xRetractionDirection == XRetractionDirection::Inwards )
             {
@@ -400,6 +400,17 @@ void ViewSfml::updateTextFromModel( const Model& model )
             }
             m_txtMisc5->setString( "(Press up / down to change" );
             m_txtWarning->setString( "Enter to close screen" );
+            break;
+        }
+        case Mode::XRadiusSetup:
+        {
+            m_txtMode->setString( "X Radius Setup" );
+            m_txtMisc2->setString( "Measure the workpiece and ensure the tool is on" );
+            m_txtMisc3->setString( "its surface. You can then enter the RADIUS here" );
+            m_txtMisc4->setString( "" );
+            m_txtMisc5->setString( fmt::format( "Work piece current radius: {}_",
+                model.m_input ) );
+            m_txtWarning->setString( "Enter to set, Esc to cancel" );
             break;
         }
         case Mode::None:

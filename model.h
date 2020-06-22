@@ -33,7 +33,8 @@ enum class Mode
     Setup,
     Threading,
     Taper,
-    XRetractSetup
+    XRetractSetup,
+    XRadiusSetup
 };
 
 enum class XRetractionDirection
