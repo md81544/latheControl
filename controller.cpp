@@ -84,12 +84,12 @@ void Controller::run()
 
     while( ! m_model->m_quit )
     {
+        processKeyPress();
+
         if( m_model->m_enabledFunction == Mode::Taper )
         {
             syncXMotorPosition();
         }
-
-        processKeyPress();
 
         if( m_model->m_enabledFunction == Mode::Threading )
         {
@@ -117,7 +117,7 @@ void Controller::run()
         {
             if( m_model->m_input.empty() )
             {
-                m_model->m_taperAngle = 0.f;
+                m_model->m_taperAngle = 0.0;
             }
             else
             {
@@ -125,16 +125,16 @@ void Controller::run()
                 {
                     try
                     {
-                        m_model->m_taperAngle = std::stof( m_model->m_input );
-                        if( m_model->m_taperAngle > 90.f )
+                        m_model->m_taperAngle = std::stod( m_model->m_input );
+                        if( m_model->m_taperAngle > 90.0 )
                         {
-                            m_model->m_taperAngle = 90.f;
+                            m_model->m_taperAngle = 90.0;
                             m_model->m_input = "90.0";
                         }
                     }
                     catch( const std::exception& )
                     {
-                        m_model->m_taperAngle = 0.f;
+                        m_model->m_taperAngle = 0.0;
                         m_model->m_input = "";
                     }
                 }
@@ -422,7 +422,7 @@ void Controller::processKeyPress()
             {
                 if( m_model->m_currentDisplayMode != Mode::Threading )
                 {
-                    m_model->m_zAxisMotor->setRpm( 20.f );
+                    m_model->m_zAxisMotor->setRpm( 20.0 );
                 }
                 break;
             }
@@ -430,7 +430,7 @@ void Controller::processKeyPress()
             {
                 if( m_model->m_currentDisplayMode != Mode::Threading )
                 {
-                    m_model->m_zAxisMotor->setRpm( 40.f );
+                    m_model->m_zAxisMotor->setRpm( 40.0 );
                 }
                 break;
             }
@@ -438,7 +438,7 @@ void Controller::processKeyPress()
             {
                 if( m_model->m_currentDisplayMode != Mode::Threading )
                 {
-                    m_model->m_zAxisMotor->setRpm( 100.f );
+                    m_model->m_zAxisMotor->setRpm( 100.0 );
                 }
                 break;
             }
@@ -446,7 +446,7 @@ void Controller::processKeyPress()
             {
                 if( m_model->m_currentDisplayMode != Mode::Threading )
                 {
-                    m_model->m_zAxisMotor->setRpm( 250.f );
+                    m_model->m_zAxisMotor->setRpm( 250.0 );
                 }
                 break;
             }
@@ -463,7 +463,7 @@ void Controller::processKeyPress()
             {
                 if( m_model->m_currentDisplayMode != Mode::Threading )
                 {
-                    m_model->m_xAxisMotor->setRpm( 30.f );
+                    m_model->m_xAxisMotor->setRpm( 30.0 );
                 }
                 break;
             }
@@ -471,7 +471,7 @@ void Controller::processKeyPress()
             {
                 if( m_model->m_currentDisplayMode != Mode::Threading )
                 {
-                    m_model->m_xAxisMotor->setRpm( 60.f );
+                    m_model->m_xAxisMotor->setRpm( 60.0 );
                 }
                 break;
             }
@@ -479,7 +479,7 @@ void Controller::processKeyPress()
             {
                 if( m_model->m_currentDisplayMode != Mode::Threading )
                 {
-                    m_model->m_xAxisMotor->setRpm( 120.f );
+                    m_model->m_xAxisMotor->setRpm( 120.0 );
                 }
                 break;
             }
@@ -510,10 +510,9 @@ void Controller::processKeyPress()
                 m_model->m_zAxisMotor->stop();
                 m_model->m_zAxisMotor->wait();
                 // If we are tapering, we need to set a speed the x-axis motor can keep up with
-                // if the angle is steep. We choose an arbitrary 5.f for the angle
-                if( m_model->m_taperAngle > 5.f && m_model->m_enabledFunction == Mode::Taper )
+                if( m_model->m_enabledFunction == Mode::Taper )
                 {
-                    m_model->m_zAxisMotor->setRpm( 100.f );
+                    m_model->m_zAxisMotor->setRpm( 100.0 );
                 }
                 else
                 {
@@ -541,7 +540,7 @@ void Controller::processKeyPress()
                     // come from config
                     m_model->m_xOldPosition = m_model->m_xAxisMotor->getCurrentStep();
                     m_model->m_previousXSpeed = m_model->m_xAxisMotor->getRpm();
-                    m_model->m_xAxisMotor->setRpm( 300.f );
+                    m_model->m_xAxisMotor->setRpm( 300.0 );
                     int direction = -1;
                     if( m_model->m_xRetractionDirection == XRetractionDirection::Inwards )
                     {
@@ -648,6 +647,7 @@ void Controller::changeMode( Mode mode )
     m_model->m_warning = "";
     m_model->m_currentDisplayMode = mode;
     m_model->m_enabledFunction = mode;
+    m_model->m_input="";
 
     if( mode == Mode::Taper )
     {
@@ -655,7 +655,8 @@ void Controller::changeMode( Mode mode )
         m_model->m_taperZStartPosition = std::numeric_limits<double>::max();
         m_model->m_taperXStartPosition = std::numeric_limits<double>::max();
         m_model->m_taperPreviousXSpeed = m_model->m_xAxisMotor->getSpeed();
-        if( m_model->m_taperAngle != 0.f )
+        m_model->m_xAxisMotor->setSpeed( 100.0 );
+        if( m_model->m_taperAngle != 0.0 )
         {
             m_model->m_input = std::to_string( m_model->m_taperAngle );
         }
@@ -824,10 +825,9 @@ int Controller::processInputKeys( int key )
             }
             catch( ... ) {}
             m_model->m_xAxisMotor->zeroPosition();
-            m_model->m_xAxisOffsetSteps = offset * -2400L; // TODO configure or get
+            m_model->m_xAxisOffsetSteps = offset * -2'400L; // TODO configure or get
         }
         m_model->m_currentDisplayMode = Mode::None;
-        m_model->m_enabledFunction = Mode::None;
         return -1;
     }
     return key;
@@ -835,7 +835,6 @@ int Controller::processInputKeys( int key )
 
 void Controller::syncXMotorPosition()
 {
-    m_model->m_xAxisMotor->setSpeed( 100.f );
     if( m_model->m_taperZStartPosition == std::numeric_limits<double>::max() )
     {
         m_model->m_taperZStartPosition = m_model->m_zAxisMotor->getPosition();

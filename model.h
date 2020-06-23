@@ -62,7 +62,7 @@ struct Model
     float       m_previousZSpeed{ 40.f };
     bool        m_fastReturning{ false };
     int         m_keyPressed{ 0 };
-    float       m_taperAngle{ 0.f };
+    double      m_taperAngle{ 0.0 };
     double      m_taperZStartPosition{ std::numeric_limits<double>::max() };
     double      m_taperXStartPosition{ std::numeric_limits<double>::max() };
     float       m_taperPreviousXSpeed{ 40.f };
