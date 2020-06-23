@@ -224,7 +224,17 @@ void Controller::processKeyPress()
                     m_model->m_xAxisMotor->stop();
                     m_model->m_xAxisMotor->wait();
                 }
-                m_model->m_xAxisMotor->goToStep( m_model->m_xAxisMotor->getCurrentStep() + 60.0 );
+                if( m_model->m_keyPressed == key::W )
+                {
+                    // extra fine with shift
+                    m_model->m_xAxisMotor->goToStep(
+                        m_model->m_xAxisMotor->getCurrentStep() + 12.0 );
+                }
+                else
+                {
+                    m_model->m_xAxisMotor->goToStep(
+                        m_model->m_xAxisMotor->getCurrentStep() + 60.0 );
+                }
                 break;
             }
             // Nudge out X axis
@@ -236,7 +246,17 @@ void Controller::processKeyPress()
                     m_model->m_xAxisMotor->stop();
                     m_model->m_xAxisMotor->wait();
                 }
-                m_model->m_xAxisMotor->goToStep( m_model->m_xAxisMotor->getCurrentStep() - 60.0 );
+                if( m_model->m_keyPressed == key::S )
+                {
+                    // extra fine with shift
+                    m_model->m_xAxisMotor->goToStep(
+                        m_model->m_xAxisMotor->getCurrentStep() - 12.0 );
+                }
+                else
+                {
+                    m_model->m_xAxisMotor->goToStep(
+                        m_model->m_xAxisMotor->getCurrentStep() - 60.0 );
+                }
                 break;
             }
             case key::EQUALS: // (i.e. plus)
@@ -621,12 +641,20 @@ void Controller::processKeyPress()
 void Controller::changeMode( Mode mode )
 {
     stopAllMotors();
+    if( m_model->m_enabledFunction == Mode::Taper && mode != Mode::Taper )
+    {
+        m_model->m_xAxisMotor->setSpeed( m_model->m_taperPreviousXSpeed );
+    }
     m_model->m_warning = "";
     m_model->m_currentDisplayMode = mode;
     m_model->m_enabledFunction = mode;
 
     if( mode == Mode::Taper )
     {
+        // reset any taper start points
+        m_model->m_taperZStartPosition = std::numeric_limits<double>::max();
+        m_model->m_taperXStartPosition = std::numeric_limits<double>::max();
+        m_model->m_taperPreviousXSpeed = m_model->m_xAxisMotor->getSpeed();
         if( m_model->m_taperAngle != 0.f )
         {
             m_model->m_input = std::to_string( m_model->m_taperAngle );
@@ -708,7 +736,8 @@ int Controller::processInputKeys( int key )
 {
     // If we are in a "mode" then certain keys (e.g. the number keys) are used for input
     // so are processed here before allowing them to fall through to the main key processing
-    if( m_model->m_currentDisplayMode == Mode::Taper )
+    if( m_model->m_currentDisplayMode == Mode::Taper ||
+        m_model->m_currentDisplayMode == Mode::XRadiusSetup )
     {
         if( key >= key::ZERO && key <= key::NINE )
         {
@@ -786,7 +815,19 @@ int Controller::processInputKeys( int key )
 
     if( m_model->m_currentDisplayMode != Mode::None && key == key::ENTER )
     {
+        if( m_model->m_currentDisplayMode == Mode::XRadiusSetup )
+        {
+            float offset = 0;
+            try
+            {
+                offset = std::stof( m_model->m_input );
+            }
+            catch( ... ) {}
+            m_model->m_xAxisMotor->zeroPosition();
+            m_model->m_xAxisOffsetSteps = offset * -2400L; // TODO configure or get
+        }
         m_model->m_currentDisplayMode = Mode::None;
+        m_model->m_enabledFunction = Mode::None;
         return -1;
     }
     return key;
@@ -795,28 +836,24 @@ int Controller::processInputKeys( int key )
 void Controller::syncXMotorPosition()
 {
     m_model->m_xAxisMotor->setSpeed( 100.f );
-    static double startZPosition = std::numeric_limits<double>::max();
-    static double startXPosition = std::numeric_limits<double>::max();
-    static double previousZPosition = std::numeric_limits<double>::max();
-    if( startZPosition == std::numeric_limits<double>::max() )
+    if( m_model->m_taperZStartPosition == std::numeric_limits<double>::max() )
     {
-        startZPosition = m_model->m_zAxisMotor->getPosition();
-        startXPosition = m_model->m_xAxisMotor->getPosition();
+        m_model->m_taperZStartPosition = m_model->m_zAxisMotor->getPosition();
+        m_model->m_taperXStartPosition = m_model->m_xAxisMotor->getPosition();
         return;
     }
     double currentZPosition = m_model->m_zAxisMotor->getPosition();
-    if( currentZPosition == previousZPosition )
+    double zDelta = m_model->m_taperZStartPosition - currentZPosition;
+    double newXPosition = m_model->m_taperXStartPosition -
+        (std::tan( static_cast<double>( m_model->m_taperAngle ) * 0.0174533 ) * zDelta );
+    m_model->m_xAxisMotor->setPosition( newXPosition );
+    if( ! m_model->m_zAxisMotor->isRunning() )
     {
-        // we appear to have stopped, so store a new start position
-        startZPosition = m_model->m_zAxisMotor->getPosition();
-        startXPosition = m_model->m_xAxisMotor->getPosition();
+        // reset any taper start points
+        m_model->m_taperZStartPosition = std::numeric_limits<double>::max();
+        m_model->m_taperXStartPosition = std::numeric_limits<double>::max();
         return;
     }
-    double zDelta = startZPosition - currentZPosition;
-    double newXPosition = startXPosition -
-        (std::tan( m_model->m_taperAngle * 0.0174533 ) * zDelta );
-    m_model->m_xAxisMotor->setPosition( newXPosition );
-    previousZPosition = currentZPosition;
 }
 
 } // end namespace

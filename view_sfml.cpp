@@ -27,6 +27,11 @@ std::string cnv( const mgo::StepperMotor* motor )
     return cnv( motor, motor->getCurrentStep() );
 }
 
+std::string cnvWithOffset( const mgo::StepperMotor* motor, long offset )
+{
+    return cnv( motor, motor->getCurrentStep() + offset );
+}
+
 int convertKeyCode( sf::Event event )
 {
     int sfKey = event.key.code;
@@ -279,10 +284,14 @@ void ViewSfml::updateTextFromModel( const Model& model )
     // Updates all the text objects with data in the model
     m_txtZPos->setString( fmt::format( "Z: {}", cnv( model.m_zAxisMotor.get() ) ) );
     m_txtZSpeed->setString( fmt::format( "{:<.1f} mm/min", model.m_zAxisMotor->getSpeed() ) );
-    m_txtXPos->setString( fmt::format( "X: {}", cnv( model.m_xAxisMotor.get() ) ) );
+    m_txtXPos->setString( fmt::format( "X: {}",
+            cnvWithOffset( model.m_xAxisMotor.get(),  model.m_xAxisOffsetSteps )
+            )
+        );
     m_txtXSpeed->setString( fmt::format( "{:<.1f} mm/min", model.m_xAxisMotor->getSpeed() ) );
     m_txtRpm->setString( fmt::format( "C:  {:<4}  rpm",
         static_cast<int>( model.m_rotaryEncoder->getRpm() ) ) );
+    // TODO: turn on debug info in config file
     m_txtStatus->setString( fmt::format( "Status: {}    Debug: last keycode={}",
             model.m_status,
             model.m_keyPressed
@@ -335,11 +344,11 @@ void ViewSfml::updateTextFromModel( const Model& model )
         case Mode::Help:
         {
             m_txtMode->setString( "Help" );
-            m_txtMisc1->setString( "Modes: F2: Setup, F3: Threading, F4: Taper, F5: X Retract Setup" );
-            m_txtMisc2->setString( "Z axis speed: 1-5, X axis speed: 6-0" );
-            m_txtMisc3->setString( "Square brackets select memory store to use" );
-            m_txtMisc4->setString( "M remembers position, Enter returns to it. (F for fast return)" );
-            m_txtMisc5->setString( "Space to stop all motors." );
+            m_txtMisc1->setString( "Modes: F2=Setup F3=Thread F4=Taper F5=Retract F6=Radius" );
+            m_txtMisc2->setString( "" ); // reserved for future modes
+            m_txtMisc3->setString( "Z axis speed: 1-5, X axis speed: 6-0" );
+            m_txtMisc4->setString( "[ and ] select Z-mem to use. M store, Enter return (F fast)." );
+            m_txtMisc5->setString( "WASD = nudge. Space to stop all motors." );
             m_txtWarning->setString( "Press Esc to exit help" );
             break;
         }
@@ -405,6 +414,7 @@ void ViewSfml::updateTextFromModel( const Model& model )
         case Mode::XRadiusSetup:
         {
             m_txtMode->setString( "X Radius Setup" );
+            m_txtMisc1->setString( "" );
             m_txtMisc2->setString( "Measure the workpiece and ensure the tool is on" );
             m_txtMisc3->setString( "its surface. You can then enter the RADIUS here" );
             m_txtMisc4->setString( "" );

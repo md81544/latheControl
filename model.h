@@ -63,6 +63,9 @@ struct Model
     bool        m_fastReturning{ false };
     int         m_keyPressed{ 0 };
     float       m_taperAngle{ 0.f };
+    double      m_taperZStartPosition{ std::numeric_limits<double>::max() };
+    double      m_taperXStartPosition{ std::numeric_limits<double>::max() };
+    float       m_taperPreviousXSpeed{ 40.f };
     bool        m_useSfml{ true };
     std::unique_ptr<mgo::ConfigReader> m_config;
     // Stores the current function displayed on the screen:
@@ -77,6 +80,8 @@ struct Model
     bool                    m_xRetracted{ false };
     float                   m_previousXSpeed{ 40.f };
     bool                    m_fastRetracting{ false };
+
+    long                    m_xAxisOffsetSteps{ 0L };
 };
 
 } // end namespace

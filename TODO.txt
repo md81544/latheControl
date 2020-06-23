@@ -1,3 +1,8 @@
+Remove curses UI
+
+Add motor "conversion factors" or steps per revolution including gearing
+as a config item
+
 Automate threading operations (or all?) to automatically return after the
 target step has been reached and a key is pressed
 
