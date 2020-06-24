@@ -316,7 +316,7 @@ void Controller::processKeyPress()
                 m_model->m_zAxisMotor->wait();
                 m_model->m_status = "returning";
                 // Ensure z backlash is compensated first for tapering or threading:
-                int direction = 0;
+                ZDirection direction;
                 if( m_model->m_memory.at( m_model->m_currentMemory ) <
                     m_model->m_zAxisMotor->getCurrentStep() )
                 {
@@ -324,13 +324,13 @@ void Controller::processKeyPress()
                     // NOTE!! Memory is stored as STEPS which, on the Z-axis is
                     // reversed from POSITION (see stepper's getPosition() vs getCurrentStep())
                     // so the direction we save is reversed
-                    direction = 1;
+                    direction = ZDirection::Right;
                     m_model->m_zAxisMotor->goToStep( m_model->m_zAxisMotor->getCurrentStep() - 1 );
                 }
                 else
                 {
                     // Z motor is moving towards chuck
-                    direction = -1;
+                    direction = ZDirection::Left;
                     m_model->m_zAxisMotor->goToStep( m_model->m_zAxisMotor->getCurrentStep() + 1 );
                 }
                 m_model->m_zAxisMotor->wait();
@@ -390,6 +390,11 @@ void Controller::processKeyPress()
                     break;
                 }
                 m_model->m_status = "moving left";
+                if( m_model->m_enabledFunction == Mode::Taper )
+                {
+                    takeUpZBacklash( ZDirection::Left );
+                    startSynchronisedXMotor( ZDirection::Left, m_model->m_zAxisMotor->getSpeed() );
+                }
                 m_model->m_zAxisMotor->goToStep( INF_LEFT );
                 break;
             }
@@ -402,6 +407,11 @@ void Controller::processKeyPress()
                     break;
                 }
                 m_model->m_status = "moving right";
+                if( m_model->m_enabledFunction == Mode::Taper )
+                {
+                    takeUpZBacklash( ZDirection::Right );
+                    startSynchronisedXMotor( ZDirection::Right, m_model->m_zAxisMotor->getSpeed() );
+                }
                 m_model->m_zAxisMotor->goToStep( INF_RIGHT );
                 break;
             }
@@ -859,29 +869,38 @@ int Controller::processInputKeys( int key )
     return key;
 }
 
-void Controller::startSynchronisedXMotor( int direction, double zSpeed )
+void Controller::startSynchronisedXMotor( ZDirection direction, double zSpeed )
 {
-        // As this is called just before the Z motor starts moving, we take
-        // up any backlash first. Note that "direction" relates to the z motor,
-        // which is inverted
-        m_model->m_xAxisMotor->goToStep( m_model->m_xAxisMotor->getCurrentStep() + direction );
-        m_model->m_xAxisMotor->wait();
-        // What speed will we need for the angle required?
-        m_model->m_xAxisMotor->setSpeed(
-            zSpeed  * std::abs( m_model->m_taperAngle / 45.0 ) );
-        // If direction = -1 and angle is positive we need to move negatively
-        // if direction = -1 and angle is negative we need to move positively
-        // if direction =  1 and angle is positive we need to move positively
-        // if direction =  1 and angle is negative we need to move negatively
-        if( ( direction == -1 && m_model->m_taperAngle < 0.0 ) ||
-            ( direction ==  1 && m_model->m_taperAngle > 0.0 ) )
-        {
-            m_model->m_xAxisMotor->goToStep( INF_IN );
-        }
-        else
-        {
-            m_model->m_xAxisMotor->goToStep( INF_OUT );
-        }
+    int target = INF_OUT;
+    int stepAdd = -1;
+    if( ( direction == ZDirection::Left  && m_model->m_taperAngle < 0.0 ) ||
+        ( direction == ZDirection::Right && m_model->m_taperAngle > 0.0 ) )
+    {
+        target = INF_IN;
+        stepAdd = 1;
+    }
+    // As this is called just before the Z motor starts moving, we take
+    // up any backlash first.
+    m_model->m_xAxisMotor->setSpeed( 100.0 );
+    m_model->m_xAxisMotor->goToStep( m_model->m_xAxisMotor->getCurrentStep() + stepAdd );
+    m_model->m_xAxisMotor->wait();
+    // What speed will we need for the angle required?
+    m_model->m_xAxisMotor->setSpeed(
+        zSpeed  * std::abs( m_model->m_taperAngle / 45.0 ) );
+    m_model->m_xAxisMotor->goToStep( target );
+}
+
+void Controller::takeUpZBacklash( ZDirection direction )
+{
+    if( direction == ZDirection::Right )
+    {
+        m_model->m_zAxisMotor->goToStep( m_model->m_zAxisMotor->getCurrentStep() - 1 );
+    }
+    else if( direction == ZDirection::Left )
+    {
+        m_model->m_zAxisMotor->goToStep( m_model->m_zAxisMotor->getCurrentStep() + 1 );
+    }
+    m_model->m_zAxisMotor->wait();
 }
 
 } // end namespace

@@ -45,6 +45,12 @@ enum class XRetractionDirection
     Inwards     // away from operator (when boring)
 };
 
+enum class ZDirection
+{
+    Left,
+    Right
+};
+
 struct Model
 {
     Model( IGpio& gpio ) : m_gpio(gpio) {}
