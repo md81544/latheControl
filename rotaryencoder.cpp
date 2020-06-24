@@ -91,7 +91,7 @@ void RotaryEncoder::callback(
             // out to the next one for accurate starting when waiting to cut a
             // thread. Owing to the latency on the callbacks, it's not sufficient
             // to simply wait for the next zero-degree tick. With the 1 ms latency,
-            // this could result in an inaccuracy of up to 6° at 1,000 prm.
+            // this could result in an inaccuracy of up to 6° at 1,000 rpm.
             m_lastZeroDegreesTick = tick;
         }
         m_tickDiffTotal += tick - m_lastTick; // don't need to worry about wrap

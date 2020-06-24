@@ -149,6 +149,15 @@ void Controller::run()
                 m_model->m_zAxisMotor->setRpm( m_model->m_previousZSpeed );
                 m_model->m_fastReturning = false;
             }
+            if( m_model->m_enabledFunction == Mode::Taper && m_model->m_zWasRunning )
+            {
+                m_model->m_xAxisMotor->stop();
+            }
+            m_model->m_zWasRunning = false;
+        }
+        else
+        {
+            m_model->m_zWasRunning = true;
         }
 
         if ( ! m_model->m_xAxisMotor->isRunning() )
@@ -301,14 +310,17 @@ void Controller::processKeyPress()
             case key::ENTER:
             {
                 if( m_model->m_memory.at( m_model->m_currentMemory ) == INF_RIGHT ) break;
+                if( m_model->m_memory.at( m_model->m_currentMemory ) ==
+                    m_model->m_zAxisMotor->getCurrentStep() ) break;
                 m_model->m_zAxisMotor->stop();
                 m_model->m_zAxisMotor->wait();
                 m_model->m_status = "returning";
-                // Ensure z backlash is compensated first for tapering or threading...
+                // Ensure z backlash is compensated first for tapering or threading:
                 int direction = 0;
                 if( m_model->m_memory.at( m_model->m_currentMemory ) <
                     m_model->m_zAxisMotor->getCurrentStep() )
                 {
+                    // Z motor is moving away from chuck
                     // NOTE!! Memory is stored as STEPS which, on the Z-axis is
                     // reversed from POSITION (see stepper's getPosition() vs getCurrentStep())
                     // so the direction we save is reversed
@@ -317,6 +329,7 @@ void Controller::processKeyPress()
                 }
                 else
                 {
+                    // Z motor is moving towards chuck
                     direction = -1;
                     m_model->m_zAxisMotor->goToStep( m_model->m_zAxisMotor->getCurrentStep() + 1 );
                 }
@@ -849,7 +862,8 @@ int Controller::processInputKeys( int key )
 void Controller::startSynchronisedXMotor( int direction, double zSpeed )
 {
         // As this is called just before the Z motor starts moving, we take
-        // up any backlash first
+        // up any backlash first. Note that "direction" relates to the z motor,
+        // which is inverted
         m_model->m_xAxisMotor->goToStep( m_model->m_xAxisMotor->getCurrentStep() + direction );
         m_model->m_xAxisMotor->wait();
         // What speed will we need for the angle required?

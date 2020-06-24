@@ -82,6 +82,8 @@ struct Model
     bool                    m_fastRetracting{ false };
 
     long                    m_xAxisOffsetSteps{ 0L };
+
+    bool                    m_zWasRunning{ false };
 };
 
 } // end namespace
