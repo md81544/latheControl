@@ -17,7 +17,9 @@ namespace mgo
 class IGpio;
 
 const int INF_RIGHT = std::numeric_limits<int>::min();
+const int INF_OUT   = std::numeric_limits<int>::min();
 const int INF_LEFT  = std::numeric_limits<int>::max();
+const int INF_IN    = std::numeric_limits<int>::max();
 
 constexpr float INFEED = 0.05f; // mm
 // The large number below is tan 29.5°
@@ -63,8 +65,6 @@ struct Model
     bool        m_fastReturning{ false };
     int         m_keyPressed{ 0 };
     double      m_taperAngle{ 0.0 };
-    double      m_taperZStartPosition{ std::numeric_limits<double>::max() };
-    double      m_taperXStartPosition{ std::numeric_limits<double>::max() };
     float       m_taperPreviousXSpeed{ 40.f };
     bool        m_useSfml{ true };
     std::unique_ptr<mgo::ConfigReader> m_config;

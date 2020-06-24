@@ -23,7 +23,7 @@ private:
     int checkKeyAllowedForMode( int key );
     void changeMode( Mode mode );
     int processInputKeys( int key );
-    void syncXMotorPosition();
+    void startSynchronisedXMotor( int direction, double zSpeed );
     // Cache of config values for speed
     double m_zMaxMotorSpeed;
     double m_xMaxMotorSpeed;

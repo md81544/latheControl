@@ -86,11 +86,6 @@ void Controller::run()
     {
         processKeyPress();
 
-        if( m_model->m_enabledFunction == Mode::Taper )
-        {
-            syncXMotorPosition();
-        }
-
         if( m_model->m_enabledFunction == Mode::Threading )
         {
             // We are cutting threads, so the stepper motor's speed
@@ -126,10 +121,15 @@ void Controller::run()
                     try
                     {
                         m_model->m_taperAngle = std::stod( m_model->m_input );
-                        if( m_model->m_taperAngle > 90.0 )
+                        if( m_model->m_taperAngle > 60.0 )
                         {
-                            m_model->m_taperAngle = 90.0;
-                            m_model->m_input = "90.0";
+                            m_model->m_taperAngle = 60.0;
+                            m_model->m_input = "60.0";
+                        }
+                        else if( m_model->m_taperAngle < -60.0 )
+                        {
+                            m_model->m_taperAngle = -60.0;
+                            m_model->m_input = "-60.0";
                         }
                     }
                     catch( const std::exception& )
@@ -301,30 +301,46 @@ void Controller::processKeyPress()
             case key::ENTER:
             {
                 if( m_model->m_memory.at( m_model->m_currentMemory ) == INF_RIGHT ) break;
-                // We always start at the same rotational position: it's
-                // required for thread cutting, but doesn't impact
-                // anything if we're just turning down, so we always do it.
                 m_model->m_zAxisMotor->stop();
                 m_model->m_zAxisMotor->wait();
                 m_model->m_status = "returning";
-                // Before we make the move at zero degrees, we want to ensure any potential
-                // backlash is compensated, so we move one step towards the target first
+                // Ensure z backlash is compensated first for tapering or threading...
+                int direction = 0;
                 if( m_model->m_memory.at( m_model->m_currentMemory ) <
                     m_model->m_zAxisMotor->getCurrentStep() )
                 {
-                    m_model->m_zAxisMotor->goToStep( m_model->m_zAxisMotor->getCurrentStep() -1 );
+                    // NOTE!! Memory is stored as STEPS which, on the Z-axis is
+                    // reversed from POSITION (see stepper's getPosition() vs getCurrentStep())
+                    // so the direction we save is reversed
+                    direction = 1;
+                    m_model->m_zAxisMotor->goToStep( m_model->m_zAxisMotor->getCurrentStep() - 1 );
                 }
                 else
                 {
-                    m_model->m_zAxisMotor->goToStep( m_model->m_zAxisMotor->getCurrentStep() +1 );
+                    direction = -1;
+                    m_model->m_zAxisMotor->goToStep( m_model->m_zAxisMotor->getCurrentStep() + 1 );
                 }
                 m_model->m_zAxisMotor->wait();
-                m_model->m_rotaryEncoder->callbackAtZeroDegrees([&]()
+                // If threading, we need to start at the same point each time - we
+                // wait for zero degrees on the chuck before starting:
+                if( m_model->m_enabledFunction == Mode::Threading )
+                {
+                    m_model->m_rotaryEncoder->callbackAtZeroDegrees([&]()
+                        {
+                            m_model->m_zAxisMotor->goToStep(
+                                m_model->m_memory.at( m_model->m_currentMemory ) );
+                        }
+                        );
+                }
+                else
+                {
+                    if( m_model->m_enabledFunction == Mode::Taper )
                     {
-                        m_model->m_zAxisMotor->goToStep(
-                            m_model->m_memory.at( m_model->m_currentMemory ) );
+                        startSynchronisedXMotor( direction, m_model->m_zAxisMotor->getSpeed() );
                     }
-                    );
+                    m_model->m_zAxisMotor->goToStep(
+                        m_model->m_memory.at( m_model->m_currentMemory ) );
+                }
                 break;
             }
             case key::UP:
@@ -335,7 +351,7 @@ void Controller::processKeyPress()
                 }
                 else
                 {
-                    m_model->m_xAxisMotor->goToStep( INF_LEFT );
+                    m_model->m_xAxisMotor->goToStep( INF_IN );
                 }
                 break;
             }
@@ -347,7 +363,7 @@ void Controller::processKeyPress()
                 }
                 else
                 {
-                    m_model->m_xAxisMotor->goToStep( INF_RIGHT );
+                    m_model->m_xAxisMotor->goToStep( INF_OUT );
                 }
                 break;
             }
@@ -642,7 +658,7 @@ void Controller::changeMode( Mode mode )
     stopAllMotors();
     if( m_model->m_enabledFunction == Mode::Taper && mode != Mode::Taper )
     {
-        m_model->m_xAxisMotor->setSpeed( m_model->m_taperPreviousXSpeed );
+        // TODO m_model->m_xAxisMotor->setSpeed( m_model->m_taperPreviousXSpeed );
     }
     m_model->m_warning = "";
     m_model->m_currentDisplayMode = mode;
@@ -652,10 +668,7 @@ void Controller::changeMode( Mode mode )
     if( mode == Mode::Taper )
     {
         // reset any taper start points
-        m_model->m_taperZStartPosition = std::numeric_limits<double>::max();
-        m_model->m_taperXStartPosition = std::numeric_limits<double>::max();
         m_model->m_taperPreviousXSpeed = m_model->m_xAxisMotor->getSpeed();
-        m_model->m_xAxisMotor->setSpeed( 100.0 );
         if( m_model->m_taperAngle != 0.0 )
         {
             m_model->m_input = std::to_string( m_model->m_taperAngle );
@@ -833,26 +846,28 @@ int Controller::processInputKeys( int key )
     return key;
 }
 
-void Controller::syncXMotorPosition()
+void Controller::startSynchronisedXMotor( int direction, double zSpeed )
 {
-    if( m_model->m_taperZStartPosition == std::numeric_limits<double>::max() )
-    {
-        m_model->m_taperZStartPosition = m_model->m_zAxisMotor->getPosition();
-        m_model->m_taperXStartPosition = m_model->m_xAxisMotor->getPosition();
-        return;
-    }
-    double currentZPosition = m_model->m_zAxisMotor->getPosition();
-    double zDelta = m_model->m_taperZStartPosition - currentZPosition;
-    double newXPosition = m_model->m_taperXStartPosition -
-        (std::tan( static_cast<double>( m_model->m_taperAngle ) * 0.0174533 ) * zDelta );
-    m_model->m_xAxisMotor->setPosition( newXPosition );
-    if( ! m_model->m_zAxisMotor->isRunning() )
-    {
-        // reset any taper start points
-        m_model->m_taperZStartPosition = std::numeric_limits<double>::max();
-        m_model->m_taperXStartPosition = std::numeric_limits<double>::max();
-        return;
-    }
+        // As this is called just before the Z motor starts moving, we take
+        // up any backlash first
+        m_model->m_xAxisMotor->goToStep( m_model->m_xAxisMotor->getCurrentStep() + direction );
+        m_model->m_xAxisMotor->wait();
+        // What speed will we need for the angle required?
+        m_model->m_xAxisMotor->setSpeed(
+            zSpeed  * std::abs( m_model->m_taperAngle / 45.0 ) );
+        // If direction = -1 and angle is positive we need to move negatively
+        // if direction = -1 and angle is negative we need to move positively
+        // if direction =  1 and angle is positive we need to move positively
+        // if direction =  1 and angle is negative we need to move negatively
+        if( ( direction == -1 && m_model->m_taperAngle < 0.0 ) ||
+            ( direction ==  1 && m_model->m_taperAngle > 0.0 ) )
+        {
+            m_model->m_xAxisMotor->goToStep( INF_IN );
+        }
+        else
+        {
+            m_model->m_xAxisMotor->goToStep( INF_OUT );
+        }
 }
 
 } // end namespace
