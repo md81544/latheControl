@@ -21,6 +21,8 @@ const int INF_OUT   = std::numeric_limits<int>::min();
 const int INF_LEFT  = std::numeric_limits<int>::max();
 const int INF_IN    = std::numeric_limits<int>::max();
 
+constexpr double DEG_TO_RAD = 3.14159265359 / 180.0;
+
 constexpr float INFEED = 0.05f; // mm
 // The large number below is tan 29.5°
 // (Cannot use std::tan in constexpr owing to side effects)

@@ -886,7 +886,7 @@ void Controller::startSynchronisedXMotor( ZDirection direction, double zSpeed )
     m_model->m_xAxisMotor->wait();
     // What speed will we need for the angle required?
     m_model->m_xAxisMotor->setSpeed(
-        zSpeed  * std::abs( m_model->m_taperAngle / 45.0 ) );
+        zSpeed  * std::abs( std::tan( m_model->m_taperAngle * DEG_TO_RAD ) ) );
     m_model->m_xAxisMotor->goToStep( target );
 }
 
