@@ -1,27 +1,42 @@
-CC      = g++
-CFLAGS  = -std=c++17 -Wall -Wextra -Wpedantic -Werror -g
-LIBS = -lncurses -lfmt -pthread -lsfml-graphics -lsfml-window -lsfml-system
+CXX      := g++
+CXXFLAGS := -std=c++17 -Wall -Wextra -Werror -Wpedantic
+LDFLAGS  := -L/usr/lib -lstdc++ -lm  -lncurses -lfmt -pthread -lsfml-graphics -lsfml-window -lsfml-system
+BUILD    := ./build
+OBJ_DIR  := $(BUILD)/objects
+APP_DIR  := $(BUILD)/apps
+TARGET   := els
+INCLUDE  := -Iinclude/
+SRC      := $(shell ls *.cpp stepperControl/*.cpp | grep -v gpio.cpp)
 
-SOURCES := $(wildcard *.cpp stepperControl/*.cpp)
-FAKESOURCES := $(shell ls *.cpp stepperControl/*.cpp | grep -v gpio.cpp)
+OBJECTS  := $(SRC:%.cpp=$(OBJ_DIR)/%.o)
 
-BINARY = els
-
-.PHONY: all clean fake
-
-all: $(BINARY)
-
-
-$(BINARY): $(SOURCES)
-	$(CC) -O3 $(CFLAGS) $(SOURCES) -o $(BINARY) $(LIBS) -lpigpio
+all: build $(APP_DIR)/$(TARGET)
 	ctags -R --c++-kinds=+p --fields=+iaS
+	cppcheck -q $(SRC)
 
-# Make binary without need for pigpio lib for testing UI
-fake: $(SOURCES)
-	$(CC) -DFAKE $(CFLAGS) $(FAKESOURCES) -o $(BINARY) $(LIBS)
-	ctags -R --c++-kinds=+p --fields=+iaS
-	cppcheck -q $(SOURCES)
+$(OBJ_DIR)/%.o: %.cpp
+	@mkdir -p $(@D)
+	$(CXX) $(CXXFLAGS) $(INCLUDE) -c $< -o $@ $(LDFLAGS)
+
+$(APP_DIR)/$(TARGET): $(OBJECTS)
+	@mkdir -p $(@D)
+	$(CXX) $(CXXFLAGS) -o $(APP_DIR)/$(TARGET) $^ $(LDFLAGS)
+
+.PHONY: all build clean debug release
+
+build:
+	@mkdir -p $(APP_DIR)
+	@mkdir -p $(OBJ_DIR)
+
+fake: CXXFLAGS += -DDEBUG -DFAKE -g
+fake: SRC := $(shell ls *.cpp stepperControl/*.cpp | grep -v gpio.cpp)
+fake: OBJECTS := $(SRC:%.cpp=$(OBJ_DIR)/%.o)
+fake: all
+
+release: CXXFLAGS += -O3
+release: SRC += stepperControl/gpio.cpp
+release: all
 
 clean:
-	rm -f $(BINARY)
-	rm -f tags
+	-@rm -rvf $(OBJ_DIR)/*
+	-@rm -rvf $(APP_DIR)/*
