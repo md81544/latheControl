@@ -348,7 +348,7 @@ void ViewSfml::updateTextFromModel( const Model& model )
             m_txtMisc2->setString( "" ); // reserved for future modes
             m_txtMisc3->setString( "Z axis speed: 1-5, X axis speed: 6-0" );
             m_txtMisc4->setString( "[ and ] select Z-mem to use. M store, Enter return (F fast)." );
-            m_txtMisc5->setString( "WASD = nudge. Space to stop all motors." );
+            m_txtMisc5->setString( "WASD = nudge. Space to stop all motors. R retract." );
             m_txtWarning->setString( "Press Esc to exit help" );
             break;
         }

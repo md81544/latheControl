@@ -42,7 +42,7 @@ Controller::Controller( Model* model )
     }
 
     m_zMaxMotorSpeed = m_model->m_config->readDouble( "zMaxMotorSpeed", 700.0 );
-    m_xMaxMotorSpeed = m_model->m_config->readDouble( "xMaxMotorSpeed", 720.0 );
+    m_xMaxMotorSpeed = m_model->m_config->readDouble( "xMaxMotorSpeed", 240.0 );
 
     m_view->initialise();
 
@@ -105,7 +105,7 @@ void Controller::run()
             {
                 m_model->m_warning = "";
             }
-            m_model->m_zAxisMotor->setRpm( speed );
+            m_model->m_zAxisMotor->setSpeed( speed );
         }
 
         if( m_model->m_currentDisplayMode == Mode::Taper )
@@ -146,12 +146,18 @@ void Controller::run()
             m_model->m_status = "stopped";
             if( m_model->m_fastReturning )
             {
-                m_model->m_zAxisMotor->setRpm( m_model->m_previousZSpeed );
+                m_model->m_zAxisMotor->setSpeed( m_model->m_previousZSpeed );
                 m_model->m_fastReturning = false;
             }
             if( m_model->m_enabledFunction == Mode::Taper && m_model->m_zWasRunning )
             {
                 m_model->m_xAxisMotor->stop();
+            }
+            if( m_model->m_zWasRunning && m_model->m_zAxisMotor->getRpm() >= 100.0 )
+            {
+                // We don't allow faster speeds to "stick" to avoid accidental
+                // fast motion after a long fast movement
+                m_model->m_zAxisMotor->setSpeed( 40.0 );
             }
             m_model->m_zWasRunning = false;
         }
@@ -164,10 +170,21 @@ void Controller::run()
         {
             if( m_model->m_fastRetracting )
             {
-                m_model->m_xAxisMotor->setRpm( m_model->m_previousXSpeed );
+                m_model->m_xAxisMotor->setSpeed( m_model->m_previousXSpeed );
                 m_model->m_fastRetracting = false;
                 m_model->m_xRetracted = false;
             }
+            if( m_model->m_xWasRunning && m_model->m_xAxisMotor->getSpeed() >= 80.0 )
+            {
+                // We don't allow faster speeds to "stick" to avoid accidental
+                // fast motion after a long fast movement
+                m_model->m_xAxisMotor->setSpeed( 40.0 );
+            }
+            m_model->m_xWasRunning = false;
+        }
+        else
+        {
+            m_model->m_xWasRunning = true;
         }
 
         m_view->updateDisplay( *m_model );
@@ -273,13 +290,13 @@ void Controller::processKeyPress()
                 if( m_model->m_enabledFunction == Mode::Threading ) break;
                 if( m_model->m_zAxisMotor->getRpm() < 20.0 )
                 {
-                    m_model->m_zAxisMotor->setRpm( 20.0 );
+                    m_model->m_zAxisMotor->setSpeed( 20.0 );
                 }
                 else
                 {
                     if( m_model->m_zAxisMotor->getRpm() < m_zMaxMotorSpeed )
                     {
-                        m_model->m_zAxisMotor->setRpm( m_model->m_zAxisMotor->getRpm() + 20.0 );
+                        m_model->m_zAxisMotor->setSpeed( m_model->m_zAxisMotor->getRpm() + 20.0 );
                     }
                 }
                 break;
@@ -289,13 +306,13 @@ void Controller::processKeyPress()
                 if( m_model->m_enabledFunction == Mode::Threading ) break;
                 if( m_model->m_zAxisMotor->getRpm() > 20 )
                 {
-                    m_model->m_zAxisMotor->setRpm( m_model->m_zAxisMotor->getRpm() - 20.0 );
+                    m_model->m_zAxisMotor->setSpeed( m_model->m_zAxisMotor->getRpm() - 20.0 );
                 }
                 else
                 {
                     if ( m_model->m_zAxisMotor->getRpm() > 1 )
                     {
-                        m_model->m_zAxisMotor->setRpm( m_model->m_zAxisMotor->getRpm() - 1.0 );
+                        m_model->m_zAxisMotor->setSpeed( m_model->m_zAxisMotor->getRpm() - 1.0 );
                     }
                 }
                 break;
@@ -461,7 +478,7 @@ void Controller::processKeyPress()
             {
                 if( m_model->m_currentDisplayMode != Mode::Threading )
                 {
-                    m_model->m_zAxisMotor->setRpm( 20.0 );
+                    m_model->m_zAxisMotor->setSpeed( 20.0 );
                 }
                 break;
             }
@@ -469,7 +486,7 @@ void Controller::processKeyPress()
             {
                 if( m_model->m_currentDisplayMode != Mode::Threading )
                 {
-                    m_model->m_zAxisMotor->setRpm( 40.0 );
+                    m_model->m_zAxisMotor->setSpeed( 40.0 );
                 }
                 break;
             }
@@ -477,7 +494,7 @@ void Controller::processKeyPress()
             {
                 if( m_model->m_currentDisplayMode != Mode::Threading )
                 {
-                    m_model->m_zAxisMotor->setRpm( 100.0 );
+                    m_model->m_zAxisMotor->setSpeed( 100.0 );
                 }
                 break;
             }
@@ -485,7 +502,7 @@ void Controller::processKeyPress()
             {
                 if( m_model->m_currentDisplayMode != Mode::Threading )
                 {
-                    m_model->m_zAxisMotor->setRpm( 250.0 );
+                    m_model->m_zAxisMotor->setSpeed( 250.0 );
                 }
                 break;
             }
@@ -493,7 +510,7 @@ void Controller::processKeyPress()
             {
                 if( m_model->m_currentDisplayMode != Mode::Threading )
                 {
-                    m_model->m_zAxisMotor->setRpm( m_zMaxMotorSpeed );
+                    m_model->m_zAxisMotor->setSpeed( m_zMaxMotorSpeed );
                 }
                 break;
             }
@@ -502,7 +519,7 @@ void Controller::processKeyPress()
             {
                 if( m_model->m_currentDisplayMode != Mode::Threading )
                 {
-                    m_model->m_xAxisMotor->setRpm( 30.0 );
+                    m_model->m_xAxisMotor->setSpeed( 10.0 );
                 }
                 break;
             }
@@ -510,7 +527,7 @@ void Controller::processKeyPress()
             {
                 if( m_model->m_currentDisplayMode != Mode::Threading )
                 {
-                    m_model->m_xAxisMotor->setRpm( 60.0 );
+                    m_model->m_xAxisMotor->setSpeed( 20.0 );
                 }
                 break;
             }
@@ -518,7 +535,7 @@ void Controller::processKeyPress()
             {
                 if( m_model->m_currentDisplayMode != Mode::Threading )
                 {
-                    m_model->m_xAxisMotor->setRpm( 120.0 );
+                    m_model->m_xAxisMotor->setSpeed( 40.0 );
                 }
                 break;
             }
@@ -526,7 +543,7 @@ void Controller::processKeyPress()
             {
                 if( m_model->m_currentDisplayMode != Mode::Threading )
                 {
-                    m_model->m_xAxisMotor->setRpm( 240.f );
+                    m_model->m_xAxisMotor->setSpeed( 80.f );
                 }
                 break;
             }
@@ -534,7 +551,7 @@ void Controller::processKeyPress()
             {
                 if( m_model->m_currentDisplayMode != Mode::Threading )
                 {
-                    m_model->m_xAxisMotor->setRpm( m_xMaxMotorSpeed );
+                    m_model->m_xAxisMotor->setSpeed( m_xMaxMotorSpeed );
                 }
                 break;
             }
@@ -544,18 +561,18 @@ void Controller::processKeyPress()
                 // Fast return to point
                 if( m_model->m_memory.at( m_model->m_currentMemory ) == INF_RIGHT ) break;
                 if( m_model->m_fastReturning ) break;
-                m_model->m_previousZSpeed = m_model->m_zAxisMotor->getRpm();
+                m_model->m_previousZSpeed = m_model->m_zAxisMotor->getSpeed();
                 m_model->m_fastReturning = true;
                 m_model->m_zAxisMotor->stop();
                 m_model->m_zAxisMotor->wait();
                 // If we are tapering, we need to set a speed the x-axis motor can keep up with
                 if( m_model->m_enabledFunction == Mode::Taper )
                 {
-                    m_model->m_zAxisMotor->setRpm( 100.0 );
+                    m_model->m_zAxisMotor->setSpeed( 100.0 );
                 }
                 else
                 {
-                    m_model->m_zAxisMotor->setRpm( m_model->m_zAxisMotor->getMaxRpm() );
+                    m_model->m_zAxisMotor->setSpeed( m_model->m_zAxisMotor->getMaxRpm() );
                 }
                 m_model->m_status = "fast returning";
                 m_model->m_zAxisMotor->goToStep( m_model->m_memory.at( m_model->m_currentMemory ) );
@@ -578,8 +595,8 @@ void Controller::processKeyPress()
                     // use to construct the motor in the first place, which in turn should
                     // come from config
                     m_model->m_xOldPosition = m_model->m_xAxisMotor->getCurrentStep();
-                    m_model->m_previousXSpeed = m_model->m_xAxisMotor->getRpm();
-                    m_model->m_xAxisMotor->setRpm( 300.0 );
+                    m_model->m_previousXSpeed = m_model->m_xAxisMotor->getSpeed();
+                    m_model->m_xAxisMotor->setSpeed( 100.0 );
                     int direction = -1;
                     if( m_model->m_xRetractionDirection == XRetractionDirection::Inwards )
                     {

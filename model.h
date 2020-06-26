@@ -92,6 +92,7 @@ struct Model
     long                    m_xAxisOffsetSteps{ 0L };
 
     bool                    m_zWasRunning{ false };
+    bool                    m_xWasRunning{ false };
 };
 
 } // end namespace
