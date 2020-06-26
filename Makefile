@@ -6,7 +6,7 @@ OBJ_DIR  := $(BUILD)/objects
 APP_DIR  := $(BUILD)/apps
 TARGET   := els
 INCLUDE  := -Iinclude/
-SRC      := $(shell ls *.cpp stepperControl/*.cpp | grep -v gpio.cpp)
+SRC      := $(wildcard *.cpp stepperControl/*.cpp)
 
 OBJECTS  := $(SRC:%.cpp=$(OBJ_DIR)/%.o)
 
@@ -29,12 +29,10 @@ build:
 	@mkdir -p $(OBJ_DIR)
 
 fake: CXXFLAGS += -DDEBUG -DFAKE -g
-fake: SRC := $(shell ls *.cpp stepperControl/*.cpp | grep -v gpio.cpp)
-fake: OBJECTS := $(SRC:%.cpp=$(OBJ_DIR)/%.o)
 fake: all
 
 release: CXXFLAGS += -O3
-release: SRC += stepperControl/gpio.cpp
+release: LDFLAGS += -lpigpio
 release: all
 
 clean:
