@@ -292,9 +292,8 @@ void ViewSfml::updateTextFromModel( const Model& model )
     m_txtRpm->setString( fmt::format( "C:  {:<4}  rpm",
         static_cast<int>( model.m_rotaryEncoder->getRpm() ) ) );
     // TODO: turn on debug info in config file
-    m_txtStatus->setString( fmt::format( "Status: {}    Debug: last keycode={}",
-            model.m_status,
-            model.m_keyPressed
+    m_txtStatus->setString( fmt::format( "Status: {}",
+            model.m_status
             )
         );
     m_txtWarning->setString( model.m_warning );
