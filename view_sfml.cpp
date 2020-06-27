@@ -343,7 +343,7 @@ void ViewSfml::updateTextFromModel( const Model& model )
         case Mode::Help:
         {
             m_txtMode->setString( "Help" );
-            m_txtMisc1->setString( "Modes: F2=Setup F3=Thread F4=Taper F5=Retract F6=Radius" );
+            m_txtMisc1->setString( "Modes: F2=Setup F3=Thread F4=Taper F5=Retract F6=Diameter" );
             m_txtMisc2->setString( "" ); // reserved for future modes
             m_txtMisc3->setString( "Z axis speed: 1-5, X axis speed: 6-0" );
             m_txtMisc4->setString( "[ and ] select Z-mem to use. M store, Enter return (F fast)." );
@@ -410,14 +410,14 @@ void ViewSfml::updateTextFromModel( const Model& model )
             m_txtWarning->setString( "Enter to close screen" );
             break;
         }
-        case Mode::XRadiusSetup:
+        case Mode::XDiameterSetup:
         {
-            m_txtMode->setString( "X Radius Setup" );
+            m_txtMode->setString( "X Diameter Setup" );
             m_txtMisc1->setString( "" );
             m_txtMisc2->setString( "Measure the workpiece and ensure the tool is on" );
-            m_txtMisc3->setString( "its surface. You can then enter the RADIUS here" );
+            m_txtMisc3->setString( "its surface. You can then enter the DIAMETER here" );
             m_txtMisc4->setString( "" );
-            m_txtMisc5->setString( fmt::format( "Work piece current radius: {}_",
+            m_txtMisc5->setString( fmt::format( "Work piece current diameter: {}_",
                 model.m_input ) );
             m_txtWarning->setString( "Enter to set, Esc to cancel" );
             break;

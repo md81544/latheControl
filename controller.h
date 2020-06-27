@@ -22,7 +22,7 @@ private:
     void stopAllMotors();
     int checkKeyAllowedForMode( int key );
     void changeMode( Mode mode );
-    int processInputKeys( int key );
+    int processModeInputKeys( int key );
     void startSynchronisedXMotor( ZDirection direction, double zSpeed );
     void takeUpZBacklash( ZDirection direction );
     // Cache of config values for speed

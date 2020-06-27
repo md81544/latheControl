@@ -198,7 +198,7 @@ void Controller::processKeyPress()
 {
     int t = m_view->getInput();
     t = checkKeyAllowedForMode( t );
-    t = processInputKeys( t );
+    t = processModeInputKeys( t );
     if( t != key::None )
     {
         m_model->m_keyPressed = t;
@@ -676,7 +676,7 @@ void Controller::processKeyPress()
             }
             case key::F6: // X retraction setup
             {
-                changeMode( Mode::XRadiusSetup );
+                changeMode( Mode::XDiameterSetup );
                 break;
             }
             case key::ESC: // return to normal mode
@@ -774,7 +774,7 @@ int Controller::checkKeyAllowedForMode( int key )
             if( key == key::UP || key == key::DOWN ) return key;
             return -1;
         // Any modes that have numerical input:
-        case Mode::XRadiusSetup:
+        case Mode::XDiameterSetup:
         case Mode::Taper:
             if( key >= key::ZERO && key <= key::NINE ) return key;
             if( key == key::FULLSTOP || key == key::BACKSPACE || key == key::DELETE ) return key;
@@ -786,12 +786,12 @@ int Controller::checkKeyAllowedForMode( int key )
     }
 }
 
-int Controller::processInputKeys( int key )
+int Controller::processModeInputKeys( int key )
 {
     // If we are in a "mode" then certain keys (e.g. the number keys) are used for input
     // so are processed here before allowing them to fall through to the main key processing
     if( m_model->m_currentDisplayMode == Mode::Taper ||
-        m_model->m_currentDisplayMode == Mode::XRadiusSetup )
+        m_model->m_currentDisplayMode == Mode::XDiameterSetup )
     {
         if( key >= key::ZERO && key <= key::NINE )
         {
@@ -869,12 +869,12 @@ int Controller::processInputKeys( int key )
 
     if( m_model->m_currentDisplayMode != Mode::None && key == key::ENTER )
     {
-        if( m_model->m_currentDisplayMode == Mode::XRadiusSetup )
+        if( m_model->m_currentDisplayMode == Mode::XDiameterSetup )
         {
             float offset = 0;
             try
             {
-                offset = std::stof( m_model->m_input );
+                offset = std::stof( m_model->m_input ) / 2;
             }
             catch( ... ) {}
             m_model->m_xAxisMotor->zeroPosition();
