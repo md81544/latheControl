@@ -14,6 +14,7 @@ namespace
 
 std::string cnv( const mgo::StepperMotor* motor, long step )
 {
+    if( ! motor ) return std::string();
     double mm = motor->getPosition( step );
     if( std::abs( mm ) < 0.001 )
     {
@@ -24,11 +25,13 @@ std::string cnv( const mgo::StepperMotor* motor, long step )
 
 std::string cnv( const mgo::StepperMotor* motor )
 {
+    if( ! motor ) return std::string();
     return cnv( motor, motor->getCurrentStep() );
 }
 
 std::string cnvWithOffset( const mgo::StepperMotor* motor, long offset )
 {
+    if( ! motor ) return std::string();
     return cnv( motor, motor->getCurrentStep() + offset );
 }
 
@@ -235,8 +238,6 @@ int  ViewSfml::getInput()
 
 void ViewSfml::updateDisplay( const Model& model )
 {
-    std::string t = cnv( model.m_zAxisMotor.get() );
-    // TODO
     m_window->clear();
     updateTextFromModel( model );
     m_window->draw( *m_txtZPos );
@@ -283,14 +284,23 @@ void ViewSfml::updateTextFromModel( const Model& model )
 {
     // Updates all the text objects with data in the model
     m_txtZPos->setString( fmt::format( "Z: {}", cnv( model.m_zAxisMotor.get() ) ) );
-    m_txtZSpeed->setString( fmt::format( "{:<.1f} mm/min", model.m_zAxisMotor->getSpeed() ) );
+    if( model.m_zAxisMotor )
+    {
+        m_txtZSpeed->setString( fmt::format( "{:<.1f} mm/min", model.m_zAxisMotor->getSpeed() ) );
+    }
     m_txtXPos->setString( fmt::format( "X: {}",
             cnvWithOffset( model.m_xAxisMotor.get(),  model.m_xAxisOffsetSteps )
             )
         );
-    m_txtXSpeed->setString( fmt::format( "{:<.1f} mm/min", model.m_xAxisMotor->getSpeed() ) );
-    m_txtRpm->setString( fmt::format( "C:  {:<4}  rpm",
-        static_cast<int>( model.m_rotaryEncoder->getRpm() ) ) );
+    if( model.m_xAxisMotor )
+    {
+        m_txtXSpeed->setString( fmt::format( "{:<.1f} mm/min", model.m_xAxisMotor->getSpeed() ) );
+    }
+    if( model.m_rotaryEncoder )
+    {
+        m_txtRpm->setString( fmt::format( "C:  {:<4}  rpm",
+            static_cast<int>( model.m_rotaryEncoder->getRpm() ) ) );
+    }
     // TODO: turn on debug info in config file
     m_txtStatus->setString( fmt::format( "Status: {}",
             model.m_status

@@ -32,19 +32,21 @@ void yieldSleep( std::chrono::microseconds microsecs )
 Controller::Controller( Model* model )
     : m_model( model )
 {
-    if( m_model->m_useSfml ) // driven from command line --sfml
+    if( m_model->m_useSfml )
     {
         m_view = std::make_unique<ViewSfml>();
     }
     else
     {
-        m_view = std::make_unique<ViewCurses>();
+        m_view = std::make_unique<ViewCurses>(); // Driven from command line --tui
     }
 
     m_zMaxMotorSpeed = m_model->m_config->readDouble( "zMaxMotorSpeed", 700.0 );
     m_xMaxMotorSpeed = m_model->m_config->readDouble( "xMaxMotorSpeed", 240.0 );
 
     m_view->initialise();
+
+    m_view->updateDisplay( *m_model ); // get SFML running before we start the motor threads
 
     // TODO: currently ignoring enable pin
     m_model->m_zAxisMotor = std::make_unique<mgo::StepperMotor>(
