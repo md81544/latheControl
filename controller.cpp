@@ -617,6 +617,7 @@ void Controller::processKeyPress()
                 }
                 m_model->m_zAxisMotor->zeroPosition();
                 m_model->m_xAxisMotor->zeroPosition();
+                m_model->m_xAxisOffsetSteps = 0L;
                 // Zeroing will invalidate any memorised positions, so we clear them
                 for( auto& m : m_model->m_memory )
                 {
@@ -633,6 +634,7 @@ void Controller::processKeyPress()
                     changeMode( Mode::None );
                 }
                 m_model->m_xAxisMotor->zeroPosition();
+                m_model->m_xAxisOffsetSteps = 0L;
                 break;
             }
             case key::ASTERISK: // shutdown
