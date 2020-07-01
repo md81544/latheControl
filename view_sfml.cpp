@@ -241,41 +241,47 @@ void ViewSfml::updateDisplay( const Model& model )
     m_window->clear();
     updateTextFromModel( model );
     m_window->draw( *m_txtZPos );
-    m_window->draw( *m_txtZSpeed );
-    m_window->draw( *m_txtXPos );
-    m_window->draw( *m_txtXSpeed );
-    m_window->draw( *m_txtRpm );
-    m_window->draw( *m_txtStatus );
-    m_window->draw( *m_txtWarning );
-    m_window->draw( *m_txtNotification );
-    if( model.m_enabledFunction == Mode::Taper )
+
+    // If we're shutting down there's a "shutting down" message in m_txtZpos,
+    // we don't want to display anything else
+    if( ! model.m_shutdown )
     {
-        m_window->draw( *m_txtTaperAngle );
-    }
-    if( model.m_xRetractionDirection == XRetractionDirection::Inwards )
-    {
-        m_window->draw( *m_txtXRetractDirection );
-    }
-    if( model.m_xRetracted )
-    {
-        m_window->draw( *m_txtXRetracted );
-    }
-    for( std::size_t n = 0; n < m_txtMemoryLabel.size(); ++n )
-    {
-        m_window->draw( *m_txtMemoryLabel.at( n ) );
-        m_window->draw( *m_txtMemoryValue.at( n ) );
-    }
-    if( model.m_currentDisplayMode != Mode::None )
-    {
-        m_window->draw( *m_txtMode );
-    }
-    if( model.m_currentDisplayMode != Mode::None )
-    {
-        m_window->draw( *m_txtMisc1 );
-        m_window->draw( *m_txtMisc2 );
-        m_window->draw( *m_txtMisc3 );
-        m_window->draw( *m_txtMisc4 );
-        m_window->draw( *m_txtMisc5 );
+        m_window->draw( *m_txtZSpeed );
+        m_window->draw( *m_txtXPos );
+        m_window->draw( *m_txtXSpeed );
+        m_window->draw( *m_txtRpm );
+        m_window->draw( *m_txtStatus );
+        m_window->draw( *m_txtWarning );
+        m_window->draw( *m_txtNotification );
+        if( model.m_enabledFunction == Mode::Taper )
+        {
+            m_window->draw( *m_txtTaperAngle );
+        }
+        if( model.m_xRetractionDirection == XRetractionDirection::Inwards )
+        {
+            m_window->draw( *m_txtXRetractDirection );
+        }
+        if( model.m_xRetracted )
+        {
+            m_window->draw( *m_txtXRetracted );
+        }
+        for( std::size_t n = 0; n < m_txtMemoryLabel.size(); ++n )
+        {
+            m_window->draw( *m_txtMemoryLabel.at( n ) );
+            m_window->draw( *m_txtMemoryValue.at( n ) );
+        }
+        if( model.m_currentDisplayMode != Mode::None )
+        {
+            m_window->draw( *m_txtMode );
+        }
+        if( model.m_currentDisplayMode != Mode::None )
+        {
+            m_window->draw( *m_txtMisc1 );
+            m_window->draw( *m_txtMisc2 );
+            m_window->draw( *m_txtMisc3 );
+            m_window->draw( *m_txtMisc4 );
+            m_window->draw( *m_txtMisc5 );
+        }
     }
     m_window->display();
 }
@@ -283,6 +289,12 @@ void ViewSfml::updateDisplay( const Model& model )
 void ViewSfml::updateTextFromModel( const Model& model )
 {
     // Updates all the text objects with data in the model
+    if( model.m_shutdown )
+    {
+        m_txtZPos->setString( "SHUTTING DOWN" );
+        return;
+    }
+
     m_txtZPos->setString( fmt::format( "Z: {}", cnv( model.m_zAxisMotor.get() ) ) );
     if( model.m_zAxisMotor )
     {

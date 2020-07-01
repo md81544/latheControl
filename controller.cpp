@@ -191,6 +191,11 @@ void Controller::run()
 
         m_view->updateDisplay( *m_model );
 
+        if( m_model->m_shutdown )
+        {
+            system( "sudo systemctl poweroff --no-block" );
+        }
+
         // Small delay just to avoid the UI loop spinning
         yieldSleep( std::chrono::microseconds( 50'000 ) );
     }
@@ -646,7 +651,7 @@ void Controller::processKeyPress()
                 #ifndef FAKE
                 stopAllMotors();
                 m_model->m_quit = true;
-                system( "sudo systemctl poweroff --no-block" );
+                m_model->m_shutdown = true;
                 #endif
                 break;
             }
@@ -685,6 +690,8 @@ void Controller::processKeyPress()
             }
             case key::ESC: // return to normal mode
             {
+                // Cancel any retract as well
+                m_model->m_xRetracted = false;
                 changeMode( Mode::None );
                 break;
             }

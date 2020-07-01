@@ -69,6 +69,7 @@ struct Model
     std::string m_warning;
     std::string m_input; // general-purpose string for user-entered data
     bool        m_quit{ false };
+    bool        m_shutdown{ false };
     float       m_previousZSpeed{ 40.f };
     bool        m_fastReturning{ false };
     int         m_keyPressed{ 0 };
