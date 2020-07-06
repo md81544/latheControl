@@ -8,10 +8,6 @@
 #include "view_curses.h"
 #include "view_sfml.h"
 
-#include <linux/reboot.h>
-#include <sys/reboot.h>
-#include <unistd.h>
-
 #include <cassert>
 #include <chrono>
 
@@ -200,8 +196,7 @@ void Controller::run()
             // Stop the motor threads
             m_model->m_xAxisMotor.reset();
             m_model->m_zAxisMotor.reset();
-            sync();
-            reboot(LINUX_REBOOT_CMD_POWER_OFF);
+            system( "sudo shutdown -h now" );
         }
 
         // Small delay just to avoid the UI loop spinning
