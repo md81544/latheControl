@@ -352,14 +352,13 @@ void Controller::processKeyPress()
                     // reversed from POSITION (see stepper's getPosition() vs getCurrentStep())
                     // so the direction we save is reversed
                     direction = ZDirection::Right;
-                    m_model->m_zAxisMotor->goToStep( m_model->m_zAxisMotor->getCurrentStep() - 1 );
                 }
                 else
                 {
                     // Z motor is moving towards chuck
                     direction = ZDirection::Left;
-                    m_model->m_zAxisMotor->goToStep( m_model->m_zAxisMotor->getCurrentStep() + 1 );
                 }
+                takeUpZBacklash( direction );
                 m_model->m_zAxisMotor->wait();
                 // If threading, we need to start at the same point each time - we
                 // wait for zero degrees on the chuck before starting:
@@ -575,10 +574,18 @@ void Controller::processKeyPress()
                 m_model->m_fastReturning = true;
                 m_model->m_zAxisMotor->stop();
                 m_model->m_zAxisMotor->wait();
-                // If we are tapering, we need to set a speed the x-axis motor can keep up with
                 if( m_model->m_enabledFunction == Mode::Taper )
                 {
+                    // If we are tapering, we need to set a speed the x-axis motor can keep up with
                     m_model->m_zAxisMotor->setSpeed( 100.0 );
+                    ZDirection direction = ZDirection::Left;
+                    if( m_model->m_memory.at( m_model->m_currentMemory ) <
+                        m_model->m_zAxisMotor->getCurrentStep() )
+                    {
+                        direction = ZDirection::Right;
+                    }
+                    takeUpZBacklash( direction );
+                    startSynchronisedXMotor( direction, m_model->m_zAxisMotor->getSpeed() );
                 }
                 else
                 {
@@ -902,6 +909,10 @@ int Controller::processModeInputKeys( int key )
 
 void Controller::startSynchronisedXMotor( ZDirection direction, double zSpeed )
 {
+    // Make sure X isn't already running first
+    m_model->m_xAxisMotor->stop();
+    m_model->m_xAxisMotor->wait();
+
     int target = INF_OUT;
     int stepAdd = -1;
     if( ( direction == ZDirection::Left  && m_model->m_taperAngle < 0.0 ) ||
