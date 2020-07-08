@@ -720,7 +720,7 @@ void Controller::changeMode( Mode mode )
     stopAllMotors();
     if( m_model->m_enabledFunction == Mode::Taper && mode != Mode::Taper )
     {
-        // TODO m_model->m_xAxisMotor->setSpeed( m_model->m_taperPreviousXSpeed );
+        m_model->m_xAxisMotor->setSpeed( m_model->m_taperPreviousXSpeed );
     }
     m_model->m_warning = "";
     m_model->m_currentDisplayMode = mode;
