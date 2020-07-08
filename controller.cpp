@@ -600,6 +600,7 @@ void Controller::processKeyPress()
             {
                 // X retraction
                 if( m_model->m_xAxisMotor->isRunning() ) return;
+                if( m_model->m_enabledFunction == Mode::Taper ) return;
                 if( m_model->m_xRetracted )
                 {
                     // Return
