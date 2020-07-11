@@ -313,10 +313,14 @@ void ViewSfml::updateTextFromModel( const Model& model )
         m_txtRpm->setString( fmt::format( "C:  {:<4}  rpm",
             static_cast<int>( model.m_rotaryEncoder->getRpm() ) ) );
     }
-    m_txtStatus->setString( fmt::format( "Status: {}",
-            model.m_status
-            )
-        );
+    std::string status = fmt::format( "Status: {}", model.m_status );
+    if( model.m_xAxisOffsetSteps != 0L )
+    {
+        status += fmt::format( ",   current diameter = {:.3f}",
+            std::abs( model.m_xAxisMotor->getPosition(
+                model.m_xAxisMotor->getCurrentStep() + model.m_xAxisOffsetSteps ) * 2) );
+    }
+    m_txtStatus->setString( status );
     m_txtWarning->setString( model.m_warning );
     if( model.m_enabledFunction == Mode::Taper )
     {

@@ -694,7 +694,7 @@ void Controller::processKeyPress()
                 changeMode( Mode::XRetractSetup );
                 break;
             }
-            case key::F6: // X retraction setup
+            case key::F6: // Diameter set mode
             {
                 changeMode( Mode::XDiameterSetup );
                 break;
