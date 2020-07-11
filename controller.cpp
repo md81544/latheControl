@@ -900,7 +900,7 @@ int Controller::processModeInputKeys( int key )
             }
             catch( ... ) {}
             m_model->m_xAxisMotor->zeroPosition();
-            m_model->m_xAxisOffsetSteps = offset * -2'400L; // TODO configure or get
+            m_model->m_xAxisOffsetSteps = - offset / m_model->m_xAxisMotor->getConversionFactor();
         }
         m_model->m_currentDisplayMode = Mode::None;
         return -1;
