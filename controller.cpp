@@ -609,9 +609,6 @@ void Controller::processKeyPress()
                 }
                 else
                 {
-                    // TODO the steps for retraction should be derived from the figure we
-                    // use to construct the motor in the first place, which in turn should
-                    // come from config
                     m_model->m_xOldPosition = m_model->m_xAxisMotor->getCurrentStep();
                     m_model->m_previousXSpeed = m_model->m_xAxisMotor->getSpeed();
                     m_model->m_xAxisMotor->setSpeed( 100.0 );
@@ -620,8 +617,10 @@ void Controller::processKeyPress()
                     {
                         direction = 1;
                     }
+                    long stepsForRetraction =
+                        2.0 / std::abs( m_model->m_xAxisMotor->getConversionFactor() );
                     m_model->m_xAxisMotor->goToStep(
-                        m_model->m_xAxisMotor->getCurrentStep() + 4'800 * direction );
+                        m_model->m_xAxisMotor->getCurrentStep() + stepsForRetraction * direction );
                     m_model->m_xRetracted = true;
                 }
                 break;

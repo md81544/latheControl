@@ -58,7 +58,6 @@ mgo::Curses::Window::Window()
         throw std::runtime_error( "Error initialising ncurses" );
     }
     ::start_color();
-    // TODO, remove hard coding / add colour setting functionality?
     ::init_pair( static_cast<short>(Colours::greenOnBlack),  COLOR_GREEN,  COLOR_BLACK );
     ::init_pair( static_cast<short>(Colours::redOnBlack),    COLOR_RED,    COLOR_BLACK );
     ::init_pair( static_cast<short>(Colours::yellowOnBlack), COLOR_YELLOW, COLOR_BLACK );
