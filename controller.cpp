@@ -196,6 +196,8 @@ void Controller::run()
             // Stop the motor threads
             m_model->m_xAxisMotor.reset();
             m_model->m_zAxisMotor.reset();
+            // Note the command used for shutdown should be made passwordless
+            // in the /etc/sudoers files
             system( "sudo shutdown -h now &" );
         }
 
@@ -655,8 +657,6 @@ void Controller::processKeyPress()
                 break;
             }
             case key::ASTERISK: // shutdown
-            // Note the command used for shutdown should be made passwordless
-            // in the /etc/sudoers files
             {
                 #ifndef FAKE
                 stopAllMotors();
