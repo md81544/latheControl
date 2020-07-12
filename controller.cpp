@@ -196,7 +196,7 @@ void Controller::run()
             // Stop the motor threads
             m_model->m_xAxisMotor.reset();
             m_model->m_zAxisMotor.reset();
-            system( "sudo shutdown -h now" );
+            system( "sudo shutdown -h now &" );
         }
 
         // Small delay just to avoid the UI loop spinning
