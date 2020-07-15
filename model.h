@@ -94,6 +94,7 @@ struct Model
 
     bool                    m_zWasRunning{ false };
     bool                    m_xWasRunning{ false };
+    bool                    m_spindleWasRunning{ false };
 };
 
 } // end namespace

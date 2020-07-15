@@ -88,6 +88,21 @@ void Controller::run()
     {
         processKeyPress();
 
+        float chuckRpm = m_model->m_rotaryEncoder->getRpm();
+        if( m_model->m_spindleWasRunning && chuckRpm == 0.f )
+        {
+            // If the chuck has stopped, we stop X/Z motors as a safety
+            // feature, just in case the motor has stalled or the operator
+            // has turned it off because of some issue.
+            // This won't stop the motors being started again even
+            // if the chuck isn't moving.
+            stopAllMotors();
+        }
+        if( chuckRpm > 0.f )
+        {
+            m_model->m_spindleWasRunning = true;
+        }
+
         if( m_model->m_enabledFunction == Mode::Threading )
         {
             // We are cutting threads, so the stepper motor's speed
