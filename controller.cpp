@@ -98,10 +98,7 @@ void Controller::run()
             // if the chuck isn't moving.
             stopAllMotors();
         }
-        if( chuckRpm > 0.f )
-        {
-            m_model->m_spindleWasRunning = true;
-        }
+        m_model->m_spindleWasRunning = chuckRpm > 0.f;
 
         if( m_model->m_enabledFunction == Mode::Threading )
         {
