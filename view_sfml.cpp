@@ -369,10 +369,10 @@ void ViewSfml::updateTextFromModel( const Model& model )
         {
             m_txtMode->setString( "Help" );
             m_txtMisc1->setString( "Modes: F2=Setup F3=Thread F4=Taper F5=Retract F6=Diameter" );
-            m_txtMisc2->setString( "" ); // reserved for future modes
+            m_txtMisc2->setString( "       F7=Z position set" );
             m_txtMisc3->setString( "Z axis speed: 1-5, X axis speed: 6-0" );
             m_txtMisc4->setString( "[ and ] select Z-mem to use. M store, Enter return (F fast)." );
-            m_txtMisc5->setString( "WASD = nudge. Space to stop all motors. R retract." );
+            m_txtMisc5->setString( "WASD = nudge 0.025mm. Space to stop all motors. R retract." );
             m_txtWarning->setString( "Press Esc to exit help" );
             break;
         }
@@ -443,6 +443,18 @@ void ViewSfml::updateTextFromModel( const Model& model )
             m_txtMisc3->setString( "its surface. You can then enter the DIAMETER here" );
             m_txtMisc4->setString( "" );
             m_txtMisc5->setString( fmt::format( "Work piece current diameter: {}_",
+                model.m_input ) );
+            m_txtWarning->setString( "Enter to set, Esc to cancel" );
+            break;
+        }
+        case Mode::ZPositionSetup:
+        {
+            m_txtMode->setString( "Z Position Setup" );
+            m_txtMisc1->setString( "" );
+            m_txtMisc2->setString( "Specify a value for Z here" );
+            m_txtMisc3->setString( "" );
+            m_txtMisc4->setString( "" );
+            m_txtMisc5->setString( fmt::format( "Current Z position: {}_",
                 model.m_input ) );
             m_txtWarning->setString( "Enter to set, Esc to cancel" );
             break;

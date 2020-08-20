@@ -89,7 +89,7 @@ void Controller::run()
         processKeyPress();
 
         float chuckRpm = m_model->m_rotaryEncoder->getRpm();
-        if( m_model->m_spindleWasRunning && chuckRpm == 0.f )
+        if( m_model->m_spindleWasRunning && chuckRpm < 30.f )
         {
             // If the chuck has stopped, we stop X/Z motors as a safety
             // feature, just in case the motor has stalled or the operator
@@ -98,7 +98,7 @@ void Controller::run()
             // if the chuck isn't moving.
             stopAllMotors();
         }
-        m_model->m_spindleWasRunning = chuckRpm > 0.f;
+        m_model->m_spindleWasRunning = chuckRpm > 30.f;
 
         if( m_model->m_enabledFunction == Mode::Threading )
         {
@@ -710,6 +710,11 @@ void Controller::processKeyPress()
                 changeMode( Mode::XDiameterSetup );
                 break;
             }
+            case key::F7: // Z position set
+            {
+                changeMode( Mode::ZPositionSetup );
+                break;
+            }
             case key::ESC: // return to normal mode
             {
                 // Cancel any retract as well
@@ -808,6 +813,7 @@ int Controller::checkKeyAllowedForMode( int key )
             return -1;
         // Any modes that have numerical input:
         case Mode::XDiameterSetup:
+        case Mode::ZPositionSetup:
         case Mode::Taper:
             if( key >= key::ZERO && key <= key::NINE ) return key;
             if( key == key::FULLSTOP || key == key::BACKSPACE || key == key::DELETE ) return key;
@@ -824,7 +830,8 @@ int Controller::processModeInputKeys( int key )
     // If we are in a "mode" then certain keys (e.g. the number keys) are used for input
     // so are processed here before allowing them to fall through to the main key processing
     if( m_model->m_currentDisplayMode == Mode::Taper ||
-        m_model->m_currentDisplayMode == Mode::XDiameterSetup )
+        m_model->m_currentDisplayMode == Mode::XDiameterSetup ||
+        m_model->m_currentDisplayMode == Mode::ZPositionSetup )
     {
         if( key >= key::ZERO && key <= key::NINE )
         {
@@ -912,6 +919,16 @@ int Controller::processModeInputKeys( int key )
             catch( ... ) {}
             m_model->m_xAxisMotor->zeroPosition();
             m_model->m_xAxisOffsetSteps = - offset / m_model->m_xAxisMotor->getConversionFactor();
+        }
+        if( m_model->m_currentDisplayMode == Mode::ZPositionSetup )
+        {
+            float zPos = 0;
+            try
+            {
+                zPos = std::stof( m_model->m_input );
+            }
+            catch( ... ) {}
+            m_model->m_zAxisMotor->setPosition( zPos );
         }
         m_model->m_currentDisplayMode = Mode::None;
         return -1;
