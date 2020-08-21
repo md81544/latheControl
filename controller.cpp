@@ -232,8 +232,7 @@ void Controller::processKeyPress()
             {
                 break;
             }
-            case key::Q:
-            case key::q:
+            case key::CtrlQ:
             {
                 stopAllMotors();
                 m_model->m_quit = true;
@@ -852,7 +851,10 @@ int Controller::processModeInputKeys( int key )
         }
         if( key == key::BACKSPACE )
         {
-            m_model->m_input.pop_back();
+            if( ! m_model->m_input.empty() )
+            {
+                m_model->m_input.pop_back();
+            }
             return -1;
         }
         if( key == key::MINUS && m_model->m_input.empty() )

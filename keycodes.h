@@ -107,6 +107,9 @@ constexpr int x = 120;
 constexpr int y = 121;
 constexpr int z = 122;
 
+// Random others
+constexpr int CtrlQ = key::q & 0x10000;
+
 } // namespace key
 } // namespace mgo
 

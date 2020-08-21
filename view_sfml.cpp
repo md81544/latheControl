@@ -1,5 +1,6 @@
 #include "view_sfml.h"
 
+#include "keycodes.h"
 #include "model.h"
 #include "threadpitches.h"
 
@@ -38,15 +39,19 @@ std::string cnvWithOffset( const mgo::StepperMotor* motor, long offset )
 int convertKeyCode( sf::Event event )
 {
     int sfKey = event.key.code;
+    if( sfKey == sf::Keyboard::Q && event.key.control )
+    {
+        return key::CtrlQ;
+    }
     // Letters
     if( sfKey >= sf::Keyboard::A && sfKey <= sf::Keyboard::Z )
     {
         // A is defined in SFML's enum as zero
         if( event.key.shift )
         {
-            return 65 + sfKey;
+            return key::A + sfKey;
         }
-        return 97 + sfKey;
+        return key::a + sfKey;
     }
     // Number keys
     if( sfKey >= sf::Keyboard::Num0 && sfKey <= sf::Keyboard::Num9 )
@@ -54,7 +59,7 @@ int convertKeyCode( sf::Event event )
         // Check for shift-8 (asterisk)
         if( sfKey == sf::Keyboard::Num8 && event.key.shift )
         {
-            return 42;
+            return key::ASTERISK;
         }
         return 22 + sfKey;
     }
@@ -68,38 +73,38 @@ int convertKeyCode( sf::Event event )
     switch( sfKey )
     {
         case sf::Keyboard::Return:
-            return 10;
+            return key::ENTER;
         case sf::Keyboard::LBracket: // [
-            return 91;
+            return key::LBRACKET;
         case sf::Keyboard::RBracket: // ]
-            return 93;
+            return key::RBRACKET;
         case sf::Keyboard::Comma:
-            return 44;
+            return key::COMMA;
         case sf::Keyboard::Period:
-            return 46;
+            return key::FULLSTOP;
         case sf::Keyboard::Right:
-            return 261;
+            return key::RIGHT;
         case sf::Keyboard::Left:
-            return 260;
+            return key::LEFT;
         case sf::Keyboard::Up:
-            return 259;
+            return key::UP;
         case sf::Keyboard::Down:
-            return 258;
+            return key::DOWN;
         case sf::Keyboard::BackSlash:
-            if( event.key.shift ) return 124;
-            return 92;
+            if( event.key.shift ) return key::PIPE;
+            return key::BACKSLASH;
         case sf::Keyboard::Dash:
-            return 45;
+            return key::MINUS;
         case sf::Keyboard::Equal:
-            return 61;
+            return key::EQUALS;
         case sf::Keyboard::Space:
-            return 32;
+            return key::SPACE;
         case sf::Keyboard::Escape:
-            return 27;
+            return key::ESC;
         case sf::Keyboard::BackSpace:
-            return 8;
+            return key::BACKSPACE;
         case sf::Keyboard::Delete:
-            return 127;
+            return key::DELETE;
         default:
             return -1;
     }
@@ -224,7 +229,7 @@ int  ViewSfml::getInput()
     m_window->pollEvent( event );
     if( event.type == sf::Event::KeyPressed )
     {
-        if( lastKey == event.key.code && clock.getElapsedTime().asMilliseconds() - lastTime < 250 )
+        if( lastKey == event.key.code && clock.getElapsedTime().asMilliseconds() - lastTime < 100 )
         {
             // Debounce
             return -1;
@@ -300,10 +305,17 @@ void ViewSfml::updateTextFromModel( const Model& model )
     {
         m_txtZSpeed->setString( fmt::format( "{:<.1f} mm/min", model.m_zAxisMotor->getSpeed() ) );
     }
+    if( ! model.m_xRetracted )
+    {
     m_txtXPos->setString( fmt::format( "X: {}",
             cnvWithOffset( model.m_xAxisMotor.get(),  model.m_xAxisOffsetSteps )
             )
         );
+    }
+    else
+    {
+        m_txtXPos->setString( "X:  ---" );
+    }
     if( model.m_xAxisMotor )
     {
         m_txtXSpeed->setString( fmt::format( "{:<.1f} mm/min", model.m_xAxisMotor->getSpeed() ) );
@@ -314,7 +326,7 @@ void ViewSfml::updateTextFromModel( const Model& model )
             static_cast<int>( model.m_rotaryEncoder->getRpm() ) ) );
     }
     std::string status = fmt::format( "Status: {}", model.m_status );
-    if( model.m_xAxisOffsetSteps != 0L )
+    if( model.m_xAxisOffsetSteps != 0L && ! model.m_xRetracted )
     {
         status += fmt::format( ",   current diameter = {:.3f}",
             std::abs( model.m_xAxisMotor->getPosition(
