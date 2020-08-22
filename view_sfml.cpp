@@ -39,13 +39,14 @@ std::string cnvWithOffset( const mgo::StepperMotor* motor, long offset )
 int convertKeyCode( sf::Event event )
 {
     int sfKey = event.key.code;
-    if( sfKey == sf::Keyboard::Q && event.key.control )
-    {
-        return key::CtrlQ;
-    }
     // Letters
     if( sfKey >= sf::Keyboard::A && sfKey <= sf::Keyboard::Z )
     {
+        if( event.key.control )
+        {
+            // Ctrl-letter has 0x10000 ORed to it
+            return ( key::a + sfKey ) | 0x10000;
+        }
         // A is defined in SFML's enum as zero
         if( event.key.shift )
         {

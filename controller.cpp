@@ -742,10 +742,6 @@ void Controller::changeMode( Mode mode )
         {
             m_model->m_input = std::to_string( m_model->m_taperAngle );
         }
-        else
-        {
-            m_model->m_input = "";
-        }
     }
 }
 
