@@ -76,7 +76,6 @@ struct Model
     int         m_keyPressed{ 0 };
     double      m_taperAngle{ 0.0 };
     float       m_taperPreviousXSpeed{ 40.f };
-    bool        m_useSfml{ true };
     std::unique_ptr<mgo::ConfigReader> m_config;
     // Stores the current function displayed on the screen:
     Mode        m_currentDisplayMode{ Mode::None };

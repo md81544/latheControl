@@ -13,9 +13,6 @@ You'll need to do the following (on deb-based systems) to install required packa
 
     sudo apt install libfmt-dev
     sudo apt install libsfml-dev
-    sudo apt install libncurses-dev
-    
-(ncurses was already installed on my fresh Kubuntu 20.04 install)
 
 The makefile also expects `cppcheck` and `ctags`:
 

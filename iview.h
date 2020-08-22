@@ -3,7 +3,8 @@
 #include "model.h"
 
 // The "view" object encapsulates the the graphical toolkit being used.
-// Abstracting this will mean the switch from curses to SFML will be easier.
+// Abstracting allows for easier switching of UI libraries used - for
+// instance this program originally used curses as a textual interface
 
 namespace mgo
 {

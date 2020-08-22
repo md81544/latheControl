@@ -3,8 +3,6 @@ Add ability to pick up existing memories if the stepper loses the plot
 Think about incorporating reading from scales to make position reporting
 accurate rather than estimated
 
-Remove curses UI?
-
 Add motor "conversion factors" or steps per revolution including gearing
 as a config item
 

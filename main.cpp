@@ -11,7 +11,7 @@
 
 #include <iostream>
 
-int main( int argc, char* argv[] )
+int main()
 {
     try
     {
@@ -25,11 +25,6 @@ int main( int argc, char* argv[] )
         #endif
 
         mgo::Model model( gpio );
-
-        if( argc > 1 && std::string( argv[1] ) == "--tui" )
-        {
-            model.m_useSfml = false;
-        }
 
         model.m_config = std::make_unique<mgo::ConfigReader>( "els.cfg" );
 

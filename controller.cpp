@@ -5,7 +5,6 @@
 #include "log.h"
 #include "stepperControl/igpio.h"
 #include "threadpitches.h"  // for ThreadPitch, threadPitches
-#include "view_curses.h"
 #include "view_sfml.h"
 
 #include <cassert>
@@ -32,14 +31,7 @@ void yieldSleep( std::chrono::microseconds microsecs )
 Controller::Controller( Model* model )
     : m_model( model )
 {
-    if( m_model->m_useSfml )
-    {
-        m_view = std::make_unique<ViewSfml>();
-    }
-    else
-    {
-        m_view = std::make_unique<ViewCurses>(); // Driven from command line --tui
-    }
+    m_view = std::make_unique<ViewSfml>();
 
     m_zMaxMotorSpeed = m_model->m_config->readDouble( "zMaxMotorSpeed", 700.0 );
     m_xMaxMotorSpeed = m_model->m_config->readDouble( "xMaxMotorSpeed", 240.0 );

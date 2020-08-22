@@ -1,6 +1,6 @@
 CXX      := g++
 CXXFLAGS := -std=c++17 -Wall -Wextra -Werror -Wpedantic
-LDFLAGS  := -L/usr/lib -lstdc++ -lm  -lncurses -lfmt -pthread -lsfml-graphics -lsfml-window -lsfml-system
+LDFLAGS  := -L/usr/lib -lstdc++ -lm  -lfmt -pthread -lsfml-graphics -lsfml-window -lsfml-system
 BUILD    := ./build
 OBJ_DIR  := $(BUILD)/objects
 APP_DIR  := $(BUILD)/apps
