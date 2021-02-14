@@ -1,3 +1,5 @@
+Add X-axis memories
+
 Add ability to pick up existing memories if the stepper loses the plot
 
 Think about incorporating reading from scales to make position reporting
@@ -19,3 +21,5 @@ of the chuck/spindle
 Consider adding support for some form of switch / sensor to prevent
 carriage movement outside of specific points (or mandate position
 checks at start-up to do this in software only?)
+
+Much as I dislike the idea, I should support imperial units :/
