@@ -42,6 +42,20 @@ enum class Mode
     ZPositionSetup
 };
 
+// "Key Modes" allow for two-key actions, a bit like vim.
+// Initial use case is to allow for actions to only apply to
+// Z or X axis - for example, "xz" means zero X only. "xm" means
+// memorise X only. "z<Enter>" means go to the stored Z value only.
+// Pressing "m" or "<Enter>" will apply to both axes. There won't
+// be a single keypress for zeroing both axes at once - use "zz" and "xz".
+enum class KeyMode
+{
+    None,
+    XAxis,
+    ZAxis,
+    Function
+};
+
 enum class XRetractionDirection
 {
     Outwards,   // towards operator
@@ -63,7 +77,8 @@ struct Model
     // Cross slide:
     std::unique_ptr<mgo::StepperMotor> m_xAxisMotor;
     std::unique_ptr<mgo::RotaryEncoder> m_rotaryEncoder;
-    std::vector<long> m_memory{ INF_RIGHT, INF_RIGHT, INF_RIGHT, INF_RIGHT };
+    std::vector<long> m_zMemory{ INF_RIGHT, INF_RIGHT, INF_RIGHT, INF_RIGHT };
+    std::vector<long> m_xMemory{ INF_RIGHT, INF_RIGHT, INF_RIGHT, INF_RIGHT };
     std::size_t m_currentMemory{ 0 };
     std::size_t m_threadPitchIndex{ 0 };
     std::string m_status{ "stopped" };
@@ -82,6 +97,7 @@ struct Model
     // Stores current function, i.e. whether tapering or threading is on
     // we use the same enum class as "mode"
     Mode        m_enabledFunction{ Mode::None };
+    KeyMode     m_keyMode{ KeyMode::None };
 
     XRetractionDirection    m_xRetractionDirection;
     // Used to store position to return to after retract:

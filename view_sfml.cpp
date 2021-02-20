@@ -154,16 +154,27 @@ void ViewSfml::initialise()
     for( int n = 0; n < 4; ++n )
     {
         auto lbl = std::make_unique<sf::Text>("", *m_font, 30 );
-        lbl->setPosition( { 4.f + n * 200.f, 225 });
+        lbl->setPosition( { 60.f + n * 200.f, 210 });
         lbl->setFillColor( { 128, 128, 128 } );
-        lbl->setString( fmt::format( " Z Mem {}", n + 1 ) );
+        lbl->setString( fmt::format( " Mem {}", n + 1 ) );
         m_txtMemoryLabel.push_back( std::move(lbl) );
-        auto val = std::make_unique<sf::Text>("", *m_font, 30 );
-        val->setPosition( { 4.f + n * 200.f, 255 });
-        val->setFillColor( { 128, 128, 128 } );
-        val->setString( " not set" );
-        m_txtMemoryValue.push_back( std::move( val ) );
+        auto valZ = std::make_unique<sf::Text>("", *m_font, 30 );
+        valZ->setPosition( { 60.f + n * 200.f, 245 });
+        valZ->setFillColor( { 128, 128, 128 } );
+        valZ->setString( " not set" );
+        m_txtZMemoryValue.push_back( std::move( valZ ) );
+        auto valX = std::make_unique<sf::Text>("", *m_font, 30 );
+        valX->setPosition( { 60.f + n * 200.f, 275 });
+        valX->setFillColor( { 128, 128, 128 } );
+        valX->setString( " not set" );
+        m_txtXMemoryValue.push_back( std::move( valX ) );
     }
+    m_txtZMemoryLabel = std::make_unique<sf::Text>("Z:", *m_font, 30);
+    m_txtZMemoryLabel->setPosition( { 24.f, 245 });
+    m_txtZMemoryLabel->setFillColor( { 128, 128, 128 } );
+    m_txtXMemoryLabel = std::make_unique<sf::Text>("X:", *m_font, 30);
+    m_txtXMemoryLabel->setPosition( { 24.f, 275 });
+    m_txtXMemoryLabel->setFillColor( { 128, 128, 128 } );
 
     m_txtStatus = std::make_unique<sf::Text>("", *m_font, 20 );
     m_txtStatus->setPosition( { 20, 550 });
@@ -274,8 +285,28 @@ void ViewSfml::updateDisplay( const Model& model )
         for( std::size_t n = 0; n < m_txtMemoryLabel.size(); ++n )
         {
             m_window->draw( *m_txtMemoryLabel.at( n ) );
-            m_window->draw( *m_txtMemoryValue.at( n ) );
+            m_window->draw( *m_txtZMemoryValue.at( n ) );
+            m_window->draw( *m_txtXMemoryValue.at( n ) );
         }
+        // Z/X labels - make red if keyMode corresponds
+        if( model.m_keyMode == KeyMode::ZAxis )
+        {
+            m_txtZMemoryLabel->setFillColor( sf::Color::Red );
+        }
+        else
+        {
+            m_txtZMemoryLabel->setFillColor( { 128, 128, 128 });
+        }
+        if( model.m_keyMode == KeyMode::XAxis )
+        {
+            m_txtXMemoryLabel->setFillColor( sf::Color::Red );
+        }
+        else
+        {
+            m_txtXMemoryLabel->setFillColor( { 128, 128, 128 });
+        }
+        m_window->draw( *m_txtZMemoryLabel );
+        m_window->draw( *m_txtXMemoryLabel );
         if( model.m_currentDisplayMode != Mode::None )
         {
             m_window->draw( *m_txtMode );
@@ -345,21 +376,33 @@ void ViewSfml::updateTextFromModel( const Model& model )
         if( model.m_currentMemory == n )
         {
             m_txtMemoryLabel.at( n )->setFillColor( { 255, 255, 255 } );
-            m_txtMemoryValue.at( n )->setFillColor( { 255, 255, 255 } );
+            m_txtZMemoryValue.at( n )->setFillColor( { 255, 255, 255 } );
+            m_txtXMemoryValue.at( n )->setFillColor( { 255, 255, 255 } );
         }
         else
         {
             m_txtMemoryLabel.at( n )->setFillColor( { 100, 100, 100 } );
-            m_txtMemoryValue.at( n )->setFillColor( { 100, 100, 100 } );
+            m_txtZMemoryValue.at( n )->setFillColor( { 100, 100, 100 } );
+            m_txtXMemoryValue.at( n )->setFillColor( { 100, 100, 100 } );
         }
-        if ( model.m_memory.at( n ) == INF_RIGHT )
+        if ( model.m_zMemory.at( n ) == INF_RIGHT )
         {
-            m_txtMemoryValue.at( n )->setString( " not set" );
+            m_txtZMemoryValue.at( n )->setString( " not set" );
         }
         else
         {
-            m_txtMemoryValue.at( n )->setString(
-                fmt::format( "{:<12}", cnv( model.m_zAxisMotor.get(), model.m_memory.at( n ) ) )
+            m_txtZMemoryValue.at( n )->setString(
+                fmt::format( "{:<12}", cnv( model.m_zAxisMotor.get(), model.m_zMemory.at( n ) ) )
+                );
+        }
+        if ( model.m_xMemory.at( n ) == INF_OUT )
+        {
+            m_txtXMemoryValue.at( n )->setString( " not set" );
+        }
+        else
+        {
+            m_txtXMemoryValue.at( n )->setString(
+                fmt::format( "{:<12}", cnv( model.m_xAxisMotor.get(), model.m_xMemory.at( n ) ) )
                 );
         }
     }

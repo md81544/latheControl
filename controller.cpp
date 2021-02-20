@@ -217,6 +217,13 @@ void Controller::processKeyPress()
     t = processModeInputKeys( t );
     if( t != key::None )
     {
+        if( m_model->m_keyMode != KeyMode::None )
+        {
+            // If we are in a "leader key mode" (i.e. the first "prefix" key has
+            // already been pressed) then we can modify t here. If the key
+            // combination is recognised, we get a "chord" keypress e.g. key::xz.
+            t = processLeaderKeyModeKeyPress( t );
+        }
         m_model->m_keyPressed = t;
         switch( m_model->m_keyPressed )
         {
@@ -224,6 +231,25 @@ void Controller::processKeyPress()
             {
                 break;
             }
+            // "Leader" keys ====================
+            case key::z:
+            case key::Z:
+            {
+                m_model->m_keyMode = KeyMode::ZAxis;
+                break;
+            }
+            case key::x:
+            case key::X:
+            {
+                m_model->m_keyMode = KeyMode::XAxis;
+                break;
+            }
+            case key::F2:
+            {
+                m_model->m_keyMode = KeyMode::Function;
+                break;
+            }
+            // End of "Leader" keys ==============
             case key::CtrlQ:
             {
                 stopAllMotors();
@@ -332,24 +358,49 @@ void Controller::processKeyPress()
                 }
                 break;
             }
-            case key::m:
-            case key::M:
+            case key::zm:
             {
-                m_model->m_memory.at( m_model->m_currentMemory ) =
+                m_model->m_zMemory.at( m_model->m_currentMemory ) =
                     m_model->m_zAxisMotor->getCurrentStep();
                 break;
             }
-            case key::ENTER:
+            case key::xm:
             {
-                if( m_model->m_memory.at( m_model->m_currentMemory ) == INF_RIGHT ) break;
-                if( m_model->m_memory.at( m_model->m_currentMemory ) ==
+                m_model->m_xMemory.at( m_model->m_currentMemory ) =
+                    m_model->m_xAxisMotor->getCurrentStep();
+                break;
+            }
+            case key::m:
+            case key::M:
+            {
+                m_model->m_zMemory.at( m_model->m_currentMemory ) =
+                    m_model->m_zAxisMotor->getCurrentStep();
+                m_model->m_xMemory.at( m_model->m_currentMemory ) =
+                    m_model->m_xAxisMotor->getCurrentStep();
+                break;
+            }
+            case key::xg:
+            {
+                if( m_model->m_xMemory.at( m_model->m_currentMemory ) == INF_RIGHT ) break;
+                if( m_model->m_xMemory.at( m_model->m_currentMemory ) ==
+                    m_model->m_xAxisMotor->getCurrentStep() ) break;
+                m_model->m_xAxisMotor->stop();
+                m_model->m_xAxisMotor->goToStep(
+                    m_model->m_xMemory.at( m_model->m_currentMemory ) );
+                break;
+            }
+            case key::ENTER:
+            case key::zg:
+            {
+                if( m_model->m_zMemory.at( m_model->m_currentMemory ) == INF_RIGHT ) break;
+                if( m_model->m_zMemory.at( m_model->m_currentMemory ) ==
                     m_model->m_zAxisMotor->getCurrentStep() ) break;
                 m_model->m_zAxisMotor->stop();
                 m_model->m_zAxisMotor->wait();
                 m_model->m_status = "returning";
                 // Ensure z backlash is compensated first for tapering or threading:
                 ZDirection direction;
-                if( m_model->m_memory.at( m_model->m_currentMemory ) <
+                if( m_model->m_zMemory.at( m_model->m_currentMemory ) <
                     m_model->m_zAxisMotor->getCurrentStep() )
                 {
                     // Z motor is moving away from chuck
@@ -372,7 +423,7 @@ void Controller::processKeyPress()
                     m_model->m_rotaryEncoder->callbackAtZeroDegrees([&]()
                         {
                             m_model->m_zAxisMotor->goToStep(
-                                m_model->m_memory.at( m_model->m_currentMemory ) );
+                                m_model->m_zMemory.at( m_model->m_currentMemory ) );
                         }
                         );
                 }
@@ -383,7 +434,7 @@ void Controller::processKeyPress()
                         startSynchronisedXMotor( direction, m_model->m_zAxisMotor->getSpeed() );
                     }
                     m_model->m_zAxisMotor->goToStep(
-                        m_model->m_memory.at( m_model->m_currentMemory ) );
+                        m_model->m_zMemory.at( m_model->m_currentMemory ) );
                 }
                 break;
             }
@@ -480,7 +531,7 @@ void Controller::processKeyPress()
             }
             case key::RBRACKET: // ]
             {
-                if( m_model->m_currentMemory < m_model->m_memory.size() - 1 )
+                if( m_model->m_currentMemory < m_model->m_zMemory.size() - 1 )
                 {
                     ++m_model->m_currentMemory;
                 }
@@ -528,7 +579,8 @@ void Controller::processKeyPress()
                 }
                 break;
             }
-            // Speed presets for X with number keys 6-0
+            // Speed presets for X with number keys 6-0 or X leader + 1-5
+            case key::x1:
             case key::SIX:
             {
                 if( m_model->m_currentDisplayMode != Mode::Threading )
@@ -537,6 +589,7 @@ void Controller::processKeyPress()
                 }
                 break;
             }
+            case key::x2:
             case key::SEVEN:
             {
                 if( m_model->m_currentDisplayMode != Mode::Threading )
@@ -545,6 +598,7 @@ void Controller::processKeyPress()
                 }
                 break;
             }
+            case key::x3:
             case key::EIGHT:
             {
                 if( m_model->m_currentDisplayMode != Mode::Threading )
@@ -553,6 +607,7 @@ void Controller::processKeyPress()
                 }
                 break;
             }
+            case key::x4:
             case key::NINE:
             {
                 if( m_model->m_currentDisplayMode != Mode::Threading )
@@ -561,6 +616,7 @@ void Controller::processKeyPress()
                 }
                 break;
             }
+            case key::x5:
             case key::ZERO:
             {
                 if( m_model->m_currentDisplayMode != Mode::Threading )
@@ -573,7 +629,7 @@ void Controller::processKeyPress()
             case key::F:
             {
                 // Fast return to point
-                if( m_model->m_memory.at( m_model->m_currentMemory ) == INF_RIGHT ) break;
+                if( m_model->m_zMemory.at( m_model->m_currentMemory ) == INF_RIGHT ) break;
                 if( m_model->m_fastReturning ) break;
                 m_model->m_previousZSpeed = m_model->m_zAxisMotor->getSpeed();
                 m_model->m_fastReturning = true;
@@ -584,7 +640,7 @@ void Controller::processKeyPress()
                     // If we are tapering, we need to set a speed the x-axis motor can keep up with
                     m_model->m_zAxisMotor->setSpeed( 100.0 );
                     ZDirection direction = ZDirection::Left;
-                    if( m_model->m_memory.at( m_model->m_currentMemory ) <
+                    if( m_model->m_zMemory.at( m_model->m_currentMemory ) <
                         m_model->m_zAxisMotor->getCurrentStep() )
                     {
                         direction = ZDirection::Right;
@@ -597,7 +653,7 @@ void Controller::processKeyPress()
                     m_model->m_zAxisMotor->setSpeed( m_model->m_zAxisMotor->getMaxRpm() );
                 }
                 m_model->m_status = "fast returning";
-                m_model->m_zAxisMotor->goToStep( m_model->m_memory.at( m_model->m_currentMemory ) );
+                m_model->m_zAxisMotor->goToStep( m_model->m_zMemory.at( m_model->m_currentMemory ) );
                 break;
             }
             case key::r:
@@ -630,33 +686,33 @@ void Controller::processKeyPress()
                 }
                 break;
             }
-            case key::z:
-            case key::Z:
+            case key::zz:
             {
                 if( m_model->m_enabledFunction == Mode::Taper )
                 {
                     changeMode( Mode::None );
                 }
                 m_model->m_zAxisMotor->zeroPosition();
-                m_model->m_xAxisMotor->zeroPosition();
-                m_model->m_xAxisOffsetSteps = 0L;
-                // Zeroing will invalidate any memorised positions, so we clear them
-                for( auto& m : m_model->m_memory )
+                // Zeroing will invalidate any memorised Z positions, so we clear them
+                for( auto& m : m_model->m_zMemory )
                 {
                     m = INF_RIGHT;
                 }
                 break;
             }
-            case key::x:
-            case key::X:
+            case key::xz:
             {
-                // Zero just X-axis
                 if( m_model->m_enabledFunction == Mode::Taper )
                 {
                     changeMode( Mode::None );
                 }
                 m_model->m_xAxisMotor->zeroPosition();
                 m_model->m_xAxisOffsetSteps = 0L;
+                // Zeroing will invalidate any memorised X positions, so we clear them
+                for( auto& m : m_model->m_xMemory )
+                {
+                    m = INF_OUT;
+                }
                 break;
             }
             case key::ASTERISK: // shutdown
@@ -669,11 +725,12 @@ void Controller::processKeyPress()
                 break;
             }
             case key::F1: // help mode
+            case key::f2h:
             {
                 changeMode( Mode::Help );
                 break;
             }
-            case key::F2: // setup mode
+            case key::f2s: // setup mode
             {
                 m_model->m_enabledFunction = Mode::None;
                 m_model->m_zAxisMotor->setSpeed( 0.8f );
@@ -681,29 +738,34 @@ void Controller::processKeyPress()
                 changeMode( Mode::Setup );
                 break;
             }
-            case key::F3: // threading mode
+            case key::f2t: // threading mode
             {
                 changeMode( Mode::Threading );
                 break;
             }
-            case key::F4: // taper mode
+            case key::f2p: // taper mode
             {
                 changeMode( Mode::Taper );
                 break;
             }
-            case key::F5: // X retraction setup
+            case key::f2r: // X retraction setup
             {
                 changeMode( Mode::XRetractSetup );
                 break;
             }
-            case key::F6: // Diameter set mode
+            case key::f2d: // Diameter set mode
             {
                 changeMode( Mode::XDiameterSetup );
                 break;
             }
-            case key::F7: // Z position set
+            case key::zs: // Z position set
             {
                 changeMode( Mode::ZPositionSetup );
+                break;
+            }
+            case key::xs: // X position set
+            {
+                // TODO
                 break;
             }
             case key::ESC: // return to normal mode
@@ -924,6 +986,124 @@ int Controller::processModeInputKeys( int key )
         return -1;
     }
     return key;
+}
+
+int Controller::processLeaderKeyModeKeyPress( int keyPress )
+{
+    // TODO speed settings, ENTER (go to), memorise
+    if( m_model->m_keyMode == KeyMode::ZAxis )
+    {
+        switch( keyPress )
+        {
+            case key::z:
+            case key::Z:
+                keyPress = key::zz;
+                break;
+            case key::m:
+            case key::M:
+                keyPress = key::zm;
+                break;
+            case key::g:
+            case key::G:
+                keyPress = key::zg;
+                break;
+            case key::ONE:
+                keyPress = key::z1;
+                break;
+            case key::TWO:
+                keyPress = key::z2;
+                break;
+            case key::THREE:
+                keyPress = key::z3;
+                break;
+            case key::FOUR:
+                keyPress = key::z4;
+                break;
+            case key::FIVE:
+                keyPress = key::z5;
+                break;
+            case key::s:
+            case key::S:
+                keyPress = key::zs;
+                break;
+            default:
+                keyPress = key::None;
+        }
+    }
+    else if( m_model->m_keyMode == KeyMode::XAxis )
+    {
+        switch( keyPress )
+        {
+            case key::z:
+            case key::Z:
+                keyPress = key::xz;
+                break;
+            case key::m:
+            case key::M:
+                keyPress = key::xm;
+                break;
+            case key::g:
+            case key::G:
+                keyPress = key::xg;
+                break;
+            case key::ONE:
+                keyPress = key::x1;
+                break;
+            case key::TWO:
+                keyPress = key::x2;
+                break;
+            case key::THREE:
+                keyPress = key::x3;
+                break;
+            case key::FOUR:
+                keyPress = key::x4;
+                break;
+            case key::FIVE:
+                keyPress = key::x5;
+                break;
+            case key::s:
+            case key::S:
+                keyPress = key::xs;
+                break;
+            default:
+                keyPress = key::None;
+        }
+    }
+    else if( m_model->m_keyMode == KeyMode::Function )
+    {
+        switch( keyPress )
+        {
+            case key::h:
+            case key::H:
+                keyPress = key::f2h;
+                break;
+            case key::s:
+            case key::S:
+                keyPress = key::f2s;
+                break;
+            case key::t:
+            case key::T:
+                keyPress = key::f2t;
+                break;
+            case key::p:
+            case key::P:
+            case key::FULLSTOP:  // > - looks like a taper
+                keyPress = key::f2p;
+                break;
+            case key::r:
+            case key::R:
+                keyPress = key::f2r;
+                break;
+            case key::d:
+            case key::D:
+                keyPress = key::f2d;
+                break;
+            default:
+                keyPress = key::None;
+        }
+    }
+    m_model->m_keyMode = KeyMode::None;
+    return keyPress;
 }
 
 void Controller::startSynchronisedXMotor( ZDirection direction, double zSpeed )

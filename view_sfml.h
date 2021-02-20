@@ -46,7 +46,10 @@ private:
     std::unique_ptr<sf::Text> m_txtXRetracted;
 
     std::vector<std::unique_ptr<sf::Text>> m_txtMemoryLabel;
-    std::vector<std::unique_ptr<sf::Text>> m_txtMemoryValue;
+    std::unique_ptr<sf::Text> m_txtZMemoryLabel;
+    std::unique_ptr<sf::Text> m_txtXMemoryLabel;
+    std::vector<std::unique_ptr<sf::Text>> m_txtZMemoryValue;
+    std::vector<std::unique_ptr<sf::Text>> m_txtXMemoryValue;
 };
 
 } // namespace mgo
