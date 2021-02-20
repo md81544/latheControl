@@ -424,10 +424,10 @@ void ViewSfml::updateTextFromModel( const Model& model )
         case Mode::Help:
         {
             m_txtMode->setString( "Help" );
-            m_txtMisc1->setString( "Modes: F2=Setup F3=Thread F4=Taper F5=Retract F6=Diameter" );
-            m_txtMisc2->setString( "       F7=Z position set" );
+            m_txtMisc1->setString( "Modes: (F2=Leader) s=Setup t=Thread p=taPer r=Retract d=Diameter" );
+            m_txtMisc2->setString( "" );
             m_txtMisc3->setString( "Z axis speed: 1-5, X axis speed: 6-0" );
-            m_txtMisc4->setString( "[ and ] select Z-mem to use. M store, Enter return (F fast)." );
+            m_txtMisc4->setString( "[ and ] select mem to use. M store, Enter return (F fast)." );
             m_txtMisc5->setString( "WASD = nudge 0.025mm. Space to stop all motors. R retract." );
             m_txtWarning->setString( "Press Esc to exit help" );
             break;
