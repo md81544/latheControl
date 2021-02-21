@@ -113,10 +113,10 @@ void ViewSfml::initialise()
     #ifdef FAKE
         // run in a window in "fake" mode for manual testing
     m_window = std::make_unique<sf::RenderWindow>(
-        sf::VideoMode(1024, 600, 32), "Electronic Lead Screw" );
+        sf::VideoMode(1024, 600, 32), "Lathe Control" );
     #else
     m_window = std::make_unique<sf::RenderWindow>(
-        sf::VideoMode::getDesktopMode(), "Electronic Lead Screw", sf::Style::Fullscreen);
+        sf::VideoMode::getDesktopMode(), "Lathe Control", sf::Style::Fullscreen);
     #endif
     m_window->setKeyRepeatEnabled( false );
     m_window->setMouseCursorVisible( false );

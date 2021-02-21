@@ -4,7 +4,7 @@ LDFLAGS  := -L/usr/lib -lstdc++ -lm  -lfmt -pthread -lsfml-graphics -lsfml-windo
 BUILD    := ./build
 OBJ_DIR  := $(BUILD)/objects
 APP_DIR  := $(BUILD)/apps
-TARGET   := els
+TARGET   := lc
 INCLUDE  := -Iinclude/
 SRC      := $(wildcard *.cpp stepperControl/*.cpp)
 

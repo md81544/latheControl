@@ -15,7 +15,7 @@ int main()
 {
     try
     {
-        INIT_MGOLOG( "els.log" );
+        INIT_MGOLOG( "lc.log" );
         MGOLOG( "Program started" );
 
         #ifdef FAKE
@@ -26,7 +26,7 @@ int main()
 
         mgo::Model model( gpio );
 
-        model.m_config = std::make_unique<mgo::ConfigReader>( "els.cfg" );
+        model.m_config = std::make_unique<mgo::ConfigReader>( "lc.cfg" );
 
         mgo::Controller controller( &model );
         controller.run();

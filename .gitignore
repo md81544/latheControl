@@ -31,7 +31,8 @@
 *.out
 *.app
 test/test
-els
+lc
+build/*
 
 # Other
 tags
