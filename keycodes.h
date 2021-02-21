@@ -133,7 +133,6 @@ constexpr int f2s = 7001; // setup
 constexpr int f2t = 7002; // threading
 constexpr int f2p = 7003; // taPer
 constexpr int f2r = 7004; // X retraction mode
-constexpr int f2d = 7005; // Diameter setup
 
 
 // Random others

@@ -30,12 +30,6 @@ std::string cnv( const mgo::StepperMotor* motor )
     return cnv( motor, motor->getCurrentStep() );
 }
 
-std::string cnvWithOffset( const mgo::StepperMotor* motor, long offset )
-{
-    if( ! motor ) return std::string();
-    return cnv( motor, motor->getCurrentStep() + offset );
-}
-
 int convertKeyCode( sf::Event event )
 {
     int sfKey = event.key.code;
@@ -176,9 +170,17 @@ void ViewSfml::initialise()
     m_txtXMemoryLabel->setPosition( { 24.f, 275 });
     m_txtXMemoryLabel->setFillColor( { 128, 128, 128 } );
 
-    m_txtStatus = std::make_unique<sf::Text>("", *m_font, 20 );
-    m_txtStatus->setPosition( { 20, 550 });
-    m_txtStatus->setFillColor( sf::Color::Green );
+    m_txtGeneralStatus = std::make_unique<sf::Text>("", *m_font, 20 );
+    m_txtGeneralStatus->setPosition( { 20, 550 });
+    m_txtGeneralStatus->setFillColor( sf::Color::Green );
+
+    m_txtZStatus = std::make_unique<sf::Text>("", *m_font, 20 );
+    m_txtZStatus->setPosition( { 450, 550 });
+    m_txtZStatus->setFillColor( sf::Color::Green );
+
+    m_txtXStatus = std::make_unique<sf::Text>("", *m_font, 20 );
+    m_txtXStatus->setPosition( { 700, 550 });
+    m_txtXStatus->setFillColor( sf::Color::Green );
 
     m_txtMode = std::make_unique<sf::Text>( "", *m_font, 25 );
     m_txtMode->setPosition( { 20, 320 } );
@@ -267,7 +269,9 @@ void ViewSfml::updateDisplay( const Model& model )
         m_window->draw( *m_txtXPos );
         m_window->draw( *m_txtXSpeed );
         m_window->draw( *m_txtRpm );
-        m_window->draw( *m_txtStatus );
+        m_window->draw( *m_txtGeneralStatus );
+        m_window->draw( *m_txtZStatus );
+        m_window->draw( *m_txtXStatus );
         m_window->draw( *m_txtWarning );
         m_window->draw( *m_txtNotification );
         if( model.m_enabledFunction == Mode::Taper )
@@ -339,10 +343,7 @@ void ViewSfml::updateTextFromModel( const Model& model )
     }
     if( ! model.m_xRetracted )
     {
-    m_txtXPos->setString( fmt::format( "X: {}",
-            cnvWithOffset( model.m_xAxisMotor.get(),  model.m_xAxisOffsetSteps )
-            )
-        );
+        m_txtXPos->setString( fmt::format( "X: {}", cnv( model.m_xAxisMotor.get() ) ) );
     }
     else
     {
@@ -357,14 +358,12 @@ void ViewSfml::updateTextFromModel( const Model& model )
         m_txtRpm->setString( fmt::format( "C:  {:<4}  rpm",
             static_cast<int>( model.m_rotaryEncoder->getRpm() ) ) );
     }
-    std::string status = fmt::format( "Status: {}", model.m_status );
-    if( model.m_xAxisOffsetSteps != 0L && ! model.m_xRetracted )
-    {
-        status += fmt::format( ",   current diameter = {:.3f}",
-            std::abs( model.m_xAxisMotor->getPosition(
-                model.m_xAxisMotor->getCurrentStep() + model.m_xAxisOffsetSteps ) * 2) );
-    }
-    m_txtStatus->setString( status );
+
+    m_txtGeneralStatus->setString( model.m_generalStatus );
+    std::string status = fmt::format( "Z: {}", model.m_zStatus );
+    m_txtZStatus->setString( status );
+    status = fmt::format( "X: {}", model.m_xStatus );
+    m_txtXStatus->setString( status );
     m_txtWarning->setString( model.m_warning );
     if( model.m_enabledFunction == Mode::Taper )
     {
@@ -424,7 +423,7 @@ void ViewSfml::updateTextFromModel( const Model& model )
         case Mode::Help:
         {
             m_txtMode->setString( "Help" );
-            m_txtMisc1->setString( "Modes: (F2=Leader) s=Setup t=Thread p=taPer r=Retract d=Diameter" );
+            m_txtMisc1->setString( "Modes: (F2=Leader) s=Setup t=Thread p=taPer r=Retract" );
             m_txtMisc2->setString( "" );
             m_txtMisc3->setString( "Z axis speed: 1-5, X axis speed: 6-0" );
             m_txtMisc4->setString( "[ and ] select mem to use. M store, Enter return (F fast)." );
@@ -491,14 +490,14 @@ void ViewSfml::updateTextFromModel( const Model& model )
             m_txtWarning->setString( "Enter to close screen" );
             break;
         }
-        case Mode::XDiameterSetup:
+        case Mode::XPositionSetup:
         {
-            m_txtMode->setString( "X Diameter Setup" );
+            m_txtMode->setString( "X Position Setup" );
             m_txtMisc1->setString( "" );
-            m_txtMisc2->setString( "Measure the workpiece and ensure the tool is on" );
-            m_txtMisc3->setString( "its surface. You can then enter the DIAMETER here" );
+            m_txtMisc2->setString( "Specify a value for X here" );
+            m_txtMisc3->setString( "NOTE! X would normally be negative" );
             m_txtMisc4->setString( "" );
-            m_txtMisc5->setString( fmt::format( "Work piece current diameter: {}_",
+            m_txtMisc5->setString( fmt::format( "Current X position: {}_",
                 model.m_input ) );
             m_txtWarning->setString( "Enter to set, Esc to cancel" );
             break;

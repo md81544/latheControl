@@ -38,7 +38,7 @@ enum class Mode
     Threading,
     Taper,
     XRetractSetup,
-    XDiameterSetup,
+    XPositionSetup,
     ZPositionSetup
 };
 
@@ -81,7 +81,9 @@ struct Model
     std::vector<long> m_xMemory{ INF_RIGHT, INF_RIGHT, INF_RIGHT, INF_RIGHT };
     std::size_t m_currentMemory{ 0 };
     std::size_t m_threadPitchIndex{ 0 };
-    std::string m_status{ "stopped" };
+    std::string m_generalStatus{ "Press F1 for help" };
+    std::string m_zStatus{ "stopped" };
+    std::string m_xStatus{ "stopped" };
     std::string m_warning;
     std::string m_input; // general-purpose string for user-entered data
     bool        m_quit{ false };
@@ -105,8 +107,6 @@ struct Model
     bool                    m_xRetracted{ false };
     float                   m_previousXSpeed{ 40.f };
     bool                    m_fastRetracting{ false };
-
-    long                    m_xAxisOffsetSteps{ 0L };
 
     bool                    m_zWasRunning{ false };
     bool                    m_xWasRunning{ false };

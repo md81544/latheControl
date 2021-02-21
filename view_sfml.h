@@ -29,7 +29,9 @@ private:
     std::unique_ptr<sf::Text> m_txtXPos;
     std::unique_ptr<sf::Text> m_txtXSpeed;
     std::unique_ptr<sf::Text> m_txtRpm;
-    std::unique_ptr<sf::Text> m_txtStatus;
+    std::unique_ptr<sf::Text> m_txtGeneralStatus;
+    std::unique_ptr<sf::Text> m_txtZStatus;
+    std::unique_ptr<sf::Text> m_txtXStatus;
     std::unique_ptr<sf::Text> m_txtWarning;
     std::unique_ptr<sf::Text> m_txtTaperAngle;
 

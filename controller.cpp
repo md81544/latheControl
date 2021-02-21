@@ -146,10 +146,13 @@ void Controller::run()
                 }
             }
         }
-
+        if ( ! m_model->m_xAxisMotor->isRunning() )
+        {
+            m_model->m_xStatus = "stopped";
+        }
         if ( ! m_model->m_zAxisMotor->isRunning() )
         {
-            m_model->m_status = "stopped";
+            m_model->m_zStatus = "stopped";
             if( m_model->m_fastReturning )
             {
                 m_model->m_zAxisMotor->setSpeed( m_model->m_previousZSpeed );
@@ -385,6 +388,7 @@ void Controller::processKeyPress()
                 if( m_model->m_xMemory.at( m_model->m_currentMemory ) ==
                     m_model->m_xAxisMotor->getCurrentStep() ) break;
                 m_model->m_xAxisMotor->stop();
+                m_model->m_xStatus = "returning";
                 m_model->m_xAxisMotor->goToStep(
                     m_model->m_xMemory.at( m_model->m_currentMemory ) );
                 break;
@@ -397,7 +401,7 @@ void Controller::processKeyPress()
                     m_model->m_zAxisMotor->getCurrentStep() ) break;
                 m_model->m_zAxisMotor->stop();
                 m_model->m_zAxisMotor->wait();
-                m_model->m_status = "returning";
+                m_model->m_zStatus = "returning";
                 // Ensure z backlash is compensated first for tapering or threading:
                 ZDirection direction;
                 if( m_model->m_zMemory.at( m_model->m_currentMemory ) <
@@ -446,6 +450,7 @@ void Controller::processKeyPress()
                 }
                 else
                 {
+                    m_model->m_xStatus = "moving in";
                     m_model->m_xAxisMotor->goToStep( INF_IN );
                 }
                 break;
@@ -458,6 +463,7 @@ void Controller::processKeyPress()
                 }
                 else
                 {
+                    m_model->m_xStatus = "moving out";
                     m_model->m_xAxisMotor->goToStep( INF_OUT );
                 }
                 break;
@@ -471,7 +477,7 @@ void Controller::processKeyPress()
                     m_model->m_zAxisMotor->wait();
                     break;
                 }
-                m_model->m_status = "moving left";
+                m_model->m_zStatus = "moving left";
                 if( m_model->m_enabledFunction == Mode::Taper )
                 {
                     takeUpZBacklash( ZDirection::Left );
@@ -488,7 +494,7 @@ void Controller::processKeyPress()
                     m_model->m_zAxisMotor->stop();
                     break;
                 }
-                m_model->m_status = "moving right";
+                m_model->m_zStatus = "moving right";
                 if( m_model->m_enabledFunction == Mode::Taper )
                 {
                     takeUpZBacklash( ZDirection::Right );
@@ -585,7 +591,7 @@ void Controller::processKeyPress()
             {
                 if( m_model->m_currentDisplayMode != Mode::Threading )
                 {
-                    m_model->m_xAxisMotor->setSpeed( 10.0 );
+                    m_model->m_xAxisMotor->setSpeed( 5.0 );
                 }
                 break;
             }
@@ -652,7 +658,7 @@ void Controller::processKeyPress()
                 {
                     m_model->m_zAxisMotor->setSpeed( m_model->m_zAxisMotor->getMaxRpm() );
                 }
-                m_model->m_status = "fast returning";
+                m_model->m_zStatus = "fast returning";
                 m_model->m_zAxisMotor->goToStep( m_model->m_zMemory.at( m_model->m_currentMemory ) );
                 break;
             }
@@ -707,7 +713,6 @@ void Controller::processKeyPress()
                     changeMode( Mode::None );
                 }
                 m_model->m_xAxisMotor->zeroPosition();
-                m_model->m_xAxisOffsetSteps = 0L;
                 // Zeroing will invalidate any memorised X positions, so we clear them
                 for( auto& m : m_model->m_xMemory )
                 {
@@ -753,19 +758,14 @@ void Controller::processKeyPress()
                 changeMode( Mode::XRetractSetup );
                 break;
             }
-            case key::f2d: // Diameter set mode
+            case key::xs: // X position set
             {
-                changeMode( Mode::XDiameterSetup );
+                changeMode( Mode::XPositionSetup );
                 break;
             }
             case key::zs: // Z position set
             {
                 changeMode( Mode::ZPositionSetup );
-                break;
-            }
-            case key::xs: // X position set
-            {
-                // TODO
                 break;
             }
             case key::ESC: // return to normal mode
@@ -813,7 +813,8 @@ void Controller::stopAllMotors()
     m_model->m_xAxisMotor->stop();
     m_model->m_zAxisMotor->wait();
     m_model->m_xAxisMotor->wait();
-    m_model->m_status = "stopped";
+    m_model->m_zStatus = "stopped";
+    m_model->m_xStatus = "stopped";
 }
 
 int Controller::checkKeyAllowedForMode( int key )
@@ -861,7 +862,7 @@ int Controller::checkKeyAllowedForMode( int key )
             if( key == key::UP || key == key::DOWN ) return key;
             return -1;
         // Any modes that have numerical input:
-        case Mode::XDiameterSetup:
+        case Mode::XPositionSetup:
         case Mode::ZPositionSetup:
         case Mode::Taper:
             if( key >= key::ZERO && key <= key::NINE ) return key;
@@ -879,7 +880,7 @@ int Controller::processModeInputKeys( int key )
     // If we are in a "mode" then certain keys (e.g. the number keys) are used for input
     // so are processed here before allowing them to fall through to the main key processing
     if( m_model->m_currentDisplayMode == Mode::Taper ||
-        m_model->m_currentDisplayMode == Mode::XDiameterSetup ||
+        m_model->m_currentDisplayMode == Mode::XPositionSetup ||
         m_model->m_currentDisplayMode == Mode::ZPositionSetup )
     {
         if( key >= key::ZERO && key <= key::NINE )
@@ -961,16 +962,15 @@ int Controller::processModeInputKeys( int key )
 
     if( m_model->m_currentDisplayMode != Mode::None && key == key::ENTER )
     {
-        if( m_model->m_currentDisplayMode == Mode::XDiameterSetup )
+        if( m_model->m_currentDisplayMode == Mode::XPositionSetup )
         {
-            float offset = 0;
+            float xPos = 0;
             try
             {
-                offset = std::stof( m_model->m_input ) / 2;
+                xPos = std::stof( m_model->m_input );
             }
             catch( ... ) {}
-            m_model->m_xAxisMotor->zeroPosition();
-            m_model->m_xAxisOffsetSteps = - offset / m_model->m_xAxisMotor->getConversionFactor();
+            m_model->m_xAxisMotor->setPosition( xPos );
         }
         if( m_model->m_currentDisplayMode == Mode::ZPositionSetup )
         {
@@ -1093,10 +1093,6 @@ int Controller::processLeaderKeyModeKeyPress( int keyPress )
             case key::r:
             case key::R:
                 keyPress = key::f2r;
-                break;
-            case key::d:
-            case key::D:
-                keyPress = key::f2d;
                 break;
             default:
                 keyPress = key::None;
