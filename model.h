@@ -101,16 +101,17 @@ struct Model
     Mode        m_enabledFunction{ Mode::None };
     KeyMode     m_keyMode{ KeyMode::None };
 
-    XRetractionDirection    m_xRetractionDirection;
     // Used to store position to return to after retract:
-    long                    m_xOldPosition;
-    bool                    m_xRetracted{ false };
-    float                   m_previousXSpeed{ 40.f };
-    bool                    m_fastRetracting{ false };
+    long        m_xOldPosition;
+    bool        m_xRetracted{ false };
+    float       m_previousXSpeed{ 40.f };
+    bool        m_fastRetracting{ false };
 
-    bool                    m_zWasRunning{ false };
-    bool                    m_xWasRunning{ false };
-    bool                    m_spindleWasRunning{ false };
+    bool        m_zWasRunning{ false };
+    bool        m_xWasRunning{ false };
+    bool        m_spindleWasRunning{ false };
+    
+    XRetractionDirection    m_xRetractionDirection;
 };
 
 } // end namespace

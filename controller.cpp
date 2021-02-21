@@ -863,6 +863,11 @@ int Controller::checkKeyAllowedForMode( int key )
             return -1;
         // Any modes that have numerical input:
         case Mode::XPositionSetup:
+            if( key >= key::ZERO && key <= key::NINE ) return key;
+            if( key == key::FULLSTOP || key == key::BACKSPACE || key == key::DELETE ) return key;
+            if( key == key::MINUS ) return key;
+            if( key == key::d || key == key::D ) return key;
+            return -1;
         case Mode::ZPositionSetup:
         case Mode::Taper:
             if( key >= key::ZERO && key <= key::NINE ) return key;
@@ -960,6 +965,25 @@ int Controller::processModeInputKeys( int key )
         }
     }
 
+    if( m_model->m_currentDisplayMode == Mode::XPositionSetup &&
+        ( key == key::d || key == key::D ) )
+    {
+        float xPos = 0;
+        try
+        {
+            xPos = std::stof( m_model->m_input );
+        }
+        catch( ... ) {}
+        m_model->m_xAxisMotor->setPosition( xPos / 2 );
+        // This will invalidate any memorised X positions, so we clear them
+        for( auto& m : m_model->m_xMemory )
+        {
+            m = INF_OUT;
+        }
+        m_model->m_currentDisplayMode = Mode::None;
+        return -1;
+    }
+
     if( m_model->m_currentDisplayMode != Mode::None && key == key::ENTER )
     {
         if( m_model->m_currentDisplayMode == Mode::XPositionSetup )
@@ -971,6 +995,11 @@ int Controller::processModeInputKeys( int key )
             }
             catch( ... ) {}
             m_model->m_xAxisMotor->setPosition( xPos );
+            // This will invalidate any memorised X positions, so we clear them
+            for( auto& m : m_model->m_xMemory )
+            {
+                m = INF_OUT;
+            }
         }
         if( m_model->m_currentDisplayMode == Mode::ZPositionSetup )
         {
@@ -981,6 +1010,11 @@ int Controller::processModeInputKeys( int key )
             }
             catch( ... ) {}
             m_model->m_zAxisMotor->setPosition( zPos );
+            // This will invalidate any memorised Z positions, so we clear them
+            for( auto& m : m_model->m_zMemory )
+            {
+                m = INF_RIGHT;
+            }
         }
         m_model->m_currentDisplayMode = Mode::None;
         return -1;
@@ -1088,6 +1122,7 @@ int Controller::processLeaderKeyModeKeyPress( int keyPress )
             case key::p:
             case key::P:
             case key::FULLSTOP:  // > - looks like a taper
+            case key::COMMA:     // < - looks like a taper
                 keyPress = key::f2p;
                 break;
             case key::r:
