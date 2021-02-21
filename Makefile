@@ -10,6 +10,9 @@ SRC      := $(wildcard *.cpp stepperControl/*.cpp)
 
 OBJECTS  := $(SRC:%.cpp=$(OBJ_DIR)/%.o)
 
+fake: CXXFLAGS += -DDEBUG -DFAKE -g
+fake: all
+
 all: build $(APP_DIR)/$(TARGET)
 	ctags -R --c++-kinds=+p --fields=+iaS
 	cppcheck -q $(SRC)
@@ -27,9 +30,6 @@ $(APP_DIR)/$(TARGET): $(OBJECTS)
 build:
 	@mkdir -p $(APP_DIR)
 	@mkdir -p $(OBJ_DIR)
-
-fake: CXXFLAGS += -DDEBUG -DFAKE -g
-fake: all
 
 release: CXXFLAGS += -O3
 release: LDFLAGS += -lpigpio
