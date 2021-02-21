@@ -20,8 +20,8 @@ The makefile also expects `cppcheck` and `ctags`:
 
     sudo apt install cppcheck ctags
 
-To make a binary to run on non-Pi hardware, just type `make`. This mocks out the pigpio library usage, and also provides mock objects for all the steppers and rotary encoder, which means you can test it on a PC without needing to be in the workshop.
+To make a binary to run on non-Pi hardware, just type `make`. This mocks out the pigpio library usage, and also provides mock objects for all the steppers and rotary encoder, which means you can test it on a PC without needing to be in the workshop. This build includes debugging symbols.
 
-To make the binary on a Pi, type `make release`.
+To make the binary on a Pi, type `make release`. This expects real hardware to be present.
 
 To run unit tests, `cd` to the `test` directory and type `make`.
