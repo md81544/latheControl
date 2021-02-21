@@ -965,13 +965,14 @@ int Controller::processModeInputKeys( int key )
         }
     }
 
+    // Diameter set
     if( m_model->m_currentDisplayMode == Mode::XPositionSetup &&
         ( key == key::d || key == key::D ) )
     {
         float xPos = 0;
         try
         {
-            xPos = std::stof( m_model->m_input );
+            xPos = - std::abs( std::stof( m_model->m_input ) );
         }
         catch( ... ) {}
         m_model->m_xAxisMotor->setPosition( xPos / 2 );
