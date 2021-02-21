@@ -499,7 +499,7 @@ void ViewSfml::updateTextFromModel( const Model& model )
             m_txtMisc4->setString( "" );
             m_txtMisc5->setString( fmt::format( "Current X position: {}_",
                 model.m_input ) );
-            m_txtWarning->setString( "Enter to set, 'D' to halve, Esc to cancel" );
+            m_txtWarning->setString( "Enter to set, 'D' to enter as diameter, Esc to cancel" );
             break;
         }
         case Mode::ZPositionSetup:
