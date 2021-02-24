@@ -13,7 +13,7 @@ namespace mgo
 class ViewSfml : public IView
 {
 public:
-    virtual void initialise() override;
+    virtual void initialise( const Model& ) override;
     virtual void close() override;
     virtual int getInput() override;
     virtual void updateDisplay( const Model& ) override;
@@ -24,14 +24,14 @@ private:
     std::unique_ptr<sf::Font> m_font;
 
     // Main text items which are always displayed:
-    std::unique_ptr<sf::Text> m_txtZPos;
-    std::unique_ptr<sf::Text> m_txtZSpeed;
-    std::unique_ptr<sf::Text> m_txtXPos;
-    std::unique_ptr<sf::Text> m_txtXSpeed;
+    std::unique_ptr<sf::Text> m_txtAxis1Pos;
+    std::unique_ptr<sf::Text> m_txtAxis1Speed;
+    std::unique_ptr<sf::Text> m_txtAxis2Pos;
+    std::unique_ptr<sf::Text> m_txtAxis2Speed;
     std::unique_ptr<sf::Text> m_txtRpm;
     std::unique_ptr<sf::Text> m_txtGeneralStatus;
-    std::unique_ptr<sf::Text> m_txtZStatus;
-    std::unique_ptr<sf::Text> m_txtXStatus;
+    std::unique_ptr<sf::Text> m_txtAxis1Status;
+    std::unique_ptr<sf::Text> m_txtAxis2Status;
     std::unique_ptr<sf::Text> m_txtWarning;
     std::unique_ptr<sf::Text> m_txtTaperAngle;
 
@@ -48,10 +48,10 @@ private:
     std::unique_ptr<sf::Text> m_txtXRetracted;
 
     std::vector<std::unique_ptr<sf::Text>> m_txtMemoryLabel;
-    std::unique_ptr<sf::Text> m_txtZMemoryLabel;
-    std::unique_ptr<sf::Text> m_txtXMemoryLabel;
-    std::vector<std::unique_ptr<sf::Text>> m_txtZMemoryValue;
-    std::vector<std::unique_ptr<sf::Text>> m_txtXMemoryValue;
+    std::unique_ptr<sf::Text> m_txtAxis1MemoryLabel;
+    std::unique_ptr<sf::Text> m_txtAxis2MemoryLabel;
+    std::vector<std::unique_ptr<sf::Text>> m_txtAxis1MemoryValue;
+    std::vector<std::unique_ptr<sf::Text>> m_txtAxis2MemoryValue;
 };
 
 } // namespace mgo

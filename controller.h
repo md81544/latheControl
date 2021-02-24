@@ -27,7 +27,7 @@ private:
     void startSynchronisedXMotor( ZDirection direction, double zSpeed );
     void takeUpZBacklash( ZDirection direction );
     // Cache of config values for speed
-    double m_zMaxMotorSpeed;
+    double m_axis1MaxMotorSpeed;
     double m_xMaxMotorSpeed;
 };
 

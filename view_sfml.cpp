@@ -108,7 +108,7 @@ int convertKeyCode( sf::Event event )
 
 } // end anonymous namespace
 
-void ViewSfml::initialise()
+void ViewSfml::initialise( const Model& model )
 {
     #ifdef FAKE
         // run in a window in "fake" mode for manual testing
@@ -125,21 +125,21 @@ void ViewSfml::initialise()
     {
        throw std::runtime_error("Could not load TTF font");
     }
-    m_txtZPos = std::make_unique<sf::Text>("", *m_font, 60 );
-    m_txtZPos->setPosition( { 20, 10 });
-    m_txtZPos->setFillColor( sf::Color::Green );
+    m_txtAxis1Pos = std::make_unique<sf::Text>("", *m_font, 60 );
+    m_txtAxis1Pos->setPosition( { 20, 10 });
+    m_txtAxis1Pos->setFillColor( sf::Color::Green );
 
-    m_txtZSpeed = std::make_unique<sf::Text>("", *m_font, 40 );
-    m_txtZSpeed->setPosition( { 550, 30 });
-    m_txtZSpeed->setFillColor( { 209, 209, 50 } );
+    m_txtAxis1Speed = std::make_unique<sf::Text>("", *m_font, 40 );
+    m_txtAxis1Speed->setPosition( { 550, 30 });
+    m_txtAxis1Speed->setFillColor( { 209, 209, 50 } );
 
-    m_txtXPos = std::make_unique<sf::Text>("", *m_font, 60 );
-    m_txtXPos->setPosition( { 20, 70 });
-    m_txtXPos->setFillColor( sf::Color::Green );
+    m_txtAxis2Pos = std::make_unique<sf::Text>("", *m_font, 60 );
+    m_txtAxis2Pos->setPosition( { 20, 70 });
+    m_txtAxis2Pos->setFillColor( sf::Color::Green );
 
-    m_txtXSpeed = std::make_unique<sf::Text>("", *m_font, 40 );
-    m_txtXSpeed->setPosition( { 550, 90 });
-    m_txtXSpeed->setFillColor( { 209, 209, 50 } );
+    m_txtAxis2Speed = std::make_unique<sf::Text>("", *m_font, 40 );
+    m_txtAxis2Speed->setPosition( { 550, 90 });
+    m_txtAxis2Speed->setFillColor( { 209, 209, 50 } );
 
     m_txtRpm = std::make_unique<sf::Text>("", *m_font, 60 );
     m_txtRpm->setPosition( { 20, 130 });
@@ -156,31 +156,33 @@ void ViewSfml::initialise()
         valZ->setPosition( { 60.f + n * 200.f, 245 });
         valZ->setFillColor( { 128, 128, 128 } );
         valZ->setString( " not set" );
-        m_txtZMemoryValue.push_back( std::move( valZ ) );
+        m_txtAxis1MemoryValue.push_back( std::move( valZ ) );
         auto valX = std::make_unique<sf::Text>("", *m_font, 30 );
         valX->setPosition( { 60.f + n * 200.f, 275 });
         valX->setFillColor( { 128, 128, 128 } );
         valX->setString( " not set" );
-        m_txtXMemoryValue.push_back( std::move( valX ) );
+        m_txtAxis2MemoryValue.push_back( std::move( valX ) );
     }
-    m_txtZMemoryLabel = std::make_unique<sf::Text>("Z:", *m_font, 30);
-    m_txtZMemoryLabel->setPosition( { 24.f, 245 });
-    m_txtZMemoryLabel->setFillColor( { 128, 128, 128 } );
-    m_txtXMemoryLabel = std::make_unique<sf::Text>("X:", *m_font, 30);
-    m_txtXMemoryLabel->setPosition( { 24.f, 275 });
-    m_txtXMemoryLabel->setFillColor( { 128, 128, 128 } );
+    std::string axis1Label = model.m_config->read( "Axis1Label", "Z" ) + ":";
+    m_txtAxis1MemoryLabel = std::make_unique<sf::Text>( axis1Label, *m_font, 30);
+    m_txtAxis1MemoryLabel->setPosition( { 24.f, 245 });
+    m_txtAxis1MemoryLabel->setFillColor( { 128, 128, 128 } );
+    std::string axis2Label = model.m_config->read( "Axis2Label", "X" ) + ":";
+    m_txtAxis2MemoryLabel = std::make_unique<sf::Text>( axis2Label, *m_font, 30);
+    m_txtAxis2MemoryLabel->setPosition( { 24.f, 275 });
+    m_txtAxis2MemoryLabel->setFillColor( { 128, 128, 128 } );
 
     m_txtGeneralStatus = std::make_unique<sf::Text>("", *m_font, 20 );
     m_txtGeneralStatus->setPosition( { 20, 550 });
     m_txtGeneralStatus->setFillColor( sf::Color::Green );
 
-    m_txtZStatus = std::make_unique<sf::Text>("", *m_font, 20 );
-    m_txtZStatus->setPosition( { 450, 550 });
-    m_txtZStatus->setFillColor( sf::Color::Green );
+    m_txtAxis1Status = std::make_unique<sf::Text>("", *m_font, 20 );
+    m_txtAxis1Status->setPosition( { 450, 550 });
+    m_txtAxis1Status->setFillColor( sf::Color::Green );
 
-    m_txtXStatus = std::make_unique<sf::Text>("", *m_font, 20 );
-    m_txtXStatus->setPosition( { 700, 550 });
-    m_txtXStatus->setFillColor( sf::Color::Green );
+    m_txtAxis2Status = std::make_unique<sf::Text>("", *m_font, 20 );
+    m_txtAxis2Status->setPosition( { 700, 550 });
+    m_txtAxis2Status->setFillColor( sf::Color::Green );
 
     m_txtMode = std::make_unique<sf::Text>( "", *m_font, 25 );
     m_txtMode->setPosition( { 20, 320 } );
@@ -259,19 +261,28 @@ void ViewSfml::updateDisplay( const Model& model )
 {
     m_window->clear();
     updateTextFromModel( model );
-    m_window->draw( *m_txtZPos );
 
-    // If we're shutting down there's a "shutting down" message in m_txtZpos,
-    // we don't want to display anything else
     if( ! model.m_shutdown )
     {
-        m_window->draw( *m_txtZSpeed );
-        m_window->draw( *m_txtXPos );
-        m_window->draw( *m_txtXSpeed );
-        m_window->draw( *m_txtRpm );
+        if( ! model.m_config->readBool( "DisableAxis1", false ) )
+        {
+            m_window->draw( *m_txtAxis1Pos );
+            m_window->draw( *m_txtAxis1Speed );
+            m_window->draw( *m_txtAxis1Status );
+            m_window->draw( *m_txtAxis1MemoryLabel );
+        }
+        if( ! model.m_config->readBool( "DisableAxis2", false ) )
+        {
+            m_window->draw( *m_txtAxis2Pos );
+            m_window->draw( *m_txtAxis2Speed );
+            m_window->draw( *m_txtAxis2Status );
+            m_window->draw( *m_txtAxis2MemoryLabel );
+        }
+        if( ! model.m_config->readBool( "DisableRpm", false ) )
+        {
+            m_window->draw( *m_txtRpm );
+        }
         m_window->draw( *m_txtGeneralStatus );
-        m_window->draw( *m_txtZStatus );
-        m_window->draw( *m_txtXStatus );
         m_window->draw( *m_txtWarning );
         m_window->draw( *m_txtNotification );
         if( model.m_enabledFunction == Mode::Taper )
@@ -282,35 +293,39 @@ void ViewSfml::updateDisplay( const Model& model )
         {
             m_window->draw( *m_txtXRetractDirection );
         }
-        if( model.m_xRetracted )
+        if( model.m_axis2Retracted )
         {
             m_window->draw( *m_txtXRetracted );
         }
         for( std::size_t n = 0; n < m_txtMemoryLabel.size(); ++n )
         {
             m_window->draw( *m_txtMemoryLabel.at( n ) );
-            m_window->draw( *m_txtZMemoryValue.at( n ) );
-            m_window->draw( *m_txtXMemoryValue.at( n ) );
+            if( ! model.m_config->readBool( "DisableAxis1", false ) )
+            {
+                m_window->draw( *m_txtAxis1MemoryValue.at( n ) );
+            }
+            if( ! model.m_config->readBool( "DisableAxis2", false ) )
+            {
+                m_window->draw( *m_txtAxis2MemoryValue.at( n ) );
+            }
         }
         // Z/X labels - make red if keyMode corresponds
         if( model.m_keyMode == KeyMode::ZAxis )
         {
-            m_txtZMemoryLabel->setFillColor( sf::Color::Red );
+            m_txtAxis1MemoryLabel->setFillColor( sf::Color::Red );
         }
         else
         {
-            m_txtZMemoryLabel->setFillColor( { 128, 128, 128 });
+            m_txtAxis1MemoryLabel->setFillColor( { 128, 128, 128 });
         }
         if( model.m_keyMode == KeyMode::XAxis )
         {
-            m_txtXMemoryLabel->setFillColor( sf::Color::Red );
+            m_txtAxis2MemoryLabel->setFillColor( sf::Color::Red );
         }
         else
         {
-            m_txtXMemoryLabel->setFillColor( { 128, 128, 128 });
+            m_txtAxis2MemoryLabel->setFillColor( { 128, 128, 128 });
         }
-        m_window->draw( *m_txtZMemoryLabel );
-        m_window->draw( *m_txtXMemoryLabel );
         if( model.m_currentDisplayMode != Mode::None )
         {
             m_window->draw( *m_txtMode );
@@ -332,26 +347,29 @@ void ViewSfml::updateTextFromModel( const Model& model )
     // Updates all the text objects with data in the model
     if( model.m_shutdown )
     {
-        m_txtZPos->setString( "SHUTTING DOWN" );
+        m_txtAxis1Pos->setString( "SHUTTING DOWN" );
         return;
     }
 
-    m_txtZPos->setString( fmt::format( "Z: {}", cnv( model.m_zAxisMotor.get() ) ) );
-    if( model.m_zAxisMotor )
+    m_txtAxis1Pos->setString( fmt::format( "{}: {}",
+        model.m_config->read( "Axis1Label", "Z" ), cnv( model.m_axis1Motor.get() ) ) );
+    if( model.m_axis1Motor )
     {
-        m_txtZSpeed->setString( fmt::format( "{:<.1f} mm/min", model.m_zAxisMotor->getSpeed() ) );
+        m_txtAxis1Speed->setString( fmt::format( "{:<.1f} mm/min", model.m_axis1Motor->getSpeed() ) );
     }
-    if( ! model.m_xRetracted )
+    if( ! model.m_axis2Retracted )
     {
-        m_txtXPos->setString( fmt::format( "X: {}", cnv( model.m_xAxisMotor.get() ) ) );
+        m_txtAxis2Pos->setString( fmt::format( "{}: {}",
+            model.m_config->read( "Axis2Label", "X" ), cnv( model.m_axis2Motor.get() ) ) );
     }
     else
     {
-        m_txtXPos->setString( "X:  ---" );
+        m_txtAxis2Pos->setString( fmt::format( "{}:  ---",
+            model.m_config->read( "Axis2Label", "X" ) ) );
     }
-    if( model.m_xAxisMotor )
+    if( model.m_axis2Motor )
     {
-        m_txtXSpeed->setString( fmt::format( "{:<.1f} mm/min", model.m_xAxisMotor->getSpeed() ) );
+        m_txtAxis2Speed->setString( fmt::format( "{:<.1f} mm/min", model.m_axis2Motor->getSpeed() ) );
     }
     if( model.m_rotaryEncoder )
     {
@@ -360,10 +378,12 @@ void ViewSfml::updateTextFromModel( const Model& model )
     }
 
     m_txtGeneralStatus->setString( model.m_generalStatus );
-    std::string status = fmt::format( "Z: {}", model.m_zStatus );
-    m_txtZStatus->setString( status );
-    status = fmt::format( "X: {}", model.m_xStatus );
-    m_txtXStatus->setString( status );
+    std::string status = fmt::format( "{}: {}",
+        model.m_config->read( "Axis1Label", "Z" ), model.m_axis1Status );
+    m_txtAxis1Status->setString( status );
+    status = fmt::format( "{}: {}",
+        model.m_config->read( "Axis2Label", "X" ), model.m_axis2Status );
+    m_txtAxis2Status->setString( status );
     m_txtWarning->setString( model.m_warning );
     if( model.m_enabledFunction == Mode::Taper )
     {
@@ -375,34 +395,32 @@ void ViewSfml::updateTextFromModel( const Model& model )
         if( model.m_currentMemory == n )
         {
             m_txtMemoryLabel.at( n )->setFillColor( { 255, 255, 255 } );
-            m_txtZMemoryValue.at( n )->setFillColor( { 255, 255, 255 } );
-            m_txtXMemoryValue.at( n )->setFillColor( { 255, 255, 255 } );
+            m_txtAxis1MemoryValue.at( n )->setFillColor( { 255, 255, 255 } );
+            m_txtAxis2MemoryValue.at( n )->setFillColor( { 255, 255, 255 } );
         }
         else
         {
             m_txtMemoryLabel.at( n )->setFillColor( { 100, 100, 100 } );
-            m_txtZMemoryValue.at( n )->setFillColor( { 100, 100, 100 } );
-            m_txtXMemoryValue.at( n )->setFillColor( { 100, 100, 100 } );
+            m_txtAxis1MemoryValue.at( n )->setFillColor( { 100, 100, 100 } );
+            m_txtAxis2MemoryValue.at( n )->setFillColor( { 100, 100, 100 } );
         }
-        if ( model.m_zMemory.at( n ) == INF_RIGHT )
+        if ( model.m_axis1Memory.at( n ) == INF_RIGHT )
         {
-            m_txtZMemoryValue.at( n )->setString( " not set" );
+            m_txtAxis1MemoryValue.at( n )->setString( " not set" );
         }
         else
         {
-            m_txtZMemoryValue.at( n )->setString(
-                fmt::format( "{:<12}", cnv( model.m_zAxisMotor.get(), model.m_zMemory.at( n ) ) )
-                );
+            m_txtAxis1MemoryValue.at( n )->setString( fmt::format(
+                "{:<12}", cnv( model.m_axis1Motor.get(), model.m_axis1Memory.at( n ) ) ) );
         }
         if ( model.m_xMemory.at( n ) == INF_OUT )
         {
-            m_txtXMemoryValue.at( n )->setString( " not set" );
+            m_txtAxis2MemoryValue.at( n )->setString( " not set" );
         }
         else
         {
-            m_txtXMemoryValue.at( n )->setString(
-                fmt::format( "{:<12}", cnv( model.m_xAxisMotor.get(), model.m_xMemory.at( n ) ) )
-                );
+            m_txtAxis2MemoryValue.at( n )->setString(
+                fmt::format( "{:<12}", cnv( model.m_axis2Motor.get(), model.m_xMemory.at( n ) ) ) );
         }
     }
 
@@ -439,8 +457,8 @@ void ViewSfml::updateTextFromModel( const Model& model )
             m_txtMisc3->setString( "REMEMBER to unset any previous-set backlash figures in config!" );
             m_txtMisc4->setString( "" );
             m_txtMisc5->setString( fmt::format("Z step: {}   X step: {}",
-                    model.m_zAxisMotor->getCurrentStep(),
-                    model.m_xAxisMotor->getCurrentStep()
+                    model.m_axis1Motor->getCurrentStep(),
+                    model.m_axis2Motor->getCurrentStep()
                     )
                 );
             m_txtWarning->setString( "Press Esc to exit setup" );

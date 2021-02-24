@@ -73,17 +73,17 @@ struct Model
     Model( IGpio& gpio ) : m_gpio(gpio) {}
     IGpio& m_gpio;
     // Lead screw:
-    std::unique_ptr<mgo::StepperMotor> m_zAxisMotor;
+    std::unique_ptr<mgo::StepperMotor> m_axis1Motor;
     // Cross slide:
-    std::unique_ptr<mgo::StepperMotor> m_xAxisMotor;
+    std::unique_ptr<mgo::StepperMotor> m_axis2Motor;
     std::unique_ptr<mgo::RotaryEncoder> m_rotaryEncoder;
-    std::vector<long> m_zMemory{ INF_RIGHT, INF_RIGHT, INF_RIGHT, INF_RIGHT };
+    std::vector<long> m_axis1Memory{ INF_RIGHT, INF_RIGHT, INF_RIGHT, INF_RIGHT };
     std::vector<long> m_xMemory{ INF_RIGHT, INF_RIGHT, INF_RIGHT, INF_RIGHT };
     std::size_t m_currentMemory{ 0 };
     std::size_t m_threadPitchIndex{ 0 };
     std::string m_generalStatus{ "Press F1 for help" };
-    std::string m_zStatus{ "stopped" };
-    std::string m_xStatus{ "stopped" };
+    std::string m_axis1Status{ "stopped" };
+    std::string m_axis2Status{ "stopped" };
     std::string m_warning;
     std::string m_input; // general-purpose string for user-entered data
     bool        m_quit{ false };
@@ -103,14 +103,14 @@ struct Model
 
     // Used to store position to return to after retract:
     long        m_xOldPosition;
-    bool        m_xRetracted{ false };
+    bool        m_axis2Retracted{ false };
     float       m_previousXSpeed{ 40.f };
     bool        m_fastRetracting{ false };
 
     bool        m_zWasRunning{ false };
     bool        m_xWasRunning{ false };
     bool        m_spindleWasRunning{ false };
-    
+
     XRetractionDirection    m_xRetractionDirection;
 };
 
