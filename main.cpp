@@ -11,7 +11,7 @@
 
 #include <iostream>
 
-int main()
+int main( int argc, char* argv[] )
 {
     try
     {
@@ -26,7 +26,17 @@ int main()
 
         mgo::Model model( gpio );
 
-        model.m_config = std::make_unique<mgo::ConfigReader>( "lc.cfg" );
+        std::string configFile = "lc.cfg";
+        if( argc > 1 )
+        {
+            if( argv[1][0] == '-' )
+            {
+                std::cout << "\nUsage: lc <configfile>\n\n";
+                return 0;
+            }
+            configFile = argv[1];
+        }
+        model.m_config = std::make_unique<mgo::ConfigReader>( configFile );
 
         mgo::Controller controller( &model );
         controller.run();
