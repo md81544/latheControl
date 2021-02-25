@@ -34,22 +34,39 @@ Controller::Controller( Model* model )
     m_view = std::make_unique<ViewSfml>();
 
     m_axis1MaxMotorSpeed = m_model->m_config->readDouble( "Axis1MaxMotorSpeed", 700.0 );
-    m_xMaxMotorSpeed = m_model->m_config->readDouble( "Axis2MaxMotorSpeed", 240.0 );
+    m_axis2MaxMotorSpeed = m_model->m_config->readDouble( "Axis2MaxMotorSpeed", 240.0 );
 
     m_view->initialise( *m_model );
 
     m_view->updateDisplay( *m_model ); // get SFML running before we start the motor threads
 
-    // TODO: currently ignoring enable pin
     m_model->m_axis1Motor = std::make_unique<mgo::StepperMotor>(
-        m_model->m_gpio, 8, 7, 0, 1'000, -0.001, m_axis1MaxMotorSpeed );
-    // My X-Axis motor is set to 800 steps per revolution and the gearing
-    // is 3:1 so 2,400 steps make one revolution of the X-axis handwheel,
-    // which would be 1mm of travel. TODO: this should be settable in config
+        m_model->m_gpio,
+        m_model->m_config->readLong( "Axis1GpioStepPin", 8 ),
+        m_model->m_config->readLong( "Axis1GpioReversePin", 7 ),
+        m_model->m_config->readLong( "Axis1GpioEnablePin", 0 ),
+        m_model->m_config->readLong( "Axis1StepsPerRev", 1'000 ),
+        m_model->m_config->readDouble( "Axis1Conversion", -0.001 ),
+        m_axis1MaxMotorSpeed
+        );
+
     m_model->m_axis2Motor = std::make_unique<mgo::StepperMotor>(
-        m_model->m_gpio, 20, 21, 0, 800, 1.0 / 2'400.0, m_xMaxMotorSpeed );
+        m_model->m_gpio,
+        m_model->m_config->readLong( "Axis2GpioStepPin", 20 ),
+        m_model->m_config->readLong( "Axis2GpioReversePin", 21 ),
+        m_model->m_config->readLong( "Axis2GpioEnablePin", 0 ),
+        m_model->m_config->readLong( "Axis2StepsPerRev", 800 ),
+        m_model->m_config->readDouble( "Axis2Conversion", 1.0 / 2'400.0 ),
+        m_axis2MaxMotorSpeed
+        );
+
     m_model->m_rotaryEncoder = std::make_unique<mgo::RotaryEncoder>(
-        m_model->m_gpio, 23, 24, 2000, 35.f/30.f );
+        m_model->m_gpio,
+        m_model->m_config->readLong(  "RotaryEncoderGpioPinA", 23 ),
+        m_model->m_config->readLong(  "RotaryEncoderGpioPinB", 24 ),
+        m_model->m_config->readLong(  "RotaryEncoderPulsesPerRev", 2'000 ),
+        m_model->m_config->readDouble( "RotaryEncoderGearing", 35.0 / 30.0 )
+        );
 
     // We need to ensure that the motors are in a known position with regard to
     // backlash - which means moving them initially by the amount of
@@ -279,7 +296,7 @@ void Controller::processKeyPress()
                 {
                     m_model->m_axis2Motor->setSpeed( 10.0 );
                 }
-                else if( m_model->m_axis2Motor->getSpeed() < m_xMaxMotorSpeed )
+                else if( m_model->m_axis2Motor->getSpeed() < m_axis2MaxMotorSpeed )
                 {
                     m_model->m_axis2Motor->setSpeed( m_model->m_axis2Motor->getSpeed() + 10.0 );
                 }
@@ -627,7 +644,7 @@ void Controller::processKeyPress()
             {
                 if( m_model->m_currentDisplayMode != Mode::Threading )
                 {
-                    m_model->m_axis2Motor->setSpeed( m_xMaxMotorSpeed );
+                    m_model->m_axis2Motor->setSpeed( m_axis2MaxMotorSpeed );
                 }
                 break;
             }

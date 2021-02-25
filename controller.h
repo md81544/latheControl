@@ -28,7 +28,7 @@ private:
     void takeUpZBacklash( ZDirection direction );
     // Cache of config values for speed
     double m_axis1MaxMotorSpeed;
-    double m_xMaxMotorSpeed;
+    double m_axis2MaxMotorSpeed;
 };
 
 } // end namespace
