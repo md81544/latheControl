@@ -51,8 +51,8 @@ enum class Mode
 enum class KeyMode
 {
     None,
-    XAxis,
-    ZAxis,
+    Axis1,
+    Axis2,
     Function
 };
 

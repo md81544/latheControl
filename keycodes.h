@@ -107,25 +107,30 @@ constexpr int x = 120;
 constexpr int y = 121;
 constexpr int z = 122;
 
-// Combination keys (i.e. the user pressed, for example, X, then Z
-constexpr int xz = 6000; // XAxis zero
-constexpr int xm = 6001; // XAxis memorise
-constexpr int xg = 6002; // XAxis go to
-constexpr int x1 = 6003; // XAxis speed #1
-constexpr int x2 = 6004; // XAxis speed #2
-constexpr int x3 = 6005; // XAxis speed #3
-constexpr int x4 = 6006; // XAxis speed #4
-constexpr int x5 = 6007; // XAxis speed #5
-constexpr int xs = 6008; // X position manual entry
-constexpr int zz = 6100; // ZAxis zero
-constexpr int zm = 6101; // ZAxis memorise
-constexpr int zg = 6102; // ZAxis go to
-constexpr int z1 = 6103; // ZAxis speed #1
-constexpr int z2 = 6104; // ZAxis speed #2
-constexpr int z3 = 6105; // ZAxis speed #3
-constexpr int z4 = 6106; // ZAxis speed #4
-constexpr int z5 = 6107; // ZAxis speed #5
-constexpr int zs = 6108; // Z position manual entry
+// Axis 1 leader-prefixed keys ( 4096 = bit 12 is set )
+constexpr int a1_z = z          + 4096;  // axis1 zero
+constexpr int a1_m = m          + 4096;  // axis1 memorise
+constexpr int a1_g = g          + 4096;  // axis1 go to number
+constexpr int a1_s = s          + 4096;  // axis1 manual set
+constexpr int a1_1 = ONE        + 4096;  // axis1 speed 1
+constexpr int a1_2 = TWO        + 4096;  // axis1 speed 2
+constexpr int a1_3 = THREE      + 4096;  // axis1 speed 3
+constexpr int a1_4 = FOUR       + 4096;  // axis1 speed 4
+constexpr int a1_5 = FIVE       + 4096;  // axis1 speed 5
+constexpr int a1_ENTER = ENTER  + 4096;  // return to memory
+
+// Axis 1 leader-prefixed keys ( 8192 = bit 13 is set )
+constexpr int a2_z = z          + 8192;  // axis1 zero
+constexpr int a2_m = m          + 8192;  // axis1 memorise
+constexpr int a2_g = g          + 8192;  // axis1 go to number
+constexpr int a2_s = s          + 8192;  // axis1 manual set
+constexpr int a2_1 = ONE        + 8192;  // axis1 speed 1
+constexpr int a2_2 = TWO        + 8192;  // axis1 speed 2
+constexpr int a2_3 = THREE      + 8192;  // axis1 speed 3
+constexpr int a2_4 = FOUR       + 8192;  // axis1 speed 4
+constexpr int a2_5 = FIVE       + 8192;  // axis1 speed 5
+constexpr int a2_ENTER = ENTER  + 8192;  // return to memory
+
 
 // Functions, leader is F2
 constexpr int f2h = 7000; // help

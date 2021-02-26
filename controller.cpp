@@ -46,7 +46,8 @@ Controller::Controller( Model* model )
         m_model->m_config->readLong( "Axis1GpioReversePin", 7 ),
         m_model->m_config->readLong( "Axis1GpioEnablePin", 0 ),
         m_model->m_config->readLong( "Axis1StepsPerRev", 1'000 ),
-        m_model->m_config->readDouble( "Axis1Conversion", -0.001 ),
+        m_model->m_config->readDouble( "Axis1ConversionNumerator", -1.0 ) /
+            m_model->m_config->readDouble( "Axis1ConversionDivisor", 1'000.0 ),
         m_axis1MaxMotorSpeed
         );
 
@@ -56,7 +57,8 @@ Controller::Controller( Model* model )
         m_model->m_config->readLong( "Axis2GpioReversePin", 21 ),
         m_model->m_config->readLong( "Axis2GpioEnablePin", 0 ),
         m_model->m_config->readLong( "Axis2StepsPerRev", 800 ),
-        m_model->m_config->readDouble( "Axis2Conversion", 1.0 / 2'400.0 ),
+        m_model->m_config->readDouble( "Axis2ConversionNumerator", 1.0 ) /
+            m_model->m_config->readDouble( "Axis2ConversionDivisor", 2'400.0 ),
         m_axis2MaxMotorSpeed
         );
 
@@ -65,7 +67,8 @@ Controller::Controller( Model* model )
         m_model->m_config->readLong(  "RotaryEncoderGpioPinA", 23 ),
         m_model->m_config->readLong(  "RotaryEncoderGpioPinB", 24 ),
         m_model->m_config->readLong(  "RotaryEncoderPulsesPerRev", 2'000 ),
-        m_model->m_config->readDouble( "RotaryEncoderGearing", 35.0 / 30.0 )
+        m_model->m_config->readDouble( "RotaryEncoderGearingNumerator", 35.0 ) /
+            m_model->m_config->readDouble( "RotaryEncoderGearingDivisor", 30.0 )
         );
 
     // We need to ensure that the motors are in a known position with regard to
@@ -243,25 +246,15 @@ void Controller::processKeyPress()
             // already been pressed) then we can modify t here. If the key
             // combination is recognised, we get a "chord" keypress e.g. key::xz.
             t = processLeaderKeyModeKeyPress( t );
+            m_model->m_keyMode = KeyMode::None;
         }
         m_model->m_keyPressed = t;
+        // Modify key press if it is a known axis leader key:
+        m_model->m_keyPressed = checkForAxisLeaderKeys( m_model->m_keyPressed );
         switch( m_model->m_keyPressed )
         {
             case key::None:
             {
-                break;
-            }
-            // "Leader" keys ====================
-            case key::z:
-            case key::Z:
-            {
-                m_model->m_keyMode = KeyMode::ZAxis;
-                break;
-            }
-            case key::x:
-            case key::X:
-            {
-                m_model->m_keyMode = KeyMode::XAxis;
                 break;
             }
             case key::F2:
@@ -378,13 +371,13 @@ void Controller::processKeyPress()
                 }
                 break;
             }
-            case key::zm:
+            case key::a1_m:
             {
                 m_model->m_axis1Memory.at( m_model->m_currentMemory ) =
                     m_model->m_axis1Motor->getCurrentStep();
                 break;
             }
-            case key::xm:
+            case key::a2_m:
             {
                 m_model->m_xMemory.at( m_model->m_currentMemory ) =
                     m_model->m_axis2Motor->getCurrentStep();
@@ -399,7 +392,7 @@ void Controller::processKeyPress()
                     m_model->m_axis2Motor->getCurrentStep();
                 break;
             }
-            case key::xg:
+            case key::a2_ENTER:
             {
                 if( m_model->m_xMemory.at( m_model->m_currentMemory ) == INF_RIGHT ) break;
                 if( m_model->m_xMemory.at( m_model->m_currentMemory ) ==
@@ -411,7 +404,7 @@ void Controller::processKeyPress()
                 break;
             }
             case key::ENTER:
-            case key::zg:
+            case key::a1_ENTER:
             {
                 if( m_model->m_axis1Memory.at( m_model->m_currentMemory ) == INF_RIGHT ) break;
                 if( m_model->m_axis1Memory.at( m_model->m_currentMemory ) ==
@@ -615,7 +608,7 @@ void Controller::processKeyPress()
                 break;
             }
             // Speed presets for X with number keys 6-0 or X leader + 1-5
-            case key::x1:
+            case key::a2_1:
             case key::SIX:
             {
                 if( m_model->m_currentDisplayMode != Mode::Threading )
@@ -624,7 +617,7 @@ void Controller::processKeyPress()
                 }
                 break;
             }
-            case key::x2:
+            case key::a2_2:
             case key::SEVEN:
             {
                 if( m_model->m_currentDisplayMode != Mode::Threading )
@@ -633,7 +626,7 @@ void Controller::processKeyPress()
                 }
                 break;
             }
-            case key::x3:
+            case key::a2_3:
             case key::EIGHT:
             {
                 if( m_model->m_currentDisplayMode != Mode::Threading )
@@ -642,7 +635,7 @@ void Controller::processKeyPress()
                 }
                 break;
             }
-            case key::x4:
+            case key::a2_4:
             case key::NINE:
             {
                 if( m_model->m_currentDisplayMode != Mode::Threading )
@@ -651,7 +644,7 @@ void Controller::processKeyPress()
                 }
                 break;
             }
-            case key::x5:
+            case key::a2_5:
             case key::ZERO:
             {
                 if( m_model->m_currentDisplayMode != Mode::Threading )
@@ -721,7 +714,7 @@ void Controller::processKeyPress()
                 }
                 break;
             }
-            case key::zz:
+            case key::a1_z:
             {
                 if( m_model->m_enabledFunction == Mode::Taper )
                 {
@@ -735,7 +728,7 @@ void Controller::processKeyPress()
                 }
                 break;
             }
-            case key::xz:
+            case key::a2_z:
             {
                 if( m_model->m_enabledFunction == Mode::Taper )
                 {
@@ -787,12 +780,12 @@ void Controller::processKeyPress()
                 changeMode( Mode::XRetractSetup );
                 break;
             }
-            case key::xs: // X position set
+            case key::a2_s: // X position set
             {
                 changeMode( Mode::XPositionSetup );
                 break;
             }
-            case key::zs: // Z position set
+            case key::a1_s: // Z position set
             {
                 changeMode( Mode::ZPositionSetup );
                 break;
@@ -1054,86 +1047,18 @@ int Controller::processModeInputKeys( int key )
 
 int Controller::processLeaderKeyModeKeyPress( int keyPress )
 {
-    // TODO speed settings, ENTER (go to), memorise
-    if( m_model->m_keyMode == KeyMode::ZAxis )
+    if( m_model->m_keyMode == KeyMode::Axis1 ||
+        m_model->m_keyMode == KeyMode::Axis2 )
     {
-        switch( keyPress )
+        int bitFlip = 4096; // bit 12
+        if( m_model->m_keyMode == KeyMode::Axis2 )
         {
-            case key::z:
-            case key::Z:
-                keyPress = key::zz;
-                break;
-            case key::m:
-            case key::M:
-                keyPress = key::zm;
-                break;
-            case key::g:
-            case key::G:
-                keyPress = key::zg;
-                break;
-            case key::ONE:
-                keyPress = key::z1;
-                break;
-            case key::TWO:
-                keyPress = key::z2;
-                break;
-            case key::THREE:
-                keyPress = key::z3;
-                break;
-            case key::FOUR:
-                keyPress = key::z4;
-                break;
-            case key::FIVE:
-                keyPress = key::z5;
-                break;
-            case key::s:
-            case key::S:
-                keyPress = key::zs;
-                break;
-            default:
-                keyPress = key::None;
+            bitFlip = 8192; // bit 13
         }
+        return keyPress + bitFlip;
     }
-    else if( m_model->m_keyMode == KeyMode::XAxis )
-    {
-        switch( keyPress )
-        {
-            case key::z:
-            case key::Z:
-                keyPress = key::xz;
-                break;
-            case key::m:
-            case key::M:
-                keyPress = key::xm;
-                break;
-            case key::g:
-            case key::G:
-                keyPress = key::xg;
-                break;
-            case key::ONE:
-                keyPress = key::x1;
-                break;
-            case key::TWO:
-                keyPress = key::x2;
-                break;
-            case key::THREE:
-                keyPress = key::x3;
-                break;
-            case key::FOUR:
-                keyPress = key::x4;
-                break;
-            case key::FIVE:
-                keyPress = key::x5;
-                break;
-            case key::s:
-            case key::S:
-                keyPress = key::xs;
-                break;
-            default:
-                keyPress = key::None;
-        }
-    }
-    else if( m_model->m_keyMode == KeyMode::Function )
+
+    if( m_model->m_keyMode == KeyMode::Function )
     {
         switch( keyPress )
         {
@@ -1203,6 +1128,25 @@ void Controller::takeUpZBacklash( ZDirection direction )
         m_model->m_axis1Motor->goToStep( m_model->m_axis1Motor->getCurrentStep() + 1 );
     }
     m_model->m_axis1Motor->wait();
+}
+
+int Controller::checkForAxisLeaderKeys( int key )
+{
+    // We determine whether the key pressed is a leader key for
+    // an axis (note the key can be remapped in config) and sets
+    // the model's m_keyMode variable if so. Returns true if one
+    // was pressed, false if not.
+    if( key == static_cast<int>( m_model->m_config->readLong( "Axis1Leader", 122L ) ) )
+    {
+        m_model->m_keyMode = KeyMode::Axis1;
+        return key::None;
+    }
+    if( key == static_cast<int>( m_model->m_config->readLong( "Axis2Leader", 120L ) ) )
+    {
+        m_model->m_keyMode = KeyMode::Axis2;
+        return key::None;
+    }
+    return key;
 }
 
 } // end namespace

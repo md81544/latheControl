@@ -1,10 +1,10 @@
-Add ability to go to a specific measurement
+Add ability to go to a specific measurement. <axis leader>g should be used
+for this; the existing <leader>g should be <leader>Enter instead.
 
 Add a leader key to work on all axes, maybe \ as it's next to z & x
 on the keyboard
 
-Leader keys z & x will be confusing if the axes are relabeled in config.
-Maybe also change leader keys according to the relabeling?
+Show diameter in general status if xs command is run (or always?)
 
 Add ability to pick up existing memories if the stepper loses the plot
 

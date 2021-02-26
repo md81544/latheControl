@@ -29,6 +29,7 @@ private:
     // Cache of config values for speed
     double m_axis1MaxMotorSpeed;
     double m_axis2MaxMotorSpeed;
+    int checkForAxisLeaderKeys( int key );
 };
 
 } // end namespace
