@@ -529,7 +529,13 @@ void Controller::processKeyPress()
                     m_model->m_axis1Motor->stop();
                     m_model->m_axis1Motor->wait();
                 }
-                m_model->m_axis1Motor->goToStep( m_model->m_axis1Motor->getCurrentStep() + 25L );
+                long nudgeValue = 25L;
+                if( m_model->m_keyPressed == key::A ) // extra fine with shift
+                {
+                    nudgeValue = 5L;
+                }
+                m_model->m_axis1Motor->goToStep(
+                    m_model->m_axis1Motor->getCurrentStep() + nudgeValue );
                 break;
             }
             case key::d:
@@ -541,7 +547,13 @@ void Controller::processKeyPress()
                     m_model->m_axis1Motor->stop();
                     m_model->m_axis1Motor->wait();
                 }
-                m_model->m_axis1Motor->goToStep( m_model->m_axis1Motor->getCurrentStep() - 25L );
+                long nudgeValue = 25L;
+                if( m_model->m_keyPressed == key::D ) // extra fine with shift
+                {
+                    nudgeValue = 5L;
+                }
+                m_model->m_axis1Motor->goToStep(
+                    m_model->m_axis1Motor->getCurrentStep() - nudgeValue );
                 break;
             }
             case key::LBRACKET: // [

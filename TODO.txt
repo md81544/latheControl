@@ -1,3 +1,11 @@
+Add ability to go to a specific measurement
+
+Add a leader key to work on all axes, maybe \ as it's next to z & x
+on the keyboard
+
+Leader keys z & x will be confusing if the axes are relabeled in config.
+Maybe also change leader keys according to the relabeling?
+
 Add ability to pick up existing memories if the stepper loses the plot
 
 Think about incorporating reading from scales to make position reporting
