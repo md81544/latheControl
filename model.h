@@ -114,6 +114,10 @@ struct Model
     bool        m_spindleWasRunning{ false };
 
     XRetractionDirection    m_xRetractionDirection;
+
+    // Once the user has set the x position once then we use
+    // the status bar to display the effective diameter
+    bool        m_xDiameterSet{ false };
 };
 
 } // end namespace

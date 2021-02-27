@@ -166,6 +166,11 @@ void Controller::run()
                 }
             }
         }
+        if( m_model->m_xDiameterSet )
+        {
+            m_model->m_generalStatus = fmt::format("Diameter: {: .3f} mm",
+                std::abs( m_model->m_axis2Motor->getPosition() * 2 ) );
+        }
         if ( ! m_model->m_axis2Motor->isRunning() )
         {
             m_model->m_axis2Status = "stopped";
@@ -1013,6 +1018,7 @@ int Controller::processModeInputKeys( int key )
             m = INF_OUT;
         }
         m_model->m_currentDisplayMode = Mode::None;
+        m_model->m_xDiameterSet = true;
         return -1;
     }
 
