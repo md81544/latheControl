@@ -37,9 +37,11 @@ enum class Mode
     Setup,
     Threading,
     Taper,
-    XRetractSetup,
-    XPositionSetup,
-    ZPositionSetup
+    Axis2RetractSetup,
+    Axis1PositionSetup,
+    Axis2PositionSetup,
+    Axis1GoTo,
+    Axis2GoTo
 };
 
 // "Key Modes" allow for two-key actions, a bit like vim.

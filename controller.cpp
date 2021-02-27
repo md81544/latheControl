@@ -742,6 +742,16 @@ void Controller::processKeyPress()
                 }
                 break;
             }
+            case key::a1_g:
+            {
+                changeMode( Mode::Axis1GoTo );
+                break;
+            }
+            case key::a2_g:
+            {
+                changeMode( Mode::Axis2GoTo );
+                break;
+            }
             case key::ASTERISK: // shutdown
             {
                 #ifndef FAKE
@@ -777,17 +787,17 @@ void Controller::processKeyPress()
             }
             case key::f2r: // X retraction setup
             {
-                changeMode( Mode::XRetractSetup );
+                changeMode( Mode::Axis2RetractSetup );
                 break;
             }
             case key::a2_s: // X position set
             {
-                changeMode( Mode::XPositionSetup );
+                changeMode( Mode::Axis2PositionSetup );
                 break;
             }
             case key::a1_s: // Z position set
             {
-                changeMode( Mode::ZPositionSetup );
+                changeMode( Mode::Axis1PositionSetup );
                 break;
             }
             case key::ESC: // return to normal mode
@@ -845,14 +855,8 @@ int Controller::checkKeyAllowedForMode( int key )
     // threading, you cannot change the speed of the z-axis as
     // that would affect the thread pitch
     // Always allow certain keys:
-    if( key == key::q  ||
-        key == key::Q  ||
-        key == key::F1 ||
-        key == key::F2 ||
-        key == key::F3 ||
-        key == key::F4 ||
-        key == key::F5 ||
-        key == key::ESC||
+    if( key == key::CtrlQ  ||
+        key == key::ESC    ||
         key == key::ENTER
         )
     {
@@ -880,18 +884,20 @@ int Controller::checkKeyAllowedForMode( int key )
         case Mode::Threading:
             if( key == key::UP || key == key::DOWN ) return key;
             return -1;
-        case Mode::XRetractSetup:
+        case Mode::Axis2RetractSetup:
             if( key == key::UP || key == key::DOWN ) return key;
             return -1;
         // Any modes that have numerical input:
-        case Mode::XPositionSetup:
+        case Mode::Axis2PositionSetup:
             if( key >= key::ZERO && key <= key::NINE ) return key;
             if( key == key::FULLSTOP || key == key::BACKSPACE || key == key::DELETE ) return key;
             if( key == key::MINUS ) return key;
             if( key == key::d || key == key::D ) return key;
             return -1;
-        case Mode::ZPositionSetup:
+        case Mode::Axis1PositionSetup:
         case Mode::Taper:
+        case Mode::Axis1GoTo:
+        case Mode::Axis2GoTo:
             if( key >= key::ZERO && key <= key::NINE ) return key;
             if( key == key::FULLSTOP || key == key::BACKSPACE || key == key::DELETE ) return key;
             if( key == key::MINUS ) return key;
@@ -907,8 +913,11 @@ int Controller::processModeInputKeys( int key )
     // If we are in a "mode" then certain keys (e.g. the number keys) are used for input
     // so are processed here before allowing them to fall through to the main key processing
     if( m_model->m_currentDisplayMode == Mode::Taper ||
-        m_model->m_currentDisplayMode == Mode::XPositionSetup ||
-        m_model->m_currentDisplayMode == Mode::ZPositionSetup )
+        m_model->m_currentDisplayMode == Mode::Axis2PositionSetup ||
+        m_model->m_currentDisplayMode == Mode::Axis1PositionSetup ||
+        m_model->m_currentDisplayMode == Mode::Axis1GoTo ||
+        m_model->m_currentDisplayMode == Mode::Axis2GoTo
+        )
     {
         if( key >= key::ZERO && key <= key::NINE )
         {
@@ -973,7 +982,7 @@ int Controller::processModeInputKeys( int key )
             // fall through...
         }
     }
-    if(  m_model->m_currentDisplayMode == Mode::XRetractSetup )
+    if(  m_model->m_currentDisplayMode == Mode::Axis2RetractSetup )
     {
         if( key == key::UP )
         {
@@ -988,7 +997,7 @@ int Controller::processModeInputKeys( int key )
     }
 
     // Diameter set
-    if( m_model->m_currentDisplayMode == Mode::XPositionSetup &&
+    if( m_model->m_currentDisplayMode == Mode::Axis2PositionSetup &&
         ( key == key::d || key == key::D ) )
     {
         float xPos = 0;
@@ -1009,7 +1018,7 @@ int Controller::processModeInputKeys( int key )
 
     if( m_model->m_currentDisplayMode != Mode::None && key == key::ENTER )
     {
-        if( m_model->m_currentDisplayMode == Mode::XPositionSetup )
+        if( m_model->m_currentDisplayMode == Mode::Axis2PositionSetup )
         {
             float xPos = 0;
             try
@@ -1024,7 +1033,8 @@ int Controller::processModeInputKeys( int key )
                 m = INF_OUT;
             }
         }
-        if( m_model->m_currentDisplayMode == Mode::ZPositionSetup )
+
+        if( m_model->m_currentDisplayMode == Mode::Axis1PositionSetup )
         {
             float zPos = 0;
             try
@@ -1039,6 +1049,43 @@ int Controller::processModeInputKeys( int key )
                 m = INF_RIGHT;
             }
         }
+
+        if( m_model->m_currentDisplayMode == Mode::Axis1GoTo )
+        {
+            float pos = 0;
+            bool valid = true;
+            try
+            {
+                pos = std::stof( m_model->m_input );
+            }
+            catch( ... )
+            {
+                valid = false;
+            }
+            if( valid )
+            {
+                m_model->m_axis1Motor->goToPosition( pos );
+            }
+        }
+
+        if( m_model->m_currentDisplayMode == Mode::Axis2GoTo )
+        {
+            float pos = 0;
+            bool valid = true;
+            try
+            {
+                pos = std::stof( m_model->m_input );
+            }
+            catch( ... )
+            {
+                valid = false;
+            }
+            if( valid )
+            {
+                m_model->m_axis2Motor->goToPosition( pos );
+            }
+        }
+
         m_model->m_currentDisplayMode = Mode::None;
         return -1;
     }

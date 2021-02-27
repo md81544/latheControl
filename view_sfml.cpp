@@ -497,7 +497,7 @@ void ViewSfml::updateTextFromModel( const Model& model )
             m_txtWarning->setString( "Enter to keep enabled, Esc to disable" );
             break;
         }
-        case Mode::XRetractSetup:
+        case Mode::Axis2RetractSetup:
         {
             m_txtMode->setString(  "X Axis retraction mode" );
             m_txtMisc1->setString( "Normal X retraction is 2mm outwards" );
@@ -515,26 +515,58 @@ void ViewSfml::updateTextFromModel( const Model& model )
             m_txtWarning->setString( "Enter to close screen" );
             break;
         }
-        case Mode::XPositionSetup:
+        case Mode::Axis2PositionSetup:
         {
-            m_txtMode->setString( "X Position Setup" );
+            m_txtMode->setString( fmt::format( "{} Position Set",
+                model.m_config->read( "Axis2Label", "X" ) ) );
             m_txtMisc1->setString( "" );
-            m_txtMisc2->setString( "Specify a value for X here" );
-            m_txtMisc3->setString( "NOTE! X would normally be negative" );
+            m_txtMisc2->setString( fmt::format( "Specify a value for {} here",
+                model.m_config->read( "Axis2Label", "X" ) ) );
+            m_txtMisc3->setString( "" );
             m_txtMisc4->setString( "" );
-            m_txtMisc5->setString( fmt::format( "Current X position: {}_",
+            m_txtMisc5->setString( fmt::format( "Current {} position: {}_",
+                model.m_config->read( "Axis2Label", "X" ),
                 model.m_input ) );
             m_txtWarning->setString( "Enter to set, 'D' to enter as diameter, Esc to cancel" );
             break;
         }
-        case Mode::ZPositionSetup:
+        case Mode::Axis1PositionSetup:
         {
-            m_txtMode->setString( "Z Position Setup" );
+            m_txtMode->setString( fmt::format( "{} Position Set",
+                model.m_config->read( "Axis1Label", "Z" ) ) );
             m_txtMisc1->setString( "" );
-            m_txtMisc2->setString( "Specify a value for Z here" );
+            m_txtMisc2->setString( fmt::format( "Specify a value for {} here",
+                model.m_config->read( "Axis1Label", "Z" ) ) );
             m_txtMisc3->setString( "" );
             m_txtMisc4->setString( "" );
-            m_txtMisc5->setString( fmt::format( "Current Z position: {}_",
+            m_txtMisc5->setString( fmt::format( "Current {} position: {}_",
+                model.m_config->read( "Axis1Label", "Z" ),
+                model.m_input ) );
+            m_txtWarning->setString( "Enter to set, Esc to cancel" );
+            break;
+        }
+        case Mode::Axis1GoTo:
+        {
+            m_txtMode->setString( fmt::format( "Go To {} Position ",
+                model.m_config->read( "Axis1Label", "Z" ) ) );
+            m_txtMisc1->setString( "" );
+            m_txtMisc2->setString( "Specify a value" );
+            m_txtMisc3->setString( "" );
+            m_txtMisc4->setString( "" );
+            m_txtMisc5->setString( fmt::format( "Position: {}_",
+                model.m_input ) );
+            m_txtWarning->setString( "Enter to set, Esc to cancel" );
+            break;
+        }
+        case Mode::Axis2GoTo:
+        {
+            m_txtMode->setString( fmt::format( "Go To {} Position ",
+                model.m_config->read( "Axis2Label", "Z" ) ) );
+            m_txtMisc1->setString( "" );
+            m_txtMisc2->setString( "Specify a value" );
+            m_txtMisc3->setString( "" );
+            m_txtMisc4->setString( "" );
+            m_txtMisc5->setString( fmt::format( "Position: {}_",
                 model.m_input ) );
             m_txtWarning->setString( "Enter to set, Esc to cancel" );
             break;
