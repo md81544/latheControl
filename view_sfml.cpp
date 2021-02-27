@@ -242,19 +242,26 @@ int  ViewSfml::getInput()
     static sf::Clock clock;
     static sf::Int32 lastTime = 0;
     sf::Event event;
-    m_window->pollEvent( event );
-    if( event.type == sf::Event::KeyPressed )
+    // This loop is to quickly discard anything that's not a keypress
+    // e.g. mouse movement, which we're not interested in
+    for(;;)
     {
-        if( lastKey == event.key.code && clock.getElapsedTime().asMilliseconds() - lastTime < 100 )
+        if( ! m_window->pollEvent( event ) ) return -1;
+        if( event.type == sf::Event::KeyPressed )
         {
-            // Debounce
-            return -1;
+            break;
         }
-        lastKey = event.key.code;
-        lastTime = clock.getElapsedTime().asMilliseconds();
-        return convertKeyCode( event );
     }
-    return -1;
+
+    // We only get here if a key was pressed
+    if( lastKey == event.key.code && clock.getElapsedTime().asMilliseconds() - lastTime < 100 )
+    {
+        // Debounce
+        return -1;
+    }
+    lastKey = event.key.code;
+    lastTime = clock.getElapsedTime().asMilliseconds();
+    return convertKeyCode( event );
 }
 
 void ViewSfml::updateDisplay( const Model& model )
