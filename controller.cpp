@@ -500,7 +500,14 @@ void Controller::processKeyPress()
                     takeUpZBacklash( ZDirection::Left );
                     startSynchronisedXMotor( ZDirection::Left, m_model->m_axis1Motor->getSpeed() );
                 }
-                m_model->m_axis1Motor->goToStep( INF_LEFT );
+                if( m_model->m_config->readBool( "Axis1MotorFlipDirection", false ) )
+                {
+                    m_model->m_axis1Motor->goToStep( INF_RIGHT );
+                }
+                else
+                {
+                    m_model->m_axis1Motor->goToStep( INF_LEFT );
+                }
                 break;
             }
             case key::RIGHT:
@@ -517,7 +524,14 @@ void Controller::processKeyPress()
                     takeUpZBacklash( ZDirection::Right );
                     startSynchronisedXMotor( ZDirection::Right, m_model->m_axis1Motor->getSpeed() );
                 }
-                m_model->m_axis1Motor->goToStep( INF_RIGHT );
+                if( m_model->m_config->readBool( "Axis1MotorFlipDirection", false ) )
+                {
+                    m_model->m_axis1Motor->goToStep( INF_LEFT );
+                }
+                else
+                {
+                    m_model->m_axis1Motor->goToStep( INF_RIGHT );
+                }
                 break;
             }
             case key::a:
