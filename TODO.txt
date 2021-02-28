@@ -1,5 +1,10 @@
+Address the "Mode" concept which currently provides pseudo-modal
+"dialogs" interleaved into program flow, and is proving difficult
+to maintain. If all motors are stopped during a "dialog" then we
+can put them all on a separate flow.
+
 Add a leader key to work on all axes, maybe \ as it's next to z & x
-on the keyboard
+on the keyboard. So \z for example will zero both Z and X.
 
 Add ability to pick up existing memories if the stepper loses the plot
 

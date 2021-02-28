@@ -274,7 +274,7 @@ void Controller::processKeyPress()
                 m_model->m_quit = true;
                 break;
             }
-            case key::C: // upper case, i.e. shift-c
+            case key::a2_MINUS:
             {
                 // X-axis speed decrease
                 if( m_model->m_axis2Motor->getSpeed() > 10.1 )
@@ -287,7 +287,7 @@ void Controller::processKeyPress()
                 }
                 break;
             }
-            case key::c:
+            case key::a2_EQUALS:
             {
                 // X-axis speed increase
                 if( m_model->m_axis2Motor->getSpeed() < 10.0 )
@@ -313,7 +313,7 @@ void Controller::processKeyPress()
                 {
                     // extra fine with shift
                     m_model->m_axis2Motor->goToStep(
-                        m_model->m_axis2Motor->getCurrentStep() + 12.0 );
+                        m_model->m_axis2Motor->getCurrentStep() + 6.0 );
                 }
                 else
                 {
@@ -335,7 +335,7 @@ void Controller::processKeyPress()
                 {
                     // extra fine with shift
                     m_model->m_axis2Motor->goToStep(
-                        m_model->m_axis2Motor->getCurrentStep() - 12.0 );
+                        m_model->m_axis2Motor->getCurrentStep() - 6.0 );
                 }
                 else
                 {
@@ -344,6 +344,7 @@ void Controller::processKeyPress()
                 }
                 break;
             }
+            case key::a1_EQUALS:
             case key::EQUALS: // (i.e. plus)
             {
                 if( m_model->m_enabledFunction == Mode::Threading ) break;
@@ -360,6 +361,7 @@ void Controller::processKeyPress()
                 }
                 break;
             }
+            case key::a1_MINUS:
             case key::MINUS:
             {
                 if( m_model->m_enabledFunction == Mode::Threading ) break;
@@ -520,7 +522,6 @@ void Controller::processKeyPress()
             }
             case key::a:
             case key::A:
-            case key::COMMA: // (<) - nudge left
             {
                 if ( m_model->m_axis1Motor->isRunning() )
                 {
@@ -530,7 +531,7 @@ void Controller::processKeyPress()
                 long nudgeValue = 25L;
                 if( m_model->m_keyPressed == key::A ) // extra fine with shift
                 {
-                    nudgeValue = 5L;
+                    nudgeValue = 2L;
                 }
                 m_model->m_axis1Motor->goToStep(
                     m_model->m_axis1Motor->getCurrentStep() + nudgeValue );
@@ -538,7 +539,6 @@ void Controller::processKeyPress()
             }
             case key::d:
             case key::D:
-            case key::FULLSTOP: // (>) - nudge right
             {
                 if ( m_model->m_axis1Motor->isRunning() )
                 {
@@ -548,7 +548,7 @@ void Controller::processKeyPress()
                 long nudgeValue = 25L;
                 if( m_model->m_keyPressed == key::D ) // extra fine with shift
                 {
-                    nudgeValue = 5L;
+                    nudgeValue = 2L;
                 }
                 m_model->m_axis1Motor->goToStep(
                     m_model->m_axis1Motor->getCurrentStep() - nudgeValue );
