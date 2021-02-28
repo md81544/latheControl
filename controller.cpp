@@ -309,17 +309,18 @@ void Controller::processKeyPress()
                     m_model->m_axis2Motor->stop();
                     m_model->m_axis2Motor->wait();
                 }
+                double nudgeValue = 60.0;
                 if( m_model->m_keyPressed == key::W )
                 {
                     // extra fine with shift
-                    m_model->m_axis2Motor->goToStep(
-                        m_model->m_axis2Motor->getCurrentStep() + 6.0 );
+                    nudgeValue = 6.0;
                 }
-                else
+                if( m_model->m_config->readBool( "Axis2MotorFlipDirection", false ) )
                 {
-                    m_model->m_axis2Motor->goToStep(
-                        m_model->m_axis2Motor->getCurrentStep() + 60.0 );
+                    nudgeValue = -nudgeValue;
                 }
+                m_model->m_axis2Motor->goToStep(
+                    m_model->m_axis2Motor->getCurrentStep() + nudgeValue );
                 break;
             }
             // Nudge out X axis
@@ -331,17 +332,18 @@ void Controller::processKeyPress()
                     m_model->m_axis2Motor->stop();
                     m_model->m_axis2Motor->wait();
                 }
+                double nudgeValue = 60.0;
                 if( m_model->m_keyPressed == key::S )
                 {
                     // extra fine with shift
-                    m_model->m_axis2Motor->goToStep(
-                        m_model->m_axis2Motor->getCurrentStep() - 6.0 );
+                    nudgeValue = 6.0;
                 }
-                else
+                if( m_model->m_config->readBool( "Axis2MotorFlipDirection", false ) )
                 {
-                    m_model->m_axis2Motor->goToStep(
-                        m_model->m_axis2Motor->getCurrentStep() - 60.0 );
+                    nudgeValue = -nudgeValue;
                 }
+                m_model->m_axis2Motor->goToStep(
+                    m_model->m_axis2Motor->getCurrentStep() - nudgeValue );
                 break;
             }
             case key::a1_EQUALS:
@@ -468,7 +470,14 @@ void Controller::processKeyPress()
                 else
                 {
                     m_model->m_axis2Status = "moving in";
-                    m_model->m_axis2Motor->goToStep( INF_IN );
+                    if( m_model->m_config->readBool( "Axis2MotorFlipDirection", false ) )
+                    {
+                        m_model->m_axis2Motor->goToStep( INF_OUT );
+                    }
+                    else
+                    {
+                        m_model->m_axis2Motor->goToStep( INF_IN );
+                    }
                 }
                 break;
             }
@@ -481,7 +490,14 @@ void Controller::processKeyPress()
                 else
                 {
                     m_model->m_axis2Status = "moving out";
-                    m_model->m_axis2Motor->goToStep( INF_OUT );
+                    if( m_model->m_config->readBool( "Axis2MotorFlipDirection", false ) )
+                    {
+                        m_model->m_axis2Motor->goToStep( INF_IN );
+                    }
+                    else
+                    {
+                        m_model->m_axis2Motor->goToStep( INF_OUT );
+                    }
                 }
                 break;
             }
@@ -547,6 +563,10 @@ void Controller::processKeyPress()
                 {
                     nudgeValue = 2L;
                 }
+                if( m_model->m_config->readBool( "Axis1MotorFlipDirection", false ) )
+                {
+                    nudgeValue = -nudgeValue;
+                }
                 m_model->m_axis1Motor->goToStep(
                     m_model->m_axis1Motor->getCurrentStep() + nudgeValue );
                 break;
@@ -563,6 +583,10 @@ void Controller::processKeyPress()
                 if( m_model->m_keyPressed == key::D ) // extra fine with shift
                 {
                     nudgeValue = 2L;
+                }
+                if( m_model->m_config->readBool( "Axis1MotorFlipDirection", false ) )
+                {
+                    nudgeValue = -nudgeValue;
                 }
                 m_model->m_axis1Motor->goToStep(
                     m_model->m_axis1Motor->getCurrentStep() - nudgeValue );
