@@ -292,7 +292,7 @@ void Controller::processKeyPress()
                 // X-axis speed increase
                 if( m_model->m_axis2Motor->getSpeed() < 10.0 )
                 {
-                    m_model->m_axis2Motor->setSpeed( 10.0 );
+                    m_model->m_axis2Motor->setSpeed( m_model->m_axis2Motor->getSpeed() + 2.0 );
                 }
                 else if( m_model->m_axis2Motor->getSpeed() < m_axis2MaxMotorSpeed )
                 {
@@ -350,11 +350,11 @@ void Controller::processKeyPress()
                 if( m_model->m_enabledFunction == Mode::Threading ) break;
                 if( m_model->m_axis1Motor->getRpm() < 20.0 )
                 {
-                    m_model->m_axis1Motor->setSpeed( 20.0 );
+                    m_model->m_axis1Motor->setSpeed( m_model->m_axis1Motor->getRpm() + 1.0 );
                 }
                 else
                 {
-                    if( m_model->m_axis1Motor->getRpm() < m_axis1MaxMotorSpeed )
+                    if( m_model->m_axis1Motor->getRpm() <= m_axis1MaxMotorSpeed - 20 )
                     {
                         m_model->m_axis1Motor->setSpeed( m_model->m_axis1Motor->getRpm() + 20.0 );
                     }
