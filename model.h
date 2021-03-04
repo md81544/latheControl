@@ -80,7 +80,7 @@ struct Model
     std::unique_ptr<mgo::StepperMotor> m_axis2Motor;
     std::unique_ptr<mgo::RotaryEncoder> m_rotaryEncoder;
     std::vector<long> m_axis1Memory{ INF_RIGHT, INF_RIGHT, INF_RIGHT, INF_RIGHT };
-    std::vector<long> m_xMemory{ INF_RIGHT, INF_RIGHT, INF_RIGHT, INF_RIGHT };
+    std::vector<long> m_axis2Memory{ INF_RIGHT, INF_RIGHT, INF_RIGHT, INF_RIGHT };
     std::size_t m_currentMemory{ 0 };
     std::size_t m_threadPitchIndex{ 0 };
     std::string m_generalStatus{ "Press F1 for help" };
@@ -91,7 +91,8 @@ struct Model
     bool        m_quit{ false };
     bool        m_shutdown{ false };
     float       m_previousZSpeed{ 40.f };
-    bool        m_fastReturning{ false };
+    bool        m_axis1FastReturning{ false };
+    bool        m_axis2FastReturning{ false };
     int         m_keyPressed{ 0 };
     double      m_taperAngle{ 0.0 };
     float       m_taperPreviousXSpeed{ 40.f };

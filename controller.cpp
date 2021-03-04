@@ -178,10 +178,10 @@ void Controller::run()
         if ( ! m_model->m_axis1Motor->isRunning() )
         {
             m_model->m_axis1Status = "stopped";
-            if( m_model->m_fastReturning )
+            if( m_model->m_axis1FastReturning )
             {
                 m_model->m_axis1Motor->setSpeed( m_model->m_previousZSpeed );
-                m_model->m_fastReturning = false;
+                m_model->m_axis1FastReturning = false;
             }
             if( m_model->m_enabledFunction == Mode::Taper && m_model->m_zWasRunning )
             {
@@ -207,6 +207,11 @@ void Controller::run()
                 m_model->m_axis2Motor->setSpeed( m_model->m_previousXSpeed );
                 m_model->m_fastRetracting = false;
                 m_model->m_axis2Retracted = false;
+            }
+            if( m_model->m_axis2FastReturning )
+            {
+                m_model->m_axis2Motor->setSpeed( m_model->m_previousXSpeed );
+                m_model->m_axis2FastReturning = false;
             }
             if( m_model->m_xWasRunning && m_model->m_axis2Motor->getSpeed() >= 80.0 )
             {
@@ -388,7 +393,7 @@ void Controller::processKeyPress()
             }
             case key::a2_m:
             {
-                m_model->m_xMemory.at( m_model->m_currentMemory ) =
+                m_model->m_axis2Memory.at( m_model->m_currentMemory ) =
                     m_model->m_axis2Motor->getCurrentStep();
                 break;
             }
@@ -397,19 +402,19 @@ void Controller::processKeyPress()
             {
                 m_model->m_axis1Memory.at( m_model->m_currentMemory ) =
                     m_model->m_axis1Motor->getCurrentStep();
-                m_model->m_xMemory.at( m_model->m_currentMemory ) =
+                m_model->m_axis2Memory.at( m_model->m_currentMemory ) =
                     m_model->m_axis2Motor->getCurrentStep();
                 break;
             }
             case key::a2_ENTER:
             {
-                if( m_model->m_xMemory.at( m_model->m_currentMemory ) == INF_RIGHT ) break;
-                if( m_model->m_xMemory.at( m_model->m_currentMemory ) ==
+                if( m_model->m_axis2Memory.at( m_model->m_currentMemory ) == INF_RIGHT ) break;
+                if( m_model->m_axis2Memory.at( m_model->m_currentMemory ) ==
                     m_model->m_axis2Motor->getCurrentStep() ) break;
                 m_model->m_axis2Motor->stop();
                 m_model->m_axis2Status = "returning";
                 m_model->m_axis2Motor->goToStep(
-                    m_model->m_xMemory.at( m_model->m_currentMemory ) );
+                    m_model->m_axis2Memory.at( m_model->m_currentMemory ) );
                 break;
             }
             case key::ENTER:
@@ -698,12 +703,13 @@ void Controller::processKeyPress()
             }
             case key::f:
             case key::F:
+            case key::a1_f:
             {
                 // Fast return to point
                 if( m_model->m_axis1Memory.at( m_model->m_currentMemory ) == INF_RIGHT ) break;
-                if( m_model->m_fastReturning ) break;
+                if( m_model->m_axis1FastReturning ) break;
                 m_model->m_previousZSpeed = m_model->m_axis1Motor->getSpeed();
-                m_model->m_fastReturning = true;
+                m_model->m_axis1FastReturning = true;
                 m_model->m_axis1Motor->stop();
                 m_model->m_axis1Motor->wait();
                 if( m_model->m_enabledFunction == Mode::Taper )
@@ -724,7 +730,23 @@ void Controller::processKeyPress()
                     m_model->m_axis1Motor->setSpeed( m_model->m_axis1Motor->getMaxRpm() );
                 }
                 m_model->m_axis1Status = "fast returning";
-                m_model->m_axis1Motor->goToStep( m_model->m_axis1Memory.at( m_model->m_currentMemory ) );
+                m_model->m_axis1Motor->goToStep(
+                    m_model->m_axis1Memory.at( m_model->m_currentMemory ) );
+                break;
+            }
+            case key::a2_f:
+            {
+                // Fast return to point
+                if( m_model->m_axis2Memory.at( m_model->m_currentMemory ) == INF_RIGHT ) break;
+                if( m_model->m_axis2FastReturning ) break;
+                m_model->m_previousZSpeed = m_model->m_axis2Motor->getSpeed();
+                m_model->m_axis2FastReturning = true;
+                m_model->m_axis2Motor->stop();
+                m_model->m_axis2Motor->wait();
+                m_model->m_axis2Motor->setSpeed( m_model->m_axis2Motor->getMaxRpm() );
+                m_model->m_axis2Status = "fast returning";
+                m_model->m_axis2Motor->goToStep(
+                    m_model->m_axis2Memory.at( m_model->m_currentMemory ) );
                 break;
             }
             case key::r:
@@ -779,7 +801,7 @@ void Controller::processKeyPress()
                 }
                 m_model->m_axis2Motor->zeroPosition();
                 // Zeroing will invalidate any memorised X positions, so we clear them
-                for( auto& m : m_model->m_xMemory )
+                for( auto& m : m_model->m_axis2Memory )
                 {
                     m = INF_OUT;
                 }
@@ -1051,7 +1073,7 @@ int Controller::processModeInputKeys( int key )
         catch( ... ) {}
         m_model->m_axis2Motor->setPosition( xPos / 2 );
         // This will invalidate any memorised X positions, so we clear them
-        for( auto& m : m_model->m_xMemory )
+        for( auto& m : m_model->m_axis2Memory )
         {
             m = INF_OUT;
         }
@@ -1072,7 +1094,7 @@ int Controller::processModeInputKeys( int key )
             catch( ... ) {}
             m_model->m_axis2Motor->setPosition( xPos );
             // This will invalidate any memorised X positions, so we clear them
-            for( auto& m : m_model->m_xMemory )
+            for( auto& m : m_model->m_axis2Memory )
             {
                 m = INF_OUT;
             }

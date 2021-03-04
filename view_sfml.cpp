@@ -362,7 +362,8 @@ void ViewSfml::updateTextFromModel( const Model& model )
         model.m_config->read( "Axis1Label", "Z" ), cnv( model.m_axis1Motor.get() ) ) );
     if( model.m_axis1Motor )
     {
-        m_txtAxis1Speed->setString( fmt::format( "{:<.1f} mm/min", model.m_axis1Motor->getSpeed() ) );
+        m_txtAxis1Speed->setString(
+            fmt::format( "{:<.1f} mm/min", model.m_axis1Motor->getSpeed() ) );
     }
     if( ! model.m_axis2Retracted )
     {
@@ -376,7 +377,8 @@ void ViewSfml::updateTextFromModel( const Model& model )
     }
     if( model.m_axis2Motor )
     {
-        m_txtAxis2Speed->setString( fmt::format( "{:<.1f} mm/min", model.m_axis2Motor->getSpeed() ) );
+        m_txtAxis2Speed->setString(
+            fmt::format( "{:<.1f} mm/min", model.m_axis2Motor->getSpeed() ) );
     }
     if( model.m_rotaryEncoder )
     {
@@ -420,14 +422,15 @@ void ViewSfml::updateTextFromModel( const Model& model )
             m_txtAxis1MemoryValue.at( n )->setString( fmt::format(
                 "{:<12}", cnv( model.m_axis1Motor.get(), model.m_axis1Memory.at( n ) ) ) );
         }
-        if ( model.m_xMemory.at( n ) == INF_OUT )
+        if ( model.m_axis2Memory.at( n ) == INF_OUT )
         {
             m_txtAxis2MemoryValue.at( n )->setString( " not set" );
         }
         else
         {
             m_txtAxis2MemoryValue.at( n )->setString(
-                fmt::format( "{:<12}", cnv( model.m_axis2Motor.get(), model.m_xMemory.at( n ) ) ) );
+                fmt::format(
+                    "{:<12}", cnv( model.m_axis2Motor.get(), model.m_axis2Memory.at( n ) ) ) );
         }
     }
 
@@ -460,8 +463,10 @@ void ViewSfml::updateTextFromModel( const Model& model )
         {
             m_txtMode->setString( "Setup" );
             m_txtMisc1->setString( "This mode allows you to determine backlash compensation" );
-            m_txtMisc2->setString( "Use a dial indicator to find number of steps backlash per axis" );
-            m_txtMisc3->setString( "REMEMBER to unset any previous-set backlash figures in config!" );
+            m_txtMisc2->setString( "Use a dial indicator to find number of steps "
+                                   "backlash per axis" );
+            m_txtMisc3->setString( "REMEMBER to unset any previous-set backlash figures in "
+                                   "config!" );
             m_txtMisc4->setString( "" );
             m_txtMisc5->setString( fmt::format("Z step: {}   X step: {}",
                     model.m_axis1Motor->getCurrentStep(),
