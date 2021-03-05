@@ -13,7 +13,7 @@ namespace mgo
 namespace
 {
 
-std::string cnv( const mgo::StepperMotor* motor, long step )
+std::string cnv( const mgo::StepperMotor* motor, long step, const std::string& units = "mm" )
 {
     if( ! motor ) return std::string();
     double mm = motor->getPosition( step );
@@ -21,13 +21,13 @@ std::string cnv( const mgo::StepperMotor* motor, long step )
     {
         mm = 0.0;
     }
-    return fmt::format( "{: .3f} mm", mm );
+    return fmt::format( "{: .3f} {}", mm, units );
 }
 
-std::string cnv( const mgo::StepperMotor* motor )
+std::string cnv( const mgo::StepperMotor* motor, const std::string& units = "mm" )
 {
     if( ! motor ) return std::string();
-    return cnv( motor, motor->getCurrentStep() );
+    return cnv( motor, motor->getCurrentStep(), units );
 }
 
 int convertKeyCode( sf::Event event )
@@ -358,8 +358,12 @@ void ViewSfml::updateTextFromModel( const Model& model )
         return;
     }
 
-    m_txtAxis1Pos->setString( fmt::format( "{}: {}",
-        model.m_config->read( "Axis1Label", "Z" ), cnv( model.m_axis1Motor.get() ) ) );
+    m_txtAxis1Pos->setString(
+        fmt::format( "{}: {}",
+            model.m_config->read( "Axis1Label", "Z" ),
+            cnv( model.m_axis1Motor.get(), model.m_config->read( "Axis1DisplayUnits", "mm" ) )
+            )
+        );
     if( model.m_axis1Motor )
     {
         m_txtAxis1Speed->setString(
@@ -367,8 +371,12 @@ void ViewSfml::updateTextFromModel( const Model& model )
     }
     if( ! model.m_axis2Retracted )
     {
-        m_txtAxis2Pos->setString( fmt::format( "{}: {}",
-            model.m_config->read( "Axis2Label", "X" ), cnv( model.m_axis2Motor.get() ) ) );
+        m_txtAxis2Pos->setString(
+            fmt::format( "{}: {}",
+                model.m_config->read( "Axis2Label", "X" ),
+                cnv( model.m_axis2Motor.get(), model.m_config->read( "Axis2DisplayUnits", "mm" ) )
+                )
+            );
     }
     else
     {
