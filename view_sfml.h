@@ -24,11 +24,17 @@ private:
     std::unique_ptr<sf::Font> m_font;
 
     // Main text items which are always displayed:
+    std::unique_ptr<sf::Text> m_txtAxis1Label;
     std::unique_ptr<sf::Text> m_txtAxis1Pos;
+    std::unique_ptr<sf::Text> m_txtAxis1Units;
     std::unique_ptr<sf::Text> m_txtAxis1Speed;
+    std::unique_ptr<sf::Text> m_txtAxis2Label;
     std::unique_ptr<sf::Text> m_txtAxis2Pos;
+    std::unique_ptr<sf::Text> m_txtAxis2Units;
     std::unique_ptr<sf::Text> m_txtAxis2Speed;
+    std::unique_ptr<sf::Text> m_txtRpmLabel;
     std::unique_ptr<sf::Text> m_txtRpm;
+    std::unique_ptr<sf::Text> m_txtRpmUnits;
     std::unique_ptr<sf::Text> m_txtGeneralStatus;
     std::unique_ptr<sf::Text> m_txtAxis1Status;
     std::unique_ptr<sf::Text> m_txtAxis2Status;

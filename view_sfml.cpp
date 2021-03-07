@@ -13,7 +13,7 @@ namespace mgo
 namespace
 {
 
-std::string cnv( const mgo::StepperMotor* motor, long step, const std::string& units = "mm" )
+std::string cnv( const mgo::StepperMotor* motor, long step )
 {
     if( ! motor ) return std::string();
     double mm = motor->getPosition( step );
@@ -21,13 +21,18 @@ std::string cnv( const mgo::StepperMotor* motor, long step, const std::string& u
     {
         mm = 0.0;
     }
-    return fmt::format( "{: .3f} {}", mm, units );
+    return fmt::format( "{: .3f}", mm );
 }
 
-std::string cnv( const mgo::StepperMotor* motor, const std::string& units = "mm" )
+std::string getMotorPosition( const mgo::StepperMotor* motor )
 {
     if( ! motor ) return std::string();
-    return cnv( motor, motor->getCurrentStep(), units );
+    double mm = motor->getPosition();
+    if( std::abs( mm ) < 0.001 )
+    {
+        mm = 0.0;
+    }
+    return fmt::format( "{: .3f}", mm );
 }
 
 int convertKeyCode( sf::Event event )
@@ -125,25 +130,56 @@ void ViewSfml::initialise( const Model& model )
     {
        throw std::runtime_error("Could not load TTF font");
     }
+
+    m_txtAxis1Label = std::make_unique<sf::Text>("", *m_font, 60 );
+    m_txtAxis1Label->setPosition( { 20, 10 });
+    m_txtAxis1Label->setFillColor( { 0, 127, 0 } );
+    m_txtAxis1Label->setString( model.m_config->read( "Axis1Label", "Z" ) + ":" );
+
     m_txtAxis1Pos = std::make_unique<sf::Text>("", *m_font, 60 );
-    m_txtAxis1Pos->setPosition( { 20, 10 });
+    m_txtAxis1Pos->setPosition( { 110, 10 });
     m_txtAxis1Pos->setFillColor( sf::Color::Green );
+
+    m_txtAxis1Units = std::make_unique<sf::Text>("", *m_font, 30 );
+    m_txtAxis1Units->setPosition( { 410, 40 });
+    m_txtAxis1Units->setFillColor( { 0, 127, 0 } );
+    m_txtAxis1Units->setString( model.m_config->read( "Axis1DisplayUnits", "mm" ) );
 
     m_txtAxis1Speed = std::make_unique<sf::Text>("", *m_font, 40 );
     m_txtAxis1Speed->setPosition( { 550, 30 });
     m_txtAxis1Speed->setFillColor( { 209, 209, 50 } );
 
+    m_txtAxis2Label = std::make_unique<sf::Text>("", *m_font, 60 );
+    m_txtAxis2Label->setPosition( { 20, 70 });
+    m_txtAxis2Label->setFillColor( { 0, 127, 0 } );
+    m_txtAxis2Label->setString( model.m_config->read( "Axis2Label", "X" ) + ":" );
+
     m_txtAxis2Pos = std::make_unique<sf::Text>("", *m_font, 60 );
-    m_txtAxis2Pos->setPosition( { 20, 70 });
+    m_txtAxis2Pos->setPosition( { 110, 70 });
     m_txtAxis2Pos->setFillColor( sf::Color::Green );
+
+    m_txtAxis2Units = std::make_unique<sf::Text>("", *m_font, 30 );
+    m_txtAxis2Units->setPosition( { 410, 100 });
+    m_txtAxis2Units->setFillColor( { 0, 127, 0 } );
+    m_txtAxis2Units->setString( model.m_config->read( "Axis1DisplayUnits", "mm" ) );
 
     m_txtAxis2Speed = std::make_unique<sf::Text>("", *m_font, 40 );
     m_txtAxis2Speed->setPosition( { 550, 90 });
     m_txtAxis2Speed->setFillColor( { 209, 209, 50 } );
 
+    m_txtRpmLabel = std::make_unique<sf::Text>("", *m_font, 60 );
+    m_txtRpmLabel->setPosition( { 20, 130 });
+    m_txtRpmLabel->setFillColor( { 0, 127, 0 } );
+    m_txtRpmLabel->setString( "C:" );
+
     m_txtRpm = std::make_unique<sf::Text>("", *m_font, 60 );
-    m_txtRpm->setPosition( { 20, 130 });
+    m_txtRpm->setPosition( { 150, 130 });
     m_txtRpm->setFillColor( sf::Color::Green );
+
+    m_txtRpmUnits = std::make_unique<sf::Text>("", *m_font, 30 );
+    m_txtRpmUnits->setPosition( { 410, 160 });
+    m_txtRpmUnits->setFillColor( { 0, 127, 0 } );
+    m_txtRpmUnits->setString( "rpm" );
 
     for( int n = 0; n < 4; ++n )
     {
@@ -273,21 +309,27 @@ void ViewSfml::updateDisplay( const Model& model )
     {
         if( ! model.m_config->readBool( "DisableAxis1", false ) )
         {
+            m_window->draw( *m_txtAxis1Label );
             m_window->draw( *m_txtAxis1Pos );
+            m_window->draw( *m_txtAxis1Units );
             m_window->draw( *m_txtAxis1Speed );
             m_window->draw( *m_txtAxis1Status );
             m_window->draw( *m_txtAxis1MemoryLabel );
         }
         if( ! model.m_config->readBool( "DisableAxis2", false ) )
         {
+            m_window->draw( *m_txtAxis2Label );
             m_window->draw( *m_txtAxis2Pos );
+            m_window->draw( *m_txtAxis2Units );
             m_window->draw( *m_txtAxis2Speed );
             m_window->draw( *m_txtAxis2Status );
             m_window->draw( *m_txtAxis2MemoryLabel );
         }
         if( ! model.m_config->readBool( "DisableRpm", false ) )
         {
+            m_window->draw( *m_txtRpmLabel );
             m_window->draw( *m_txtRpm );
+            m_window->draw( *m_txtRpmUnits );
         }
         m_window->draw( *m_txtGeneralStatus );
         m_window->draw( *m_txtWarning );
@@ -358,30 +400,21 @@ void ViewSfml::updateTextFromModel( const Model& model )
         return;
     }
 
-    m_txtAxis1Pos->setString(
-        fmt::format( "{}: {}",
-            model.m_config->read( "Axis1Label", "Z" ),
-            cnv( model.m_axis1Motor.get(), model.m_config->read( "Axis1DisplayUnits", "mm" ) )
-            )
-        );
+    m_txtAxis1Pos->setString( getMotorPosition( model.m_axis1Motor.get() ) );
+
     if( model.m_axis1Motor )
     {
         m_txtAxis1Speed->setString(
             fmt::format( "{:<.1f} mm/min", model.m_axis1Motor->getSpeed() ) );
     }
+
     if( ! model.m_axis2Retracted )
     {
-        m_txtAxis2Pos->setString(
-            fmt::format( "{}: {}",
-                model.m_config->read( "Axis2Label", "X" ),
-                cnv( model.m_axis2Motor.get(), model.m_config->read( "Axis2DisplayUnits", "mm" ) )
-                )
-            );
+        m_txtAxis2Pos->setString( getMotorPosition( model.m_axis2Motor.get() ) );
     }
     else
     {
-        m_txtAxis2Pos->setString( fmt::format( "{}:  ---",
-            model.m_config->read( "Axis2Label", "X" ) ) );
+        m_txtAxis2Pos->setString( "---" );
     }
     if( model.m_axis2Motor )
     {
@@ -390,7 +423,7 @@ void ViewSfml::updateTextFromModel( const Model& model )
     }
     if( model.m_rotaryEncoder )
     {
-        m_txtRpm->setString( fmt::format( "C:  {:<4}  rpm",
+        m_txtRpm->setString( fmt::format( "{:<4}",
             static_cast<int>( model.m_rotaryEncoder->getRpm() ) ) );
     }
 
@@ -428,7 +461,7 @@ void ViewSfml::updateTextFromModel( const Model& model )
         else
         {
             m_txtAxis1MemoryValue.at( n )->setString( fmt::format(
-                "{:<12}", cnv( model.m_axis1Motor.get(), model.m_axis1Memory.at( n ) ) ) );
+                "{:<12}", cnv( model.m_axis1Motor.get(), model.m_axis1Memory.at( n ), "" ) ) );
         }
         if ( model.m_axis2Memory.at( n ) == INF_OUT )
         {
@@ -438,7 +471,7 @@ void ViewSfml::updateTextFromModel( const Model& model )
         {
             m_txtAxis2MemoryValue.at( n )->setString(
                 fmt::format(
-                    "{:<12}", cnv( model.m_axis2Motor.get(), model.m_axis2Memory.at( n ) ) ) );
+                    "{:<12}", cnv( model.m_axis2Motor.get(), model.m_axis2Memory.at( n ), "" ) ) );
         }
     }
 
