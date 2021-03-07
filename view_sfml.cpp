@@ -186,17 +186,15 @@ void ViewSfml::initialise( const Model& model )
         auto lbl = std::make_unique<sf::Text>("", *m_font, 30 );
         lbl->setPosition( { 60.f + n * 200.f, 210 });
         lbl->setFillColor( { 128, 128, 128 } );
-        lbl->setString( fmt::format( " Mem {}", n + 1 ) );
+        lbl->setString( fmt::format( "    Mem {}", n + 1 ) );
         m_txtMemoryLabel.push_back( std::move(lbl) );
         auto valZ = std::make_unique<sf::Text>("", *m_font, 30 );
         valZ->setPosition( { 60.f + n * 200.f, 245 });
         valZ->setFillColor( { 128, 128, 128 } );
-        valZ->setString( " not set" );
         m_txtAxis1MemoryValue.push_back( std::move( valZ ) );
         auto valX = std::make_unique<sf::Text>("", *m_font, 30 );
         valX->setPosition( { 60.f + n * 200.f, 275 });
         valX->setFillColor( { 128, 128, 128 } );
-        valX->setString( " not set" );
         m_txtAxis2MemoryValue.push_back( std::move( valX ) );
     }
     std::string axis1Label = model.m_config->read( "Axis1Label", "Z" ) + ":";
@@ -456,22 +454,22 @@ void ViewSfml::updateTextFromModel( const Model& model )
         }
         if ( model.m_axis1Memory.at( n ) == INF_RIGHT )
         {
-            m_txtAxis1MemoryValue.at( n )->setString( " not set" );
+            m_txtAxis1MemoryValue.at( n )->setString( "  not set" );
         }
         else
         {
             m_txtAxis1MemoryValue.at( n )->setString( fmt::format(
-                "{:<12}", cnv( model.m_axis1Motor.get(), model.m_axis1Memory.at( n ) ) ) );
+                "{: >9}", cnv( model.m_axis1Motor.get(), model.m_axis1Memory.at( n ) ) ) );
         }
         if ( model.m_axis2Memory.at( n ) == INF_OUT )
         {
-            m_txtAxis2MemoryValue.at( n )->setString( " not set" );
+            m_txtAxis2MemoryValue.at( n )->setString( "  not set" );
         }
         else
         {
             m_txtAxis2MemoryValue.at( n )->setString(
                 fmt::format(
-                    "{:<12}", cnv( model.m_axis2Motor.get(), model.m_axis2Memory.at( n ) ) ) );
+                    "{: >9}", cnv( model.m_axis2Motor.get(), model.m_axis2Memory.at( n ) ) ) );
         }
     }
 

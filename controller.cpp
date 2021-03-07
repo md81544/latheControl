@@ -93,8 +93,8 @@ Controller::Controller( Model* model )
 
 void Controller::run()
 {
-    m_model->m_axis1Motor->setSpeed( 40.f );
-    m_model->m_axis2Motor->setSpeed( 40.f );
+    m_model->m_axis1Motor->setSpeed( m_model->m_config->readDouble( "Axis1SpeedPreset2", 40.0 ) );
+    m_model->m_axis2Motor->setSpeed( m_model->m_config->readDouble( "Axis2SpeedPreset2", 20.0 ) );
 
     while( ! m_model->m_quit )
     {
@@ -191,7 +191,8 @@ void Controller::run()
             {
                 // We don't allow faster speeds to "stick" to avoid accidental
                 // fast motion after a long fast movement
-                m_model->m_axis1Motor->setSpeed( 40.0 );
+                m_model->m_axis1Motor->setSpeed(
+                    m_model->m_config->readDouble( "Axis1SpeedPreset2", 40.0 ) );
             }
             m_model->m_zWasRunning = false;
         }
@@ -217,7 +218,8 @@ void Controller::run()
             {
                 // We don't allow faster speeds to "stick" to avoid accidental
                 // fast motion after a long fast movement
-                m_model->m_axis2Motor->setSpeed( 40.0 );
+                m_model->m_axis2Motor->setSpeed(
+                    m_model->m_config->readDouble( "Axis2SpeedPreset2", 20.0 ) );
             }
             m_model->m_xWasRunning = false;
         }
@@ -619,7 +621,9 @@ void Controller::processKeyPress()
             {
                 if( m_model->m_currentDisplayMode != Mode::Threading )
                 {
-                    m_model->m_axis1Motor->setSpeed( 20.0 );
+                    m_model->m_axis1Motor->setSpeed(
+                        m_model->m_config->readDouble( "Axis1SpeedPreset1", 20.0 )
+                        );
                 }
                 break;
             }
@@ -627,7 +631,9 @@ void Controller::processKeyPress()
             {
                 if( m_model->m_currentDisplayMode != Mode::Threading )
                 {
-                    m_model->m_axis1Motor->setSpeed( 40.0 );
+                    m_model->m_axis1Motor->setSpeed(
+                        m_model->m_config->readDouble( "Axis1SpeedPreset2", 40.0 )
+                        );
                 }
                 break;
             }
@@ -635,7 +641,9 @@ void Controller::processKeyPress()
             {
                 if( m_model->m_currentDisplayMode != Mode::Threading )
                 {
-                    m_model->m_axis1Motor->setSpeed( 100.0 );
+                    m_model->m_axis1Motor->setSpeed(
+                        m_model->m_config->readDouble( "Axis1SpeedPreset3", 100.0 )
+                        );
                 }
                 break;
             }
@@ -643,7 +651,9 @@ void Controller::processKeyPress()
             {
                 if( m_model->m_currentDisplayMode != Mode::Threading )
                 {
-                    m_model->m_axis1Motor->setSpeed( 250.0 );
+                    m_model->m_axis1Motor->setSpeed(
+                        m_model->m_config->readDouble( "Axis1SpeedPreset4", 250.0 )
+                        );
                 }
                 break;
             }
@@ -651,7 +661,9 @@ void Controller::processKeyPress()
             {
                 if( m_model->m_currentDisplayMode != Mode::Threading )
                 {
-                    m_model->m_axis1Motor->setSpeed( m_axis1MaxMotorSpeed );
+                    m_model->m_axis1Motor->setSpeed(
+                        m_model->m_config->readDouble( "Axis1SpeedPreset5", m_axis1MaxMotorSpeed )
+                        );
                 }
                 break;
             }
@@ -661,7 +673,9 @@ void Controller::processKeyPress()
             {
                 if( m_model->m_currentDisplayMode != Mode::Threading )
                 {
-                    m_model->m_axis2Motor->setSpeed( 5.0 );
+                    m_model->m_axis2Motor->setSpeed(
+                        m_model->m_config->readDouble( "Axis2SpeedPreset1", 5.0 )
+                        );
                 }
                 break;
             }
@@ -670,7 +684,9 @@ void Controller::processKeyPress()
             {
                 if( m_model->m_currentDisplayMode != Mode::Threading )
                 {
-                    m_model->m_axis2Motor->setSpeed( 20.0 );
+                    m_model->m_axis2Motor->setSpeed(
+                        m_model->m_config->readDouble( "Axis2SpeedPreset2", 20.0 )
+                        );
                 }
                 break;
             }
@@ -679,7 +695,9 @@ void Controller::processKeyPress()
             {
                 if( m_model->m_currentDisplayMode != Mode::Threading )
                 {
-                    m_model->m_axis2Motor->setSpeed( 40.0 );
+                    m_model->m_axis2Motor->setSpeed(
+                        m_model->m_config->readDouble( "Axis2SpeedPreset3", 40.0 )
+                        );
                 }
                 break;
             }
@@ -688,7 +706,9 @@ void Controller::processKeyPress()
             {
                 if( m_model->m_currentDisplayMode != Mode::Threading )
                 {
-                    m_model->m_axis2Motor->setSpeed( 80.f );
+                    m_model->m_axis2Motor->setSpeed(
+                        m_model->m_config->readDouble( "Axis2SpeedPreset4", 80.0 )
+                        );
                 }
                 break;
             }
@@ -697,7 +717,9 @@ void Controller::processKeyPress()
             {
                 if( m_model->m_currentDisplayMode != Mode::Threading )
                 {
-                    m_model->m_axis2Motor->setSpeed( m_axis2MaxMotorSpeed );
+                    m_model->m_axis2Motor->setSpeed(
+                        m_model->m_config->readDouble( "Axis2SpeedPreset5", m_axis2MaxMotorSpeed )
+                        );
                 }
                 break;
             }
@@ -1043,7 +1065,8 @@ int Controller::processModeInputKeys( int key )
         if( key == key::ESC )
         {
             // Reset motor speed to something sane
-            m_model->m_axis1Motor->setSpeed( 40.f );
+            m_model->m_axis1Motor->setSpeed(
+                m_model->m_config->readDouble( "Axis1SpeedPreset2", 40.0 ) );
             // fall through...
         }
     }

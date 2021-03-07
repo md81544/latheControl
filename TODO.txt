@@ -1,7 +1,5 @@
 Convert to cmake
 
-Make axis speed presets configurable
-
 Address the "Mode" concept which currently provides pseudo-modal
 "dialogs" interleaved into program flow, and is proving difficult
 to maintain. If all motors are stopped during a "dialog" then we
