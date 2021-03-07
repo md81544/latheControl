@@ -32,7 +32,7 @@ std::string getMotorPosition( const mgo::StepperMotor* motor )
     {
         mm = 0.0;
     }
-    return fmt::format( "{: .3f}", mm );
+    return fmt::format( "{: >8.3f}", mm );
 }
 
 int convertKeyCode( sf::Event event )
@@ -141,7 +141,7 @@ void ViewSfml::initialise( const Model& model )
     m_txtAxis1Pos->setFillColor( sf::Color::Green );
 
     m_txtAxis1Units = std::make_unique<sf::Text>("", *m_font, 30 );
-    m_txtAxis1Units->setPosition( { 410, 40 });
+    m_txtAxis1Units->setPosition( { 430, 40 });
     m_txtAxis1Units->setFillColor( { 0, 127, 0 } );
     m_txtAxis1Units->setString( model.m_config->read( "Axis1DisplayUnits", "mm" ) );
 
@@ -159,7 +159,7 @@ void ViewSfml::initialise( const Model& model )
     m_txtAxis2Pos->setFillColor( sf::Color::Green );
 
     m_txtAxis2Units = std::make_unique<sf::Text>("", *m_font, 30 );
-    m_txtAxis2Units->setPosition( { 410, 100 });
+    m_txtAxis2Units->setPosition( { 430, 100 });
     m_txtAxis2Units->setFillColor( { 0, 127, 0 } );
     m_txtAxis2Units->setString( model.m_config->read( "Axis1DisplayUnits", "mm" ) );
 
@@ -177,7 +177,7 @@ void ViewSfml::initialise( const Model& model )
     m_txtRpm->setFillColor( sf::Color::Green );
 
     m_txtRpmUnits = std::make_unique<sf::Text>("", *m_font, 30 );
-    m_txtRpmUnits->setPosition( { 410, 160 });
+    m_txtRpmUnits->setPosition( { 430, 160 });
     m_txtRpmUnits->setFillColor( { 0, 127, 0 } );
     m_txtRpmUnits->setString( "rpm" );
 
@@ -423,7 +423,7 @@ void ViewSfml::updateTextFromModel( const Model& model )
     }
     if( model.m_rotaryEncoder )
     {
-        m_txtRpm->setString( fmt::format( "{:<4}",
+        m_txtRpm->setString( fmt::format( "{: >7}",
             static_cast<int>( model.m_rotaryEncoder->getRpm() ) ) );
     }
 
