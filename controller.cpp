@@ -775,12 +775,15 @@ void Controller::processKeyPress()
             case key::R:
             {
                 // X retraction
-                if( m_model->m_axis2Motor->isRunning() ) return;
-                if( m_model->m_enabledFunction == Mode::Taper ) return;
+                if( m_model->m_config->readBool( "DisableAxis2", false ) ) break;
+                if( m_model->m_axis2Motor->isRunning() ) break;
+                if( m_model->m_enabledFunction == Mode::Taper ) break;
                 if( m_model->m_axis2Retracted )
                 {
                     // Return
+                    m_model->m_axis2Motor->setSpeed( 100.0 );
                     m_model->m_axis2Motor->goToStep( m_model->m_xOldPosition );
+                    m_model->m_axis2Status = "Unretracting";
                     m_model->m_fastRetracting = true;
                 }
                 else
@@ -798,6 +801,7 @@ void Controller::processKeyPress()
                     m_model->m_axis2Motor->goToStep(
                         m_model->m_axis2Motor->getCurrentStep() + stepsForRetraction * direction );
                     m_model->m_axis2Retracted = true;
+                    m_model->m_axis2Status = "Retracting";
                 }
                 break;
             }
@@ -864,16 +868,19 @@ void Controller::processKeyPress()
             }
             case key::f2t: // threading mode
             {
+                if( m_model->m_config->readBool( "DisableAxis2", false ) ) break;
                 changeMode( Mode::Threading );
                 break;
             }
             case key::f2p: // taper mode
             {
+                if( m_model->m_config->readBool( "DisableAxis2", false ) ) break;
                 changeMode( Mode::Taper );
                 break;
             }
             case key::f2r: // X retraction setup
             {
+                if( m_model->m_config->readBool( "DisableAxis2", false ) ) break;
                 changeMode( Mode::Axis2RetractSetup );
                 break;
             }

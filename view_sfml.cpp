@@ -412,7 +412,7 @@ void ViewSfml::updateTextFromModel( const Model& model )
     }
     else
     {
-        m_txtAxis2Pos->setString( "---" );
+        m_txtAxis2Pos->setString( "     ---" );
     }
     if( model.m_axis2Motor )
     {
