@@ -461,7 +461,7 @@ void ViewSfml::updateTextFromModel( const Model& model )
         else
         {
             m_txtAxis1MemoryValue.at( n )->setString( fmt::format(
-                "{:<12}", cnv( model.m_axis1Motor.get(), model.m_axis1Memory.at( n ), "" ) ) );
+                "{:<12}", cnv( model.m_axis1Motor.get(), model.m_axis1Memory.at( n ) ) ) );
         }
         if ( model.m_axis2Memory.at( n ) == INF_OUT )
         {
@@ -471,7 +471,7 @@ void ViewSfml::updateTextFromModel( const Model& model )
         {
             m_txtAxis2MemoryValue.at( n )->setString(
                 fmt::format(
-                    "{:<12}", cnv( model.m_axis2Motor.get(), model.m_axis2Memory.at( n ), "" ) ) );
+                    "{:<12}", cnv( model.m_axis2Motor.get(), model.m_axis2Memory.at( n ) ) ) );
         }
     }
 
