@@ -7,8 +7,8 @@ APP_DIR  := $(BUILD)/apps
 TARGET   := lc
 INCLUDE  := -Iinclude/
 SRC      := $(wildcard *.cpp stepperControl/*.cpp)
-
 OBJECTS  := $(SRC:%.cpp=$(OBJ_DIR)/%.o)
+DEPS     := $(OBJECTS:.o=.d)
 
 fake: CXXFLAGS += -DDEBUG -DFAKE -g
 fake: all
@@ -17,9 +17,11 @@ all: build $(APP_DIR)/$(TARGET)
 	ctags -R --c++-kinds=+p --fields=+iaS
 	cppcheck -q $(SRC)
 
+-include $(DEPS)
+
 $(OBJ_DIR)/%.o: %.cpp
 	@mkdir -p $(@D)
-	$(CXX) $(CXXFLAGS) $(INCLUDE) -c $< -o $@ $(LDFLAGS)
+	$(CXX) $(CXXFLAGS) $(INCLUDE) -c -MMD $< -o $@ $(LDFLAGS)
 
 $(APP_DIR)/$(TARGET): $(OBJECTS)
 	@mkdir -p $(@D)
