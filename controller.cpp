@@ -1154,6 +1154,7 @@ int Controller::processModeInputKeys( int key )
             if( valid )
             {
                 m_model->m_axis1Motor->goToPosition( pos );
+                m_model->m_axis1Status = fmt::format( "Going to {}", pos );
             }
         }
 
@@ -1172,6 +1173,7 @@ int Controller::processModeInputKeys( int key )
             if( valid )
             {
                 m_model->m_axis2Motor->goToPosition( pos );
+                m_model->m_axis2Status = fmt::format( "Going to {}", pos );
             }
         }
 
