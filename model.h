@@ -70,9 +70,16 @@ enum class ZDirection
     Right
 };
 
-struct Model
+class Model
 {
+public:
     Model( IGpio& gpio ) : m_gpio(gpio) {}
+
+    void changeMode( Mode mode );
+    void stopAllMotors();
+    void takeUpZBacklash( ZDirection direction );
+    void startSynchronisedXMotor( ZDirection direction, double zSpeed );
+
     IGpio& m_gpio;
     // Lead screw:
     std::unique_ptr<mgo::StepperMotor> m_axis1Motor;

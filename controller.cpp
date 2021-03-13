@@ -108,7 +108,7 @@ void Controller::run()
             // has turned it off because of some issue.
             // This won't stop the motors being started again even
             // if the chuck isn't moving.
-            stopAllMotors();
+            m_model->stopAllMotors();
         }
         m_model->m_spindleWasRunning = chuckRpm > 30.f;
 
@@ -277,7 +277,7 @@ void Controller::processKeyPress()
             // End of "Leader" keys ==============
             case key::CtrlQ:
             {
-                stopAllMotors();
+                m_model->stopAllMotors();
                 m_model->m_quit = true;
                 break;
             }
@@ -444,7 +444,7 @@ void Controller::processKeyPress()
                     // Z motor is moving towards chuck
                     direction = ZDirection::Left;
                 }
-                takeUpZBacklash( direction );
+                m_model->takeUpZBacklash( direction );
                 m_model->m_axis1Motor->wait();
                 // If threading, we need to start at the same point each time - we
                 // wait for zero degrees on the chuck before starting:
@@ -461,7 +461,8 @@ void Controller::processKeyPress()
                 {
                     if( m_model->m_enabledFunction == Mode::Taper )
                     {
-                        startSynchronisedXMotor( direction, m_model->m_axis1Motor->getSpeed() );
+                        m_model->startSynchronisedXMotor(
+                            direction, m_model->m_axis1Motor->getSpeed() );
                     }
                     m_model->m_axis1Motor->goToStep(
                         m_model->m_axis1Memory.at( m_model->m_currentMemory ) );
@@ -520,8 +521,8 @@ void Controller::processKeyPress()
                 m_model->m_axis1Status = "moving left";
                 if( m_model->m_enabledFunction == Mode::Taper )
                 {
-                    takeUpZBacklash( ZDirection::Left );
-                    startSynchronisedXMotor( ZDirection::Left, m_model->m_axis1Motor->getSpeed() );
+                    m_model->takeUpZBacklash( ZDirection::Left );
+                    m_model->startSynchronisedXMotor( ZDirection::Left, m_model->m_axis1Motor->getSpeed() );
                 }
                 if( m_model->m_config->readBool( "Axis1MotorFlipDirection", false ) )
                 {
@@ -544,8 +545,9 @@ void Controller::processKeyPress()
                 m_model->m_axis1Status = "moving right";
                 if( m_model->m_enabledFunction == Mode::Taper )
                 {
-                    takeUpZBacklash( ZDirection::Right );
-                    startSynchronisedXMotor( ZDirection::Right, m_model->m_axis1Motor->getSpeed() );
+                    m_model->takeUpZBacklash( ZDirection::Right );
+                    m_model->startSynchronisedXMotor(
+                        ZDirection::Right, m_model->m_axis1Motor->getSpeed() );
                 }
                 if( m_model->m_config->readBool( "Axis1MotorFlipDirection", false ) )
                 {
@@ -744,8 +746,9 @@ void Controller::processKeyPress()
                     {
                         direction = ZDirection::Right;
                     }
-                    takeUpZBacklash( direction );
-                    startSynchronisedXMotor( direction, m_model->m_axis1Motor->getSpeed() );
+                    m_model->takeUpZBacklash( direction );
+                    m_model->startSynchronisedXMotor(
+                        direction, m_model->m_axis1Motor->getSpeed() );
                 }
                 else
                 {
@@ -809,7 +812,7 @@ void Controller::processKeyPress()
             {
                 if( m_model->m_enabledFunction == Mode::Taper )
                 {
-                    changeMode( Mode::None );
+                    m_model->changeMode( Mode::None );
                 }
                 m_model->m_axis1Motor->zeroPosition();
                 // Zeroing will invalidate any memorised Z positions, so we clear them
@@ -823,7 +826,7 @@ void Controller::processKeyPress()
             {
                 if( m_model->m_enabledFunction == Mode::Taper )
                 {
-                    changeMode( Mode::None );
+                    m_model->changeMode( Mode::None );
                 }
                 m_model->m_axis2Motor->zeroPosition();
                 // Zeroing will invalidate any memorised X positions, so we clear them
@@ -835,18 +838,18 @@ void Controller::processKeyPress()
             }
             case key::a1_g:
             {
-                changeMode( Mode::Axis1GoTo );
+                m_model->changeMode( Mode::Axis1GoTo );
                 break;
             }
             case key::a2_g:
             {
-                changeMode( Mode::Axis2GoTo );
+                m_model->changeMode( Mode::Axis2GoTo );
                 break;
             }
             case key::ASTERISK: // shutdown
             {
                 #ifndef FAKE
-                stopAllMotors();
+                m_model->stopAllMotors();
                 m_model->m_quit = true;
                 m_model->m_shutdown = true;
                 #endif
@@ -855,7 +858,7 @@ void Controller::processKeyPress()
             case key::F1: // help mode
             case key::f2h:
             {
-                changeMode( Mode::Help );
+                m_model->changeMode( Mode::Help );
                 break;
             }
             case key::f2s: // setup mode
@@ -863,93 +866,51 @@ void Controller::processKeyPress()
                 m_model->m_enabledFunction = Mode::None;
                 m_model->m_axis1Motor->setSpeed( 0.8f );
                 m_model->m_axis2Motor->setSpeed( 1.f );
-                changeMode( Mode::Setup );
+                m_model->changeMode( Mode::Setup );
                 break;
             }
             case key::f2t: // threading mode
             {
                 if( m_model->m_config->readBool( "DisableAxis2", false ) ) break;
-                changeMode( Mode::Threading );
+                m_model->changeMode( Mode::Threading );
                 break;
             }
             case key::f2p: // taper mode
             {
                 if( m_model->m_config->readBool( "DisableAxis2", false ) ) break;
-                changeMode( Mode::Taper );
+                m_model->changeMode( Mode::Taper );
                 break;
             }
             case key::f2r: // X retraction setup
             {
                 if( m_model->m_config->readBool( "DisableAxis2", false ) ) break;
-                changeMode( Mode::Axis2RetractSetup );
+                m_model->changeMode( Mode::Axis2RetractSetup );
                 break;
             }
             case key::a2_s: // X position set
             {
-                changeMode( Mode::Axis2PositionSetup );
+                m_model->changeMode( Mode::Axis2PositionSetup );
                 break;
             }
             case key::a1_s: // Z position set
             {
-                changeMode( Mode::Axis1PositionSetup );
+                m_model->changeMode( Mode::Axis1PositionSetup );
                 break;
             }
             case key::ESC: // return to normal mode
             {
                 // Cancel any retract as well
                 m_model->m_axis2Retracted = false;
-                changeMode( Mode::None );
+                m_model->changeMode( Mode::None );
                 break;
             }
             default: // e.g. space bar to stop all motors
             {
-                stopAllMotors();
+                m_model->stopAllMotors();
                 break;
             }
         }
     }
-}
-
-void Controller::changeMode( Mode mode )
-{
-    stopAllMotors();
-    if( mode == Mode::Threading || mode == Mode::Taper )
-    {
-        // We do not want motor speed ramping on tapering or threading
-        m_model->m_axis1Motor->enableRamping( false );
-    }
-    else
-    {
-        m_model->m_axis1Motor->enableRamping( true );
-    }
-    if( m_model->m_enabledFunction == Mode::Taper && mode != Mode::Taper )
-    {
-        m_model->m_axis2Motor->setSpeed( m_model->m_taperPreviousXSpeed );
-    }
-    m_model->m_warning = "";
-    m_model->m_currentDisplayMode = mode;
-    m_model->m_enabledFunction = mode;
-    m_model->m_input="";
-
-    if( mode == Mode::Taper )
-    {
-        // reset any taper start points
-        m_model->m_taperPreviousXSpeed = m_model->m_axis2Motor->getSpeed();
-        if( m_model->m_taperAngle != 0.0 )
-        {
-            m_model->m_input = std::to_string( m_model->m_taperAngle );
-        }
-    }
-}
-
-void Controller::stopAllMotors()
-{
-    m_model->m_axis1Motor->stop();
-    m_model->m_axis2Motor->stop();
-    m_model->m_axis1Motor->wait();
-    m_model->m_axis2Motor->wait();
-    m_model->m_axis1Status = "stopped";
-    m_model->m_axis2Status = "stopped";
 }
 
 int Controller::checkKeyAllowedForMode( int key )
@@ -1244,44 +1205,6 @@ int Controller::processLeaderKeyModeKeyPress( int keyPress )
     }
     m_model->m_keyMode = KeyMode::None;
     return keyPress;
-}
-
-void Controller::startSynchronisedXMotor( ZDirection direction, double zSpeed )
-{
-    // Make sure X isn't already running first
-    m_model->m_axis2Motor->stop();
-    m_model->m_axis2Motor->wait();
-
-    int target = INF_OUT;
-    int stepAdd = -1;
-    if( ( direction == ZDirection::Left  && m_model->m_taperAngle < 0.0 ) ||
-        ( direction == ZDirection::Right && m_model->m_taperAngle > 0.0 ) )
-    {
-        target = INF_IN;
-        stepAdd = 1;
-    }
-    // As this is called just before the Z motor starts moving, we take
-    // up any backlash first.
-    m_model->m_axis2Motor->setSpeed( 100.0 );
-    m_model->m_axis2Motor->goToStep( m_model->m_axis2Motor->getCurrentStep() + stepAdd );
-    m_model->m_axis2Motor->wait();
-    // What speed will we need for the angle required?
-    m_model->m_axis2Motor->setSpeed(
-        zSpeed  * std::abs( std::tan( m_model->m_taperAngle * DEG_TO_RAD ) ) );
-    m_model->m_axis2Motor->goToStep( target );
-}
-
-void Controller::takeUpZBacklash( ZDirection direction )
-{
-    if( direction == ZDirection::Right )
-    {
-        m_model->m_axis1Motor->goToStep( m_model->m_axis1Motor->getCurrentStep() - 1 );
-    }
-    else if( direction == ZDirection::Left )
-    {
-        m_model->m_axis1Motor->goToStep( m_model->m_axis1Motor->getCurrentStep() + 1 );
-    }
-    m_model->m_axis1Motor->wait();
 }
 
 int Controller::checkForAxisLeaderKeys( int key )

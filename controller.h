@@ -19,13 +19,9 @@ public:
 private:
     Model* m_model; // non-owning
     std::unique_ptr<IView> m_view;
-    void stopAllMotors();
     int checkKeyAllowedForMode( int key );
-    void changeMode( Mode mode );
     int processModeInputKeys( int key );
     int processLeaderKeyModeKeyPress( int key );
-    void startSynchronisedXMotor( ZDirection direction, double zSpeed );
-    void takeUpZBacklash( ZDirection direction );
     // Cache of config values for speed
     double m_axis1MaxMotorSpeed;
     double m_axis2MaxMotorSpeed;
