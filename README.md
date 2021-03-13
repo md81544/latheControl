@@ -1,7 +1,7 @@
 # latheControl
 Code for controlling a lathe's lead screw (Z-axis) with a stepper motor.
 
-![Screen shot](https://www.martyndavis.com/wp-content/uploads/2020/10/els2.png "")
+![Screen shot](https://www.martyndavis.com/wp-content/uploads/2020/10/lc.png "")
 
 Now also will control the X-axis (cross-slide).
 
