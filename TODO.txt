@@ -1,3 +1,5 @@
+Move "business logic" into the model
+
 Convert to cmake
 
 Address the "Mode" concept which currently provides pseudo-modal

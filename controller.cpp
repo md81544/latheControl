@@ -121,7 +121,7 @@ void Controller::run()
             // revolution, there is a direct correlation between spindle
             // rpm and stepper motor rpm for a 1mm thread pitch.
             float speed = pitch * m_model->m_rotaryEncoder->getRpm();
-            if( speed > m_axis1MaxMotorSpeed )
+            if( speed > m_axis1MaxMotorSpeed * 0.8 )
             {
                 m_model->m_axis1Motor->stop();
                 m_model->m_axis1Motor->wait();
@@ -913,6 +913,15 @@ void Controller::processKeyPress()
 void Controller::changeMode( Mode mode )
 {
     stopAllMotors();
+    if( mode == Mode::Threading || mode == Mode::Taper )
+    {
+        // We do not want motor speed ramping on tapering or threading
+        m_model->m_axis1Motor->enableRamping( false );
+    }
+    else
+    {
+        m_model->m_axis1Motor->enableRamping( true );
+    }
     if( m_model->m_enabledFunction == Mode::Taper && mode != Mode::Taper )
     {
         m_model->m_axis2Motor->setSpeed( m_model->m_taperPreviousXSpeed );
