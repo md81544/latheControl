@@ -201,3 +201,17 @@ TEST_CASE( "Check motor speed ramping" )
         previousRampedRpm = rampedRpm;
     }
 }
+
+TEST_CASE( "Check motor synchronisation" )
+{
+    mgo::MockGpio gpio( false );
+    mgo::StepperMotor motor1( gpio, 0, 0, 0, 1'000, 0.01, 10'000.0 );
+    mgo::StepperMotor motor2( gpio, 0, 0, 0, 1'000, 0.01, 10'000.0 );
+    REQUIRE( motor2.getPosition() == 0.0 );
+    motor2.synchroniseOn( &motor1, []( double pos ){ return pos / 2.0; } );
+    motor1.setRpm( 500.0 );
+    motor1.goToPosition( 2.4 );
+    motor1.wait();
+    motor2.wait();
+    REQUIRE( motor2.getPosition() == Approx( 1.2 ) );
+}

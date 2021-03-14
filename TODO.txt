@@ -1,4 +1,13 @@
-Move "business logic" into the model
+Continue moving "business logic" into the model
+
+Synchronisation of two motors should be done at the motor level
+and not in the UI loop. Motor function should take a pointer to
+the "driver" motor and perhaps a callback for determining position
+of the "driven" motor. This will allow for non-linear synchronisation,
+for example turning a radius.
+
+All "Axis1..." and "Axis2..." references should be replaced with an
+array to allow for future expansion.
 
 Convert to cmake
 

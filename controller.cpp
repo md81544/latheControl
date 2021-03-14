@@ -522,7 +522,8 @@ void Controller::processKeyPress()
                 if( m_model->m_enabledFunction == Mode::Taper )
                 {
                     m_model->takeUpZBacklash( ZDirection::Left );
-                    m_model->startSynchronisedXMotor( ZDirection::Left, m_model->m_axis1Motor->getSpeed() );
+                    m_model->startSynchronisedXMotor(
+                        ZDirection::Left, m_model->m_axis1Motor->getSpeed() );
                 }
                 if( m_model->m_config->readBool( "Axis1MotorFlipDirection", false ) )
                 {
