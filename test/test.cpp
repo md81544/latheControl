@@ -187,18 +187,22 @@ TEST_CASE( "Check backlash compensation" )
 TEST_CASE( "Check motor speed ramping" )
 {
     mgo::MockGpio gpio( false );
-    mgo::StepperMotor motor( gpio, 0, 0, 0, 1'000, 1.0, 10'000.0 );
-    motor.setRpm( 10'000.0 );
+    double maxSpeed = 1'000.0; // mm/sec, not rpm
+    long stepsPerRev = 4'000;
+    double conversionFactor = 0.0005;
+    double maxRpm = maxSpeed / conversionFactor / stepsPerRev;
+    mgo::StepperMotor motor( gpio, 0, 0, 0, stepsPerRev, conversionFactor, maxRpm );
+    motor.setSpeed( maxSpeed );
     motor.goToStep( 999'999'999 );
     // Motor should not be at full speed immediately:
     double previousRampedRpm = 0.0;
     for( int n = 0; n < 5; ++n )
     {
         std::this_thread::sleep_for( std::chrono::milliseconds( 20 ) );
-        double rampedRpm = motor.getRampedRpm();
-        REQUIRE( rampedRpm < 10'000.0 );
-        REQUIRE( rampedRpm > previousRampedRpm );
-        previousRampedRpm = rampedRpm;
+        double rampedSpeed = motor.getRampedSpeed();
+        REQUIRE( rampedSpeed < maxSpeed );
+        REQUIRE( rampedSpeed > previousRampedRpm );
+        previousRampedRpm = rampedSpeed;
     }
 }
 
@@ -209,7 +213,7 @@ TEST_CASE( "Check motor synchronisation" )
     mgo::StepperMotor motor2( gpio, 0, 0, 0, 1'000, 0.01, 10'000.0 );
     REQUIRE( motor2.getPosition() == 0.0 );
     motor2.synchroniseOn( &motor1, []( double pos ){ return pos / 2.0; } );
-    motor1.setRpm( 500.0 );
+    motor1.setSpeed( 1'000.0 );
     motor1.goToPosition( 2.4 );
     motor1.wait();
     motor2.wait();

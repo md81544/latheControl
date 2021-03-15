@@ -33,33 +33,39 @@ Controller::Controller( Model* model )
 {
     m_view = std::make_unique<ViewSfml>();
 
-    m_axis1MaxMotorSpeed = m_model->m_config->readDouble( "Axis1MaxMotorSpeed", 700.0 );
-    m_axis2MaxMotorSpeed = m_model->m_config->readDouble( "Axis2MaxMotorSpeed", 240.0 );
 
     m_view->initialise( *m_model );
 
     m_view->updateDisplay( *m_model ); // get SFML running before we start the motor threads
 
+    double axis1ConversionFactor =
+        m_model->m_config->readDouble( "Axis1ConversionNumerator", -1.0 ) /
+            m_model->m_config->readDouble( "Axis1ConversionDivisor", 1'000.0 );
+    m_axis1MaxMotorSpeed = m_model->m_config->readDouble( "Axis1MaxMotorSpeed", 700.0 );
+    long axis1StepsPerRevolution = m_model->m_config->readLong( "Axis1StepsPerRev", 1'000 );
     m_model->m_axis1Motor = std::make_unique<mgo::StepperMotor>(
         m_model->m_gpio,
         m_model->m_config->readLong( "Axis1GpioStepPin", 8 ),
         m_model->m_config->readLong( "Axis1GpioReversePin", 7 ),
         m_model->m_config->readLong( "Axis1GpioEnablePin", 0 ),
-        m_model->m_config->readLong( "Axis1StepsPerRev", 1'000 ),
-        m_model->m_config->readDouble( "Axis1ConversionNumerator", -1.0 ) /
-            m_model->m_config->readDouble( "Axis1ConversionDivisor", 1'000.0 ),
-        m_axis1MaxMotorSpeed
+        axis1StepsPerRevolution,
+        axis1ConversionFactor,
+        m_axis1MaxMotorSpeed / axis1ConversionFactor / axis1StepsPerRevolution
         );
 
+    double axis2ConversionFactor =
+        m_model->m_config->readDouble( "Axis2ConversionNumerator", -1.0 ) /
+            m_model->m_config->readDouble( "Axis2ConversionDivisor", 1'000.0 );
+    m_axis2MaxMotorSpeed = m_model->m_config->readDouble( "Axis2MaxMotorSpeed", 240.0 );
+    long axis2StepsPerRevolution = m_model->m_config->readLong( "Axis2StepsPerRev", 800 );
     m_model->m_axis2Motor = std::make_unique<mgo::StepperMotor>(
         m_model->m_gpio,
         m_model->m_config->readLong( "Axis2GpioStepPin", 20 ),
         m_model->m_config->readLong( "Axis2GpioReversePin", 21 ),
         m_model->m_config->readLong( "Axis2GpioEnablePin", 0 ),
-        m_model->m_config->readLong( "Axis2StepsPerRev", 800 ),
-        m_model->m_config->readDouble( "Axis2ConversionNumerator", 1.0 ) /
-            m_model->m_config->readDouble( "Axis2ConversionDivisor", 2'400.0 ),
-        m_axis2MaxMotorSpeed
+        axis2StepsPerRevolution,
+        axis2ConversionFactor,
+        m_axis2MaxMotorSpeed / axis2ConversionFactor / axis2StepsPerRevolution
         );
 
     m_model->m_rotaryEncoder = std::make_unique<mgo::RotaryEncoder>(
