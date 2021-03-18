@@ -1,10 +1,13 @@
-Continue moving "business logic" into the model
+(WIP) Continue moving "business logic" into the model
 
-Synchronisation of two motors should be done at the motor level
+(WIP) Synchronisation of two motors should be done at the motor level
 and not in the UI loop. Motor function should take a pointer to
 the "driver" motor and perhaps a callback for determining position
 of the "driven" motor. This will allow for non-linear synchronisation,
 for example turning a radius.
+
+Start thinking around a setting for adding a tiny amount of x motion
+to counteract a lathe that cuts a bit of a taper
 
 All "Axis1..." and "Axis2..." references should be replaced with an
 array to allow for future expansion.

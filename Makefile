@@ -27,7 +27,7 @@ $(APP_DIR)/$(TARGET): $(OBJECTS)
 	@mkdir -p $(@D)
 	$(CXX) $(CXXFLAGS) -o $(APP_DIR)/$(TARGET) $^ $(LDFLAGS)
 
-.PHONY: all build clean debug release
+.PHONY: all build clean release test
 
 build:
 	@mkdir -p $(APP_DIR)
@@ -40,3 +40,14 @@ release: all
 clean:
 	-@rm -rvf $(OBJ_DIR)/*
 	-@rm -rvf $(APP_DIR)/*
+	-@rm -rvf test/test
+
+test/test: test/test.cpp
+	$(CXX) $(CXXFLAGS) -g -o test/test -I. \
+		$(OBJ_DIR)/stepperControl/steppermotor.o \
+		$(OBJ_DIR)/rotaryencoder.o \
+		$(OBJ_DIR)/log.o \
+		test/test.cpp $(LDFLAGS)
+
+test: test/test fake
+	./test/test -d yes
