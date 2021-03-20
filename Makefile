@@ -49,5 +49,5 @@ test/test: test/test.cpp
 		$(OBJ_DIR)/log.o \
 		test/test.cpp $(LDFLAGS)
 
-test: test/test fake
+test: fake test/test
 	./test/test -d yes

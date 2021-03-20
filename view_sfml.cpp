@@ -145,8 +145,8 @@ void ViewSfml::initialise( const Model& model )
     m_txtAxis1Units->setFillColor( { 0, 127, 0 } );
     m_txtAxis1Units->setString( model.m_config->read( "Axis1DisplayUnits", "mm" ) );
 
-    m_txtAxis1Speed = std::make_unique<sf::Text>("", *m_font, 40 );
-    m_txtAxis1Speed->setPosition( { 550, 30 });
+    m_txtAxis1Speed = std::make_unique<sf::Text>("", *m_font, 30 );
+    m_txtAxis1Speed->setPosition( { 550, 40 });
     m_txtAxis1Speed->setFillColor( { 209, 209, 50 } );
 
     m_txtAxis2Label = std::make_unique<sf::Text>("", *m_font, 60 );
@@ -163,8 +163,8 @@ void ViewSfml::initialise( const Model& model )
     m_txtAxis2Units->setFillColor( { 0, 127, 0 } );
     m_txtAxis2Units->setString( model.m_config->read( "Axis1DisplayUnits", "mm" ) );
 
-    m_txtAxis2Speed = std::make_unique<sf::Text>("", *m_font, 40 );
-    m_txtAxis2Speed->setPosition( { 550, 90 });
+    m_txtAxis2Speed = std::make_unique<sf::Text>("", *m_font, 30 );
+    m_txtAxis2Speed->setPosition( { 550, 100 });
     m_txtAxis2Speed->setFillColor( { 209, 209, 50 } );
 
     m_txtRpmLabel = std::make_unique<sf::Text>("", *m_font, 60 );
@@ -403,7 +403,7 @@ void ViewSfml::updateTextFromModel( const Model& model )
     if( model.m_axis1Motor )
     {
         m_txtAxis1Speed->setString(
-            fmt::format( "{:<.1f} mm/min", model.m_axis1Motor->getSpeed() ) );
+            fmt::format( "{:<.2f} mm/min", model.m_axis1Motor->getSpeed() ) );
     }
 
     if( ! model.m_axis2Retracted )
@@ -417,7 +417,7 @@ void ViewSfml::updateTextFromModel( const Model& model )
     if( model.m_axis2Motor )
     {
         m_txtAxis2Speed->setString(
-            fmt::format( "{:<.1f} mm/min", model.m_axis2Motor->getSpeed() ) );
+            fmt::format( "{:<.2f} mm/min", model.m_axis2Motor->getSpeed() ) );
     }
     if( model.m_rotaryEncoder )
     {
