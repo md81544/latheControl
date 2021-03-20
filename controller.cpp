@@ -50,7 +50,7 @@ Controller::Controller( Model* model )
         m_model->m_config->readLong( "Axis1GpioEnablePin", 0 ),
         axis1StepsPerRevolution,
         axis1ConversionFactor,
-        m_axis1MaxMotorSpeed / axis1ConversionFactor / axis1StepsPerRevolution
+        std::abs( m_axis1MaxMotorSpeed / axis1ConversionFactor / axis1StepsPerRevolution )
         );
 
     double axis2ConversionFactor =
@@ -65,7 +65,7 @@ Controller::Controller( Model* model )
         m_model->m_config->readLong( "Axis2GpioEnablePin", 0 ),
         axis2StepsPerRevolution,
         axis2ConversionFactor,
-        m_axis2MaxMotorSpeed / axis2ConversionFactor / axis2StepsPerRevolution
+        std::abs( m_axis2MaxMotorSpeed / axis2ConversionFactor / axis2StepsPerRevolution )
         );
 
     m_model->m_rotaryEncoder = std::make_unique<mgo::RotaryEncoder>(
