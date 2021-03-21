@@ -1018,6 +1018,7 @@ int Controller::processModeInputKeys( int key )
         if( key == key::MINUS && m_model->m_input.empty() )
         {
             m_model->m_input = "-";
+            return -1;
         }
     }
     if(  m_model->m_currentDisplayMode == Mode::Threading )
