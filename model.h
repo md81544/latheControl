@@ -75,10 +75,17 @@ class Model
 public:
     Model( IGpio& gpio ) : m_gpio(gpio) {}
 
+    // This should be repeatedly called from the run loop
+    void checkStatus();
     void changeMode( Mode mode );
     void stopAllMotors();
     void takeUpZBacklash( ZDirection direction );
-    void startSynchronisedXMotor( ZDirection direction, double zSpeed );
+    void startSynchronisedXMotor( ZDirection direction );
+
+    void axis1GoToStep( long step );
+    void axis1GoToPosition( double pos );
+    void axis1MoveLeft();
+    void axis1MoveRight();
 
     IGpio& m_gpio;
     // Lead screw:
