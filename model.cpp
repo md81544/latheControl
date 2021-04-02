@@ -5,10 +5,19 @@
 
 namespace mgo
 {
+void Model::initialise()
+{
+    // TODO: all motor initialisation should happen here,
+    // rather than in the controller's constructor (but
+    // still called from there).
+    m_axis1PreviousPositions.push( m_axis1Motor->getPosition() );
+}
+
 
 void Model::checkStatus()
 {
     float chuckRpm = m_rotaryEncoder->getRpm();
+    #ifndef FAKE
     if( m_spindleWasRunning && chuckRpm < 30.f )
     {
         // If the chuck has stopped, we stop X/Z motors as a safety
@@ -18,6 +27,7 @@ void Model::checkStatus()
         // if the chuck isn't moving.
         stopAllMotors();
     }
+    #endif
     m_spindleWasRunning = chuckRpm > 30.f;
 
     if( m_enabledFunction == Mode::Threading )
@@ -87,6 +97,13 @@ void Model::checkStatus()
     if ( ! m_axis1Motor->isRunning() )
     {
         m_axis1Status = "stopped";
+        if( m_zWasRunning )
+        {
+            // We see that axis1 has stopped. We save the position
+            // in case the user wants to return to it without
+            // explicitly having saved it.
+            m_axis1PreviousPositions.push( m_axis1Motor->getPosition() );
+        }
         if( m_axis1FastReturning )
         {
             m_axis1Motor->setSpeed( m_previousZSpeed );
@@ -236,6 +253,26 @@ void Model::axis1GoToPosition( double pos )
     m_axis1Motor->goToPosition( pos );
 }
 
+void Model::axis1GoToPreviousPosition()
+{
+    axis1Stop();
+    while( ! m_axis1PreviousPositions.empty()
+        && ( std::abs(m_axis1PreviousPositions.top() - m_axis1Motor->getPosition() ) < 0.0001 ) )
+    {
+        if( m_axis1PreviousPositions.size() == 1 )
+        {
+            return;
+        }
+        m_axis1PreviousPositions.pop();
+    }
+    if( m_axis1PreviousPositions.empty() )
+    {
+        return;
+    }
+    axis1GoToPosition( m_axis1PreviousPositions.top() );
+    m_axis1PreviousPositions.pop();
+}
+
 void Model::axis1MoveLeft()
 {
     if( ! m_config->readBool( "Axis1MotorFlipDirection", false ) )
@@ -258,6 +295,18 @@ void Model::axis1MoveRight()
     {
         m_axis1Motor->goToStep( INF_LEFT );
     }
+}
+
+void Model::axis1Stop()
+{
+    m_axis1Motor->stop();
+    m_axis1Motor->wait();
+}
+
+void Model::axis2Stop()
+{
+    m_axis2Motor->stop();
+    m_axis2Motor->wait();
 }
 
 }

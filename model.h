@@ -7,6 +7,7 @@
 #include <cmath>
 #include <limits>
 #include <memory>
+#include <stack>
 #include <vector>
 
 // "Model", i.e. program state data
@@ -75,6 +76,8 @@ class Model
 public:
     Model( IGpio& gpio ) : m_gpio(gpio) {}
 
+    void initialise();
+
     // This should be repeatedly called from the run loop
     void checkStatus();
     void changeMode( Mode mode );
@@ -84,8 +87,13 @@ public:
 
     void axis1GoToStep( long step );
     void axis1GoToPosition( double pos );
+    void axis1GoToPreviousPosition();
+
     void axis1MoveLeft();
     void axis1MoveRight();
+
+    void axis1Stop();
+    void axis2Stop();
 
     IGpio& m_gpio;
     // Lead screw:
@@ -133,6 +141,8 @@ public:
     // Once the user has set the x position once then we use
     // the status bar to display the effective diameter
     bool        m_xDiameterSet{ false };
+
+    std::stack<double> m_axis1PreviousPositions;
 };
 
 } // end namespace
