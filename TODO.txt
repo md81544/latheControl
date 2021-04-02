@@ -1,15 +1,10 @@
 Desperately need a "scratch memory" (or collection of them) to allow
 a return to the previous stopped location. This is because I'll line
 things up, then forget to store the memory location before moving.
-(How about "gb" for "go back"?)
+(WIP) - currently key L works for axis 1 (Z) for this.
 
 (WIP) Continue moving "business logic" into the model
-
-(WIP) Synchronisation of two motors should be done at the motor level
-and not in the UI loop. Motor function should take a pointer to
-the "driver" motor and perhaps a callback for determining position
-of the "driven" motor. This will allow for non-linear synchronisation,
-for example turning a radius.
+Including the "initialise" function to set up all the motors
 
 Why should "go to" cancel any tapering in effect
 
