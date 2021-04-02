@@ -1,7 +1,7 @@
 #pragma once
 
-#include <map>
 #include <string>
+#include <unordered_map>
 
 namespace mgo
 {
@@ -17,16 +17,22 @@ public:
     unsigned long readLong(
         const std::string& key,
         unsigned long defaultValue = 0
-        ) const;
+        );
     double readDouble(
         const std::string& key,
-        double defaultValue = 0.0 ) const;
+        double defaultValue = 0.0 );
     bool readBool(
         const std::string& key,
-        bool defaultValue ) const;
+        bool defaultValue );
     std::string operator[](const std::string& key) const;
 private:
-    std::map<std::string, std::string> m_map;
+    std::unordered_map<std::string, std::string> m_map;
+    // Lazy caches for bool, double, and long types.
+    // We could use a map of variants, but as we only
+    // support three types, it's simple enough like this.
+    std::unordered_map<std::string, bool>   m_mapBool;
+    std::unordered_map<std::string, double> m_mapDouble;
+    std::unordered_map<std::string, long>   m_mapLong;
 };
 
 } // namespace mgo

@@ -13,10 +13,6 @@ to counteract a lathe that cuts a bit of a taper (which works brilliantly,
 but needs to be a config item that is applied automatically, rather
 than having to use taper mode)
 
-The config reader could be improved to also (lazily) store non-string
-values in its cache to avoid repeated conversions from strings.
-Perhaps a hash map of variants?
-
 All "Axis1..." and "Axis2..." references should be replaced with an
 array to allow for future expansion.
 
