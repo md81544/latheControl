@@ -201,6 +201,7 @@ void Model::takeUpZBacklash( ZDirection direction )
 void Model::startSynchronisedXMotor( ZDirection direction )
 {
     // Make sure X isn't already running first
+    m_axis2Motor->synchroniseOff();
     m_axis2Motor->stop();
     m_axis2Motor->wait();
 
@@ -220,8 +221,6 @@ void Model::startSynchronisedXMotor( ZDirection direction )
         m_axis1Motor.get(),
         [angleConversion]( double zPosDelta )
             {
-                // Old formula for speed was
-                // zSpeed  * std::abs( std::tan( m_taperAngle * DEG_TO_RAD ) ) );
                 return zPosDelta * angleConversion;
             }
         );

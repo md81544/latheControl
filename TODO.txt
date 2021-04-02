@@ -1,3 +1,8 @@
+Desperately need a "scratch memory" (or collection of them) to allow
+a return to the previous stopped location. This is because I'll line
+things up, then forget to store the memory location before moving.
+(How about "gb" for "go back"?)
+
 (WIP) Continue moving "business logic" into the model
 
 (WIP) Synchronisation of two motors should be done at the motor level
