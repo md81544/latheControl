@@ -205,6 +205,7 @@ void Model::stopAllMotors()
 
 void Model::takeUpZBacklash( ZDirection direction )
 {
+    axis1Stop();
     if( direction == ZDirection::Right )
     {
         m_axis1Motor->goToStep( m_axis1Motor->getCurrentStep() - 1 );

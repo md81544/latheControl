@@ -1,3 +1,9 @@
+Bug: tapering doesn't work properly
+
+Idea: for determining the angle required for correcting a lathe
+cutting a taper: allow the program to calculate the angle required
+by entering two measurements and a distance
+
 Desperately need a "scratch memory" (or collection of them) to allow
 a return to the previous stopped location. This is because I'll line
 things up, then forget to store the memory location before moving.
