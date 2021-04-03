@@ -1,4 +1,5 @@
-Bug: tapering doesn't work properly
+Bug: tapering doesn't work properly on the real machine
+    - need to reproduce
 
 Idea: for determining the angle required for correcting a lathe
 cutting a taper: allow the program to calculate the angle required
@@ -8,6 +9,8 @@ Desperately need a "scratch memory" (or collection of them) to allow
 a return to the previous stopped location. This is because I'll line
 things up, then forget to store the memory location before moving.
 (WIP) - currently key L works for axis 1 (Z) for this.
+    - scratch memories should be cleared if the axis value is changed
+      (i.e. with zero or manually setting a position)
 
 (WIP) Continue moving "business logic" into the model
 Including the "initialise" function to set up all the motors

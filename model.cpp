@@ -361,12 +361,10 @@ void Model::axis1MoveLeft()
     m_axis1Status = "moving left";
     if( ! m_config->readBool( "Axis1MotorFlipDirection", false ) )
     {
-        axis1CheckForSynchronisation( ZDirection::Left );
         axis1GoToStep( INF_LEFT );
     }
     else
     {
-        axis1CheckForSynchronisation( ZDirection::Right );
         axis1GoToStep( INF_RIGHT );
     }
 }
