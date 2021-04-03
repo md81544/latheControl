@@ -312,49 +312,7 @@ void Controller::processKeyPress()
             case key::ENTER:
             case key::a1_ENTER:
             {
-                if( m_model->m_axis1Memory.at( m_model->m_currentMemory ) == INF_RIGHT ) break;
-                if( m_model->m_axis1Memory.at( m_model->m_currentMemory ) ==
-                    m_model->m_axis1Motor->getCurrentStep() ) break;
-                m_model->axis1Stop();
-                m_model->m_axis1Status = "returning";
-                // Ensure z backlash is compensated first for tapering or threading:
-                ZDirection direction;
-                if( m_model->m_axis1Memory.at( m_model->m_currentMemory ) <
-                    m_model->m_axis1Motor->getCurrentStep() )
-                {
-                    // Z motor is moving away from chuck
-                    // NOTE!! Memory is stored as STEPS which, on the Z-axis is
-                    // reversed from POSITION (see stepper's getPosition() vs getCurrentStep())
-                    // so the direction we save is reversed
-                    direction = ZDirection::Right;
-                }
-                else
-                {
-                    // Z motor is moving towards chuck
-                    direction = ZDirection::Left;
-                }
-                m_model->takeUpZBacklash( direction );
-                m_model->m_axis1Motor->wait();
-                // If threading, we need to start at the same point each time - we
-                // wait for zero degrees on the chuck before starting:
-                if( m_model->m_enabledFunction == Mode::Threading )
-                {
-                    m_model->m_rotaryEncoder->callbackAtZeroDegrees([&]()
-                        {
-                            m_model->axis1GoToStep(
-                                m_model->m_axis1Memory.at( m_model->m_currentMemory ) );
-                        }
-                        );
-                }
-                else
-                {
-                    if( m_model->m_enabledFunction == Mode::Taper )
-                    {
-                        m_model->startSynchronisedXMotor( direction );
-                    }
-                    m_model->axis1GoToStep(
-                        m_model->m_axis1Memory.at( m_model->m_currentMemory ) );
-                }
+                m_model->axis1GoToCurrentMemory();
                 break;
             }
             case key::UP:
@@ -399,35 +357,11 @@ void Controller::processKeyPress()
             }
             case key::LEFT:
             {
-                // Same key will cancel if we're already moving
-                if ( m_model->m_axis1Motor->isRunning() )
-                {
-                    m_model->axis1Stop();
-                    break;
-                }
-                m_model->m_axis1Status = "moving left";
-                if( m_model->m_enabledFunction == Mode::Taper )
-                {
-                    m_model->takeUpZBacklash( ZDirection::Left );
-                    m_model->startSynchronisedXMotor( ZDirection::Left );
-                }
                 m_model->axis1MoveLeft();
                 break;
             }
             case key::RIGHT:
             {
-                // Same key will cancel if we're already moving
-                if ( m_model->m_axis1Motor->isRunning() )
-                {
-                    m_model->axis1Stop();
-                    break;
-                }
-                m_model->m_axis1Status = "moving right";
-                if( m_model->m_enabledFunction == Mode::Taper )
-                {
-                    m_model->takeUpZBacklash( ZDirection::Right );
-                    m_model->startSynchronisedXMotor( ZDirection::Right );
-                }
                 m_model->axis1MoveRight();
                 break;
             }

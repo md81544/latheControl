@@ -88,6 +88,9 @@ public:
     void axis1GoToStep( long step );
     void axis1GoToPosition( double pos );
     void axis1GoToPreviousPosition();
+    void axis1CheckForSynchronisation( ZDirection direction );
+    void axis1CheckForSynchronisation( long step );
+    void axis1GoToCurrentMemory();
 
     void axis1MoveLeft();
     void axis1MoveRight();

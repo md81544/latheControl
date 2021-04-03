@@ -103,6 +103,8 @@ void Model::checkStatus()
             // in case the user wants to return to it without
             // explicitly having saved it.
             m_axis1PreviousPositions.push( m_axis1Motor->getPosition() );
+            // Also, just in case it was on, we turn off synchronisation
+            m_axis2Motor->synchroniseOff();
         }
         if( m_axis1FastReturning )
         {
@@ -182,7 +184,6 @@ void Model::changeMode( Mode mode )
 
     if( mode == Mode::Taper )
     {
-        // reset any taper start points
         m_taperPreviousXSpeed = m_axis2Motor->getSpeed();
         if( m_taperAngle != 0.0 )
         {
@@ -245,12 +246,36 @@ void Model::startSynchronisedXMotor( ZDirection direction )
 
 void Model::axis1GoToStep( long step )
 {
-    m_axis1Motor->goToStep( step );
+    axis1CheckForSynchronisation( step );
+    if( m_enabledFunction == Mode::Threading )
+    {
+        m_rotaryEncoder->callbackAtZeroDegrees([&]()
+            {
+                m_axis1Motor->goToStep( step );
+            }
+            );
+    }
+    else
+    {
+        m_axis1Motor->goToStep( step );
+    }
 }
 
 void Model::axis1GoToPosition( double pos )
 {
-    m_axis1Motor->goToPosition( pos );
+    axis1CheckForSynchronisation( pos / m_axis1Motor->getConversionFactor() );
+    if( m_enabledFunction == Mode::Threading )
+    {
+        m_rotaryEncoder->callbackAtZeroDegrees([&]()
+            {
+                m_axis1Motor->goToPosition( pos );
+            }
+            );
+    }
+    else
+    {
+        m_axis1Motor->goToPosition( pos );
+    }
 }
 
 void Model::axis1GoToPreviousPosition()
@@ -273,26 +298,96 @@ void Model::axis1GoToPreviousPosition()
     m_axis1PreviousPositions.pop();
 }
 
-void Model::axis1MoveLeft()
+void Model::axis1CheckForSynchronisation( ZDirection direction )
 {
-    if( ! m_config->readBool( "Axis1MotorFlipDirection", false ) )
+    if( m_enabledFunction == Mode::Taper )
     {
-        m_axis1Motor->goToStep( INF_LEFT );
+        takeUpZBacklash( direction );
+        startSynchronisedXMotor( direction );
+    }
+}
+
+void Model::axis1CheckForSynchronisation( long step )
+{
+    if( m_enabledFunction != Mode::Taper ) return;
+    ZDirection direction;
+    if( step < m_axis1Motor->getCurrentStep() )
+    {
+        direction = ZDirection::Right;
     }
     else
     {
-        m_axis1Motor->goToStep( INF_RIGHT );
+        direction = ZDirection::Left;
+    }
+    axis1CheckForSynchronisation( direction );
+}
+
+void Model::axis1GoToCurrentMemory()
+{
+    if( m_axis1Memory.at( m_currentMemory ) == INF_RIGHT ) return;
+    if( m_axis1Memory.at( m_currentMemory ) == m_axis1Motor->getCurrentStep() ) return;
+    axis1Stop();
+    m_axis1Status = "returning";
+    axis1CheckForSynchronisation( m_axis1Memory.at( m_currentMemory ) );
+    axis1GoToStep( m_axis1Memory.at( m_currentMemory ) );
+    // If threading, we need to start at the same point each time - we
+    // wait for zero degrees on the chuck before starting:
+    if( m_enabledFunction == Mode::Threading )
+    {
+        m_rotaryEncoder->callbackAtZeroDegrees([&]()
+            {
+                axis1GoToStep( m_axis1Memory.at( m_currentMemory ) );
+            }
+            );
+    }
+    else
+    {
+        axis1CheckForSynchronisation( m_axis1Memory.at( m_currentMemory ) );
+        axis1GoToStep( m_axis1Memory.at( m_currentMemory ) );
+    }
+
+}
+
+void Model::axis1MoveLeft()
+{
+    // Issuing the same command (i.e. pressing the same key)
+    // when it is already running will cause the motor to stop
+    if ( m_axis1Motor->isRunning() )
+    {
+        axis1Stop();
+        return;
+    }
+    m_axis1Status = "moving left";
+    if( ! m_config->readBool( "Axis1MotorFlipDirection", false ) )
+    {
+        axis1CheckForSynchronisation( ZDirection::Left );
+        axis1GoToStep( INF_LEFT );
+    }
+    else
+    {
+        axis1CheckForSynchronisation( ZDirection::Right );
+        axis1GoToStep( INF_RIGHT );
     }
 }
 
 void Model::axis1MoveRight()
 {
+    // Issuing the same command (i.e. pressing the same key)
+    // when it is already running will cause the motor to stop
+    if ( m_axis1Motor->isRunning() )
+    {
+        axis1Stop();
+        return;
+    }
+    m_axis1Status = "moving right";
     if( ! m_config->readBool( "Axis1MotorFlipDirection", false ) )
     {
+        axis1CheckForSynchronisation( ZDirection::Right );
         m_axis1Motor->goToStep( INF_RIGHT );
     }
     else
     {
+        axis1CheckForSynchronisation( ZDirection::Left );
         m_axis1Motor->goToStep( INF_LEFT );
     }
 }
