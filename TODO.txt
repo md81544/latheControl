@@ -1,6 +1,3 @@
-Bug: tapering doesn't work properly on the real machine
-    - need to reproduce
-
 Idea: for determining the angle required for correcting a lathe
 cutting a taper: allow the program to calculate the angle required
 by entering two measurements and a distance
@@ -39,9 +36,6 @@ Add ability to pick up existing memories if the stepper loses the plot
 
 Think about incorporating reading from scales to make position reporting
 accurate rather than estimated
-
-Add motor "conversion factors" or steps per revolution including gearing
-as a config item
 
 Automate threading operations (or all?) to automatically return after the
 target step has been reached and a key is pressed
