@@ -241,7 +241,7 @@ void Model::startSynchronisedXMotorForRadius(ZDirection direction)
                 // (i.e. the radius): z^2 + x^2 = r^2, so
                 // sqrt( r^2 - z^2 ) = our x position
                 double zPosOutwards = radius + zPosDelta;
-                double newXPos = std::sqrt( radius * radius - zPosOutwards * zPosOutwards );
+                double newXPos = - std::sqrt( radius * radius - zPosOutwards * zPosOutwards );
                 return newXPos;
             }
         );
