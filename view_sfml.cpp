@@ -246,9 +246,9 @@ void ViewSfml::initialise( const Model& model )
     m_txtWarning->setPosition( { 20, 510 });
     m_txtWarning->setFillColor( sf::Color::Red );
 
-    m_txtTaperAngle= std::make_unique<sf::Text>("", *m_font, 30 );
-    m_txtTaperAngle->setPosition( { 550, 160 });
-    m_txtTaperAngle->setFillColor( sf::Color::Red );
+    m_txtTaperOrRadius= std::make_unique<sf::Text>("", *m_font, 30 );
+    m_txtTaperOrRadius->setPosition( { 550, 160 });
+    m_txtTaperOrRadius->setFillColor( sf::Color::Red );
 
     m_txtNotification = std::make_unique<sf::Text>("", *m_font, 25 );
     m_txtNotification->setPosition( { 860, 45 });
@@ -332,9 +332,10 @@ void ViewSfml::updateDisplay( const Model& model )
         m_window->draw( *m_txtGeneralStatus );
         m_window->draw( *m_txtWarning );
         m_window->draw( *m_txtNotification );
-        if( model.m_enabledFunction == Mode::Taper )
+        if( model.m_enabledFunction == Mode::Taper ||
+            model.m_enabledFunction == Mode::Radius )
         {
-            m_window->draw( *m_txtTaperAngle );
+            m_window->draw( *m_txtTaperOrRadius );
         }
         if( model.m_xRetractionDirection == XRetractionDirection::Inwards )
         {
@@ -435,7 +436,11 @@ void ViewSfml::updateTextFromModel( const Model& model )
     m_txtWarning->setString( model.m_warning );
     if( model.m_enabledFunction == Mode::Taper )
     {
-        m_txtTaperAngle->setString( fmt::format( "Angle: {}", model.m_taperAngle ) );
+        m_txtTaperOrRadius->setString( fmt::format( "Angle: {}", model.m_taperAngle ) );
+    }
+    else if( model.m_enabledFunction == Mode::Radius )
+    {
+        m_txtTaperOrRadius->setString( fmt::format( "Radius: {}", model.m_radius ) );
     }
 
     for( std::size_t n = 0; n < m_txtMemoryLabel.size(); ++n )
@@ -481,6 +486,9 @@ void ViewSfml::updateTextFromModel( const Model& model )
         case Mode::Taper:
             m_txtNotification->setString( "TAPERING" );
             break;
+        case Mode::Radius:
+            m_txtNotification->setString( "RADIUS" );
+            break;
         default:
             m_txtNotification->setString( "" );
     }
@@ -524,6 +532,18 @@ void ViewSfml::updateTextFromModel( const Model& model )
             m_txtMisc3->setString( "MT1 = 1.4287, MT2 = 1.4307, MT3 = 1.4377, MT4 = 1.4876" );
             m_txtMisc4->setString( "" );
             m_txtMisc5->setString( "NOTE! Arbitrary max angle = 60 degrees" );
+            m_txtWarning->setString( "Enter to keep enabled, Esc to disable, Del to clear" );
+            break;
+        }
+        case Mode::Radius:
+        {
+            m_txtMode->setString( "Radius" );
+            m_txtMisc1->setString( fmt::format( "Radius required: {}_",
+                model.m_input ) );
+            m_txtMisc2->setString( "" );
+            m_txtMisc3->setString( "" );
+            m_txtMisc4->setString( "" );
+            m_txtMisc5->setString( "" );
             m_txtWarning->setString( "Enter to keep enabled, Esc to disable, Del to clear" );
             break;
         }

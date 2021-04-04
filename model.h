@@ -42,7 +42,8 @@ enum class Mode
     Axis1PositionSetup,
     Axis2PositionSetup,
     Axis1GoTo,
-    Axis2GoTo
+    Axis2GoTo,
+    Radius
 };
 
 // "Key Modes" allow for two-key actions, a bit like vim.
@@ -83,7 +84,8 @@ public:
     void changeMode( Mode mode );
     void stopAllMotors();
     void takeUpZBacklash( ZDirection direction );
-    void startSynchronisedXMotor( ZDirection direction );
+    void startSynchronisedXMotorForTaper(  ZDirection direction );
+    void startSynchronisedXMotorForRadius( ZDirection direction );
 
     void axis1GoToStep( long step );
     void axis1GoToPosition( double pos );
@@ -97,6 +99,10 @@ public:
 
     void axis1Stop();
     void axis2Stop();
+
+    // This is called when the user presses ENTER when
+    // inputting a mode parameter (e.g. taper angle)
+    void acceptInputValue();
 
     IGpio& m_gpio;
     // Lead screw:
@@ -120,6 +126,7 @@ public:
     bool        m_axis2FastReturning{ false };
     int         m_keyPressed{ 0 };
     double      m_taperAngle{ 0.0 };
+    double      m_radius{ 0.0 };
     float       m_taperPreviousXSpeed{ 40.f };
     std::unique_ptr<mgo::ConfigReader> m_config;
     // Stores the current function displayed on the screen:

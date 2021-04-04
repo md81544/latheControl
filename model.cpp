@@ -3,6 +3,8 @@
 
 #include "fmt/format.h"
 
+#include <cassert>
+
 namespace mgo
 {
 void Model::initialise()
@@ -12,7 +14,6 @@ void Model::initialise()
     // still called from there).
     m_axis1PreviousPositions.push( m_axis1Motor->getPosition() );
 }
-
 
 void Model::checkStatus()
 {
@@ -51,39 +52,6 @@ void Model::checkStatus()
             m_warning = "";
         }
         m_axis1Motor->setSpeed( speed );
-    }
-
-    if( m_currentDisplayMode == Mode::Taper )
-    {
-        if( m_input.empty() )
-        {
-            m_taperAngle = 0.0;
-        }
-        else
-        {
-            if( m_input != "-" )
-            {
-                try
-                {
-                    m_taperAngle = std::stod( m_input );
-                    if( m_taperAngle > 60.0 )
-                    {
-                        m_taperAngle = 60.0;
-                        m_input = "60.0";
-                    }
-                    else if( m_taperAngle < -60.0 )
-                    {
-                        m_taperAngle = -60.0;
-                        m_input = "-60.0";
-                    }
-                }
-                catch( const std::exception& )
-                {
-                    m_taperAngle = 0.0;
-                    m_input = "";
-                }
-            }
-        }
     }
     if( m_xDiameterSet )
     {
@@ -164,7 +132,7 @@ void Model::checkStatus()
 void Model::changeMode( Mode mode )
 {
     stopAllMotors();
-    if( mode == Mode::Threading || mode == Mode::Taper )
+    if( mode == Mode::Threading || mode == Mode::Taper || mode == Mode::Radius )
     {
         // We do not want motor speed ramping on tapering or threading
         m_axis1Motor->enableRamping( false );
@@ -217,7 +185,7 @@ void Model::takeUpZBacklash( ZDirection direction )
     m_axis1Motor->wait();
 }
 
-void Model::startSynchronisedXMotor( ZDirection direction )
+void Model::startSynchronisedXMotorForTaper( ZDirection direction )
 {
     // Make sure X isn't already running first
     m_axis2Motor->synchroniseOff();
@@ -238,9 +206,43 @@ void Model::startSynchronisedXMotor( ZDirection direction )
     double angleConversion = std::tan( m_taperAngle * DEG_TO_RAD );
     m_axis2Motor->synchroniseOn(
         m_axis1Motor.get(),
-        [angleConversion]( double zPosDelta )
+        [ angleConversion ]( double zPosDelta )
             {
                 return zPosDelta * angleConversion;
+            }
+        );
+}
+
+void Model::startSynchronisedXMotorForRadius(ZDirection direction)
+{
+    // Make sure X isn't already running first
+    m_axis2Motor->synchroniseOff();
+    m_axis2Motor->stop();
+    m_axis2Motor->wait();
+
+    int stepAdd = -1;
+    if( ( direction == ZDirection::Left  && m_taperAngle < 0.0 ) ||
+        ( direction == ZDirection::Right && m_taperAngle > 0.0 ) )
+    {
+        stepAdd = 1;
+    }
+    // As this is called just before the Z motor starts moving, we take
+    // up any backlash first.
+    m_axis2Motor->setSpeed( 100.0 );
+    m_axis2Motor->goToStep( m_axis2Motor->getCurrentStep() + stepAdd );
+    m_axis2Motor->wait();
+    double radius = m_radius;
+    m_axis2Motor->synchroniseOn(
+        m_axis1Motor.get(),
+        [ radius ]( double zPosDelta )
+            {
+                // To solve for X, given Z, we can use Pythagoras
+                // as we have a right angle with known hypoteneuse
+                // (i.e. the radius): z^2 + x^2 = r^2, so
+                // sqrt( r^2 - z^2 ) = our x position
+                double zPosOutwards = radius + zPosDelta;
+                double newXPos = std::sqrt( radius * radius - zPosOutwards * zPosOutwards );
+                return newXPos;
             }
         );
 }
@@ -304,13 +306,22 @@ void Model::axis1CheckForSynchronisation( ZDirection direction )
     if( m_enabledFunction == Mode::Taper )
     {
         takeUpZBacklash( direction );
-        startSynchronisedXMotor( direction );
+        startSynchronisedXMotorForTaper( direction );
+    }
+    else if( m_enabledFunction == Mode::Radius )
+    {
+        takeUpZBacklash( direction );
+        startSynchronisedXMotorForRadius( direction );
     }
 }
 
 void Model::axis1CheckForSynchronisation( long step )
 {
-    if( m_enabledFunction != Mode::Taper ) return;
+    if( m_enabledFunction != Mode::Taper  &&
+        m_enabledFunction != Mode::Radius )
+    {
+        return;
+    }
     ZDirection direction;
     if( step < m_axis1Motor->getCurrentStep() )
     {
@@ -330,7 +341,6 @@ void Model::axis1GoToCurrentMemory()
     axis1Stop();
     m_axis1Status = "returning";
     axis1CheckForSynchronisation( m_axis1Memory.at( m_currentMemory ) );
-    axis1GoToStep( m_axis1Memory.at( m_currentMemory ) );
     // If threading, we need to start at the same point each time - we
     // wait for zero degrees on the chuck before starting:
     if( m_enabledFunction == Mode::Threading )
@@ -343,7 +353,6 @@ void Model::axis1GoToCurrentMemory()
     }
     else
     {
-        axis1CheckForSynchronisation( m_axis1Memory.at( m_currentMemory ) );
         axis1GoToStep( m_axis1Memory.at( m_currentMemory ) );
     }
 
@@ -381,13 +390,11 @@ void Model::axis1MoveRight()
     m_axis1Status = "moving right";
     if( ! m_config->readBool( "Axis1MotorFlipDirection", false ) )
     {
-        axis1CheckForSynchronisation( ZDirection::Right );
-        m_axis1Motor->goToStep( INF_RIGHT );
+        axis1GoToStep( INF_RIGHT );
     }
     else
     {
-        axis1CheckForSynchronisation( ZDirection::Left );
-        m_axis1Motor->goToStep( INF_LEFT );
+        axis1GoToStep( INF_LEFT );
     }
 }
 
@@ -401,6 +408,78 @@ void Model::axis2Stop()
 {
     m_axis2Motor->stop();
     m_axis2Motor->wait();
+}
+
+void Model::acceptInputValue()
+{
+    double inputValue = 0.0;
+    bool valid = true;
+    try
+    {
+        inputValue = std::stod( m_input );
+    }
+    catch( ... )
+    {
+        valid = false;
+    }
+
+    switch( m_currentDisplayMode )
+    {
+        case Mode::Axis2PositionSetup:
+        {
+            m_axis2Motor->setPosition( inputValue );
+            // This will invalidate any memorised X positions, so we clear them
+            for( auto& m : m_axis2Memory )
+            {
+                m = INF_OUT;
+            }
+            break;
+        }
+        case Mode::Axis1PositionSetup:
+        {
+            m_axis1Motor->setPosition( inputValue );
+            // This will invalidate any memorised Z positions, so we clear them
+            for( auto& m : m_axis1Memory )
+            {
+                m = INF_RIGHT;
+            }
+            break;
+        }
+        case Mode::Axis1GoTo:
+        {
+            if( valid )
+            {
+                axis1GoToPosition( inputValue );
+                m_axis1Status = fmt::format( "Going to {}", inputValue );
+            }
+            break;
+        }
+        case Mode::Axis2GoTo:
+        {
+            if( valid )
+            {
+                m_axis2Motor->goToPosition( inputValue );
+                m_axis2Status = fmt::format( "Going to {}", inputValue );
+            }
+            break;
+        }
+        case Mode::Taper:
+        {
+            m_taperAngle = inputValue;
+            break;
+        }
+        case Mode::Radius:
+        {
+            m_radius = inputValue;
+            break;
+        }
+        case Mode::Axis2RetractSetup:
+            // no processing required for these modes
+        default:
+            // unhandled mode
+            assert( false );
+    }
+    m_currentDisplayMode = Mode::None;
 }
 
 }

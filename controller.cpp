@@ -553,7 +553,7 @@ void Controller::processKeyPress()
                         direction = ZDirection::Right;
                     }
                     m_model->takeUpZBacklash( direction );
-                    m_model->startSynchronisedXMotor( direction );
+                    m_model->startSynchronisedXMotorForTaper( direction );
                 }
                 else
                 {
@@ -691,6 +691,12 @@ void Controller::processKeyPress()
                 m_model->changeMode( Mode::Axis2RetractSetup );
                 break;
             }
+            case key::f2o: // Radius mode
+            {
+                if( m_model->m_config->readBool( "DisableAxis2", false ) ) break;
+                m_model->changeMode( Mode::Radius );
+                break;
+            }
             case key::a2_s: // X position set
             {
                 m_model->changeMode( Mode::Axis2PositionSetup );
@@ -766,6 +772,7 @@ int Controller::checkKeyAllowedForMode( int key )
         case Mode::Taper:
         case Mode::Axis1GoTo:
         case Mode::Axis2GoTo:
+        case Mode::Radius:
             if( key >= key::ZERO && key <= key::NINE ) return key;
             if( key == key::FULLSTOP || key == key::BACKSPACE || key == key::DELETE ) return key;
             if( key == key::MINUS ) return key;
@@ -784,7 +791,8 @@ int Controller::processModeInputKeys( int key )
         m_model->m_currentDisplayMode == Mode::Axis2PositionSetup ||
         m_model->m_currentDisplayMode == Mode::Axis1PositionSetup ||
         m_model->m_currentDisplayMode == Mode::Axis1GoTo ||
-        m_model->m_currentDisplayMode == Mode::Axis2GoTo
+        m_model->m_currentDisplayMode == Mode::Axis2GoTo ||
+        m_model->m_currentDisplayMode == Mode::Radius
         )
     {
         if( key >= key::ZERO && key <= key::NINE )
@@ -889,77 +897,7 @@ int Controller::processModeInputKeys( int key )
 
     if( m_model->m_currentDisplayMode != Mode::None && key == key::ENTER )
     {
-        if( m_model->m_currentDisplayMode == Mode::Axis2PositionSetup )
-        {
-            float xPos = 0;
-            try
-            {
-                xPos = std::stof( m_model->m_input );
-            }
-            catch( ... ) {}
-            m_model->m_axis2Motor->setPosition( xPos );
-            // This will invalidate any memorised X positions, so we clear them
-            for( auto& m : m_model->m_axis2Memory )
-            {
-                m = INF_OUT;
-            }
-        }
-
-        if( m_model->m_currentDisplayMode == Mode::Axis1PositionSetup )
-        {
-            float zPos = 0;
-            try
-            {
-                zPos = std::stof( m_model->m_input );
-            }
-            catch( ... ) {}
-            m_model->m_axis1Motor->setPosition( zPos );
-            // This will invalidate any memorised Z positions, so we clear them
-            for( auto& m : m_model->m_axis1Memory )
-            {
-                m = INF_RIGHT;
-            }
-        }
-
-        if( m_model->m_currentDisplayMode == Mode::Axis1GoTo )
-        {
-            float pos = 0;
-            bool valid = true;
-            try
-            {
-                pos = std::stof( m_model->m_input );
-            }
-            catch( ... )
-            {
-                valid = false;
-            }
-            if( valid )
-            {
-                m_model->axis1GoToPosition( pos );
-                m_model->m_axis1Status = fmt::format( "Going to {}", pos );
-            }
-        }
-
-        if( m_model->m_currentDisplayMode == Mode::Axis2GoTo )
-        {
-            float pos = 0;
-            bool valid = true;
-            try
-            {
-                pos = std::stof( m_model->m_input );
-            }
-            catch( ... )
-            {
-                valid = false;
-            }
-            if( valid )
-            {
-                m_model->m_axis2Motor->goToPosition( pos );
-                m_model->m_axis2Status = fmt::format( "Going to {}", pos );
-            }
-        }
-
-        m_model->m_currentDisplayMode = Mode::None;
+        m_model->acceptInputValue();
         return -1;
     }
     return key;
@@ -1003,6 +941,10 @@ int Controller::processLeaderKeyModeKeyPress( int keyPress )
             case key::r:
             case key::R:
                 keyPress = key::f2r;
+                break;
+            case key::o:
+            case key::O:
+                keyPress = key::f2o;
                 break;
             default:
                 keyPress = key::None;
