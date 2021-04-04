@@ -32,79 +32,15 @@ Controller::Controller( Model* model )
     : m_model( model )
 {
     m_view = std::make_unique<ViewSfml>();
-
-
     m_view->initialise( *m_model );
-
     m_view->updateDisplay( *m_model ); // get SFML running before we start the motor threads
-
-    double axis1ConversionFactor =
-        m_model->m_config->readDouble( "Axis1ConversionNumerator", -1.0 ) /
-            m_model->m_config->readDouble( "Axis1ConversionDivisor", 1'000.0 );
-    double maxZSpeed = m_model->m_config->readDouble( "Axis1MaxMotorSpeed", 1'000.0 );
-    long axis1StepsPerRevolution = m_model->m_config->readLong( "Axis1StepsPerRev", 1'000 );
-    m_model->m_axis1Motor = std::make_unique<mgo::StepperMotor>(
-        m_model->m_gpio,
-        m_model->m_config->readLong( "Axis1GpioStepPin", 8 ),
-        m_model->m_config->readLong( "Axis1GpioReversePin", 7 ),
-        m_model->m_config->readLong( "Axis1GpioEnablePin", 0 ),
-        axis1StepsPerRevolution,
-        axis1ConversionFactor,
-        std::abs( maxZSpeed / axis1ConversionFactor / axis1StepsPerRevolution )
-        );
-
-    double axis2ConversionFactor =
-        m_model->m_config->readDouble( "Axis2ConversionNumerator", -1.0 ) /
-            m_model->m_config->readDouble( "Axis2ConversionDivisor", 1'000.0 );
-    double maxXSpeed = m_model->m_config->readDouble( "Axis2MaxMotorSpeed", 1'000.0 );
-    long axis2StepsPerRevolution = m_model->m_config->readLong( "Axis2StepsPerRev", 800 );
-    m_model->m_axis2Motor = std::make_unique<mgo::StepperMotor>(
-        m_model->m_gpio,
-        m_model->m_config->readLong( "Axis2GpioStepPin", 20 ),
-        m_model->m_config->readLong( "Axis2GpioReversePin", 21 ),
-        m_model->m_config->readLong( "Axis2GpioEnablePin", 0 ),
-        axis2StepsPerRevolution,
-        axis2ConversionFactor,
-        std::abs( maxXSpeed / axis2ConversionFactor / axis2StepsPerRevolution )
-        );
-
-    m_model->m_rotaryEncoder = std::make_unique<mgo::RotaryEncoder>(
-        m_model->m_gpio,
-        m_model->m_config->readLong(  "RotaryEncoderGpioPinA", 23 ),
-        m_model->m_config->readLong(  "RotaryEncoderGpioPinB", 24 ),
-        m_model->m_config->readLong(  "RotaryEncoderPulsesPerRev", 2'000 ),
-        m_model->m_config->readDouble( "RotaryEncoderGearingNumerator", 35.0 ) /
-            m_model->m_config->readDouble( "RotaryEncoderGearingDivisor", 30.0 )
-        );
-
-    // We need to ensure that the motors are in a known position with regard to
-    // backlash - which means moving them initially by the amount of
-    // configured backlash compensation to ensure any backlash is taken up
-    // This initial movement will be small but this could cause an issue if
-    // the tool is against work already - maybe TODO something here?
-    unsigned long zBacklashCompensation =
-        m_model->m_config->readLong( "Axis1BacklashCompensationSteps", 0 );
-    unsigned long xBacklashCompensation =
-        m_model->m_config->readLong( "Axis2BacklashCompensationSteps", 0 );
-    m_model->axis1GoToStep( zBacklashCompensation );
-    m_model->m_axis1Motor->setBacklashCompensation( zBacklashCompensation, zBacklashCompensation );
-    m_model->m_axis2Motor->goToStep( xBacklashCompensation );
-    m_model->m_axis2Motor->setBacklashCompensation( xBacklashCompensation, xBacklashCompensation );
-    m_model->m_axis1Motor->wait();
-    m_model->m_axis2Motor->wait();
-    // re-zero after that:
-    m_model->m_axis1Motor->zeroPosition();
-    m_model->m_axis2Motor->zeroPosition();
-
-    // TODO: Most of the above should be in this function.
     m_model->initialise();
-
 }
 
 void Controller::run()
 {
-    m_model->m_axis1Motor->setSpeed( m_model->m_config->readDouble( "Axis1SpeedPreset2", 40.0 ) );
-    m_model->m_axis2Motor->setSpeed( m_model->m_config->readDouble( "Axis2SpeedPreset2", 20.0 ) );
+    m_model->m_axis1Motor->setSpeed( m_model->m_config.readDouble( "Axis1SpeedPreset2", 40.0 ) );
+    m_model->m_axis2Motor->setSpeed( m_model->m_config.readDouble( "Axis2SpeedPreset2", 20.0 ) );
 
     while( ! m_model->m_quit )
     {
@@ -192,7 +128,7 @@ void Controller::processKeyPress()
                     m_model->m_axis2Motor->setSpeed( m_model->m_axis2Motor->getSpeed() + 2.0 );
                 }
                 else if( m_model->m_axis2Motor->getSpeed() <
-                    m_model->m_config->readDouble( "Axis2MaxMotorSpeed", 1'000.0 ) )
+                    m_model->m_config.readDouble( "Axis2MaxMotorSpeed", 1'000.0 ) )
                 {
                     m_model->m_axis2Motor->setSpeed( m_model->m_axis2Motor->getSpeed() + 10.0 );
                 }
@@ -212,7 +148,7 @@ void Controller::processKeyPress()
                     // extra fine with shift
                     nudgeValue = 6.0;
                 }
-                if( m_model->m_config->readBool( "Axis2MotorFlipDirection", false ) )
+                if( m_model->m_config.readBool( "Axis2MotorFlipDirection", false ) )
                 {
                     nudgeValue = -nudgeValue;
                 }
@@ -234,7 +170,7 @@ void Controller::processKeyPress()
                     // extra fine with shift
                     nudgeValue = 6.0;
                 }
-                if( m_model->m_config->readBool( "Axis2MotorFlipDirection", false ) )
+                if( m_model->m_config.readBool( "Axis2MotorFlipDirection", false ) )
                 {
                     nudgeValue = -nudgeValue;
                 }
@@ -253,7 +189,7 @@ void Controller::processKeyPress()
                 else
                 {
                     if( m_model->m_axis1Motor->getRpm() <=
-                        m_model->m_config->readDouble( "Axis1MaxMotorSpeed", 1'000.0 ) - 20 )
+                        m_model->m_config.readDouble( "Axis1MaxMotorSpeed", 1'000.0 ) - 20 )
                     {
                         m_model->m_axis1Motor->setSpeed( m_model->m_axis1Motor->getRpm() + 20.0 );
                     }
@@ -324,7 +260,7 @@ void Controller::processKeyPress()
                 else
                 {
                     m_model->m_axis2Status = "moving in";
-                    if( m_model->m_config->readBool( "Axis2MotorFlipDirection", false ) )
+                    if( m_model->m_config.readBool( "Axis2MotorFlipDirection", false ) )
                     {
                         m_model->m_axis2Motor->goToStep( INF_OUT );
                     }
@@ -344,7 +280,7 @@ void Controller::processKeyPress()
                 else
                 {
                     m_model->m_axis2Status = "moving out";
-                    if( m_model->m_config->readBool( "Axis2MotorFlipDirection", false ) )
+                    if( m_model->m_config.readBool( "Axis2MotorFlipDirection", false ) )
                     {
                         m_model->m_axis2Motor->goToStep( INF_IN );
                     }
@@ -377,7 +313,7 @@ void Controller::processKeyPress()
                 {
                     nudgeValue = 2L;
                 }
-                if( m_model->m_config->readBool( "Axis1MotorFlipDirection", false ) )
+                if( m_model->m_config.readBool( "Axis1MotorFlipDirection", false ) )
                 {
                     nudgeValue = -nudgeValue;
                 }
@@ -397,7 +333,7 @@ void Controller::processKeyPress()
                 {
                     nudgeValue = 2L;
                 }
-                if( m_model->m_config->readBool( "Axis1MotorFlipDirection", false ) )
+                if( m_model->m_config.readBool( "Axis1MotorFlipDirection", false ) )
                 {
                     nudgeValue = -nudgeValue;
                 }
@@ -428,7 +364,7 @@ void Controller::processKeyPress()
                 if( m_model->m_currentDisplayMode != Mode::Threading )
                 {
                     m_model->m_axis1Motor->setSpeed(
-                        m_model->m_config->readDouble( "Axis1SpeedPreset1", 20.0 )
+                        m_model->m_config.readDouble( "Axis1SpeedPreset1", 20.0 )
                         );
                 }
                 break;
@@ -438,7 +374,7 @@ void Controller::processKeyPress()
                 if( m_model->m_currentDisplayMode != Mode::Threading )
                 {
                     m_model->m_axis1Motor->setSpeed(
-                        m_model->m_config->readDouble( "Axis1SpeedPreset2", 40.0 )
+                        m_model->m_config.readDouble( "Axis1SpeedPreset2", 40.0 )
                         );
                 }
                 break;
@@ -448,7 +384,7 @@ void Controller::processKeyPress()
                 if( m_model->m_currentDisplayMode != Mode::Threading )
                 {
                     m_model->m_axis1Motor->setSpeed(
-                        m_model->m_config->readDouble( "Axis1SpeedPreset3", 100.0 )
+                        m_model->m_config.readDouble( "Axis1SpeedPreset3", 100.0 )
                         );
                 }
                 break;
@@ -458,7 +394,7 @@ void Controller::processKeyPress()
                 if( m_model->m_currentDisplayMode != Mode::Threading )
                 {
                     m_model->m_axis1Motor->setSpeed(
-                        m_model->m_config->readDouble( "Axis1SpeedPreset4", 250.0 )
+                        m_model->m_config.readDouble( "Axis1SpeedPreset4", 250.0 )
                         );
                 }
                 break;
@@ -468,8 +404,8 @@ void Controller::processKeyPress()
                 if( m_model->m_currentDisplayMode != Mode::Threading )
                 {
                     m_model->m_axis1Motor->setSpeed(
-                        m_model->m_config->readDouble( "Axis1SpeedPreset5",
-                            m_model->m_config->readDouble( "Axis1MaxMotorSpeed", 1'000.0 )
+                        m_model->m_config.readDouble( "Axis1SpeedPreset5",
+                            m_model->m_config.readDouble( "Axis1MaxMotorSpeed", 1'000.0 )
                             )
                         );
                 }
@@ -482,7 +418,7 @@ void Controller::processKeyPress()
                 if( m_model->m_currentDisplayMode != Mode::Threading )
                 {
                     m_model->m_axis2Motor->setSpeed(
-                        m_model->m_config->readDouble( "Axis2SpeedPreset1", 5.0 )
+                        m_model->m_config.readDouble( "Axis2SpeedPreset1", 5.0 )
                         );
                 }
                 break;
@@ -493,7 +429,7 @@ void Controller::processKeyPress()
                 if( m_model->m_currentDisplayMode != Mode::Threading )
                 {
                     m_model->m_axis2Motor->setSpeed(
-                        m_model->m_config->readDouble( "Axis2SpeedPreset2", 20.0 )
+                        m_model->m_config.readDouble( "Axis2SpeedPreset2", 20.0 )
                         );
                 }
                 break;
@@ -504,7 +440,7 @@ void Controller::processKeyPress()
                 if( m_model->m_currentDisplayMode != Mode::Threading )
                 {
                     m_model->m_axis2Motor->setSpeed(
-                        m_model->m_config->readDouble( "Axis2SpeedPreset3", 40.0 )
+                        m_model->m_config.readDouble( "Axis2SpeedPreset3", 40.0 )
                         );
                 }
                 break;
@@ -515,7 +451,7 @@ void Controller::processKeyPress()
                 if( m_model->m_currentDisplayMode != Mode::Threading )
                 {
                     m_model->m_axis2Motor->setSpeed(
-                        m_model->m_config->readDouble( "Axis2SpeedPreset4", 80.0 )
+                        m_model->m_config.readDouble( "Axis2SpeedPreset4", 80.0 )
                         );
                 }
                 break;
@@ -526,8 +462,8 @@ void Controller::processKeyPress()
                 if( m_model->m_currentDisplayMode != Mode::Threading )
                 {
                     m_model->m_axis2Motor->setSpeed(
-                        m_model->m_config->readDouble( "Axis2SpeedPreset5",
-                            m_model->m_config->readDouble( "Axis2MaxMotorSpeed", 1'000.0 ) )
+                        m_model->m_config.readDouble( "Axis2SpeedPreset5",
+                            m_model->m_config.readDouble( "Axis2MaxMotorSpeed", 1'000.0 ) )
                         );
                 }
                 break;
@@ -582,7 +518,7 @@ void Controller::processKeyPress()
             case key::R:
             {
                 // X retraction
-                if( m_model->m_config->readBool( "DisableAxis2", false ) ) break;
+                if( m_model->m_config.readBool( "DisableAxis2", false ) ) break;
                 if( m_model->m_axis2Motor->isRunning() ) break;
                 if( m_model->m_enabledFunction == Mode::Taper ) break;
                 if( m_model->m_axis2Retracted )
@@ -675,25 +611,25 @@ void Controller::processKeyPress()
             }
             case key::f2t: // threading mode
             {
-                if( m_model->m_config->readBool( "DisableAxis2", false ) ) break;
+                if( m_model->m_config.readBool( "DisableAxis2", false ) ) break;
                 m_model->changeMode( Mode::Threading );
                 break;
             }
             case key::f2p: // taper mode
             {
-                if( m_model->m_config->readBool( "DisableAxis2", false ) ) break;
+                if( m_model->m_config.readBool( "DisableAxis2", false ) ) break;
                 m_model->changeMode( Mode::Taper );
                 break;
             }
             case key::f2r: // X retraction setup
             {
-                if( m_model->m_config->readBool( "DisableAxis2", false ) ) break;
+                if( m_model->m_config.readBool( "DisableAxis2", false ) ) break;
                 m_model->changeMode( Mode::Axis2RetractSetup );
                 break;
             }
             case key::f2o: // Radius mode
             {
-                if( m_model->m_config->readBool( "DisableAxis2", false ) ) break;
+                if( m_model->m_config.readBool( "DisableAxis2", false ) ) break;
                 m_model->changeMode( Mode::Radius );
                 break;
             }
@@ -856,7 +792,7 @@ int Controller::processModeInputKeys( int key )
         {
             // Reset motor speed to something sane
             m_model->m_axis1Motor->setSpeed(
-                m_model->m_config->readDouble( "Axis1SpeedPreset2", 40.0 ) );
+                m_model->m_config.readDouble( "Axis1SpeedPreset2", 40.0 ) );
             // fall through...
         }
     }
@@ -960,12 +896,12 @@ int Controller::checkForAxisLeaderKeys( int key )
     // an axis (note the key can be remapped in config) and sets
     // the model's m_keyMode variable if so. Returns true if one
     // was pressed, false if not.
-    if( key == static_cast<int>( m_model->m_config->readLong( "Axis1Leader", 122L ) ) )
+    if( key == static_cast<int>( m_model->m_config.readLong( "Axis1Leader", 122L ) ) )
     {
         m_model->m_keyMode = KeyMode::Axis1;
         return key::None;
     }
-    if( key == static_cast<int>( m_model->m_config->readLong( "Axis2Leader", 120L ) ) )
+    if( key == static_cast<int>( m_model->m_config.readLong( "Axis2Leader", 120L ) ) )
     {
         m_model->m_keyMode = KeyMode::Axis2;
         return key::None;

@@ -138,11 +138,6 @@ double ConfigReader::readDouble(
     return rc;
 }
 
-std::string ConfigReader::operator[]( const std::string& key ) const
-{
-    return read( key );
-}
-
 bool ConfigReader::readBool(
     const std::string& key,
     bool defaultBoolValue

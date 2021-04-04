@@ -9,9 +9,64 @@ namespace mgo
 {
 void Model::initialise()
 {
-    // TODO: all motor initialisation should happen here,
-    // rather than in the controller's constructor (but
-    // still called from there).
+    double axis1ConversionFactor =
+        m_config.readDouble( "Axis1ConversionNumerator", -1.0 ) /
+            m_config.readDouble( "Axis1ConversionDivisor", 1'000.0 );
+    double maxZSpeed = m_config.readDouble( "Axis1MaxMotorSpeed", 1'000.0 );
+    long axis1StepsPerRevolution = m_config.readLong( "Axis1StepsPerRev", 1'000 );
+    m_axis1Motor = std::make_unique<mgo::StepperMotor>(
+        m_gpio,
+        m_config.readLong( "Axis1GpioStepPin", 8 ),
+        m_config.readLong( "Axis1GpioReversePin", 7 ),
+        m_config.readLong( "Axis1GpioEnablePin", 0 ),
+        axis1StepsPerRevolution,
+        axis1ConversionFactor,
+        std::abs( maxZSpeed / axis1ConversionFactor / axis1StepsPerRevolution )
+        );
+
+    double axis2ConversionFactor =
+        m_config.readDouble( "Axis2ConversionNumerator", -1.0 ) /
+            m_config.readDouble( "Axis2ConversionDivisor", 1'000.0 );
+    double maxXSpeed = m_config.readDouble( "Axis2MaxMotorSpeed", 1'000.0 );
+    long axis2StepsPerRevolution = m_config.readLong( "Axis2StepsPerRev", 800 );
+    m_axis2Motor = std::make_unique<mgo::StepperMotor>(
+        m_gpio,
+        m_config.readLong( "Axis2GpioStepPin", 20 ),
+        m_config.readLong( "Axis2GpioReversePin", 21 ),
+        m_config.readLong( "Axis2GpioEnablePin", 0 ),
+        axis2StepsPerRevolution,
+        axis2ConversionFactor,
+        std::abs( maxXSpeed / axis2ConversionFactor / axis2StepsPerRevolution )
+        );
+
+    m_rotaryEncoder = std::make_unique<mgo::RotaryEncoder>(
+        m_gpio,
+        m_config.readLong(  "RotaryEncoderGpioPinA", 23 ),
+        m_config.readLong(  "RotaryEncoderGpioPinB", 24 ),
+        m_config.readLong(  "RotaryEncoderPulsesPerRev", 2'000 ),
+        m_config.readDouble( "RotaryEncoderGearingNumerator", 35.0 ) /
+            m_config.readDouble( "RotaryEncoderGearingDivisor", 30.0 )
+        );
+
+    // We need to ensure that the motors are in a known position with regard to
+    // backlash - which means moving them initially by the amount of
+    // configured backlash compensation to ensure any backlash is taken up
+    // This initial movement will be small but this could cause an issue if
+    // the tool is against work already - maybe TODO something here?
+    unsigned long zBacklashCompensation =
+        m_config.readLong( "Axis1BacklashCompensationSteps", 0 );
+    unsigned long xBacklashCompensation =
+        m_config.readLong( "Axis2BacklashCompensationSteps", 0 );
+    axis1GoToStep( zBacklashCompensation );
+    m_axis1Motor->setBacklashCompensation( zBacklashCompensation, zBacklashCompensation );
+    m_axis2Motor->goToStep( xBacklashCompensation );
+    m_axis2Motor->setBacklashCompensation( xBacklashCompensation, xBacklashCompensation );
+    m_axis1Motor->wait();
+    m_axis2Motor->wait();
+    // re-zero after that:
+    m_axis1Motor->zeroPosition();
+    m_axis2Motor->zeroPosition();
+
     m_axis1PreviousPositions.push( m_axis1Motor->getPosition() );
 }
 
@@ -40,7 +95,7 @@ void Model::checkStatus()
         // revolution, there is a direct correlation between spindle
         // rpm and stepper motor rpm for a 1mm thread pitch.
         float speed = pitch * m_rotaryEncoder->getRpm();
-        double maxZSpeed = m_config->readDouble( "Axis1MaxMotorSpeed", 700.0 );
+        double maxZSpeed = m_config.readDouble( "Axis1MaxMotorSpeed", 700.0 );
         if( speed > maxZSpeed * 0.8 )
         {
             m_axis1Motor->stop();
@@ -88,7 +143,7 @@ void Model::checkStatus()
             // We don't allow faster speeds to "stick" to avoid accidental
             // fast motion after a long fast movement
             m_axis1Motor->setSpeed(
-                m_config->readDouble( "Axis1SpeedPreset2", 40.0 ) );
+                m_config.readDouble( "Axis1SpeedPreset2", 40.0 ) );
         }
         m_zWasRunning = false;
     }
@@ -118,7 +173,7 @@ void Model::checkStatus()
             // We don't allow faster speeds to "stick" to avoid accidental
             // fast motion after a long fast movement
             m_axis2Motor->setSpeed(
-                m_config->readDouble( "Axis2SpeedPreset2", 20.0 ) );
+                m_config.readDouble( "Axis2SpeedPreset2", 20.0 ) );
         }
         m_xWasRunning = false;
     }
@@ -368,7 +423,7 @@ void Model::axis1MoveLeft()
         return;
     }
     m_axis1Status = "moving left";
-    if( ! m_config->readBool( "Axis1MotorFlipDirection", false ) )
+    if( ! m_config.readBool( "Axis1MotorFlipDirection", false ) )
     {
         axis1GoToStep( INF_LEFT );
     }
@@ -388,7 +443,7 @@ void Model::axis1MoveRight()
         return;
     }
     m_axis1Status = "moving right";
-    if( ! m_config->readBool( "Axis1MotorFlipDirection", false ) )
+    if( ! m_config.readBool( "Axis1MotorFlipDirection", false ) )
     {
         axis1GoToStep( INF_RIGHT );
     }
@@ -396,6 +451,16 @@ void Model::axis1MoveRight()
     {
         axis1GoToStep( INF_LEFT );
     }
+}
+
+void Model::axis1Wait()
+{
+    m_axis1Motor->wait();
+}
+
+void Model::axis2Wait()
+{
+    m_axis2Motor->wait();
 }
 
 void Model::axis1Stop()

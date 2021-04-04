@@ -47,6 +47,7 @@ test/test: test/test.cpp
 		$(OBJ_DIR)/stepperControl/steppermotor.o \
 		$(OBJ_DIR)/rotaryencoder.o \
 		$(OBJ_DIR)/log.o \
+		$(OBJ_DIR)/model.o \
 		test/test.cpp $(LDFLAGS)
 
 test: fake test/test

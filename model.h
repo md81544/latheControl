@@ -75,7 +75,9 @@ enum class ZDirection
 class Model
 {
 public:
-    Model( IGpio& gpio ) : m_gpio(gpio) {}
+    Model(  IGpio& gpio,
+            mgo::IConfigReader& config )
+        : m_gpio( gpio ), m_config( config ) {}
 
     void initialise();
 
@@ -97,7 +99,9 @@ public:
     void axis1MoveLeft();
     void axis1MoveRight();
 
+    void axis1Wait();
     void axis1Stop();
+    void axis2Wait();
     void axis2Stop();
 
     // This is called when the user presses ENTER when
@@ -105,6 +109,7 @@ public:
     void acceptInputValue();
 
     IGpio& m_gpio;
+    mgo::IConfigReader& m_config;
     // Lead screw:
     std::unique_ptr<mgo::StepperMotor> m_axis1Motor;
     // Cross slide:
@@ -128,7 +133,6 @@ public:
     double      m_taperAngle{ 0.0 };
     double      m_radius{ 0.0 };
     float       m_taperPreviousXSpeed{ 40.f };
-    std::unique_ptr<mgo::ConfigReader> m_config;
     // Stores the current function displayed on the screen:
     Mode        m_currentDisplayMode{ Mode::None };
     // Stores current function, i.e. whether tapering or threading is on
