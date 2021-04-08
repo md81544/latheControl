@@ -99,10 +99,13 @@ public:
     void axis1MoveLeft();
     void axis1MoveRight();
 
+    void axis1SetSpeed( double speed );
     void axis1Wait();
     void axis1Stop();
+    void axis2SetSpeed( double speed );
     void axis2Wait();
     void axis2Stop();
+    void axis2SynchroniseOff();
 
     // This is called when the user presses ENTER when
     // inputting a mode parameter (e.g. taper angle)

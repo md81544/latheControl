@@ -232,9 +232,30 @@ TEST_CASE( "Model:   check tapering" )
     model.initialise();
     model.changeMode( mgo::Mode::Taper );
     model.m_taperAngle = 45;
+    model.axis1SetSpeed( 200.0 );
     model.axis1GoToPosition( -0.5 );
     model.axis1Wait();
     double pos = model.m_axis2Motor->getPosition();
     REQUIRE( pos < -0.495 );
     REQUIRE( pos > -0.505 );
+}
+
+TEST_CASE( "Model:   check radius" )
+{
+    mgo::MockGpio gpio( false );
+    // The mock config reader just returns whatever you specify
+    // as the default return value
+    mgo::MockConfigReader config;
+    mgo::Model model( gpio, config );
+    model.initialise();
+    model.changeMode( mgo::Mode::Radius );
+    model.m_radius = 2.5;
+    model.axis1SetSpeed( 60.0 );
+    model.axis1GoToPosition( -0.5 );
+    model.axis1Wait();
+    // X position should be - sqrt( 2.5^2 - 2^2 )
+    double pos = model.m_axis2Motor->getPosition();
+    REQUIRE( pos < -1.45 );
+    REQUIRE( pos > -1.55 );
+
 }

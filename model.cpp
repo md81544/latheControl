@@ -127,7 +127,7 @@ void Model::checkStatus()
             // explicitly having saved it.
             m_axis1PreviousPositions.push( m_axis1Motor->getPosition() );
             // Also, just in case it was on, we turn off synchronisation
-            m_axis2Motor->synchroniseOff();
+            axis2SynchroniseOff();
         }
         if( m_axis1FastReturning )
         {
@@ -213,11 +213,16 @@ void Model::changeMode( Mode mode )
             m_input = std::to_string( m_taperAngle );
         }
     }
+
+    if( mode == Mode::Radius )
+    {
+        axis1SetSpeed( 10.0 );
+    }
 }
 
 void Model::stopAllMotors()
 {
-    m_axis2Motor->synchroniseOff();
+    axis2SynchroniseOff();
     m_axis1Motor->stop();
     m_axis2Motor->stop();
     m_axis1Motor->wait();
@@ -243,7 +248,7 @@ void Model::takeUpZBacklash( ZDirection direction )
 void Model::startSynchronisedXMotorForTaper( ZDirection direction )
 {
     // Make sure X isn't already running first
-    m_axis2Motor->synchroniseOff();
+    axis2SynchroniseOff();
     m_axis2Motor->stop();
     m_axis2Motor->wait();
 
@@ -271,7 +276,6 @@ void Model::startSynchronisedXMotorForTaper( ZDirection direction )
 void Model::startSynchronisedXMotorForRadius(ZDirection direction)
 {
     // Make sure X isn't already running first
-    m_axis2Motor->synchroniseOff();
     m_axis2Motor->stop();
     m_axis2Motor->wait();
 
@@ -296,7 +300,9 @@ void Model::startSynchronisedXMotorForRadius(ZDirection direction)
                 // (i.e. the radius): z^2 + x^2 = r^2, so
                 // sqrt( r^2 - z^2 ) = our x position
                 double zPosOutwards = radius + zPosDelta;
-                double newXPos = - std::sqrt( radius * radius - zPosOutwards * zPosOutwards );
+                double t = radius * radius - zPosOutwards * zPosOutwards;
+                if( t < 0 ) t = 0;
+                double newXPos = - std::sqrt( t );
                 return newXPos;
             }
         );
@@ -307,7 +313,7 @@ void Model::axis1GoToStep( long step )
     axis1CheckForSynchronisation( step );
     if( m_enabledFunction == Mode::Threading )
     {
-        m_rotaryEncoder->callbackAtZeroDegrees([&]()
+       m_rotaryEncoder->callbackAtZeroDegrees([&]()
             {
                 m_axis1Motor->goToStep( step );
             }
@@ -453,6 +459,11 @@ void Model::axis1MoveRight()
     }
 }
 
+void Model::axis1SetSpeed(double speed)
+{
+    m_axis1Motor->setSpeed( speed );
+}
+
 void Model::axis1Wait()
 {
     m_axis1Motor->wait();
@@ -469,10 +480,23 @@ void Model::axis1Stop()
     m_axis1Motor->wait();
 }
 
+void Model::axis2SetSpeed(double speed)
+{
+    m_axis2Motor->setSpeed( speed );
+}
+
 void Model::axis2Stop()
 {
     m_axis2Motor->stop();
     m_axis2Motor->wait();
+}
+
+void Model::axis2SynchroniseOff()
+{
+    if( m_enabledFunction != Mode::Radius )
+    {
+        m_axis2Motor->synchroniseOff();
+    }
 }
 
 void Model::acceptInputValue()
