@@ -2,6 +2,8 @@
 #include "stepperControl/steppermotor.h"
 #include "rotaryencoder.h"
 #include "log.h"
+#include "model.h"
+#include "configreader.h"
 
 #include <chrono>
 #include <thread>
@@ -9,7 +11,7 @@
 #define CATCH_CONFIG_MAIN
 #include "catch.hpp"
 
-TEST_CASE( "Step once" )
+TEST_CASE( "Stepper: Step once" )
 {
     mgo::MockGpio gpio( false );
     mgo::StepperMotor motor( gpio, 0, 0, 0, 1'000, 1.0, 10'000.0 );
@@ -19,7 +21,7 @@ TEST_CASE( "Step once" )
     REQUIRE( motor.getCurrentStep() == 3 );
 }
 
-TEST_CASE( "Stop motor" )
+TEST_CASE( "Stepper: Stop motor" )
 {
     mgo::MockGpio gpio( false );
     mgo::StepperMotor motor( gpio, 0, 0, 0, 1'000, 1.0, 10'000.0 );
@@ -33,7 +35,7 @@ TEST_CASE( "Stop motor" )
     REQUIRE( motor.getCurrentStep() > 0 );
 }
 
-TEST_CASE( "Stop stopped motor" )
+TEST_CASE( "Stepper: Stop stopped motor" )
 {
     mgo::MockGpio gpio( false );
     mgo::StepperMotor motor( gpio, 0, 0, 0, 1'000, 1.0, 10'000.0 );
@@ -42,7 +44,7 @@ TEST_CASE( "Stop stopped motor" )
     REQUIRE( ! motor.isRunning() );
 }
 
-TEST_CASE( "Move then move again" )
+TEST_CASE( "Stepper: Move then move again" )
 {
     mgo::MockGpio gpio( false );
     mgo::StepperMotor motor( gpio, 0, 0, 0, 1'000, 1.0, 10'000.0 );
@@ -56,7 +58,7 @@ TEST_CASE( "Move then move again" )
     REQUIRE( motor.getCurrentStep() == 150 );
 }
 
-TEST_CASE( "Forward and reverse" )
+TEST_CASE( "Stepper: Forward and reverse" )
 {
     mgo::MockGpio gpio( false );
     mgo::StepperMotor motor( gpio, 0, 0, 0, 1'000, 1.0, 10'000.0 );
@@ -68,7 +70,7 @@ TEST_CASE( "Forward and reverse" )
     REQUIRE( motor.getCurrentStep() == 50 );
 }
 
-TEST_CASE( "Check direction" )
+TEST_CASE( "Stepper: Check direction" )
 {
     mgo::MockGpio gpio( false );
     mgo::StepperMotor motor( gpio, 0, 0, 0, 1'000, 1.0, 10'000.0 );
@@ -84,7 +86,7 @@ TEST_CASE( "Check direction" )
     REQUIRE( motor.getDirection() == mgo::Direction::forward );
 }
 
-TEST_CASE( "Stepper RPM" )
+TEST_CASE( "Stepper: RPM" )
 {
     mgo::MockGpio gpio( false );
     mgo::StepperMotor motor( gpio, 0, 0, 0, 1'000, 1.0, 10'000.0 );
@@ -101,7 +103,7 @@ TEST_CASE( "Stepper RPM" )
     REQUIRE( motor.getDelay() == 30'000 );
 }
 
-TEST_CASE( "Stepper RPM Limits" )
+TEST_CASE( "Stepper: RPM Limits" )
 {
     mgo::MockGpio gpio( false );
     mgo::StepperMotor motor( gpio, 0, 0, 0, 1'000, 1.0, 10'000.0 );
@@ -112,7 +114,7 @@ TEST_CASE( "Stepper RPM Limits" )
     REQUIRE( motor.getDelay() > 5 );
 }
 
-TEST_CASE( "Change target step while busy" )
+TEST_CASE( "Stepper: Change target step while busy" )
 {
     mgo::MockGpio gpio( false );
     mgo::StepperMotor motor( gpio, 0, 0, 0, 1'000, 1.0, 10'000.0 );
@@ -124,7 +126,7 @@ TEST_CASE( "Change target step while busy" )
     REQUIRE( motor.getCurrentStep() == 1'000 );
 }
 
-TEST_CASE( "Rotary Encoder RPM" )
+TEST_CASE( "Stepper: Rotary Encoder RPM" )
 {
     mgo::MockGpio gpio( false );
     mgo::RotaryEncoder re(
@@ -138,7 +140,7 @@ TEST_CASE( "Rotary Encoder RPM" )
     REQUIRE( re.getRpm() > 0.f);
 }
 
-TEST_CASE( "Rotary Encoder Position Callback" )
+TEST_CASE( "Stepper: Rotary Encoder Position Callback" )
 {
     mgo::MockGpio gpio( false );
     mgo::RotaryEncoder re(
@@ -155,7 +157,7 @@ TEST_CASE( "Rotary Encoder Position Callback" )
     REQUIRE( called == true );
 }
 
-TEST_CASE( "Check backlash compensation" )
+TEST_CASE( "Stepper: Check backlash compensation" )
 {
     mgo::MockGpio gpio( false );
     mgo::StepperMotor motor( gpio, 0, 0, 0, 1'000, 1.0, 10'000.0 );
@@ -184,7 +186,7 @@ TEST_CASE( "Check backlash compensation" )
     REQUIRE( motor.getCurrentStepWithoutBacklashCompensation() == 1 );
 }
 
-TEST_CASE( "Check motor speed ramping" )
+TEST_CASE( "Stepper: Check motor speed ramping" )
 {
     mgo::MockGpio gpio( false );
     double maxSpeed = 1'000.0; // mm/sec, not rpm
@@ -206,7 +208,7 @@ TEST_CASE( "Check motor speed ramping" )
     }
 }
 
-TEST_CASE( "Check motor synchronisation" )
+TEST_CASE( "Stepper: Check motor synchronisation" )
 {
     mgo::MockGpio gpio( false );
     mgo::StepperMotor motor1( gpio, 0, 0, 0, 1'000, 0.01, 10'000.0 );
@@ -218,4 +220,42 @@ TEST_CASE( "Check motor synchronisation" )
     motor1.wait();
     motor2.wait();
     REQUIRE( motor2.getPosition() == Approx( 1.2 ) );
+}
+
+TEST_CASE( "Model:   check tapering" )
+{
+    mgo::MockGpio gpio( false );
+    // The mock config reader just returns whatever you specify
+    // as the default return value
+    mgo::MockConfigReader config;
+    mgo::Model model( gpio, config );
+    model.initialise();
+    model.changeMode( mgo::Mode::Taper );
+    model.m_taperAngle = 45;
+    model.axis1SetSpeed( 200.0 );
+    model.axis1GoToPosition( -0.5 );
+    model.axis1Wait();
+    double pos = model.m_axis2Motor->getPosition();
+    REQUIRE( pos < -0.495 );
+    REQUIRE( pos > -0.505 );
+}
+
+TEST_CASE( "Model:   check radius" )
+{
+    mgo::MockGpio gpio( false );
+    // The mock config reader just returns whatever you specify
+    // as the default return value
+    mgo::MockConfigReader config;
+    mgo::Model model( gpio, config );
+    model.initialise();
+    model.changeMode( mgo::Mode::Radius );
+    model.m_radius = 2.5;
+    model.axis1SetSpeed( 60.0 );
+    model.axis1GoToPosition( -0.5 );
+    model.axis1Wait();
+    // X position should be - sqrt( 2.5^2 - 2^2 )
+    double pos = model.m_axis2Motor->getPosition();
+    REQUIRE( pos < -1.45 );
+    REQUIRE( pos > -1.55 );
+
 }

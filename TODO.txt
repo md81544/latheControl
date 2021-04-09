@@ -1,13 +1,28 @@
-(WIP) Continue moving "business logic" into the model
+Make the speeds above which the program automatically resets them
+lower after a stop to be configurable
 
-(WIP) Synchronisation of two motors should be done at the motor level
-and not in the UI loop. Motor function should take a pointer to
-the "driver" motor and perhaps a callback for determining position
-of the "driven" motor. This will allow for non-linear synchronisation,
-for example turning a radius.
+Idea: for determining the angle required for correcting a lathe
+cutting a taper: allow the program to calculate the angle required
+by entering two measurements and a distance
+
+Remove arbitrary 60° maximum angle on tapering
+
+Desperately need a "scratch memory" (or collection of them) to allow
+a return to the previous stopped location. This is because I'll line
+things up, then forget to store the memory location before moving.
+(WIP) - currently key L works for axis 1 (Z) for this.
+    - scratch memories should be cleared if the axis value is changed
+      (i.e. with zero or manually setting a position)
+
+(WIP) Continue moving "business logic" into the model
+Including the "initialise" function to set up all the motors
+
+Why should "go to" cancel any tapering in effect
 
 Start thinking around a setting for adding a tiny amount of x motion
-to counteract a lathe that cuts a bit of a taper
+to counteract a lathe that cuts a bit of a taper (which works brilliantly,
+but needs to be a config item that is applied automatically, rather
+than having to use taper mode)
 
 All "Axis1..." and "Axis2..." references should be replaced with an
 array to allow for future expansion.
@@ -26,9 +41,6 @@ Add ability to pick up existing memories if the stepper loses the plot
 
 Think about incorporating reading from scales to make position reporting
 accurate rather than estimated
-
-Add motor "conversion factors" or steps per revolution including gearing
-as a config item
 
 Automate threading operations (or all?) to automatically return after the
 target step has been reached and a key is pressed

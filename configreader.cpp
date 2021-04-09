@@ -111,29 +111,43 @@ std::string ConfigReader::read(
 unsigned long ConfigReader::readLong(
     const std::string& key,
     unsigned long defaultValue
-    ) const
+    )
 {
-    return std::stoul( read( key, std::to_string( defaultValue ) ) );
+    auto it = m_mapLong.find( key );
+    if( it != m_mapLong.end() )
+    {
+        return it->second;
+    }
+    long rc = std::stoul( read( key, std::to_string( defaultValue ) ) );
+    m_mapLong.insert( { key, rc } );
+    return rc;
 }
 
 double ConfigReader::readDouble(
     const std::string& key,
     double defaultValue
-    ) const
+    )
 {
-    return std::stod( read( key, std::to_string( defaultValue ) ) );
-}
-
-std::string ConfigReader::operator[]( const std::string& key ) const
-{
-    return read( key );
+    auto it = m_mapDouble.find( key );
+    if( it != m_mapDouble.end() )
+    {
+        return it->second;
+    }
+    double rc = std::stod( read( key, std::to_string( defaultValue ) ) );
+    m_mapDouble.insert( { key, rc } );
+    return rc;
 }
 
 bool ConfigReader::readBool(
     const std::string& key,
     bool defaultBoolValue
-    ) const
+    )
 {
+    auto it = m_mapBool.find( key );
+    if( it != m_mapBool.end() )
+    {
+        return it->second;
+    }
     std::string defaultValue;
     if ( defaultBoolValue == true )
     {
@@ -145,14 +159,17 @@ bool ConfigReader::readBool(
     }
     std::string value = read( key, defaultValue );
     std::transform( value.begin(), value.end(), value.begin(), ::toupper );
+    bool rc;
     if ( value[ 0 ] == 'Y' || value[ 0 ] == 'T' )
     {
-        return true;
+        rc = true;
     }
     else
     {
-        return false;
+        rc = false;
     }
+    m_mapBool.insert( { key, rc } );
+    return rc;
 }
 
 } // namespace mgo

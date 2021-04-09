@@ -134,7 +134,7 @@ void ViewSfml::initialise( const Model& model )
     m_txtAxis1Label = std::make_unique<sf::Text>("", *m_font, 60 );
     m_txtAxis1Label->setPosition( { 20, 10 });
     m_txtAxis1Label->setFillColor( { 0, 127, 0 } );
-    m_txtAxis1Label->setString( model.m_config->read( "Axis1Label", "Z" ) + ":" );
+    m_txtAxis1Label->setString( model.m_config.read( "Axis1Label", "Z" ) + ":" );
 
     m_txtAxis1Pos = std::make_unique<sf::Text>("", *m_font, 60 );
     m_txtAxis1Pos->setPosition( { 110, 10 });
@@ -143,7 +143,7 @@ void ViewSfml::initialise( const Model& model )
     m_txtAxis1Units = std::make_unique<sf::Text>("", *m_font, 30 );
     m_txtAxis1Units->setPosition( { 430, 40 });
     m_txtAxis1Units->setFillColor( { 0, 127, 0 } );
-    m_txtAxis1Units->setString( model.m_config->read( "Axis1DisplayUnits", "mm" ) );
+    m_txtAxis1Units->setString( model.m_config.read( "Axis1DisplayUnits", "mm" ) );
 
     m_txtAxis1Speed = std::make_unique<sf::Text>("", *m_font, 30 );
     m_txtAxis1Speed->setPosition( { 550, 40 });
@@ -152,7 +152,7 @@ void ViewSfml::initialise( const Model& model )
     m_txtAxis2Label = std::make_unique<sf::Text>("", *m_font, 60 );
     m_txtAxis2Label->setPosition( { 20, 70 });
     m_txtAxis2Label->setFillColor( { 0, 127, 0 } );
-    m_txtAxis2Label->setString( model.m_config->read( "Axis2Label", "X" ) + ":" );
+    m_txtAxis2Label->setString( model.m_config.read( "Axis2Label", "X" ) + ":" );
 
     m_txtAxis2Pos = std::make_unique<sf::Text>("", *m_font, 60 );
     m_txtAxis2Pos->setPosition( { 110, 70 });
@@ -161,7 +161,7 @@ void ViewSfml::initialise( const Model& model )
     m_txtAxis2Units = std::make_unique<sf::Text>("", *m_font, 30 );
     m_txtAxis2Units->setPosition( { 430, 100 });
     m_txtAxis2Units->setFillColor( { 0, 127, 0 } );
-    m_txtAxis2Units->setString( model.m_config->read( "Axis1DisplayUnits", "mm" ) );
+    m_txtAxis2Units->setString( model.m_config.read( "Axis1DisplayUnits", "mm" ) );
 
     m_txtAxis2Speed = std::make_unique<sf::Text>("", *m_font, 30 );
     m_txtAxis2Speed->setPosition( { 550, 100 });
@@ -197,11 +197,11 @@ void ViewSfml::initialise( const Model& model )
         valX->setFillColor( { 128, 128, 128 } );
         m_txtAxis2MemoryValue.push_back( std::move( valX ) );
     }
-    std::string axis1Label = model.m_config->read( "Axis1Label", "Z" ) + ":";
+    std::string axis1Label = model.m_config.read( "Axis1Label", "Z" ) + ":";
     m_txtAxis1MemoryLabel = std::make_unique<sf::Text>( axis1Label, *m_font, 30);
     m_txtAxis1MemoryLabel->setPosition( { 24.f, 245 });
     m_txtAxis1MemoryLabel->setFillColor( { 128, 128, 128 } );
-    std::string axis2Label = model.m_config->read( "Axis2Label", "X" ) + ":";
+    std::string axis2Label = model.m_config.read( "Axis2Label", "X" ) + ":";
     m_txtAxis2MemoryLabel = std::make_unique<sf::Text>( axis2Label, *m_font, 30);
     m_txtAxis2MemoryLabel->setPosition( { 24.f, 275 });
     m_txtAxis2MemoryLabel->setFillColor( { 128, 128, 128 } );
@@ -246,9 +246,9 @@ void ViewSfml::initialise( const Model& model )
     m_txtWarning->setPosition( { 20, 510 });
     m_txtWarning->setFillColor( sf::Color::Red );
 
-    m_txtTaperAngle= std::make_unique<sf::Text>("", *m_font, 30 );
-    m_txtTaperAngle->setPosition( { 550, 160 });
-    m_txtTaperAngle->setFillColor( sf::Color::Red );
+    m_txtTaperOrRadius= std::make_unique<sf::Text>("", *m_font, 30 );
+    m_txtTaperOrRadius->setPosition( { 550, 160 });
+    m_txtTaperOrRadius->setFillColor( sf::Color::Red );
 
     m_txtNotification = std::make_unique<sf::Text>("", *m_font, 25 );
     m_txtNotification->setPosition( { 860, 45 });
@@ -305,7 +305,7 @@ void ViewSfml::updateDisplay( const Model& model )
 
     if( ! model.m_shutdown )
     {
-        if( ! model.m_config->readBool( "DisableAxis1", false ) )
+        if( ! model.m_config.readBool( "DisableAxis1", false ) )
         {
             m_window->draw( *m_txtAxis1Label );
             m_window->draw( *m_txtAxis1Pos );
@@ -314,7 +314,7 @@ void ViewSfml::updateDisplay( const Model& model )
             m_window->draw( *m_txtAxis1Status );
             m_window->draw( *m_txtAxis1MemoryLabel );
         }
-        if( ! model.m_config->readBool( "DisableAxis2", false ) )
+        if( ! model.m_config.readBool( "DisableAxis2", false ) )
         {
             m_window->draw( *m_txtAxis2Label );
             m_window->draw( *m_txtAxis2Pos );
@@ -323,7 +323,7 @@ void ViewSfml::updateDisplay( const Model& model )
             m_window->draw( *m_txtAxis2Status );
             m_window->draw( *m_txtAxis2MemoryLabel );
         }
-        if( ! model.m_config->readBool( "DisableRpm", false ) )
+        if( ! model.m_config.readBool( "DisableRpm", false ) )
         {
             m_window->draw( *m_txtRpmLabel );
             m_window->draw( *m_txtRpm );
@@ -332,9 +332,10 @@ void ViewSfml::updateDisplay( const Model& model )
         m_window->draw( *m_txtGeneralStatus );
         m_window->draw( *m_txtWarning );
         m_window->draw( *m_txtNotification );
-        if( model.m_enabledFunction == Mode::Taper )
+        if( model.m_enabledFunction == Mode::Taper ||
+            model.m_enabledFunction == Mode::Radius )
         {
-            m_window->draw( *m_txtTaperAngle );
+            m_window->draw( *m_txtTaperOrRadius );
         }
         if( model.m_xRetractionDirection == XRetractionDirection::Inwards )
         {
@@ -347,11 +348,11 @@ void ViewSfml::updateDisplay( const Model& model )
         for( std::size_t n = 0; n < m_txtMemoryLabel.size(); ++n )
         {
             m_window->draw( *m_txtMemoryLabel.at( n ) );
-            if( ! model.m_config->readBool( "DisableAxis1", false ) )
+            if( ! model.m_config.readBool( "DisableAxis1", false ) )
             {
                 m_window->draw( *m_txtAxis1MemoryValue.at( n ) );
             }
-            if( ! model.m_config->readBool( "DisableAxis2", false ) )
+            if( ! model.m_config.readBool( "DisableAxis2", false ) )
             {
                 m_window->draw( *m_txtAxis2MemoryValue.at( n ) );
             }
@@ -427,15 +428,19 @@ void ViewSfml::updateTextFromModel( const Model& model )
 
     m_txtGeneralStatus->setString( model.m_generalStatus );
     std::string status = fmt::format( "{}: {}",
-        model.m_config->read( "Axis1Label", "Z" ), model.m_axis1Status );
+        model.m_config.read( "Axis1Label", "Z" ), model.m_axis1Status );
     m_txtAxis1Status->setString( status );
     status = fmt::format( "{}: {}",
-        model.m_config->read( "Axis2Label", "X" ), model.m_axis2Status );
+        model.m_config.read( "Axis2Label", "X" ), model.m_axis2Status );
     m_txtAxis2Status->setString( status );
     m_txtWarning->setString( model.m_warning );
     if( model.m_enabledFunction == Mode::Taper )
     {
-        m_txtTaperAngle->setString( fmt::format( "Angle: {}", model.m_taperAngle ) );
+        m_txtTaperOrRadius->setString( fmt::format( "Angle: {}", model.m_taperAngle ) );
+    }
+    else if( model.m_enabledFunction == Mode::Radius )
+    {
+        m_txtTaperOrRadius->setString( fmt::format( "Radius: {}", model.m_radius ) );
     }
 
     for( std::size_t n = 0; n < m_txtMemoryLabel.size(); ++n )
@@ -480,6 +485,9 @@ void ViewSfml::updateTextFromModel( const Model& model )
             break;
         case Mode::Taper:
             m_txtNotification->setString( "TAPERING" );
+            break;
+        case Mode::Radius:
+            m_txtNotification->setString( "RADIUS" );
             break;
         default:
             m_txtNotification->setString( "" );
@@ -527,6 +535,18 @@ void ViewSfml::updateTextFromModel( const Model& model )
             m_txtWarning->setString( "Enter to keep enabled, Esc to disable, Del to clear" );
             break;
         }
+        case Mode::Radius:
+        {
+            m_txtMode->setString( "Radius" );
+            m_txtMisc1->setString( fmt::format( "Radius required: {}_",
+                model.m_input ) );
+            m_txtMisc2->setString( "" );
+            m_txtMisc3->setString( "" );
+            m_txtMisc4->setString( "" );
+            m_txtMisc5->setString( "" );
+            m_txtWarning->setString( "Enter to keep enabled, Esc to disable, Del to clear" );
+            break;
+        }
         case Mode::Threading:
         {
             m_txtMode->setString( "Thread" );
@@ -562,14 +582,14 @@ void ViewSfml::updateTextFromModel( const Model& model )
         case Mode::Axis2PositionSetup:
         {
             m_txtMode->setString( fmt::format( "{} Position Set",
-                model.m_config->read( "Axis2Label", "X" ) ) );
+                model.m_config.read( "Axis2Label", "X" ) ) );
             m_txtMisc1->setString( "" );
             m_txtMisc2->setString( fmt::format( "Specify a value for {} here",
-                model.m_config->read( "Axis2Label", "X" ) ) );
+                model.m_config.read( "Axis2Label", "X" ) ) );
             m_txtMisc3->setString( "" );
             m_txtMisc4->setString( "" );
             m_txtMisc5->setString( fmt::format( "Current {} position: {}_",
-                model.m_config->read( "Axis2Label", "X" ),
+                model.m_config.read( "Axis2Label", "X" ),
                 model.m_input ) );
             m_txtWarning->setString( "Enter to set, 'D' to enter as diameter, Esc to cancel" );
             break;
@@ -577,14 +597,14 @@ void ViewSfml::updateTextFromModel( const Model& model )
         case Mode::Axis1PositionSetup:
         {
             m_txtMode->setString( fmt::format( "{} Position Set",
-                model.m_config->read( "Axis1Label", "Z" ) ) );
+                model.m_config.read( "Axis1Label", "Z" ) ) );
             m_txtMisc1->setString( "" );
             m_txtMisc2->setString( fmt::format( "Specify a value for {} here",
-                model.m_config->read( "Axis1Label", "Z" ) ) );
+                model.m_config.read( "Axis1Label", "Z" ) ) );
             m_txtMisc3->setString( "" );
             m_txtMisc4->setString( "" );
             m_txtMisc5->setString( fmt::format( "Current {} position: {}_",
-                model.m_config->read( "Axis1Label", "Z" ),
+                model.m_config.read( "Axis1Label", "Z" ),
                 model.m_input ) );
             m_txtWarning->setString( "Enter to set, Esc to cancel" );
             break;
@@ -592,7 +612,7 @@ void ViewSfml::updateTextFromModel( const Model& model )
         case Mode::Axis1GoTo:
         {
             m_txtMode->setString( fmt::format( "Go To {} Position ",
-                model.m_config->read( "Axis1Label", "Z" ) ) );
+                model.m_config.read( "Axis1Label", "Z" ) ) );
             m_txtMisc1->setString( "" );
             m_txtMisc2->setString( "Specify a value" );
             m_txtMisc3->setString( "" );
@@ -605,7 +625,7 @@ void ViewSfml::updateTextFromModel( const Model& model )
         case Mode::Axis2GoTo:
         {
             m_txtMode->setString( fmt::format( "Go To {} Position ",
-                model.m_config->read( "Axis2Label", "Z" ) ) );
+                model.m_config.read( "Axis2Label", "Z" ) ) );
             m_txtMisc1->setString( "" );
             m_txtMisc2->setString( "Specify a value" );
             m_txtMisc3->setString( "" );

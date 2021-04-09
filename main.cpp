@@ -24,8 +24,6 @@ int main( int argc, char* argv[] )
             mgo::Gpio gpio;
         #endif
 
-        mgo::Model model( gpio );
-
         std::string configFile = "lc.cfg";
         if( argc > 1 )
         {
@@ -36,7 +34,9 @@ int main( int argc, char* argv[] )
             }
             configFile = argv[1];
         }
-        model.m_config = std::make_unique<mgo::ConfigReader>( configFile );
+
+        mgo::ConfigReader config( configFile );
+        mgo::Model model( gpio, config );
 
         mgo::Controller controller( &model );
         controller.run();

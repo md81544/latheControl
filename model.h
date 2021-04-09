@@ -7,6 +7,7 @@
 #include <cmath>
 #include <limits>
 #include <memory>
+#include <stack>
 #include <vector>
 
 // "Model", i.e. program state data
@@ -41,7 +42,8 @@ enum class Mode
     Axis1PositionSetup,
     Axis2PositionSetup,
     Axis1GoTo,
-    Axis2GoTo
+    Axis2GoTo,
+    Radius
 };
 
 // "Key Modes" allow for two-key actions, a bit like vim.
@@ -73,14 +75,44 @@ enum class ZDirection
 class Model
 {
 public:
-    Model( IGpio& gpio ) : m_gpio(gpio) {}
+    Model(  IGpio& gpio,
+            mgo::IConfigReader& config )
+        : m_gpio( gpio ), m_config( config ) {}
 
+    void initialise();
+
+    // This should be repeatedly called from the run loop
+    void checkStatus();
     void changeMode( Mode mode );
     void stopAllMotors();
     void takeUpZBacklash( ZDirection direction );
-    void startSynchronisedXMotor( ZDirection direction, double zSpeed );
+    void startSynchronisedXMotorForTaper(  ZDirection direction );
+    void startSynchronisedXMotorForRadius( ZDirection direction );
+
+    void axis1GoToStep( long step );
+    void axis1GoToPosition( double pos );
+    void axis1GoToPreviousPosition();
+    void axis1CheckForSynchronisation( ZDirection direction );
+    void axis1CheckForSynchronisation( long step );
+    void axis1GoToCurrentMemory();
+
+    void axis1MoveLeft();
+    void axis1MoveRight();
+
+    void axis1SetSpeed( double speed );
+    void axis1Wait();
+    void axis1Stop();
+    void axis2SetSpeed( double speed );
+    void axis2Wait();
+    void axis2Stop();
+    void axis2SynchroniseOff();
+
+    // This is called when the user presses ENTER when
+    // inputting a mode parameter (e.g. taper angle)
+    void acceptInputValue();
 
     IGpio& m_gpio;
+    mgo::IConfigReader& m_config;
     // Lead screw:
     std::unique_ptr<mgo::StepperMotor> m_axis1Motor;
     // Cross slide:
@@ -102,8 +134,8 @@ public:
     bool        m_axis2FastReturning{ false };
     int         m_keyPressed{ 0 };
     double      m_taperAngle{ 0.0 };
+    double      m_radius{ 0.0 };
     float       m_taperPreviousXSpeed{ 40.f };
-    std::unique_ptr<mgo::ConfigReader> m_config;
     // Stores the current function displayed on the screen:
     Mode        m_currentDisplayMode{ Mode::None };
     // Stores current function, i.e. whether tapering or threading is on
@@ -126,6 +158,8 @@ public:
     // Once the user has set the x position once then we use
     // the status bar to display the effective diameter
     bool        m_xDiameterSet{ false };
+
+    std::stack<double> m_axis1PreviousPositions;
 };
 
 } // end namespace
