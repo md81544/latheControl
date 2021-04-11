@@ -258,4 +258,10 @@ TEST_CASE( "Model:   check radius" )
     REQUIRE( pos < -1.45 );
     REQUIRE( pos > -1.55 );
 
+    model.axis1GoToPosition( 0.0 );
+    model.axis1Wait();
+
+    // X position should be zero
+    pos = model.m_axis2Motor->getPosition();
+    REQUIRE( pos < 0.05 );
 }

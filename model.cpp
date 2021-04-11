@@ -126,8 +126,6 @@ void Model::checkStatus()
             // in case the user wants to return to it without
             // explicitly having saved it.
             m_axis1PreviousPositions.push( m_axis1Motor->getPosition() );
-            // Also, just in case it was on, we turn off synchronisation
-            axis2SynchroniseOff();
         }
         if( m_axis1FastReturning )
         {
@@ -187,6 +185,7 @@ void Model::checkStatus()
 void Model::changeMode( Mode mode )
 {
     stopAllMotors();
+    axis2SynchroniseOff();
     if( mode == Mode::Threading || mode == Mode::Taper || mode == Mode::Radius )
     {
         // We do not want motor speed ramping on tapering or threading
@@ -217,12 +216,15 @@ void Model::changeMode( Mode mode )
     if( mode == Mode::Radius )
     {
         axis1SetSpeed( 10.0 );
+        if( m_radius != 0.0 )
+        {
+            m_input = std::to_string( m_radius );
+        }
     }
 }
 
 void Model::stopAllMotors()
 {
-    axis2SynchroniseOff();
     m_axis1Motor->stop();
     m_axis2Motor->stop();
     m_axis1Motor->wait();
@@ -299,6 +301,7 @@ void Model::startSynchronisedXMotorForRadius(ZDirection direction)
                 // as we have a right angle with known hypoteneuse
                 // (i.e. the radius): z^2 + x^2 = r^2, so
                 // sqrt( r^2 - z^2 ) = our x position
+                if( radius + zPosDelta < 0 ) return -radius;
                 double zPosOutwards = radius + zPosDelta;
                 double t = radius * radius - zPosOutwards * zPosOutwards;
                 if( t < 0 ) t = 0;
@@ -493,10 +496,7 @@ void Model::axis2Stop()
 
 void Model::axis2SynchroniseOff()
 {
-    if( m_enabledFunction != Mode::Radius )
-    {
-        m_axis2Motor->synchroniseOff();
-    }
+    m_axis2Motor->synchroniseOff();
 }
 
 void Model::acceptInputValue()
