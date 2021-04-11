@@ -4,9 +4,30 @@
 #include "fmt/format.h"
 
 #include <cassert>
+#include <sstream>
+
+namespace
+{
+
+std::string convertToString( double number, int decimalPlaces )
+{
+    // If the number appears to be an integer, dispense with all
+    // decimal places but one
+    if( std::abs( number - static_cast<int>( number ) ) < 0.00001 )
+    {
+        decimalPlaces = 1;
+    }
+    std::ostringstream oss;
+    oss.precision( decimalPlaces );
+    oss << std::fixed << number;
+    return oss.str();
+}
+
+} // anonymous namepace
 
 namespace mgo
 {
+
 void Model::initialise()
 {
     double axis1ConversionFactor =
@@ -209,7 +230,7 @@ void Model::changeMode( Mode mode )
         m_taperPreviousXSpeed = m_axis2Motor->getSpeed();
         if( m_taperAngle != 0.0 )
         {
-            m_input = std::to_string( m_taperAngle );
+            m_input = convertToString( m_taperAngle, 4 );
         }
     }
 
@@ -218,7 +239,7 @@ void Model::changeMode( Mode mode )
         axis1SetSpeed( 10.0 );
         if( m_radius != 0.0 )
         {
-            m_input = std::to_string( m_radius );
+            m_input = convertToString( m_radius, 4 );
         }
     }
 }

@@ -531,7 +531,7 @@ void ViewSfml::updateTextFromModel( const Model& model )
             m_txtMisc2->setString( "" );
             m_txtMisc3->setString( "MT1 = 1.4287, MT2 = 1.4307, MT3 = 1.4377, MT4 = 1.4876" );
             m_txtMisc4->setString( "" );
-            m_txtMisc5->setString( "NOTE! Arbitrary max angle = 60 degrees" );
+            m_txtMisc5->setString( "" );
             m_txtWarning->setString( "Enter to keep enabled, Esc to disable, Del to clear" );
             break;
         }
