@@ -5,8 +5,6 @@ Idea: for determining the angle required for correcting a lathe
 cutting a taper: allow the program to calculate the angle required
 by entering two measurements and a distance
 
-Remove arbitrary 60° maximum angle on tapering
-
 Desperately need a "scratch memory" (or collection of them) to allow
 a return to the previous stopped location. This is because I'll line
 things up, then forget to store the memory location before moving.
@@ -16,8 +14,6 @@ things up, then forget to store the memory location before moving.
 
 (WIP) Continue moving "business logic" into the model
 Including the "initialise" function to set up all the motors
-
-Why should "go to" cancel any tapering in effect
 
 Start thinking around a setting for adding a tiny amount of x motion
 to counteract a lathe that cuts a bit of a taper (which works brilliantly,

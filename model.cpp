@@ -13,7 +13,7 @@ std::string convertToString( double number, int decimalPlaces )
 {
     // If the number appears to be an integer, dispense with all
     // decimal places but one
-    if( std::abs( number - static_cast<int>( number ) ) < 0.00001 )
+    if( decimalPlaces > 1 && std::abs( number - static_cast<int>( number ) ) < 0.00001 )
     {
         decimalPlaces = 1;
     }
