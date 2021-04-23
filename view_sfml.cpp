@@ -540,10 +540,10 @@ void ViewSfml::updateTextFromModel( const Model& model )
             m_txtMode->setString( "Radius" );
             m_txtMisc1->setString( fmt::format( "Radius required: {}_",
                 model.m_input ) );
-            m_txtMisc2->setString( "" );
-            m_txtMisc3->setString( "" );
-            m_txtMisc4->setString( "" );
-            m_txtMisc5->setString( "" );
+            m_txtMisc2->setString( "Important! Ensure the tool is at the radius of the workpiece," );
+            m_txtMisc3->setString( "near the end, and you've set the diameter." );
+            m_txtMisc4->setString( "You can then cut OUTWARDS and nudge TOWARDS the chuck" );
+            m_txtMisc5->setString( "gradually for subsequent cuts." );
             m_txtWarning->setString( "Enter to keep enabled, Esc to disable, Del to clear" );
             break;
         }
@@ -611,7 +611,7 @@ void ViewSfml::updateTextFromModel( const Model& model )
         }
         case Mode::Axis1GoTo:
         {
-            m_txtMode->setString( fmt::format( "Go To {} Position ",
+            m_txtMode->setString( fmt::format( "Go To {} Absolute Position ",
                 model.m_config.read( "Axis1Label", "Z" ) ) );
             m_txtMisc1->setString( "" );
             m_txtMisc2->setString( "Specify a value" );
@@ -624,13 +624,39 @@ void ViewSfml::updateTextFromModel( const Model& model )
         }
         case Mode::Axis2GoTo:
         {
-            m_txtMode->setString( fmt::format( "Go To {} Position ",
+            m_txtMode->setString( fmt::format( "Go To {} Absolute Position ",
                 model.m_config.read( "Axis2Label", "Z" ) ) );
             m_txtMisc1->setString( "" );
             m_txtMisc2->setString( "Specify a value" );
             m_txtMisc3->setString( "" );
             m_txtMisc4->setString( "" );
             m_txtMisc5->setString( fmt::format( "Position: {}_",
+                model.m_input ) );
+            m_txtWarning->setString( "Enter to set, Esc to cancel" );
+            break;
+        }
+        case Mode::Axis1GoToOffset:
+        {
+            m_txtMode->setString( fmt::format( "Go To {} Relative Position ",
+                model.m_config.read( "Axis1Label", "Z" ) ) );
+            m_txtMisc1->setString( "" );
+            m_txtMisc2->setString( "Specify a RELATIVE value" );
+            m_txtMisc3->setString( "" );
+            m_txtMisc4->setString( "" );
+            m_txtMisc5->setString( fmt::format( "Offset: {}_",
+                model.m_input ) );
+            m_txtWarning->setString( "Enter to set, Esc to cancel" );
+            break;
+        }
+        case Mode::Axis2GoToOffset:
+        {
+            m_txtMode->setString( fmt::format( "Go To {} Relative Position ",
+                model.m_config.read( "Axis2Label", "Z" ) ) );
+            m_txtMisc1->setString( "" );
+            m_txtMisc2->setString( "Specify a RELATIVE value" );
+            m_txtMisc3->setString( "" );
+            m_txtMisc4->setString( "" );
+            m_txtMisc5->setString( fmt::format( "Offset: {}_",
                 model.m_input ) );
             m_txtWarning->setString( "Enter to set, Esc to cancel" );
             break;

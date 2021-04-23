@@ -43,6 +43,8 @@ enum class Mode
     Axis2PositionSetup,
     Axis1GoTo,
     Axis2GoTo,
+    Axis1GoToOffset,
+    Axis2GoToOffset,
     Radius
 };
 
@@ -72,6 +74,12 @@ enum class ZDirection
     Right
 };
 
+enum class Axis
+{
+    Axis1,
+    Axis2
+};
+
 class Model
 {
 public:
@@ -91,10 +99,14 @@ public:
 
     void axis1GoToStep( long step );
     void axis1GoToPosition( double pos );
+    void axis1GoToOffset( double pos );
     void axis1GoToPreviousPosition();
     void axis1CheckForSynchronisation( ZDirection direction );
     void axis1CheckForSynchronisation( long step );
     void axis1GoToCurrentMemory();
+
+    void axis2GoToPosition( double pos );
+    void axis2GoToOffset( double pos );
 
     void axis1MoveLeft();
     void axis1MoveRight();
@@ -106,6 +118,8 @@ public:
     void axis2Wait();
     void axis2Stop();
     void axis2SynchroniseOff();
+
+    void repeatLastRelativeMove();
 
     // This is called when the user presses ENTER when
     // inputting a mode parameter (e.g. taper angle)
@@ -135,6 +149,7 @@ public:
     int         m_keyPressed{ 0 };
     double      m_taperAngle{ 0.0 };
     double      m_radius{ 0.0 };
+    double      m_radiusStartZPos{ 0.0 };
     float       m_taperPreviousXSpeed{ 40.f };
     // Stores the current function displayed on the screen:
     Mode        m_currentDisplayMode{ Mode::None };
@@ -158,6 +173,9 @@ public:
     // Once the user has set the x position once then we use
     // the status bar to display the effective diameter
     bool        m_xDiameterSet{ false };
+    double      m_axis1LastRelativeMove{ 0.0 };
+    double      m_axis2LastRelativeMove{ 0.0 };
+    Axis        m_lastRelativeMoveAxis;
 
     std::stack<double> m_axis1PreviousPositions;
 };

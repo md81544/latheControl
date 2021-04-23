@@ -1,3 +1,12 @@
+Need a way to start a radius cut from a position that's not x = 0,
+i.e. to cut a partial radius
+    - related to this, why am I able to nudge in taper mode, but
+      when I try to do it in radius mode, the X axis gets reset to
+      the pre-nudge position again? We need to have the ability to
+      nudge when radiusing.
+
+Start thinking around how to make control of two axes easier
+
 Make the speeds above which the program automatically resets them
 lower after a stop to be configurable
 

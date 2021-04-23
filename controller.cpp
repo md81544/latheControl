@@ -107,6 +107,11 @@ void Controller::processKeyPress()
                 m_model->axis1GoToPreviousPosition();
                 break;
             }
+            case key::FULLSTOP:
+            {
+                m_model->repeatLastRelativeMove();
+                break;
+            }
             case key::a2_MINUS:
             {
                 // X-axis speed decrease
@@ -586,6 +591,16 @@ void Controller::processKeyPress()
                 m_model->changeMode( Mode::Axis2GoTo );
                 break;
             }
+            case key::a1_r:
+            {
+                m_model->changeMode( Mode::Axis1GoToOffset );
+                break;
+            }
+            case key::a2_r:
+            {
+                m_model->changeMode( Mode::Axis2GoToOffset );
+                break;
+            }
             case key::ASTERISK: // shutdown
             {
                 #ifndef FAKE
@@ -708,6 +723,8 @@ int Controller::checkKeyAllowedForMode( int key )
         case Mode::Taper:
         case Mode::Axis1GoTo:
         case Mode::Axis2GoTo:
+        case Mode::Axis1GoToOffset:
+        case Mode::Axis2GoToOffset:
         case Mode::Radius:
             if( key >= key::ZERO && key <= key::NINE ) return key;
             if( key == key::FULLSTOP || key == key::BACKSPACE || key == key::DELETE ) return key;
@@ -728,6 +745,8 @@ int Controller::processModeInputKeys( int key )
         m_model->m_currentDisplayMode == Mode::Axis1PositionSetup ||
         m_model->m_currentDisplayMode == Mode::Axis1GoTo ||
         m_model->m_currentDisplayMode == Mode::Axis2GoTo ||
+        m_model->m_currentDisplayMode == Mode::Axis1GoToOffset ||
+        m_model->m_currentDisplayMode == Mode::Axis2GoToOffset ||
         m_model->m_currentDisplayMode == Mode::Radius
         )
     {

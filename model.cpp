@@ -233,10 +233,20 @@ void Model::changeMode( Mode mode )
             m_input = convertToString( m_taperAngle, 4 );
         }
     }
+    if( mode == Mode::Axis1GoToOffset && m_axis1LastRelativeMove != 0.0 )
+    {
+        m_input = convertToString( m_axis1LastRelativeMove, 3 );
+    }
+    if( mode == Mode::Axis2GoToOffset && m_axis2LastRelativeMove != 0.0 )
+    {
+        m_input = convertToString( m_axis2LastRelativeMove, 3 );
+    }
 
+    m_radiusStartZPos = 0.0;
     if( mode == Mode::Radius )
     {
         axis1SetSpeed( 10.0 );
+        m_radiusStartZPos = m_axis1Motor->getPosition();
         if( m_radius != 0.0 )
         {
             m_input = convertToString( m_radius, 4 );
@@ -364,6 +374,15 @@ void Model::axis1GoToPosition( double pos )
     {
         m_axis1Motor->goToPosition( pos );
     }
+    m_axis1Status = fmt::format( "Going to {}", pos );
+}
+
+void Model::axis1GoToOffset( double offset )
+{
+    m_axis1LastRelativeMove = offset;
+    m_lastRelativeMoveAxis = Axis::Axis1;
+    axis1GoToPosition( m_axis1Motor->getPosition() + offset );
+    m_axis1Status = fmt::format( "To offset {}", offset );
 }
 
 void Model::axis1GoToPreviousPosition()
@@ -440,7 +459,20 @@ void Model::axis1GoToCurrentMemory()
     {
         axis1GoToStep( m_axis1Memory.at( m_currentMemory ) );
     }
+}
 
+void Model::axis2GoToPosition( double pos )
+{
+    m_axis2Motor->goToPosition( pos );
+    m_axis2Status = fmt::format( "Going to {}", pos );
+}
+
+void Model::axis2GoToOffset( double offset )
+{
+    m_axis2LastRelativeMove = offset;
+    m_lastRelativeMoveAxis = Axis::Axis2;
+    axis2GoToPosition( m_axis2Motor->getPosition() + offset );
+    m_axis2Status = fmt::format( "To offset {}", offset );
 }
 
 void Model::axis1MoveLeft()
@@ -520,6 +552,24 @@ void Model::axis2SynchroniseOff()
     m_axis2Motor->synchroniseOff();
 }
 
+void Model::repeatLastRelativeMove()
+{
+    if( m_lastRelativeMoveAxis == Axis::Axis1 )
+    {
+        if( m_axis1LastRelativeMove != 0.0 )
+        {
+            axis1GoToOffset( m_axis1LastRelativeMove );
+        }
+    }
+    else if ( m_lastRelativeMoveAxis == Axis::Axis2 )
+    {
+        if( m_axis2LastRelativeMove != 0.0 )
+        {
+            axis2GoToOffset( m_axis2LastRelativeMove );
+        }
+    }
+}
+
 void Model::acceptInputValue()
 {
     double inputValue = 0.0;
@@ -560,7 +610,6 @@ void Model::acceptInputValue()
             if( valid )
             {
                 axis1GoToPosition( inputValue );
-                m_axis1Status = fmt::format( "Going to {}", inputValue );
             }
             break;
         }
@@ -568,8 +617,23 @@ void Model::acceptInputValue()
         {
             if( valid )
             {
-                m_axis2Motor->goToPosition( inputValue );
-                m_axis2Status = fmt::format( "Going to {}", inputValue );
+                axis2GoToPosition( inputValue );
+            }
+            break;
+        }
+        case Mode::Axis1GoToOffset:
+        {
+            if( valid )
+            {
+                axis1GoToOffset( inputValue );
+            }
+            break;
+        }
+        case Mode::Axis2GoToOffset:
+        {
+            if( valid )
+            {
+                axis2GoToOffset( inputValue );
             }
             break;
         }
