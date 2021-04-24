@@ -649,6 +649,7 @@ void Model::acceptInputValue()
         }
         case Mode::Axis2RetractSetup:
             // no processing required for these modes
+            break;
         default:
             // unhandled mode
             assert( false );
