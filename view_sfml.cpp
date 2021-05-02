@@ -5,7 +5,6 @@
 #include "threadpitches.h"
 
 #include <cassert>
-#include <queue>
 #include <fmt/format.h>
 
 namespace mgo
@@ -13,20 +12,6 @@ namespace mgo
 
 namespace
 {
-
-int movingAverage( int val )
-{
-    static std::queue<int> values;
-    static int total = 0;
-    total += val;
-    values.push( val );
-    if( values.size() > 32 )
-    {
-        total -= values.front();
-        values.pop();
-    }
-    return total / values.size();
-}
 
 std::string cnv( const mgo::StepperMotor* motor, long step )
 {
@@ -437,8 +422,8 @@ void ViewSfml::updateTextFromModel( const Model& model )
     }
     if( model.m_rotaryEncoder )
     {
-        int rpm = movingAverage( model.m_rotaryEncoder->getRpm() );
-        m_txtRpm->setString( fmt::format( "{: >7}", rpm ) );
+        m_txtRpm->setString(
+            fmt::format( "{: >7}", static_cast<int>( model.m_rotaryEncoder->getRpm() ) ) );
     }
 
     m_txtGeneralStatus->setString( model.m_generalStatus );

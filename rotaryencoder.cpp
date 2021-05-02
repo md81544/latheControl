@@ -105,8 +105,9 @@ float RotaryEncoder::getRpm()
     // Ticks are in microseconds
     if( warmingUp() ) return 0.f;
     if( m_gpio.getTick() - m_lastTick > 100'000 ) return 0.f;
-    return 60'000'000.f /
-        ( m_averageTickDelta * m_pulsesPerSpindleRev );
+    float rpm = 60'000'000.f / ( m_averageTickDelta * m_pulsesPerSpindleRev );
+    if( rpm > 5'000.f ) rpm = 0.f;
+    return rpm;
 }
 
 float RotaryEncoder::getPositionDegrees()
