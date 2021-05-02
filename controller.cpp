@@ -309,41 +309,23 @@ void Controller::processKeyPress()
             case key::a:
             case key::A:
             {
-                if ( m_model->m_axis1Motor->isRunning() )
-                {
-                    m_model->axis1Stop();
-                }
-                long nudgeValue = 25L;
+                long nudgeAmount = 25L;
                 if( m_model->m_keyPressed == key::A ) // extra fine with shift
                 {
-                    nudgeValue = 2L;
+                    nudgeAmount = 2L;
                 }
-                if( m_model->m_config.readBool( "Axis1MotorFlipDirection", false ) )
-                {
-                    nudgeValue = -nudgeValue;
-                }
-                m_model->axis1GoToStep(
-                    m_model->m_axis1Motor->getCurrentStep() + nudgeValue );
+                m_model->axis1Nudge( nudgeAmount );
                 break;
             }
             case key::d:
             case key::D:
             {
-                if ( m_model->m_axis1Motor->isRunning() )
-                {
-                    m_model->axis1Stop();
-                }
-                long nudgeValue = 25L;
+                long nudgeAmount = -25L;
                 if( m_model->m_keyPressed == key::D ) // extra fine with shift
                 {
-                    nudgeValue = 2L;
+                    nudgeAmount = -2L;
                 }
-                if( m_model->m_config.readBool( "Axis1MotorFlipDirection", false ) )
-                {
-                    nudgeValue = -nudgeValue;
-                }
-                m_model->axis1GoToStep(
-                    m_model->m_axis1Motor->getCurrentStep() - nudgeValue );
+                m_model->axis1Nudge( nudgeAmount );
                 break;
             }
             case key::LBRACKET: // [

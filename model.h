@@ -104,6 +104,7 @@ public:
     void axis1CheckForSynchronisation( ZDirection direction );
     void axis1CheckForSynchronisation( long step );
     void axis1GoToCurrentMemory();
+    void axis1Nudge( long nudgeAmount );
 
     void axis2GoToPosition( double pos );
     void axis2GoToOffset( double pos );
@@ -149,7 +150,6 @@ public:
     int         m_keyPressed{ 0 };
     double      m_taperAngle{ 0.0 };
     double      m_radius{ 0.0 };
-    double      m_radiusStartZPos{ 0.0 };
     float       m_taperPreviousXSpeed{ 40.f };
     // Stores the current function displayed on the screen:
     Mode        m_currentDisplayMode{ Mode::None };

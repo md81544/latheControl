@@ -153,9 +153,10 @@ void Model::checkStatus()
             m_axis1Motor->setSpeed( m_previousZSpeed );
             m_axis1FastReturning = false;
         }
-        if( m_enabledFunction == Mode::Taper && m_zWasRunning )
+        if( ( m_enabledFunction == Mode::Taper || m_enabledFunction == Mode::Radius )
+              && m_zWasRunning )
         {
-            m_axis2Motor->stop();
+            axis2SynchroniseOff();
         }
         if( m_zWasRunning && m_axis1Motor->getRpm() >= 100.0 )
         {
@@ -242,11 +243,9 @@ void Model::changeMode( Mode mode )
         m_input = convertToString( m_axis2LastRelativeMove, 3 );
     }
 
-    m_radiusStartZPos = 0.0;
     if( mode == Mode::Radius )
     {
         axis1SetSpeed( 10.0 );
-        m_radiusStartZPos = m_axis1Motor->getPosition();
         if( m_radius != 0.0 )
         {
             m_input = convertToString( m_radius, 4 );
@@ -299,7 +298,7 @@ void Model::startSynchronisedXMotorForTaper( ZDirection direction )
     double angleConversion = std::tan( m_taperAngle * DEG_TO_RAD );
     m_axis2Motor->synchroniseOn(
         m_axis1Motor.get(),
-        [ angleConversion ]( double zPosDelta )
+        [ angleConversion ]( double zPosDelta, double )
             {
                 return zPosDelta * angleConversion;
             }
@@ -308,15 +307,21 @@ void Model::startSynchronisedXMotorForTaper( ZDirection direction )
 
 void Model::startSynchronisedXMotorForRadius(ZDirection direction)
 {
-    // Make sure X isn't already running first
+    // To cut a radius, we need a defined start point for both
+    // axes. We do this by assuming zero is the start point for
+    // both (the change mode screen tells the user to zero out,
+    // such that the tool is on the outermost apex of the radius).
+    // We can then determine at any time whene axis2 should be
+    // in relation to axis1.
+
+    axis2SynchroniseOff();
     m_axis2Motor->stop();
     m_axis2Motor->wait();
 
-    int stepAdd = -1;
-    if( ( direction == ZDirection::Left  && m_taperAngle < 0.0 ) ||
-        ( direction == ZDirection::Right && m_taperAngle > 0.0 ) )
+    int stepAdd = 1;
+    if( direction == ZDirection::Left )
     {
-        stepAdd = 1;
+        stepAdd = -1;
     }
     // As this is called just before the Z motor starts moving, we take
     // up any backlash first.
@@ -326,19 +331,22 @@ void Model::startSynchronisedXMotorForRadius(ZDirection direction)
     double radius = m_radius;
     m_axis2Motor->synchroniseOn(
         m_axis1Motor.get(),
-        [ radius ]( double zPosDelta )
+        [ radius ]( double /*zPosDelta*/, double zCurrentPos )
             {
+                // Note, we only cut a radius if z is positive.
+                //
                 // To solve for X, given Z, we can use Pythagoras
                 // as we have a right angle with known hypoteneuse
                 // (i.e. the radius): z^2 + x^2 = r^2, so
                 // sqrt( r^2 - z^2 ) = our x position
-                if( radius + zPosDelta < 0 ) return -radius;
-                double zPosOutwards = radius + zPosDelta;
-                double t = radius * radius - zPosOutwards * zPosOutwards;
-                if( t < 0 ) t = 0;
-                double newXPos = - std::sqrt( t );
-                return newXPos;
-            }
+
+                if( zCurrentPos <= 0 ) return 0.0;
+                if( zCurrentPos > radius ) return radius;
+                double xPos = std::sqrt( radius * radius - zCurrentPos * zCurrentPos );
+                // We need to return a delta
+                return radius - xPos;
+            },
+            true // always use zero as sync start pos
         );
 }
 
@@ -459,6 +467,18 @@ void Model::axis1GoToCurrentMemory()
     {
         axis1GoToStep( m_axis1Memory.at( m_currentMemory ) );
     }
+}
+
+void Model::axis1Nudge( long nudgeAmount )
+{
+    if( m_config.readBool( "Axis1MotorFlipDirection", false ) )
+    {
+        nudgeAmount = -nudgeAmount;
+    }
+    m_axis1Motor->stop();
+    m_axis1Motor->wait();
+    axis1GoToStep( m_axis1Motor->getCurrentStep() + nudgeAmount );
+    m_axis1Motor->wait();
 }
 
 void Model::axis2GoToPosition( double pos )

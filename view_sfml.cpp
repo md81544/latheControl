@@ -5,6 +5,7 @@
 #include "threadpitches.h"
 
 #include <cassert>
+#include <queue>
 #include <fmt/format.h>
 
 namespace mgo
@@ -12,6 +13,20 @@ namespace mgo
 
 namespace
 {
+
+int movingAverage( int val )
+{
+    static std::queue<int> values;
+    static int total = 0;
+    total += val;
+    values.push( val );
+    if( values.size() > 32 )
+    {
+        total -= values.front();
+        values.pop();
+    }
+    return total / values.size();
+}
 
 std::string cnv( const mgo::StepperMotor* motor, long step )
 {
@@ -126,9 +141,9 @@ void ViewSfml::initialise( const Model& model )
     m_window->setKeyRepeatEnabled( false );
     m_window->setMouseCursorVisible( false );
     m_font = std::make_unique<sf::Font>();
-    if (!m_font->loadFromFile("./DroidSansMono.ttf"))
+    if (!m_font->loadFromFile("./lc_font.ttf"))
     {
-       throw std::runtime_error("Could not load TTF font");
+       throw std::runtime_error("Could not load TTF font lc_font.ttf");
     }
 
     m_txtAxis1Label = std::make_unique<sf::Text>("", *m_font, 60 );
@@ -422,8 +437,8 @@ void ViewSfml::updateTextFromModel( const Model& model )
     }
     if( model.m_rotaryEncoder )
     {
-        m_txtRpm->setString( fmt::format( "{: >7}",
-            static_cast<int>( model.m_rotaryEncoder->getRpm() ) ) );
+        int rpm = movingAverage( model.m_rotaryEncoder->getRpm() );
+        m_txtRpm->setString( fmt::format( "{: >7}", rpm ) );
     }
 
     m_txtGeneralStatus->setString( model.m_generalStatus );
@@ -540,10 +555,14 @@ void ViewSfml::updateTextFromModel( const Model& model )
             m_txtMode->setString( "Radius" );
             m_txtMisc1->setString( fmt::format( "Radius required: {}_",
                 model.m_input ) );
-            m_txtMisc2->setString( "Important! Ensure the tool is at the radius of the workpiece," );
-            m_txtMisc3->setString( "near the end, and you've set the diameter." );
-            m_txtMisc4->setString( "You can then cut OUTWARDS and nudge TOWARDS the chuck" );
-            m_txtMisc5->setString( "gradually for subsequent cuts." );
+            m_txtMisc2->setString(
+                "Important! Ensure the tool is at the radius of the workpiece," );
+            m_txtMisc3->setString(
+                "near the end, and set axes to ZERO (this drives the operation)." );
+            m_txtMisc4->setString(
+                "Then cut OUTWARDS, and move INWARDS gradually for subsequent cuts." );
+            m_txtMisc5->setString(
+                "Re-zero each time and use relative movement for each cut." );
             m_txtWarning->setString( "Enter to keep enabled, Esc to disable, Del to clear" );
             break;
         }

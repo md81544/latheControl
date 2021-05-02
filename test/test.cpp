@@ -15,6 +15,7 @@ TEST_CASE( "Stepper: Step once" )
 {
     mgo::MockGpio gpio( false );
     mgo::StepperMotor motor( gpio, 0, 0, 0, 1'000, 1.0, 10'000.0 );
+    motor.setRpm( 500.0 );
     motor.goToStep( 3 );
     motor.wait();
 
@@ -26,6 +27,7 @@ TEST_CASE( "Stepper: Stop motor" )
     mgo::MockGpio gpio( false );
     mgo::StepperMotor motor( gpio, 0, 0, 0, 1'000, 1.0, 10'000.0 );
     // High number of steps:
+    motor.setRpm( 500.0 );
     motor.goToStep( 1'000'000 );
     gpio.delayMicroSeconds( 1'000 );
     REQUIRE( motor.isRunning() );
@@ -48,6 +50,7 @@ TEST_CASE( "Stepper: Move then move again" )
 {
     mgo::MockGpio gpio( false );
     mgo::StepperMotor motor( gpio, 0, 0, 0, 1'000, 1.0, 10'000.0 );
+    motor.setRpm( 500.0 );
     motor.goToStep( 50 );
     motor.wait();
     motor.goToStep( 100 );
@@ -62,6 +65,7 @@ TEST_CASE( "Stepper: Forward and reverse" )
 {
     mgo::MockGpio gpio( false );
     mgo::StepperMotor motor( gpio, 0, 0, 0, 1'000, 1.0, 10'000.0 );
+    motor.setRpm( 500.0 );
     motor.goToStep( 100 );
     motor.wait();
     REQUIRE( motor.getCurrentStep() == 100 );
@@ -74,6 +78,7 @@ TEST_CASE( "Stepper: Check direction" )
 {
     mgo::MockGpio gpio( false );
     mgo::StepperMotor motor( gpio, 0, 0, 0, 1'000, 1.0, 10'000.0 );
+    motor.setRpm( 500.0 );
     REQUIRE( motor.getDirection() == mgo::Direction::forward );
     motor.goToStep( 100 );
     motor.wait();
@@ -164,6 +169,7 @@ TEST_CASE( "Stepper: Check backlash compensation" )
     // Set backlash compensation. This sets our backlash slop to be ten
     // steps which means if we move one step in a positive manner the
     // motor should really have to move eleven "real" steps
+    motor.setRpm( 500.0 );
     motor.setBacklashCompensation( 10, 0 );
     motor.goToStep( 1 );
     motor.wait();
@@ -213,8 +219,10 @@ TEST_CASE( "Stepper: Check motor synchronisation" )
     mgo::MockGpio gpio( false );
     mgo::StepperMotor motor1( gpio, 0, 0, 0, 1'000, 0.01, 10'000.0 );
     mgo::StepperMotor motor2( gpio, 0, 0, 0, 1'000, 0.01, 10'000.0 );
+    motor1.setRpm( 500.0 );
+    motor2.setRpm( 500.0 );
     REQUIRE( motor2.getPosition() == 0.0 );
-    motor2.synchroniseOn( &motor1, []( double pos ){ return pos / 2.0; } );
+    motor2.synchroniseOn( &motor1, []( double pos, double ){ return pos / 2.0; } );
     motor1.setSpeed( 1'000.0 );
     motor1.goToPosition( 2.4 );
     motor1.wait();
@@ -249,14 +257,15 @@ TEST_CASE( "Model:   check radius" )
     mgo::Model model( gpio, config );
     model.initialise();
     model.changeMode( mgo::Mode::Radius );
-    model.m_radius = 2.5;
+    model.m_radius = 1.0;
     model.axis1SetSpeed( 60.0 );
-    model.axis1GoToPosition( -0.5 );
+    model.axis1GoToPosition( 1.0 );
     model.axis1Wait();
-    // X position should be - sqrt( 2.5^2 - 2^2 )
+    model.axis2Wait();
+
     double pos = model.m_axis2Motor->getPosition();
-    REQUIRE( pos < -1.45 );
-    REQUIRE( pos > -1.55 );
+    REQUIRE( pos < 1.05 );
+    REQUIRE( pos > 0.95 );
 
     model.axis1GoToPosition( 0.0 );
     model.axis1Wait();

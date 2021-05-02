@@ -102,16 +102,11 @@ void RotaryEncoder::callback(
 
 float RotaryEncoder::getRpm()
 {
-    // TODO: the rpm value appears to stop updating above a certain speed:
-    // investigate whether we are still getting called back, or does the rotary
-    // encoder need to be driven more slowly (i.e. lower the gearing)?
-    //
     // Ticks are in microseconds
     if( warmingUp() ) return 0.f;
     if( m_gpio.getTick() - m_lastTick > 100'000 ) return 0.f;
-    auto rpm = 60'000'000.f /
+    return 60'000'000.f /
         ( m_averageTickDelta * m_pulsesPerSpindleRev );
-    return rpm;
 }
 
 float RotaryEncoder::getPositionDegrees()
