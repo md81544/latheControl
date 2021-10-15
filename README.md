@@ -22,7 +22,7 @@ You'll need to do the following (on deb-based systems) to install required packa
 
 The makefile also expects `cppcheck` and `ctags`:
 
-    sudo apt install cppcheck ctags
+    sudo apt install cppcheck exuberant-ctags
 
 ## Building
 
