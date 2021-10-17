@@ -19,9 +19,12 @@ add_executable(lc
         configreader.cpp
     )
 
-IF(DEFINED FAKE)
+if(DEFINED FAKE)
     add_compile_definitions(FAKE)
-ENDIF(DEFINED FAKE)
+    add_subdirectory(test)
+else()
+    target_link_libraries(lc PRIVATE pigpio)
+endif()
 
 target_link_libraries(lc PRIVATE
         shared_with_test
@@ -34,7 +37,6 @@ target_link_libraries(lc PRIVATE
 
 target_compile_options(lc PRIVATE -std=c++17 -Wall -Wextra -Werror -Wpedantic)
 
-add_subdirectory(test)
 
 # Avoid unused variable warning:
 set(ignnoreMe "${FAKE}")
