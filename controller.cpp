@@ -718,7 +718,7 @@ int Controller::checkKeyAllowedForMode( int key )
         default:
             // unhandled mode
             assert( false );
-	    return -1;
+            return -1;
     }
 }
 
