@@ -57,7 +57,10 @@ void Controller::run()
             m_model->m_axis1Motor.reset();
             // Note the command used for shutdown should be made passwordless
             // in the /etc/sudoers files
+            #pragma GCC diagnostic push
+            #pragma GCC diagnostic ignored "-Wunused-result"
             system( "sudo shutdown -h now &" );
+            #pragma GCC diagnostic pop
         }
 
         // Small delay just to avoid the UI loop spinning
@@ -715,6 +718,7 @@ int Controller::checkKeyAllowedForMode( int key )
         default:
             // unhandled mode
             assert( false );
+	    return -1;
     }
 }
 
