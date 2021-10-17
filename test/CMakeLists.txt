@@ -1,9 +1,11 @@
-project (test)
+project (unit_tests)
 
-add_executable(test test.cpp)
+add_executable(unit_test test.cpp)
 
-target_compile_options(test PRIVATE -std=c++17 -g -Wall -Wextra -Werror -Wpedantic)
+target_compile_options(unit_test PRIVATE -std=c++17 -g -Wall -Wextra -Werror -Wpedantic)
 
-target_include_directories(test PRIVATE ..)
+target_include_directories(unit_test PRIVATE ..)
 
-target_link_libraries(test PRIVATE shared_with_test fmt)
+target_link_libraries(unit_test PRIVATE shared_with_test fmt)
+
+add_test(test_all unit_test)

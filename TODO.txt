@@ -1,3 +1,7 @@
+(WIP) Convert to cmake. Still outstanding:
+    - a driver script perhaps
+    - remove old Makefile when happy
+
 Support enable pin for each motor
 
 Start thinking around how to make control of two axes easier for
@@ -26,8 +30,6 @@ than having to use taper mode)
 
 All "Axis1..." and "Axis2..." references should be replaced with an
 array to allow for future expansion.
-
-Convert to cmake
 
 Address the "Mode" concept which currently provides pseudo-modal
 "dialogs" interleaved into program flow, and is proving difficult

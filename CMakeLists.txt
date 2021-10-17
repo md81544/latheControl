@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.5)
 
 project (lc)
+enable_testing()
 
 add_library(shared_with_test OBJECT
         stepperControl/steppermotor.cpp
@@ -8,6 +9,7 @@ add_library(shared_with_test OBJECT
         log.cpp
         model.cpp
     )
+target_compile_options(shared_with_test PRIVATE -std=c++17 -Wall -Wextra -Werror -Wpedantic)
 
 add_executable(lc
         stepperControl/gpio.cpp
@@ -17,7 +19,9 @@ add_executable(lc
         configreader.cpp
     )
 
-add_compile_definitions(FAKE)
+IF(DEFINED FAKE)
+    add_compile_definitions(FAKE)
+ENDIF(DEFINED FAKE)
 
 target_link_libraries(lc PRIVATE
         shared_with_test
@@ -31,3 +35,18 @@ target_link_libraries(lc PRIVATE
 target_compile_options(lc PRIVATE -std=c++17 -Wall -Wextra -Werror -Wpedantic)
 
 add_subdirectory(test)
+
+# Avoid unused variable warning:
+set(ignnoreMe "${FAKE}")
+
+ADD_CUSTOM_TARGET(debug
+        COMMAND ${CMAKE_COMMAND} -DFAKE=1 -DCMAKE_BUILD_TYPE=Debug ${CMAKE_SOURCE_DIR}
+        COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target all
+        COMMENT "Switch CMAKE_BUILD_TYPE to Debug"
+    )
+
+ADD_CUSTOM_TARGET(release
+        COMMAND ${CMAKE_COMMAND} -DCMAKE_BUILD_TYPE=Release ${CMAKE_SOURCE_DIR}
+        COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target all
+        COMMENT "Switch CMAKE_BUILD_TYPE to Release"
+    )
