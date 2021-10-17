@@ -17,12 +17,7 @@ As this repository contains a submodule now, use `git clone --recurse-submodules
 
 You'll need to do the following (on deb-based systems) to install required packages:
 
-    sudo apt install libfmt-dev
-    sudo apt install libsfml-dev
-
-The makefile also expects `cppcheck` and `ctags`:
-
-    sudo apt install cppcheck exuberant-ctags
+    sudo apt install cmake libfmt-dev libsfml-dev cppcheck exuberant-ctags
 
 ## Building
 
@@ -31,6 +26,20 @@ To make a binary to run on non-Pi hardware, just type `make`. This mocks out the
 To make the binary on a Pi, type `make release`. This expects real hardware to be present.
 
 To run unit tests, `cd` to the `test` directory and type `make`.
+
+### CMake Building
+
+While I'm testing CMake building, you can do the above OR use cmake. To build with CMake, from the
+project root, issue the following commands:
+
+    mkdir build
+    cd build
+    cmake ..
+    make debug (or make release)
+
+`make debug` is the same as just `make` with the Makefile, and `make release` should be built
+on a real Pi. Only `make debug` includes the building of the unit tests. To run the unit tests,
+you can just run `make test`.
 
 ## Connecting Hardware
 Note that the software will take the pin high then low for each pulse, so the pins you specify in the config file should be connected to the positive inputs for the stepper controller. All the negative input pins should be tied together and connected to the Pi's GND pin.
