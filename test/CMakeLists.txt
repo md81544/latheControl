@@ -6,6 +6,6 @@ target_compile_options(unit_test PRIVATE -std=c++17 -g -Wall -Wextra -Werror -Wp
 
 target_include_directories(unit_test PRIVATE ..)
 
-target_link_libraries(unit_test PRIVATE shared_with_test fmt)
+target_link_libraries(unit_test PRIVATE shared_with_test fmt pthread)
 
 add_test(test_all unit_test)
