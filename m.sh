@@ -2,6 +2,7 @@
 
 mkdir -p build
 BUILD_TYPE=debug
+RUN_TESTS=n
 
 while [[ "$1" != "" ]]; do
     case "$1" in
@@ -15,6 +16,11 @@ while [[ "$1" != "" ]]; do
             ;;
         "release" )
             BUILD_TYPE=release
+            shift
+            ;;
+        "test" )
+            BUILD_TYPE=debug
+            RUN_TESTS=y
             shift
             ;;
         "--verbose"|"-v" )
@@ -37,13 +43,13 @@ if [[ "$1" != "" ]]; then
     BUILD_TYPE=${1}
 fi
 
-if [[ ${BUILD_TYPE} == "release" ]]; then
+if [[ "${BUILD_TYPE}" == "release" ]]; then
     if [[ -f "build/DEBUG" ]]; then
         rm -rf build/*
     fi
     touch build/RELEASE
 fi
-if [[ ${BUILD_TYPE} == "debug" ]]; then
+if [[ "${BUILD_TYPE}" == "debug" ]]; then
     if [[ -f "build/RELEASE" ]]; then
         rm -rf build/*
     fi
@@ -56,3 +62,7 @@ make ${BUILD_TYPE} ${VERBOSE}
 cd ..
 rm -f lc
 ln -s build/lc
+
+if [[ "${RUN_TESTS}" == "y" ]]; then
+    build/test/unit_test -d y
+fi
