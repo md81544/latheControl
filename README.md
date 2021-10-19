@@ -41,6 +41,15 @@ project root, issue the following commands:
 on a real Pi. Only `make debug` includes the building of the unit tests. To run the unit tests,
 you can just run `make test`.
 
+There is a convenience script called `m.sh` in the project root which does all the above in one step. You can use the following parameters with it:
+
+    ./m.sh          # no paramters, builds the debug/mock version, with tests
+    ./m.sh release  # builds the release version (run on Pi)
+    ./m.sh clean    # removes contents of build directory
+    ./m.sh test     # runs the tests in debug version
+
+    ./m.sh -v       # use the '--verbose' / '-v' flag for verbose output when building
+
 ## Connecting Hardware
 Note that the software will take the pin high then low for each pulse, so the pins you specify in the config file should be connected to the positive inputs for the stepper controller. All the negative input pins should be tied together and connected to the Pi's GND pin.
 

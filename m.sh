@@ -8,7 +8,6 @@ while [[ "$1" != "" ]]; do
     case "$1" in
         "debug"|"fake" )
             BUILD_TYPE=debug
-            shift
             ;;
         "clean" )
             rm -rf build/*
@@ -16,16 +15,13 @@ while [[ "$1" != "" ]]; do
             ;;
         "release" )
             BUILD_TYPE=release
-            shift
             ;;
         "test" )
             BUILD_TYPE=debug
             RUN_TESTS=y
-            shift
             ;;
         "--verbose"|"-v" )
             VERBOSE='VERBOSE=1'
-            shift
             ;;
         "-help"|"--help"|"-h"|"-?")
             echo "./m.sh [debug|release] [--rebuild]"
