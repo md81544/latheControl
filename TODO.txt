@@ -1,7 +1,3 @@
-(WIP) Convert to cmake. Still outstanding:
-    - a driver script perhaps
-    - remove old Makefile when happy
-
 Support enable pin for each motor
 
 Start thinking around how to make control of two axes easier for
