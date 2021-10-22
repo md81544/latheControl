@@ -3,13 +3,14 @@
         {
             "type": "shell",
             "label": "g++ build active file",
-            "command": "make",
-            "args": [
-            ],
+            "command": "./m.sh",
+            "args": [],
             "options": {
                 "cwd": "${workspaceFolder}"
             },
-            "problemMatcher": ["$gcc"],
+            "problemMatcher": [
+                "$gcc"
+            ],
             "group": {
                 "kind": "build",
                 "isDefault": true
