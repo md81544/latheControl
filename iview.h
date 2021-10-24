@@ -2,9 +2,9 @@
 
 #include "model.h"
 
-// The "view" object encapsulates the the graphical toolkit being used.
-// Abstracting allows for easier switching of UI libraries used - for
-// instance this program originally used curses as a textual interface
+// The "view" object abstracts the the graphical toolkit being used.
+// This allows for easier switching of UI libraries used - for instance,
+// this program originally used curses as a textual interface
 
 namespace mgo
 {

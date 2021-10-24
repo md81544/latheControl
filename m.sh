@@ -23,6 +23,10 @@ while [[ "$1" != "" ]]; do
         "--verbose"|"-v" )
             VERBOSE='VERBOSE=1'
             ;;
+        "sub" )
+            git submodule update --init --recursive
+            exit 0
+            ;;
         "-help"|"--help"|"-h"|"-?")
             echo "./m.sh [debug|release] [--rebuild]"
             exit 1
