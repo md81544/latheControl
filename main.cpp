@@ -10,6 +10,7 @@
 #include "configreader.h"
 
 #include <iostream>
+#include <sysexits.h>
 
 int main( int argc, char* argv[] )
 {
@@ -30,7 +31,7 @@ int main( int argc, char* argv[] )
             if( argv[1][0] == '-' )
             {
                 std::cout << "\nUsage: lc <configfile>\n\n";
-                return 0;
+                return EX_USAGE;
             }
             configFile = argv[1];
         }
@@ -41,11 +42,11 @@ int main( int argc, char* argv[] )
         mgo::Controller controller( &model );
         controller.run();
 
-        return 0;
+        return EX_OK;
     }
     catch( const std::exception& e )
     {
         std::cout << "Exception encountered: " << e.what() << std::endl;
-        return 1;
+        return EX_SOFTWARE;
     }
 }
