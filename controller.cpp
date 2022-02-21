@@ -531,6 +531,10 @@ void Controller::processKeyPress()
                     }
                     long stepsForRetraction =
                         2.0 / std::abs( m_model->m_axis2Motor->getConversionFactor() );
+                    if( m_model->m_config.readBool( "Axis2MotorFlipDirection", false ) )
+                    {
+                        stepsForRetraction = -stepsForRetraction;
+                    }
                     m_model->m_axis2Motor->goToStep(
                         m_model->m_axis2Motor->getCurrentStep() + stepsForRetraction * direction );
                     m_model->m_axis2Retracted = true;
