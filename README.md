@@ -74,3 +74,4 @@ Press the leader F2 and one of the following:
 * t - threading
 * p - tapering (negative angles mean the piece gets wider nearer the chuck)
 * r - set retract mode (retract might need to be inwards rather than outwards if you're boring a hole)
+* o - radius cutting (this is EXPERIMENTAL - use care!)
