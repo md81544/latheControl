@@ -40,33 +40,33 @@ This program is very time-critical. You shouldn't need to use `nice`, as, intern
 ## Usage
 Note: the axes are referred to as Z and X here, but these names are configurable. Z is the primary axis (axis1) and X is the secondary (axis2).
 
-For general movement of the carriage, use the arrow keys. Press the same key again (or spacebar) to stop.
+For general **movement** of the carriage, use the arrow keys. Press the same key again (or spacebar) to stop.
 
-Control speed of motion with number keys. 1-5 controls Z and 6 to 0 controls X. For finer control of speed, use the "-" and "+" (or "=") keys for the Z axis, and use the leader "x" with the same keys for the X axis (for example, press "x", then "-").
+Control **speed of motion** with number keys. 1-5 controls Z and 6 to 0 controls X. For finer control of speed, use the "-" and "+" (or "=") keys for the Z axis, and use the leader "x" with the same keys for the X axis (for example, press "x", then "-").
 
-"Nudging" the axes can be achieved with the "w", "a", "s", and "d" keys. If you're pressing these keys a lot, look at relative motion (below) instead.
+"**Nudging**" the axes can be achieved with the "w", "a", "s", and "d" keys. If you're pressing these keys a lot, look at relative motion (below) instead.
 
-There are four memory locations, you can select which one is active by means of the "[" and "]" keys. Press "m" to store the current X and Z position in the current memory slot.
+There are four **memory locations**, you can select which one is active by means of the "[" and "]" keys. Press "m" to store the current X and Z position in the current memory slot.
 
-To return to a position, select the memory slot with "[" or "]" and press ENTER.
+To **return to a position**, select the memory slot with "[" or "]" and press ENTER.
 
-Axis "leader keys" can be used to store just the X or Z value, for example, pressing "xm" (x followed by m) will memorise just the X value.
+Axis "**leader keys**" can be used to store just the X or Z value, for example, pressing "xm" (x followed by m) will memorise just the X value.
 
 Pressing ENTER for a particular memory slot will just move the Z axis to the stored position. Pressing "x", then ENTER will move to the stored X value.
 
-To move to an absolute position, press leader + "g" - for example, "zg" will open a dialog asking for a value for Z to go to.
+To move to an **absolute position**, press leader + "g" - for example, "zg" will open a dialog asking for a value for Z to go to.
 
-Relative motion can be performed by pressing leader + "r" - for example "xr" will open a dialog asking for an offset for X to go to. Once a relative motion has occurred, it can be repeated by simply pressing "."
+**Relative motion** can be performed by pressing leader + "r" - for example "xr" will open a dialog asking for an offset for X to go to. Once a relative motion has occurred, it can be repeated by simply pressing "."
 
-Zeroing - press "xz" or "zz" to zero the axis at the current position.
+**Zeroing** - press "xz" or "zz" to zero the axis at the current position.
 
-Retraction - "r" retracts the X axis a small amount. Press again to unretract. Retraction can be negative for boring operations, see "Special functions" below.
+**Retraction** - "r" retracts the X axis a small amount. Press again to unretract. Retraction can be negative for boring operations, see "Special functions" below.
 
-Fast return - pressing "f" will rapidly return the Z axis to the current memory slot.
+**Fast return** - pressing "f" will rapidly return the Z axis to the current memory slot.
 
-Quit - press Ctrl+Q to exit the application.
+**Quit** - press Ctrl+Q to exit the application.
 
-Shutdown - press shift and "*" (asterisk) to shutdown the computer (prior to power down)
+**Shutdown** - press shift and "*" (asterisk) to shutdown the computer (prior to power down)
 
 ### Special functions
 Press the leader F2 and one of the following:
@@ -74,4 +74,4 @@ Press the leader F2 and one of the following:
 * t - threading
 * p - tapering (negative angles mean the piece gets wider nearer the chuck)
 * r - set retract mode (retract might need to be inwards rather than outwards if you're boring a hole)
-* o - radius cutting (this is EXPERIMENTAL - use care!)
+* o - radius cutting (this is **EXPERIMENTAL** - use care!)
