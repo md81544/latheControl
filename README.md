@@ -42,7 +42,7 @@ Note: the axes are referred to as Z and X here, but these names are configurable
 
 For general movement of the carriage, use the arrow keys. Press the same key again (or spacebar) to stop.
 
-Control speed of motion with number keys. 1-5 controls Z and 6 to 0 controls X.
+Control speed of motion with number keys. 1-5 controls Z and 6 to 0 controls X. For finer control of speed, use the "-" and "+" (or "=") keys for the Z axis, and use the leader "x" with the same keys for the X axis (for example, press "x", then "-").
 
 "Nudging" the axes can be achieved with the "w", "a", "s", and "d" keys. If you're pressing these keys a lot, look at relative motion (below) instead.
 
@@ -54,7 +54,7 @@ Axis "leader keys" can be used to store just the X or Z value, for example, pres
 
 Pressing ENTER for a particular memory slot will just move the Z axis to the stored position. Pressing "x", then ENTER will move to the stored X value.
 
-To move to a set position, press leader + "g" - for example, "zg" will open a dialog asking for a value for Z to go to.
+To move to an absolute position, press leader + "g" - for example, "zg" will open a dialog asking for a value for Z to go to.
 
 Relative motion can be performed by pressing leader + "r" - for example "xr" will open a dialog asking for an offset for X to go to. Once a relative motion has occurred, it can be repeated by simply pressing "."
 
