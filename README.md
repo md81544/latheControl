@@ -37,3 +37,40 @@ This program is very time-critical. You shouldn't need to use `nice`, as, intern
 
 **Update on the above** - I've noticed that on a fresh Pi install I get approximately once-per-second noticeable pre-emption of the motor threads (which are meant to be running at highest realtime priority). This exhibits as an obvious "stutter" when the carriage (either axis) is moving. After lots of investigation, I find this is related to the kernel in use. I am not sure why yet. I reverted to an older kernel, (4.19.97, which is quite old, but is the version I was running previously for the lathe) and all works OK again. I will, at some time, attempt to bisect my way up the kernel versions to see where the issue occurs. To revert to a previous kernel on the Pi, follow [these instructions](https://isahatipoglu.com/2015/09/29/how-to-upgrade-or-downgrade-raspberrypis-kernel-servoblaster-problem-raspberry-pi2/).
 
+## Usage
+Note: the axes are referred to as Z and X here, but these names are configurable. Z is the primary axis (axis1) and X is the secondary (axis2).
+
+For general movement of the carriage, use the arrow keys. Press the same key again (or spacebar) to stop.
+
+Control speed of motion with number keys. 1-5 controls Z and 6 to 0 controls X.
+
+"Nudging" the axes can be achieved with the "w", "a", "s", and "d" keys. If you're pressing these keys a lot, look at relative motion (below) instead.
+
+There are four memory locations, you can select which one is active by means of the "[" and "]" keys. Press "m" to store the current X and Z position in the current memory slot.
+
+To return to a position, select the memory slot with "[" or "]" and press ENTER.
+
+Axis "leader keys" can be used to store just the X or Z value, for example, pressing "xm" (x followed by m) will memorise just the X value.
+
+Pressing ENTER for a particular memory slot will just move the Z axis to the stored position. Pressing "x", then ENTER will move to the stored X value.
+
+To move to a set position, press leader + "g" - for example, "zg" will open a dialog asking for a value for Z to go to.
+
+Relative motion can be performed by pressing leader + "r" - for example "xr" will open a dialog asking for an offset for X to go to. Once a relative motion has occurred, it can be repeated by simply pressing "."
+
+Zeroing - press "xz" or "zz" to zero the axis at the current position.
+
+Retraction - "r" retracts the X axis a small amount. Press again to unretract. Retraction can be negative for boring operations, see "Special functions" below.
+
+Fast return - pressing "f" will rapidly return the Z axis to the current memory slot.
+
+Quit - press Ctrl+Q to exit the application.
+
+Shutdown - press shift and "*" (asterisk) to shutdown the computer (prior to power down)
+
+### Special functions
+Press the leader F2 and one of the following:
+* s - setup
+* t - threading
+* p - tapering (negative angles mean the piece gets wider nearer the chuck)
+* r - set retract mode (retract might need to be inwards rather than outwards if you're boring a hole)
