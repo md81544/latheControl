@@ -59,6 +59,7 @@ enum class KeyMode
     None,
     Axis1,
     Axis2,
+    AxisAll,
     Function
 };
 
@@ -105,6 +106,7 @@ public:
     void axis1CheckForSynchronisation( long step );
     void axis1GoToCurrentMemory();
     void axis1Nudge( long nudgeAmount );
+    void axis1Zero();
 
     void axis2GoToPosition( double pos );
     void axis2GoToOffset( double pos );
@@ -118,6 +120,7 @@ public:
     void axis2SetSpeed( double speed );
     void axis2Wait();
     void axis2Stop();
+    void axis2Zero();
     void axis2SynchroniseOff();
 
     void repeatLastRelativeMove();

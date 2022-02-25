@@ -481,6 +481,20 @@ void Model::axis1Nudge( long nudgeAmount )
     m_axis1Motor->wait();
 }
 
+void Model::axis1Zero()
+{
+    if( m_enabledFunction == Mode::Taper )
+    {
+        changeMode( Mode::None );
+    }
+    m_axis1Motor->zeroPosition();
+    // Zeroing will invalidate any memorised Z positions, so we clear them
+    for( auto& m : m_axis1Memory )
+    {
+        m = INF_RIGHT;
+    }
+}
+
 void Model::axis2GoToPosition( double pos )
 {
     m_axis2Motor->goToPosition( pos );
@@ -565,6 +579,20 @@ void Model::axis2Stop()
 {
     m_axis2Motor->stop();
     m_axis2Motor->wait();
+}
+
+void Model::axis2Zero()
+{
+    if( m_enabledFunction == Mode::Taper )
+    {
+        changeMode( Mode::None );
+    }
+    m_axis2Motor->zeroPosition();
+    // Zeroing will invalidate any memorised X positions, so we clear them
+    for( auto& m : m_axis2Memory )
+    {
+        m = INF_OUT;
+    }
 }
 
 void Model::axis2SynchroniseOff()

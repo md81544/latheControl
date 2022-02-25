@@ -544,30 +544,18 @@ void Controller::processKeyPress()
             }
             case key::a1_z:
             {
-                if( m_model->m_enabledFunction == Mode::Taper )
-                {
-                    m_model->changeMode( Mode::None );
-                }
-                m_model->m_axis1Motor->zeroPosition();
-                // Zeroing will invalidate any memorised Z positions, so we clear them
-                for( auto& m : m_model->m_axis1Memory )
-                {
-                    m = INF_RIGHT;
-                }
+                m_model->axis1Zero();
                 break;
             }
             case key::a2_z:
             {
-                if( m_model->m_enabledFunction == Mode::Taper )
-                {
-                    m_model->changeMode( Mode::None );
-                }
-                m_model->m_axis2Motor->zeroPosition();
-                // Zeroing will invalidate any memorised X positions, so we clear them
-                for( auto& m : m_model->m_axis2Memory )
-                {
-                    m = INF_OUT;
-                }
+                m_model->axis2Zero();
+                break;
+            }
+            case key::aAll_z:
+            {
+                m_model->axis1Zero();
+                m_model->axis2Zero();
                 break;
             }
             case key::a1_g:
@@ -851,12 +839,17 @@ int Controller::processModeInputKeys( int key )
 int Controller::processLeaderKeyModeKeyPress( int keyPress )
 {
     if( m_model->m_keyMode == KeyMode::Axis1 ||
-        m_model->m_keyMode == KeyMode::Axis2 )
+        m_model->m_keyMode == KeyMode::Axis2 ||
+        m_model->m_keyMode == KeyMode::AxisAll )
     {
-        int bitFlip = 4096; // bit 12
+        int bitFlip = 0x1000; // bit 12
         if( m_model->m_keyMode == KeyMode::Axis2 )
         {
-            bitFlip = 8192; // bit 13
+            bitFlip = 0x2000; // bit 13
+        }
+        if( m_model->m_keyMode == KeyMode::AxisAll )
+        {
+            bitFlip = 0x4000; // bit 14
         }
         return keyPress + bitFlip;
     }
@@ -913,6 +906,11 @@ int Controller::checkForAxisLeaderKeys( int key )
     if( key == static_cast<int>( m_model->m_config.readLong( "Axis2Leader", 120L ) ) )
     {
         m_model->m_keyMode = KeyMode::Axis2;
+        return key::None;
+    }
+    if( key == key::BACKSLASH )
+    {
+        m_model->m_keyMode = KeyMode::AxisAll;
         return key::None;
     }
     return key;

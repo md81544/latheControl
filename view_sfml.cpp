@@ -358,7 +358,7 @@ void ViewSfml::updateDisplay( const Model& model )
             }
         }
         // Z/X labels - make red if keyMode corresponds
-        if( model.m_keyMode == KeyMode::Axis1 )
+        if( model.m_keyMode == KeyMode::Axis1 || model.m_keyMode == KeyMode::AxisAll )
         {
             m_txtAxis1MemoryLabel->setFillColor( sf::Color::Red );
         }
@@ -366,7 +366,7 @@ void ViewSfml::updateDisplay( const Model& model )
         {
             m_txtAxis1MemoryLabel->setFillColor( { 128, 128, 128 });
         }
-        if( model.m_keyMode == KeyMode::Axis2 )
+        if( model.m_keyMode == KeyMode::Axis2 || model.m_keyMode == KeyMode::AxisAll )
         {
             m_txtAxis2MemoryLabel->setFillColor( sf::Color::Red );
         }
