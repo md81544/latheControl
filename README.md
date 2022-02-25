@@ -58,6 +58,8 @@ To move to an **absolute position**, press leader + `G` - for example, `ZG` will
 
 **Zeroing** - press `XZ` or `ZZ` to zero the axis at the current position. The "axis leader" key `\` (backslash) selects both axes, so `\z` will zero out both axes at once.
 
+**Setting a position** - press "axis leader" then `S` - for example `ZS` - then enter a value to change what the current position is. With the X axis, you can enter the value as a **diameter value** by entering a value and then pressing `D` instead of `ENTER`. This sets the X value to half of the diameter and displays the actual diameter in the status line at the bottom of the screen.
+
 **Retraction** - `R` retracts the X axis a small amount. Press again to unretract. Retraction can be negative for boring operations, see "Special functions" below.
 
 **Fast return** - pressing `F` will rapidly return the Z axis to the current memory slot.

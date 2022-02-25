@@ -814,7 +814,7 @@ int Controller::processModeInputKeys( int key )
         float xPos = 0;
         try
         {
-            xPos = - std::abs( std::stof( m_model->m_input ) );
+            xPos = std::abs( std::stof( m_model->m_input ) );
         }
         catch( ... ) {}
         m_model->m_axis2Motor->setPosition( xPos / 2 );
