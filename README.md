@@ -56,7 +56,7 @@ To move to an **absolute position**, press leader + `G` - for example, `ZG` will
 
 **Relative motion** can be performed by pressing leader + `R` - for example `XR` will open a dialog asking for an offset for X to go to. Once a relative motion has occurred, it can be repeated by simply pressing `.`
 
-**Zeroing** - press `XZ` or `ZZ` to zero the axis at the current position.
+**Zeroing** - press `XZ` or `ZZ` to zero the axis at the current position. The "axis leader" key `\` (backslash) selects both axes, so `\z` will zero out both axes at once.
 
 **Retraction** - `R` retracts the X axis a small amount. Press again to unretract. Retraction can be negative for boring operations, see "Special functions" below.
 
