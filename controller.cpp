@@ -155,23 +155,19 @@ void Controller::processKeyPress()
             }
             case key::a1_m:
             {
-                m_model->m_axis1Memory.at( m_model->m_currentMemory ) =
-                    m_model->m_axis1Motor->getCurrentStep();
+                m_model->axis1StorePosition();
                 break;
             }
             case key::a2_m:
             {
-                m_model->m_axis2Memory.at( m_model->m_currentMemory ) =
-                    m_model->m_axis2Motor->getCurrentStep();
+                m_model->axis2StorePosition();
                 break;
             }
             case key::m:
             case key::M:
             {
-                m_model->m_axis1Memory.at( m_model->m_currentMemory ) =
-                    m_model->m_axis1Motor->getCurrentStep();
-                m_model->m_axis2Memory.at( m_model->m_currentMemory ) =
-                    m_model->m_axis2Motor->getCurrentStep();
+                m_model->axis1StorePosition();
+                m_model->axis2StorePosition();
                 break;
             }
             case key::a2_ENTER:
@@ -193,52 +189,22 @@ void Controller::processKeyPress()
             }
             case key::UP:
             {
-                if( m_model->m_axis2Motor->isRunning() )
-                {
-                    m_model->axis2Stop();
-                }
-                else
-                {
-                    m_model->m_axis2Status = "moving in";
-                    if( m_model->m_config.readBool( "Axis2MotorFlipDirection", false ) )
-                    {
-                        m_model->m_axis2Motor->goToStep( INF_OUT );
-                    }
-                    else
-                    {
-                        m_model->m_axis2Motor->goToStep( INF_IN );
-                    }
-                }
+                m_model->axis2Move( XDirection::Inwards );
                 break;
             }
             case key::DOWN:
             {
-                if( m_model->m_axis2Motor->isRunning() )
-                {
-                    m_model->axis2Stop();
-                }
-                else
-                {
-                    m_model->m_axis2Status = "moving out";
-                    if( m_model->m_config.readBool( "Axis2MotorFlipDirection", false ) )
-                    {
-                        m_model->m_axis2Motor->goToStep( INF_IN );
-                    }
-                    else
-                    {
-                        m_model->m_axis2Motor->goToStep( INF_OUT );
-                    }
-                }
+                m_model->axis2Move( XDirection::Outwards );
                 break;
             }
             case key::LEFT:
             {
-                m_model->axis1MoveLeft();
+                m_model->axis1Move( ZDirection::Left );
                 break;
             }
             case key::RIGHT:
             {
-                m_model->axis1MoveRight();
+                m_model->axis1Move( ZDirection::Right );
                 break;
             }
             case key::a:

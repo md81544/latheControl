@@ -110,16 +110,14 @@ public:
     void axis1SpeedDecrease();
     void axis1SpeedIncrease();
     void axis1FastReturn();
-
-    void axis2GoToPosition( double pos );
-    void axis2GoToOffset( double pos );
-
-    void axis1MoveLeft();
-    void axis1MoveRight();
-
     void axis1SetSpeed( double speed );
     void axis1Wait();
     void axis1Stop();
+    void axis1StorePosition();
+    void axis1Move( ZDirection direction );
+
+    void axis2GoToPosition( double pos );
+    void axis2GoToOffset( double pos );
     void axis2SetSpeed( double speed );
     void axis2Wait();
     void axis2Stop();
@@ -131,6 +129,8 @@ public:
     void axis2Nudge( XDirection direction );
     void axis2FastReturn();
     void axis2Retract();
+    void axis2StorePosition();
+    void axis2Move( XDirection direction );
 
     void repeatLastRelativeMove();
 

@@ -574,7 +574,7 @@ void Model::axis2GoToOffset( double offset )
     m_axis2Status = fmt::format( "To offset {}", offset );
 }
 
-void Model::axis1MoveLeft()
+void Model::axis1Move( ZDirection direction )
 {
     // Issuing the same command (i.e. pressing the same key)
     // when it is already running will cause the motor to stop
@@ -583,34 +583,29 @@ void Model::axis1MoveLeft()
         axis1Stop();
         return;
     }
-    m_axis1Status = "moving left";
-    if( ! m_config.readBool( "Axis1MotorFlipDirection", false ) )
+    if( direction == ZDirection::Left )
     {
-        axis1GoToStep( INF_LEFT );
+        m_axis1Status = "moving left";
+        if( ! m_config.readBool( "Axis1MotorFlipDirection", false ) )
+        {
+            axis1GoToStep( INF_LEFT );
+        }
+        else
+        {
+            axis1GoToStep( INF_RIGHT );
+        }
     }
     else
     {
-        axis1GoToStep( INF_RIGHT );
-    }
-}
-
-void Model::axis1MoveRight()
-{
-    // Issuing the same command (i.e. pressing the same key)
-    // when it is already running will cause the motor to stop
-    if ( m_axis1Motor->isRunning() )
-    {
-        axis1Stop();
-        return;
-    }
-    m_axis1Status = "moving right";
-    if( ! m_config.readBool( "Axis1MotorFlipDirection", false ) )
-    {
-        axis1GoToStep( INF_RIGHT );
-    }
-    else
-    {
-        axis1GoToStep( INF_LEFT );
+        m_axis1Status = "moving right";
+        if( ! m_config.readBool( "Axis1MotorFlipDirection", false ) )
+        {
+            axis1GoToStep( INF_RIGHT );
+        }
+        else
+        {
+            axis1GoToStep( INF_LEFT );
+        }
     }
 }
 
@@ -633,6 +628,11 @@ void Model::axis1Stop()
 {
     m_axis1Motor->stop();
     m_axis1Motor->wait();
+}
+
+void Model::axis1StorePosition()
+{
+    m_axis1Memory.at( m_currentMemory ) = m_axis1Motor->getCurrentStep();
 }
 
 void Model::axis2SetSpeed(double speed)
@@ -793,6 +793,44 @@ void Model::axis2Retract()
             m_axis2Motor->getCurrentStep() + stepsForRetraction * direction );
         m_axis2Retracted = true;
         m_axis2Status = "Retracting";
+    }
+}
+
+void Model::axis2StorePosition()
+{
+    m_axis2Memory.at( m_currentMemory ) = m_axis2Motor->getCurrentStep();
+}
+
+void Model::axis2Move(XDirection direction)
+{
+    if( m_axis2Motor->isRunning() )
+    {
+        axis2Stop();
+        return;
+    }
+    if( direction == XDirection::Inwards )
+    {
+        m_axis2Status = "moving in";
+        if( m_config.readBool( "Axis2MotorFlipDirection", false ) )
+        {
+            m_axis2Motor->goToStep( INF_OUT );
+        }
+        else
+        {
+            m_axis2Motor->goToStep( INF_IN );
+        }
+    }
+    else
+    {
+        m_axis2Status = "moving out";
+        if( m_config.readBool( "Axis2MotorFlipDirection", false ) )
+        {
+            m_axis2Motor->goToStep( INF_IN );
+        }
+        else
+        {
+            m_axis2Motor->goToStep( INF_OUT );
+        }
     }
 }
 
