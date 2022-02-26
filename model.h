@@ -107,6 +107,8 @@ public:
     void axis1GoToCurrentMemory();
     void axis1Nudge( long nudgeAmount );
     void axis1Zero();
+    void axis1SpeedDecrease();
+    void axis1SpeedIncrease();
 
     void axis2GoToPosition( double pos );
     void axis2GoToOffset( double pos );

@@ -144,36 +144,13 @@ void Controller::processKeyPress()
             case key::a1_EQUALS:
             case key::EQUALS: // (i.e. plus)
             {
-                if( m_model->m_enabledFunction == Mode::Threading ) break;
-                if( m_model->m_axis1Motor->getRpm() < 20.0 )
-                {
-                    m_model->m_axis1Motor->setSpeed( m_model->m_axis1Motor->getRpm() + 1.0 );
-                }
-                else
-                {
-                    if( m_model->m_axis1Motor->getRpm() <=
-                        m_model->m_config.readDouble( "Axis1MaxMotorSpeed", 1'000.0 ) - 20 )
-                    {
-                        m_model->m_axis1Motor->setSpeed( m_model->m_axis1Motor->getRpm() + 20.0 );
-                    }
-                }
+                m_model->axis1SpeedIncrease();
                 break;
             }
             case key::a1_MINUS:
             case key::MINUS:
             {
-                if( m_model->m_enabledFunction == Mode::Threading ) break;
-                if( m_model->m_axis1Motor->getRpm() > 20 )
-                {
-                    m_model->m_axis1Motor->setSpeed( m_model->m_axis1Motor->getRpm() - 20.0 );
-                }
-                else
-                {
-                    if ( m_model->m_axis1Motor->getRpm() > 1 )
-                    {
-                        m_model->m_axis1Motor->setSpeed( m_model->m_axis1Motor->getRpm() - 1.0 );
-                    }
-                }
+                m_model->axis1SpeedDecrease();
                 break;
             }
             case key::a1_m:

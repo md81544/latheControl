@@ -496,6 +496,39 @@ void Model::axis1Zero()
     }
 }
 
+void Model::axis1SpeedDecrease()
+{
+    if( m_enabledFunction == Mode::Threading ) return;
+    if( m_axis1Motor->getRpm() > 20 )
+    {
+        m_axis1Motor->setSpeed( m_axis1Motor->getRpm() - 20.0 );
+    }
+    else
+    {
+        if ( m_axis1Motor->getRpm() > 1 )
+        {
+            m_axis1Motor->setSpeed( m_axis1Motor->getRpm() - 1.0 );
+        }
+    }
+}
+
+void Model::axis1SpeedIncrease()
+{
+    if( m_enabledFunction == Mode::Threading ) return;
+    if( m_axis1Motor->getRpm() < 20.0 )
+    {
+        m_axis1Motor->setSpeed( m_axis1Motor->getRpm() + 1.0 );
+    }
+    else
+    {
+        if( m_axis1Motor->getRpm() <=
+            m_config.readDouble( "Axis1MaxMotorSpeed", 1'000.0 ) - 20 )
+        {
+            m_axis1Motor->setSpeed( m_axis1Motor->getRpm() + 20.0 );
+        }
+    }
+}
+
 void Model::axis2GoToPosition( double pos )
 {
     m_axis2Motor->goToPosition( pos );
