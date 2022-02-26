@@ -118,72 +118,27 @@ void Controller::processKeyPress()
             case key::a2_MINUS:
             {
                 // X-axis speed decrease
-                if( m_model->m_axis2Motor->getSpeed() > 10.1 )
-                {
-                    m_model->m_axis2Motor->setSpeed( m_model->m_axis2Motor->getSpeed() - 10.0 );
-                }
-                else if( m_model->m_axis2Motor->getSpeed() > 2.1 )
-                {
-                    m_model->m_axis2Motor->setSpeed( m_model->m_axis2Motor->getSpeed() - 2.0 );
-                }
+                m_model->axis2SpeedDecrease();
                 break;
             }
             case key::a2_EQUALS:
             {
                 // X-axis speed increase
-                if( m_model->m_axis2Motor->getSpeed() < 10.0 )
-                {
-                    m_model->m_axis2Motor->setSpeed( m_model->m_axis2Motor->getSpeed() + 2.0 );
-                }
-                else if( m_model->m_axis2Motor->getSpeed() <
-                    m_model->m_config.readDouble( "Axis2MaxMotorSpeed", 1'000.0 ) )
-                {
-                    m_model->m_axis2Motor->setSpeed( m_model->m_axis2Motor->getSpeed() + 10.0 );
-                }
+                m_model->axis2SpeedIncrease();
                 break;
             }
             // Nudge in X axis
             case key::W:
             case key::w:
             {
-                if ( m_model->m_axis2Motor->isRunning() )
-                {
-                    m_model->axis2Stop();
-                }
-                double nudgeValue = 60.0;
-                if( m_model->m_keyPressed == key::W )
-                {
-                    // extra fine with shift
-                    nudgeValue = 6.0;
-                }
-                if( m_model->m_config.readBool( "Axis2MotorFlipDirection", false ) )
-                {
-                    nudgeValue = -nudgeValue;
-                }
-                m_model->m_axis2Motor->goToStep(
-                    m_model->m_axis2Motor->getCurrentStep() + nudgeValue );
+                m_model->axis2Nudge( XDirection::Inwards );
                 break;
             }
             // Nudge out X axis
             case key::S:
             case key::s:
             {
-                if ( m_model->m_axis2Motor->isRunning() )
-                {
-                    m_model->axis2Stop();
-                }
-                double nudgeValue = 60.0;
-                if( m_model->m_keyPressed == key::S )
-                {
-                    // extra fine with shift
-                    nudgeValue = 6.0;
-                }
-                if( m_model->m_config.readBool( "Axis2MotorFlipDirection", false ) )
-                {
-                    nudgeValue = -nudgeValue;
-                }
-                m_model->m_axis2Motor->goToStep(
-                    m_model->m_axis2Motor->getCurrentStep() - nudgeValue );
+                m_model->axis2Nudge( XDirection::Outwards );
                 break;
             }
             case key::a1_EQUALS:
@@ -525,7 +480,7 @@ void Controller::processKeyPress()
                     m_model->m_previousXSpeed = m_model->m_axis2Motor->getSpeed();
                     m_model->m_axis2Motor->setSpeed( 100.0 );
                     int direction = -1;
-                    if( m_model->m_xRetractionDirection == XRetractionDirection::Inwards )
+                    if( m_model->m_xRetractionDirection == XDirection::Inwards )
                     {
                         direction = 1;
                     }
@@ -797,12 +752,12 @@ int Controller::processModeInputKeys( int key )
     {
         if( key == key::UP )
         {
-            m_model->m_xRetractionDirection = XRetractionDirection::Inwards;
+            m_model->m_xRetractionDirection = XDirection::Inwards;
             return -1;
         }
         if( key == key::DOWN )
         {
-            m_model->m_xRetractionDirection = XRetractionDirection::Outwards;
+            m_model->m_xRetractionDirection = XDirection::Outwards;
             return -1;
         }
     }

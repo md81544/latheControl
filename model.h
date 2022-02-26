@@ -63,10 +63,10 @@ enum class KeyMode
     Function
 };
 
-enum class XRetractionDirection
+enum class XDirection
 {
-    Outwards,   // towards operator
-    Inwards     // away from operator (when boring)
+    Outwards,   // towards operator, away from centre
+    Inwards     // away from operator, towards centre
 };
 
 enum class ZDirection
@@ -123,6 +123,9 @@ public:
     void axis2Zero();
     void axis2SynchroniseOff();
     void axis2GoToCurrentMemory();
+    void axis2SpeedDecrease();
+    void axis2SpeedIncrease();
+    void axis2Nudge( XDirection direction );
 
     void repeatLastRelativeMove();
 
@@ -172,7 +175,7 @@ public:
     bool        m_xWasRunning{ false };
     bool        m_spindleWasRunning{ false };
 
-    XRetractionDirection    m_xRetractionDirection;
+    XDirection  m_xRetractionDirection;
 
     // Once the user has set the x position once then we use
     // the status bar to display the effective diameter

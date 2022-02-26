@@ -1,5 +1,6 @@
 #include "model.h"
 #include "threadpitches.h"  // for ThreadPitch, threadPitches
+#include "keycodes.h"
 
 #include "fmt/format.h"
 
@@ -610,6 +611,71 @@ void Model::axis2GoToCurrentMemory()
     axis2Stop();
     m_axis2Status = "returning";
     m_axis2Motor->goToStep( m_axis2Memory.at( m_currentMemory ) );
+}
+
+void Model::axis2SpeedDecrease()
+{
+    if( m_axis2Motor->getSpeed() > 10.1 )
+    {
+        m_axis2Motor->setSpeed( m_axis2Motor->getSpeed() - 10.0 );
+    }
+    else if( m_axis2Motor->getSpeed() > 2.1 )
+    {
+        m_axis2Motor->setSpeed( m_axis2Motor->getSpeed() - 2.0 );
+    }
+}
+
+void Model::axis2SpeedIncrease()
+{
+    if( m_axis2Motor->getSpeed() < 10.0 )
+    {
+        m_axis2Motor->setSpeed( m_axis2Motor->getSpeed() + 2.0 );
+    }
+    else if( m_axis2Motor->getSpeed() <
+        m_config.readDouble( "Axis2MaxMotorSpeed", 1'000.0 ) )
+    {
+        m_axis2Motor->setSpeed( m_axis2Motor->getSpeed() + 10.0 );
+    }
+}
+
+void Model::axis2Nudge( XDirection direction )
+{
+    if( direction == XDirection::Inwards )
+    {
+        if ( m_axis2Motor->isRunning() )
+        {
+            axis2Stop();
+        }
+        double nudgeValue = 60.0;
+        if( m_keyPressed == key::W )
+        {
+            // extra fine with shift
+            nudgeValue = 6.0;
+        }
+        if( m_config.readBool( "Axis2MotorFlipDirection", false ) )
+        {
+            nudgeValue = -nudgeValue;
+        }
+        m_axis2Motor->goToStep( m_axis2Motor->getCurrentStep() + nudgeValue );
+    }
+    else
+    {
+        if ( m_axis2Motor->isRunning() )
+        {
+            axis2Stop();
+        }
+        double nudgeValue = 60.0;
+        if( m_keyPressed == key::S )
+        {
+            // extra fine with shift
+            nudgeValue = 6.0;
+        }
+        if( m_config.readBool( "Axis2MotorFlipDirection", false ) )
+        {
+            nudgeValue = -nudgeValue;
+        }
+        m_axis2Motor->goToStep( m_axis2Motor->getCurrentStep() - nudgeValue );
+    }
 }
 
 void Model::repeatLastRelativeMove()

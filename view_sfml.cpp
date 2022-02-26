@@ -338,7 +338,7 @@ void ViewSfml::updateDisplay( const Model& model )
         {
             m_window->draw( *m_txtTaperOrRadius );
         }
-        if( model.m_xRetractionDirection == XRetractionDirection::Inwards )
+        if( model.m_xRetractionDirection == XDirection::Inwards )
         {
             m_window->draw( *m_txtXRetractDirection );
         }
@@ -572,7 +572,7 @@ void ViewSfml::updateTextFromModel( const Model& model )
             m_txtMisc1->setString( "Normal X retraction is 2mm outwards" );
             m_txtMisc2->setString( "In a boring operation, retraction should be INWARDS." );
             m_txtMisc3->setString( "Current setting: " );
-            if( model.m_xRetractionDirection == XRetractionDirection::Inwards )
+            if( model.m_xRetractionDirection == XDirection::Inwards )
             {
                 m_txtMisc4->setString( "Inwards (i.e. away from you, for boring)" );
             }
