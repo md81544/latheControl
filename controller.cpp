@@ -244,13 +244,13 @@ void Controller::processKeyPress()
             }
             case key::a2_ENTER:
             {
-                if( m_model->m_axis2Memory.at( m_model->m_currentMemory ) == INF_RIGHT ) break;
-                if( m_model->m_axis2Memory.at( m_model->m_currentMemory ) ==
-                    m_model->m_axis2Motor->getCurrentStep() ) break;
-                m_model->axis2Stop();
-                m_model->m_axis2Status = "returning";
-                m_model->m_axis2Motor->goToStep(
-                    m_model->m_axis2Memory.at( m_model->m_currentMemory ) );
+                m_model->axis2GoToCurrentMemory();
+                break;
+            }
+            case key::aAll_ENTER:
+            {
+                m_model->axis1GoToCurrentMemory();
+                m_model->axis2GoToCurrentMemory();
                 break;
             }
             case key::ENTER:

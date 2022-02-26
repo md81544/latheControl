@@ -122,6 +122,7 @@ public:
     void axis2Stop();
     void axis2Zero();
     void axis2SynchroniseOff();
+    void axis2GoToCurrentMemory();
 
     void repeatLastRelativeMove();
 

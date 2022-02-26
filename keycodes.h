@@ -141,6 +141,7 @@ constexpr int a2_EQUALS = EQUALS  + 0x2000;  // axis2 speed increase
 
 // Axis All leader-prefixed keys ( 0x4000 = bit 14 is set )
 constexpr int aAll_z = z          + 0x4000;  // All axis zero
+constexpr int aAll_ENTER = ENTER  + 0x4000;  // All axis zero
 
 // Functions, leader is F2
 constexpr int f2h = 7000; // help

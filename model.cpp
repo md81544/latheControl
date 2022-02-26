@@ -600,6 +600,18 @@ void Model::axis2SynchroniseOff()
     m_axis2Motor->synchroniseOff();
 }
 
+void Model::axis2GoToCurrentMemory()
+{
+    if( m_axis2Memory.at( m_currentMemory ) == INF_RIGHT ||
+        m_axis2Memory.at( m_currentMemory ) == m_axis2Motor->getCurrentStep() )
+    {
+        return;
+    }
+    axis2Stop();
+    m_axis2Status = "returning";
+    m_axis2Motor->goToStep( m_axis2Memory.at( m_currentMemory ) );
+}
+
 void Model::repeatLastRelativeMove()
 {
     if( m_lastRelativeMoveAxis == Axis::Axis1 )
