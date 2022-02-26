@@ -395,83 +395,20 @@ void Controller::processKeyPress()
             case key::a1_f:
             {
                 // Fast return to point
-                if( m_model->m_axis1Memory.at( m_model->m_currentMemory ) == INF_RIGHT ) break;
-                if( m_model->m_axis1FastReturning ) break;
-                m_model->m_previousZSpeed = m_model->m_axis1Motor->getSpeed();
-                m_model->m_axis1FastReturning = true;
-                m_model->axis1Stop();
-                if( m_model->m_enabledFunction == Mode::Taper )
-                {
-                    // If we are tapering, we need to set a speed the x-axis motor can keep up with
-                    m_model->m_axis1Motor->setSpeed( 100.0 );
-                    ZDirection direction = ZDirection::Left;
-                    if( m_model->m_axis1Memory.at( m_model->m_currentMemory ) <
-                        m_model->m_axis1Motor->getCurrentStep() )
-                    {
-                        direction = ZDirection::Right;
-                    }
-                    m_model->takeUpZBacklash( direction );
-                    m_model->startSynchronisedXMotorForTaper( direction );
-                }
-                else
-                {
-                    m_model->m_axis1Motor->setSpeed( m_model->m_axis1Motor->getMaxRpm() );
-                }
-                m_model->m_axis1Status = "fast returning";
-                m_model->axis1GoToStep(
-                    m_model->m_axis1Memory.at( m_model->m_currentMemory ) );
+                m_model->axis1FastReturn();
                 break;
             }
             case key::a2_f:
             {
                 // Fast return to point
-                if( m_model->m_axis2Memory.at( m_model->m_currentMemory ) == INF_RIGHT ) break;
-                if( m_model->m_axis2FastReturning ) break;
-                m_model->m_previousZSpeed = m_model->m_axis2Motor->getSpeed();
-                m_model->m_axis2FastReturning = true;
-                m_model->axis2Stop();
-                m_model->m_axis2Motor->setSpeed( m_model->m_axis2Motor->getMaxRpm() );
-                m_model->m_axis2Status = "fast returning";
-                m_model->m_axis2Motor->goToStep(
-                    m_model->m_axis2Memory.at( m_model->m_currentMemory ) );
+                m_model->axis2FastReturn();
                 break;
             }
             case key::r:
             case key::R:
             {
                 // X retraction
-                if( m_model->m_config.readBool( "DisableAxis2", false ) ) break;
-                if( m_model->m_axis2Motor->isRunning() ) break;
-                if( m_model->m_enabledFunction == Mode::Taper ) break;
-                if( m_model->m_axis2Retracted )
-                {
-                    // Return
-                    m_model->m_axis2Motor->setSpeed( 100.0 );
-                    m_model->m_axis2Motor->goToStep( m_model->m_xOldPosition );
-                    m_model->m_axis2Status = "Unretracting";
-                    m_model->m_fastRetracting = true;
-                }
-                else
-                {
-                    m_model->m_xOldPosition = m_model->m_axis2Motor->getCurrentStep();
-                    m_model->m_previousXSpeed = m_model->m_axis2Motor->getSpeed();
-                    m_model->m_axis2Motor->setSpeed( 100.0 );
-                    int direction = -1;
-                    if( m_model->m_xRetractionDirection == XDirection::Inwards )
-                    {
-                        direction = 1;
-                    }
-                    long stepsForRetraction =
-                        2.0 / std::abs( m_model->m_axis2Motor->getConversionFactor() );
-                    if( m_model->m_config.readBool( "Axis2MotorFlipDirection", false ) )
-                    {
-                        stepsForRetraction = -stepsForRetraction;
-                    }
-                    m_model->m_axis2Motor->goToStep(
-                        m_model->m_axis2Motor->getCurrentStep() + stepsForRetraction * direction );
-                    m_model->m_axis2Retracted = true;
-                    m_model->m_axis2Status = "Retracting";
-                }
+                m_model->axis2Retract();
                 break;
             }
             case key::a1_z:

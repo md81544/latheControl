@@ -529,6 +529,37 @@ void Model::axis1SpeedIncrease()
     }
 }
 
+void Model::axis1FastReturn()
+{
+    if( m_axis1Memory.at( m_currentMemory ) == INF_RIGHT ||
+        m_axis1FastReturning )
+    {
+        return;
+    }
+    m_previousZSpeed = m_axis1Motor->getSpeed();
+    m_axis1FastReturning = true;
+    axis1Stop();
+    if( m_enabledFunction == Mode::Taper )
+    {
+        // If we are tapering, we need to set a speed the x-axis motor can keep up with
+        m_axis1Motor->setSpeed( 100.0 );
+        ZDirection direction = ZDirection::Left;
+        if( m_axis1Memory.at( m_currentMemory ) <
+            m_axis1Motor->getCurrentStep() )
+        {
+            direction = ZDirection::Right;
+        }
+        takeUpZBacklash( direction );
+        startSynchronisedXMotorForTaper( direction );
+    }
+    else
+    {
+        m_axis1Motor->setSpeed( m_axis1Motor->getMaxRpm() );
+    }
+    m_axis1Status = "fast returning";
+    axis1GoToStep( m_axis1Memory.at( m_currentMemory ) );
+}
+
 void Model::axis2GoToPosition( double pos )
 {
     m_axis2Motor->goToPosition( pos );
@@ -708,6 +739,60 @@ void Model::axis2Nudge( XDirection direction )
             nudgeValue = -nudgeValue;
         }
         m_axis2Motor->goToStep( m_axis2Motor->getCurrentStep() - nudgeValue );
+    }
+}
+
+void Model::axis2FastReturn()
+{
+    if( m_axis2Memory.at( m_currentMemory ) == INF_RIGHT ||
+        m_axis2FastReturning )
+    {
+        return;
+    }
+    m_previousZSpeed = m_axis2Motor->getSpeed();
+    m_axis2FastReturning = true;
+    axis2Stop();
+    m_axis2Motor->setSpeed( m_axis2Motor->getMaxRpm() );
+    m_axis2Status = "fast returning";
+    m_axis2Motor->goToStep( m_axis2Memory.at( m_currentMemory ) );
+}
+
+void Model::axis2Retract()
+{
+    if( m_config.readBool( "DisableAxis2", false )  ||
+        m_axis2Motor->isRunning()                   ||
+        m_enabledFunction == Mode::Taper )
+    {
+        return;
+    }
+    if( m_axis2Retracted )
+    {
+        // Unretract
+        m_axis2Motor->setSpeed( 100.0 );
+        m_axis2Motor->goToStep( m_xOldPosition );
+        m_axis2Status = "Unretracting";
+        m_fastRetracting = true;
+    }
+    else
+    {
+        m_xOldPosition = m_axis2Motor->getCurrentStep();
+        m_previousXSpeed = m_axis2Motor->getSpeed();
+        m_axis2Motor->setSpeed( 100.0 );
+        int direction = -1;
+        if( m_xRetractionDirection == XDirection::Inwards )
+        {
+            direction = 1;
+        }
+        long stepsForRetraction =
+            2.0 / std::abs( m_axis2Motor->getConversionFactor() );
+        if( m_config.readBool( "Axis2MotorFlipDirection", false ) )
+        {
+            stepsForRetraction = -stepsForRetraction;
+        }
+        m_axis2Motor->goToStep(
+            m_axis2Motor->getCurrentStep() + stepsForRetraction * direction );
+        m_axis2Retracted = true;
+        m_axis2Status = "Retracting";
     }
 }
 
