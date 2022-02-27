@@ -470,8 +470,17 @@ void Model::axis1GoToCurrentMemory()
     }
 }
 
-void Model::axis1Nudge( long nudgeAmount )
+void Model::axis1Nudge( ZDirection direction )
 {
+    long nudgeAmount = 25L;
+    if( m_keyPressed == key::D || m_keyPressed == key::A ) // extra fine with shift
+    {
+        nudgeAmount = 2L;
+    }
+    if( direction == ZDirection::Right )
+    {
+        nudgeAmount = -nudgeAmount;
+    }
     if( m_config.readBool( "Axis1MotorFlipDirection", false ) )
     {
         nudgeAmount = -nudgeAmount;
@@ -609,7 +618,33 @@ void Model::axis1Move( ZDirection direction )
     }
 }
 
-void Model::axis1SetSpeed(double speed)
+void Model::axis1SpeedPreset()
+{
+    if( m_currentDisplayMode == Mode::Threading )
+    {
+        return;
+    }
+    switch( m_keyPressed )
+    {
+        case key::ONE:
+            m_axis1Motor->setSpeed( m_config.readDouble( "Axis1SpeedPreset1", 20.0 ));
+            break;
+        case key::TWO:
+            m_axis1Motor->setSpeed( m_config.readDouble( "Axis1SpeedPreset2", 40.0 ));
+            break;
+        case key::THREE:
+            m_axis1Motor->setSpeed( m_config.readDouble( "Axis1SpeedPreset3", 100.0 ));
+            break;
+        case key::FOUR:
+            m_axis1Motor->setSpeed( m_config.readDouble( "Axis1SpeedPreset4", 250.0 ));
+            break;
+        case key::FIVE:
+            m_axis1Motor->setSpeed( m_config.readDouble( "Axis1SpeedPreset5", 1'000.0 ));
+            break;
+    }
+}
+
+void Model::axis1SetSpeed( double speed )
 {
     m_axis1Motor->setSpeed( speed );
 }
@@ -831,6 +866,37 @@ void Model::axis2Move(XDirection direction)
         {
             m_axis2Motor->goToStep( INF_OUT );
         }
+    }
+}
+
+void Model::axis2SpeedPreset()
+{
+    if( m_currentDisplayMode == Mode::Threading )
+    {
+        return;
+    }
+    switch( m_keyPressed )
+    {
+        case key::a2_1:
+        case key::SIX:
+            m_axis2Motor->setSpeed( m_config.readDouble( "Axis2SpeedPreset1", 5.0 ));
+            break;
+        case key::a2_2:
+        case key::SEVEN:
+            m_axis2Motor->setSpeed( m_config.readDouble( "Axis2SpeedPreset2", 20.0 ));
+            break;
+        case key::a2_3:
+        case key::EIGHT:
+            m_axis2Motor->setSpeed( m_config.readDouble( "Axis2SpeedPreset3", 40.0 ));
+            break;
+        case key::a2_4:
+        case key::NINE:
+            m_axis2Motor->setSpeed( m_config.readDouble( "Axis2SpeedPreset4", 80.0 ));
+            break;
+        case key::a2_5:
+        case key::ZERO:
+            m_axis2Motor->setSpeed( m_config.readDouble( "Axis2SpeedPreset5", 1'00.0 ));
+            break;
     }
 }
 

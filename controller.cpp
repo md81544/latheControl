@@ -210,23 +210,13 @@ void Controller::processKeyPress()
             case key::a:
             case key::A:
             {
-                long nudgeAmount = 25L;
-                if( m_model->m_keyPressed == key::A ) // extra fine with shift
-                {
-                    nudgeAmount = 2L;
-                }
-                m_model->axis1Nudge( nudgeAmount );
+                m_model->axis1Nudge( ZDirection::Left );
                 break;
             }
             case key::d:
             case key::D:
             {
-                long nudgeAmount = -25L;
-                if( m_model->m_keyPressed == key::D ) // extra fine with shift
-                {
-                    nudgeAmount = -2L;
-                }
-                m_model->axis1Nudge( nudgeAmount );
+                m_model->axis1Nudge( ZDirection::Right );
                 break;
             }
             case key::LBRACKET: // [
@@ -248,112 +238,27 @@ void Controller::processKeyPress()
 
             // Speed presets for Z with number keys 1-5
             case key::ONE:
-            {
-                if( m_model->m_currentDisplayMode != Mode::Threading )
-                {
-                    m_model->m_axis1Motor->setSpeed(
-                        m_model->m_config.readDouble( "Axis1SpeedPreset1", 20.0 )
-                        );
-                }
-                break;
-            }
             case key::TWO:
-            {
-                if( m_model->m_currentDisplayMode != Mode::Threading )
-                {
-                    m_model->m_axis1Motor->setSpeed(
-                        m_model->m_config.readDouble( "Axis1SpeedPreset2", 40.0 )
-                        );
-                }
-                break;
-            }
             case key::THREE:
-            {
-                if( m_model->m_currentDisplayMode != Mode::Threading )
-                {
-                    m_model->m_axis1Motor->setSpeed(
-                        m_model->m_config.readDouble( "Axis1SpeedPreset3", 100.0 )
-                        );
-                }
-                break;
-            }
             case key::FOUR:
-            {
-                if( m_model->m_currentDisplayMode != Mode::Threading )
-                {
-                    m_model->m_axis1Motor->setSpeed(
-                        m_model->m_config.readDouble( "Axis1SpeedPreset4", 250.0 )
-                        );
-                }
-                break;
-            }
             case key::FIVE:
             {
-                if( m_model->m_currentDisplayMode != Mode::Threading )
-                {
-                    m_model->m_axis1Motor->setSpeed(
-                        m_model->m_config.readDouble( "Axis1SpeedPreset5",
-                            m_model->m_config.readDouble( "Axis1MaxMotorSpeed", 1'000.0 )
-                            )
-                        );
-                }
+                m_model->axis1SpeedPreset();
                 break;
             }
             // Speed presets for X with number keys 6-0 or X leader + 1-5
-            case key::a2_1:
             case key::SIX:
-            {
-                if( m_model->m_currentDisplayMode != Mode::Threading )
-                {
-                    m_model->m_axis2Motor->setSpeed(
-                        m_model->m_config.readDouble( "Axis2SpeedPreset1", 5.0 )
-                        );
-                }
-                break;
-            }
-            case key::a2_2:
             case key::SEVEN:
-            {
-                if( m_model->m_currentDisplayMode != Mode::Threading )
-                {
-                    m_model->m_axis2Motor->setSpeed(
-                        m_model->m_config.readDouble( "Axis2SpeedPreset2", 20.0 )
-                        );
-                }
-                break;
-            }
-            case key::a2_3:
             case key::EIGHT:
-            {
-                if( m_model->m_currentDisplayMode != Mode::Threading )
-                {
-                    m_model->m_axis2Motor->setSpeed(
-                        m_model->m_config.readDouble( "Axis2SpeedPreset3", 40.0 )
-                        );
-                }
-                break;
-            }
-            case key::a2_4:
             case key::NINE:
-            {
-                if( m_model->m_currentDisplayMode != Mode::Threading )
-                {
-                    m_model->m_axis2Motor->setSpeed(
-                        m_model->m_config.readDouble( "Axis2SpeedPreset4", 80.0 )
-                        );
-                }
-                break;
-            }
-            case key::a2_5:
             case key::ZERO:
+            case key::a2_1:
+            case key::a2_2:
+            case key::a2_3:
+            case key::a2_4:
+            case key::a2_5:
             {
-                if( m_model->m_currentDisplayMode != Mode::Threading )
-                {
-                    m_model->m_axis2Motor->setSpeed(
-                        m_model->m_config.readDouble( "Axis2SpeedPreset5",
-                            m_model->m_config.readDouble( "Axis2MaxMotorSpeed", 1'000.0 ) )
-                        );
-                }
+                m_model->axis2SpeedPreset();
                 break;
             }
             case key::f:

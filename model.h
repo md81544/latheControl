@@ -105,7 +105,7 @@ public:
     void axis1CheckForSynchronisation( ZDirection direction );
     void axis1CheckForSynchronisation( long step );
     void axis1GoToCurrentMemory();
-    void axis1Nudge( long nudgeAmount );
+    void axis1Nudge( ZDirection direction );
     void axis1Zero();
     void axis1SpeedDecrease();
     void axis1SpeedIncrease();
@@ -115,6 +115,7 @@ public:
     void axis1Stop();
     void axis1StorePosition();
     void axis1Move( ZDirection direction );
+    void axis1SpeedPreset();
 
     void axis2GoToPosition( double pos );
     void axis2GoToOffset( double pos );
@@ -131,6 +132,7 @@ public:
     void axis2Retract();
     void axis2StorePosition();
     void axis2Move( XDirection direction );
+    void axis2SpeedPreset();
 
     void repeatLastRelativeMove();
 

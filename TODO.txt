@@ -13,9 +13,6 @@ things up, then forget to store the memory location before moving.
     - scratch memories should be cleared if the axis value is changed
       (i.e. with zero or manually setting a position)
 
-(WIP) Continue moving "business logic" into the model
-Including the "initialise" function to set up all the motors
-
 Start thinking around a setting for adding a tiny amount of x motion
 to counteract a lathe that cuts a bit of a taper (which works brilliantly,
 but needs to be a config item that is applied automatically, rather
