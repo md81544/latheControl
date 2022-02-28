@@ -378,7 +378,7 @@ void Controller::processKeyPress()
             case key::ESC: // return to normal mode
             {
                 // Cancel any retract as well
-                m_model->m_axis2Retracted = false;
+                m_model->setIsAxis2Retracted( false );
                 m_model->changeMode( Mode::None );
                 break;
             }
@@ -405,7 +405,7 @@ int Controller::checkKeyAllowedForMode( int key )
         return key;
     }
     // Don't allow any x movement when retracted
-    if( m_model->m_axis2Retracted && ( key == key::UP || key == key::DOWN || key == key::W
+    if( m_model->getIsAxis2Retracted() && ( key == key::UP || key == key::DOWN || key == key::W
         || key == key::w || key == key::s || key == key::S ) )
     {
         return -1;
@@ -537,12 +537,12 @@ int Controller::processModeInputKeys( int key )
     {
         if( key == key::UP )
         {
-            m_model->m_xRetractionDirection = XDirection::Inwards;
+            m_model->setRetractionDirection( XDirection::Inwards );
             return -1;
         }
         if( key == key::DOWN )
         {
-            m_model->m_xRetractionDirection = XDirection::Outwards;
+            m_model->setRetractionDirection( XDirection::Outwards );
             return -1;
         }
     }
@@ -564,7 +564,7 @@ int Controller::processModeInputKeys( int key )
             m = INF_OUT;
         }
         m_model->m_currentDisplayMode = Mode::None;
-        m_model->m_xDiameterSet = true;
+        m_model->diameterIsSet();
         return -1;
     }
 

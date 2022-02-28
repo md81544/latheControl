@@ -918,6 +918,31 @@ void Model::repeatLastRelativeMove()
     }
 }
 
+void Model::diameterIsSet()
+{
+    m_xDiameterSet = true;
+}
+
+XDirection Model::getRetractionDirection() const
+{
+    return m_xRetractionDirection;
+}
+
+void Model::setRetractionDirection(XDirection direction)
+{
+    m_xRetractionDirection = direction;
+}
+
+bool Model::getIsAxis2Retracted() const
+{
+    return m_axis2Retracted;
+}
+
+void Model::setIsAxis2Retracted(bool flag)
+{
+    m_axis2Retracted = flag;
+}
+
 void Model::acceptInputValue()
 {
     double inputValue = 0.0;

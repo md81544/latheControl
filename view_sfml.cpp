@@ -338,11 +338,11 @@ void ViewSfml::updateDisplay( const Model& model )
         {
             m_window->draw( *m_txtTaperOrRadius );
         }
-        if( model.m_xRetractionDirection == XDirection::Inwards )
+        if( model.getRetractionDirection() == XDirection::Inwards )
         {
             m_window->draw( *m_txtXRetractDirection );
         }
-        if( model.m_axis2Retracted )
+        if( model.getIsAxis2Retracted() )
         {
             m_window->draw( *m_txtXRetracted );
         }
@@ -408,7 +408,7 @@ void ViewSfml::updateTextFromModel( const Model& model )
             fmt::format( "{:<.2f} mm/min", model.m_axis1Motor->getSpeed() ) );
     }
 
-    if( ! model.m_axis2Retracted )
+    if( ! model.getIsAxis2Retracted() )
     {
         m_txtAxis2Pos->setString( getMotorPosition( model.m_axis2Motor.get() ) );
     }
@@ -572,7 +572,7 @@ void ViewSfml::updateTextFromModel( const Model& model )
             m_txtMisc1->setString( "Normal X retraction is 2mm outwards" );
             m_txtMisc2->setString( "In a boring operation, retraction should be INWARDS." );
             m_txtMisc3->setString( "Current setting: " );
-            if( model.m_xRetractionDirection == XDirection::Inwards )
+            if( model.getRetractionDirection()== XDirection::Inwards )
             {
                 m_txtMisc4->setString( "Inwards (i.e. away from you, for boring)" );
             }
@@ -580,7 +580,7 @@ void ViewSfml::updateTextFromModel( const Model& model )
             {
                 m_txtMisc4->setString( "Normal (i.e. towards you)" );
             }
-            m_txtMisc5->setString( "(Press up / down to change" );
+            m_txtMisc5->setString( "(Press up / down to change)" );
             m_txtWarning->setString( "Enter to close screen" );
             break;
         }

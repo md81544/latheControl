@@ -1,3 +1,6 @@
+(WIP) move all of Model's member variables to private (they were
+originally all public as Model started life as just a big data store)
+
 Support enable pin for each motor
 
 Start thinking around how to make control of two axes easier for

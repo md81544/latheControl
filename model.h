@@ -135,6 +135,13 @@ public:
     void axis2SpeedPreset();
 
     void repeatLastRelativeMove();
+    void diameterIsSet();
+
+    XDirection  getRetractionDirection() const;
+    void        setRetractionDirection( XDirection direction );
+
+    bool getIsAxis2Retracted() const;
+    void setIsAxis2Retracted( bool flag );
 
     // This is called when the user presses ENTER when
     // inputting a mode parameter (e.g. taper angle)
@@ -172,6 +179,8 @@ public:
     Mode        m_enabledFunction{ Mode::None };
     KeyMode     m_keyMode{ KeyMode::None };
 
+private:
+
     // Used to store position to return to after retract:
     long        m_xOldPosition;
     bool        m_axis2Retracted{ false };
@@ -183,7 +192,6 @@ public:
     bool        m_spindleWasRunning{ false };
 
     XDirection  m_xRetractionDirection;
-
     // Once the user has set the x position once then we use
     // the status bar to display the effective diameter
     bool        m_xDiameterSet{ false };
