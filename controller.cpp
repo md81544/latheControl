@@ -75,13 +75,13 @@ void Controller::processKeyPress()
     t = processModeInputKeys( t );
     if( t != key::None )
     {
-        if( m_model->m_keyMode != KeyMode::None )
+        if( m_model->getKeyMode() != KeyMode::None )
         {
             // If we are in a "leader key mode" (i.e. the first "prefix" key has
             // already been pressed) then we can modify t here. If the key
             // combination is recognised, we get a "chord" keypress e.g. key::xz.
             t = processLeaderKeyModeKeyPress( t );
-            m_model->m_keyMode = KeyMode::None;
+            m_model->setKeyMode( KeyMode::None );
         }
         m_model->m_keyPressed = t;
         // Modify key press if it is a known axis leader key:
@@ -94,7 +94,7 @@ void Controller::processKeyPress()
             }
             case key::F2:
             {
-                m_model->m_keyMode = KeyMode::Function;
+                m_model->setKeyMode( KeyMode::Function );
                 break;
             }
             // End of "Leader" keys ==============
@@ -335,7 +335,7 @@ void Controller::processKeyPress()
             }
             case key::f2s: // setup mode
             {
-                m_model->m_enabledFunction = Mode::None;
+                m_model->setEnabledFunction( Mode::None );
                 m_model->m_axis1Motor->setSpeed( 0.8f );
                 m_model->m_axis2Motor->setSpeed( 1.f );
                 m_model->changeMode( Mode::Setup );
@@ -410,7 +410,7 @@ int Controller::checkKeyAllowedForMode( int key )
     {
         return -1;
     }
-    switch( m_model->m_currentDisplayMode )
+    switch( m_model->getCurrentDisplayMode() )
     {
         case Mode::None:
             return key;
@@ -458,14 +458,14 @@ int Controller::processModeInputKeys( int key )
 {
     // If we are in a "mode" then certain keys (e.g. the number keys) are used for input
     // so are processed here before allowing them to fall through to the main key processing
-    if( m_model->m_currentDisplayMode == Mode::Taper ||
-        m_model->m_currentDisplayMode == Mode::Axis2PositionSetup ||
-        m_model->m_currentDisplayMode == Mode::Axis1PositionSetup ||
-        m_model->m_currentDisplayMode == Mode::Axis1GoTo ||
-        m_model->m_currentDisplayMode == Mode::Axis2GoTo ||
-        m_model->m_currentDisplayMode == Mode::Axis1GoToOffset ||
-        m_model->m_currentDisplayMode == Mode::Axis2GoToOffset ||
-        m_model->m_currentDisplayMode == Mode::Radius
+    if( m_model->getCurrentDisplayMode() == Mode::Taper ||
+        m_model->getCurrentDisplayMode() == Mode::Axis2PositionSetup ||
+        m_model->getCurrentDisplayMode() == Mode::Axis1PositionSetup ||
+        m_model->getCurrentDisplayMode() == Mode::Axis1GoTo ||
+        m_model->getCurrentDisplayMode() == Mode::Axis2GoTo ||
+        m_model->getCurrentDisplayMode() == Mode::Axis1GoToOffset ||
+        m_model->getCurrentDisplayMode() == Mode::Axis2GoToOffset ||
+        m_model->getCurrentDisplayMode() == Mode::Radius
         )
     {
         if( key >= key::ZERO && key <= key::NINE )
@@ -499,7 +499,7 @@ int Controller::processModeInputKeys( int key )
             return -1;
         }
     }
-    if(  m_model->m_currentDisplayMode == Mode::Threading )
+    if(  m_model->getCurrentDisplayMode() == Mode::Threading )
     {
         if( key == key::UP )
         {
@@ -533,7 +533,7 @@ int Controller::processModeInputKeys( int key )
             // fall through...
         }
     }
-    if(  m_model->m_currentDisplayMode == Mode::Axis2RetractSetup )
+    if(  m_model->getCurrentDisplayMode() == Mode::Axis2RetractSetup )
     {
         if( key == key::UP )
         {
@@ -548,7 +548,7 @@ int Controller::processModeInputKeys( int key )
     }
 
     // Diameter set
-    if( m_model->m_currentDisplayMode == Mode::Axis2PositionSetup &&
+    if( m_model->getCurrentDisplayMode() == Mode::Axis2PositionSetup &&
         ( key == key::d || key == key::D ) )
     {
         float xPos = 0;
@@ -563,12 +563,12 @@ int Controller::processModeInputKeys( int key )
         {
             m = INF_OUT;
         }
-        m_model->m_currentDisplayMode = Mode::None;
+        m_model->setCurrentDisplayMode( Mode::None );
         m_model->diameterIsSet();
         return -1;
     }
 
-    if( m_model->m_currentDisplayMode != Mode::None && key == key::ENTER )
+    if( m_model->getCurrentDisplayMode() != Mode::None && key == key::ENTER )
     {
         m_model->acceptInputValue();
         return -1;
@@ -578,23 +578,23 @@ int Controller::processModeInputKeys( int key )
 
 int Controller::processLeaderKeyModeKeyPress( int keyPress )
 {
-    if( m_model->m_keyMode == KeyMode::Axis1 ||
-        m_model->m_keyMode == KeyMode::Axis2 ||
-        m_model->m_keyMode == KeyMode::AxisAll )
+    if( m_model->getKeyMode() == KeyMode::Axis1 ||
+        m_model->getKeyMode() == KeyMode::Axis2 ||
+        m_model->getKeyMode() == KeyMode::AxisAll )
     {
         int bitFlip = 0x1000; // bit 12
-        if( m_model->m_keyMode == KeyMode::Axis2 )
+        if( m_model->getKeyMode() == KeyMode::Axis2 )
         {
             bitFlip = 0x2000; // bit 13
         }
-        if( m_model->m_keyMode == KeyMode::AxisAll )
+        if( m_model->getKeyMode() == KeyMode::AxisAll )
         {
             bitFlip = 0x4000; // bit 14
         }
         return keyPress + bitFlip;
     }
 
-    if( m_model->m_keyMode == KeyMode::Function )
+    if( m_model->getKeyMode() == KeyMode::Function )
     {
         switch( keyPress )
         {
@@ -628,7 +628,7 @@ int Controller::processLeaderKeyModeKeyPress( int keyPress )
                 keyPress = key::None;
         }
     }
-    m_model->m_keyMode = KeyMode::None;
+    m_model->setKeyMode( KeyMode::None );
     return keyPress;
 }
 
@@ -636,21 +636,20 @@ int Controller::checkForAxisLeaderKeys( int key )
 {
     // We determine whether the key pressed is a leader key for
     // an axis (note the key can be remapped in config) and sets
-    // the model's m_keyMode variable if so. Returns true if one
-    // was pressed, false if not.
+    // the model's keyMode if so. Returns true if one was pressed, false if not.
     if( key == static_cast<int>( m_model->m_config.readLong( "Axis1Leader", 122L ) ) )
     {
-        m_model->m_keyMode = KeyMode::Axis1;
+        m_model->setKeyMode( KeyMode::Axis1 );
         return key::None;
     }
     if( key == static_cast<int>( m_model->m_config.readLong( "Axis2Leader", 120L ) ) )
     {
-        m_model->m_keyMode = KeyMode::Axis2;
+        m_model->setKeyMode( KeyMode::Axis2 );
         return key::None;
     }
     if( key == key::BACKSLASH )
     {
-        m_model->m_keyMode = KeyMode::AxisAll;
+        m_model->setKeyMode( KeyMode::AxisAll );
         return key::None;
     }
     return key;

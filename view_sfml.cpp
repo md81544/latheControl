@@ -333,8 +333,8 @@ void ViewSfml::updateDisplay( const Model& model )
         m_window->draw( *m_txtGeneralStatus );
         m_window->draw( *m_txtWarning );
         m_window->draw( *m_txtNotification );
-        if( model.m_enabledFunction == Mode::Taper ||
-            model.m_enabledFunction == Mode::Radius )
+        if( model.getEnabledFunction() == Mode::Taper ||
+            model.getEnabledFunction() == Mode::Radius )
         {
             m_window->draw( *m_txtTaperOrRadius );
         }
@@ -359,7 +359,7 @@ void ViewSfml::updateDisplay( const Model& model )
             }
         }
         // Z/X labels - make red if keyMode corresponds
-        if( model.m_keyMode == KeyMode::Axis1 || model.m_keyMode == KeyMode::AxisAll )
+        if( model.getKeyMode() == KeyMode::Axis1 || model.getKeyMode() == KeyMode::AxisAll )
         {
             m_txtAxis1MemoryLabel->setFillColor( sf::Color::Red );
         }
@@ -367,7 +367,7 @@ void ViewSfml::updateDisplay( const Model& model )
         {
             m_txtAxis1MemoryLabel->setFillColor( { 128, 128, 128 });
         }
-        if( model.m_keyMode == KeyMode::Axis2 || model.m_keyMode == KeyMode::AxisAll )
+        if( model.getKeyMode() == KeyMode::Axis2 || model.getKeyMode() == KeyMode::AxisAll )
         {
             m_txtAxis2MemoryLabel->setFillColor( sf::Color::Red );
         }
@@ -375,11 +375,11 @@ void ViewSfml::updateDisplay( const Model& model )
         {
             m_txtAxis2MemoryLabel->setFillColor( { 128, 128, 128 });
         }
-        if( model.m_currentDisplayMode != Mode::None )
+        if( model.getCurrentDisplayMode() != Mode::None )
         {
             m_window->draw( *m_txtMode );
         }
-        if( model.m_currentDisplayMode != Mode::None )
+        if( model.getCurrentDisplayMode() != Mode::None )
         {
             m_window->draw( *m_txtMisc1 );
             m_window->draw( *m_txtMisc2 );
@@ -435,11 +435,11 @@ void ViewSfml::updateTextFromModel( const Model& model )
         model.m_config.read( "Axis2Label", "X" ), model.m_axis2Status );
     m_txtAxis2Status->setString( status );
     m_txtWarning->setString( model.m_warning );
-    if( model.m_enabledFunction == Mode::Taper )
+    if( model.getEnabledFunction() == Mode::Taper )
     {
         m_txtTaperOrRadius->setString( fmt::format( "Angle: {}", model.m_taperAngle ) );
     }
-    else if( model.m_enabledFunction == Mode::Radius )
+    else if( model.getEnabledFunction() == Mode::Radius )
     {
         m_txtTaperOrRadius->setString( fmt::format( "Radius: {}", model.m_radius ) );
     }
@@ -479,7 +479,7 @@ void ViewSfml::updateTextFromModel( const Model& model )
         }
     }
 
-    switch( model.m_enabledFunction )
+    switch( model.getEnabledFunction() )
     {
         case Mode::Threading:
             m_txtNotification->setString( "THREADING" );
@@ -494,7 +494,7 @@ void ViewSfml::updateTextFromModel( const Model& model )
             m_txtNotification->setString( "" );
     }
 
-    switch( model.m_currentDisplayMode )
+    switch( model.getCurrentDisplayMode() )
     {
         case Mode::Help:
         {

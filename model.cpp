@@ -943,6 +943,36 @@ void Model::setIsAxis2Retracted(bool flag)
     m_axis2Retracted = flag;
 }
 
+KeyMode Model::getKeyMode() const
+{
+    return m_keyMode;
+}
+
+void Model::setKeyMode(KeyMode mode)
+{
+    m_keyMode = mode;
+}
+
+Mode Model::getEnabledFunction() const
+{
+    return m_enabledFunction;
+}
+
+void Model::setEnabledFunction(Mode mode)
+{
+    m_enabledFunction = mode;
+}
+
+Mode Model::getCurrentDisplayMode() const
+{
+    return m_currentDisplayMode;
+}
+
+void Model::setCurrentDisplayMode(Mode mode)
+{
+    m_currentDisplayMode = mode;
+}
+
 void Model::acceptInputValue()
 {
     double inputValue = 0.0;

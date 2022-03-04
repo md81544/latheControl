@@ -143,6 +143,15 @@ public:
     bool getIsAxis2Retracted() const;
     void setIsAxis2Retracted( bool flag );
 
+    KeyMode getKeyMode() const;
+    void setKeyMode( KeyMode mode );
+
+    Mode getEnabledFunction() const;
+    void setEnabledFunction( Mode mode );
+
+    Mode getCurrentDisplayMode() const;
+    void setCurrentDisplayMode( Mode mode );
+
     // This is called when the user presses ENTER when
     // inputting a mode parameter (e.g. taper angle)
     void acceptInputValue();
@@ -172,15 +181,15 @@ public:
     double      m_taperAngle{ 0.0 };
     double      m_radius{ 0.0 };
     float       m_taperPreviousXSpeed{ 40.f };
+
+private:
+
     // Stores the current function displayed on the screen:
     Mode        m_currentDisplayMode{ Mode::None };
     // Stores current function, i.e. whether tapering or threading is on
     // we use the same enum class as "mode"
     Mode        m_enabledFunction{ Mode::None };
     KeyMode     m_keyMode{ KeyMode::None };
-
-private:
-
     // Used to store position to return to after retract:
     long        m_xOldPosition;
     bool        m_axis2Retracted{ false };
