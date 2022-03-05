@@ -1013,6 +1013,46 @@ void Model::shutDown()
     m_shutdown = true;
 }
 
+bool Model::isQuitting() const
+{
+    return m_quit;
+}
+
+void Model::quit()
+{
+    m_quit = true;
+}
+
+std::string Model::getInputString() const
+{
+    return m_input;
+}
+
+std::string& Model::getInputString()
+{
+    return m_input;
+}
+
+void Model::setInputString(const std::string& str)
+{
+    m_input = str;
+}
+
+std::string Model::getWarning() const
+{
+    return m_warning;
+}
+
+std::string Model::getAxis1Status() const
+{
+    return m_axis1Status;
+}
+
+std::string Model::getAxis2Status() const
+{
+    return m_axis2Status;
+}
+
 void Model::acceptInputValue()
 {
     double inputValue = 0.0;

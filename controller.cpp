@@ -42,7 +42,7 @@ void Controller::run()
     m_model->m_axis1Motor->setSpeed( m_model->m_config.readDouble( "Axis1SpeedPreset2", 40.0 ) );
     m_model->m_axis2Motor->setSpeed( m_model->m_config.readDouble( "Axis2SpeedPreset2", 20.0 ) );
 
-    while( ! m_model->m_quit )
+    while( ! m_model->isQuitting() )
     {
         processKeyPress();
 
@@ -101,7 +101,7 @@ void Controller::processKeyPress()
             case key::CtrlQ:
             {
                 m_model->stopAllMotors();
-                m_model->m_quit = true;
+                m_model->quit();
                 break;
             }
             case key::l:
@@ -322,7 +322,7 @@ void Controller::processKeyPress()
             {
                 #ifndef FAKE
                 m_model->stopAllMotors();
-                m_model->m_quit = true;
+                m_model->quit();
                 m_model->shutDown();
                 #endif
                 break;
@@ -470,32 +470,32 @@ int Controller::processModeInputKeys( int key )
     {
         if( key >= key::ZERO && key <= key::NINE )
         {
-            m_model->m_input += static_cast<char>( key );
+            m_model->getInputString() += static_cast<char>( key );
             return -1;
         }
         if( key == key::FULLSTOP )
         {
-            if( m_model->m_input.find( "." ) == std::string::npos )
+            if( m_model->getInputString().find( "." ) == std::string::npos )
             {
-                m_model->m_input += static_cast<char>( key );
+                m_model->getInputString() += static_cast<char>( key );
             }
             return -1;
         }
         if( key == key::DELETE )
         {
-            m_model->m_input = "";
+            m_model->setInputString( "" );
         }
         if( key == key::BACKSPACE )
         {
-            if( ! m_model->m_input.empty() )
+            if( ! m_model->getInputString().empty() )
             {
-                m_model->m_input.pop_back();
+                m_model->getInputString().pop_back();
             }
             return -1;
         }
-        if( key == key::MINUS && m_model->m_input.empty() )
+        if( key == key::MINUS && m_model->getInputString().empty() )
         {
-            m_model->m_input = "-";
+            m_model->setInputString( "-" );
             return -1;
         }
     }
@@ -554,7 +554,7 @@ int Controller::processModeInputKeys( int key )
         float xPos = 0;
         try
         {
-            xPos = std::abs( std::stof( m_model->m_input ) );
+            xPos = std::abs( std::stof( m_model->getInputString() ) );
         }
         catch( ... ) {}
         m_model->m_axis2Motor->setPosition( xPos / 2 );

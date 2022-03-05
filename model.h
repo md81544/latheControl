@@ -164,6 +164,17 @@ public:
     bool isShuttingDown() const;
     void shutDown();
 
+    bool isQuitting() const;
+    void quit();
+
+    std::string getInputString() const;
+    std::string& getInputString();
+    void setInputString( const std::string& str );
+
+    std::string getWarning() const;
+    std::string getAxis1Status() const;
+    std::string getAxis2Status() const;
+
     // This is called when the user presses ENTER when
     // inputting a mode parameter (e.g. taper angle)
     void acceptInputValue();
@@ -180,14 +191,14 @@ public:
     std::size_t m_currentMemory{ 0 };
     std::size_t m_threadPitchIndex{ 0 };
     std::string m_generalStatus{ "Press F1 for help" };
+
+private:
+
     std::string m_axis1Status{ "stopped" };
     std::string m_axis2Status{ "stopped" };
     std::string m_warning;
     std::string m_input; // general-purpose string for user-entered data
     bool        m_quit{ false };
-
-private:
-
     bool        m_shutdown{ false };
     float       m_previousZSpeed{ 40.f };
     bool        m_axis1FastReturning{ false };

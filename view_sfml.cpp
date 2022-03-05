@@ -429,12 +429,12 @@ void ViewSfml::updateTextFromModel( const Model& model )
 
     m_txtGeneralStatus->setString( model.m_generalStatus );
     std::string status = fmt::format( "{}: {}",
-        model.m_config.read( "Axis1Label", "Z" ), model.m_axis1Status );
+        model.m_config.read( "Axis1Label", "Z" ), model.getAxis1Status() );
     m_txtAxis1Status->setString( status );
     status = fmt::format( "{}: {}",
-        model.m_config.read( "Axis2Label", "X" ), model.m_axis2Status );
+        model.m_config.read( "Axis2Label", "X" ), model.getAxis2Status() );
     m_txtAxis2Status->setString( status );
-    m_txtWarning->setString( model.m_warning );
+    m_txtWarning->setString( model.getWarning() );
     if( model.getEnabledFunction() == Mode::Taper )
     {
         m_txtTaperOrRadius->setString( fmt::format( "Angle: {}", model.getTaperAngle() ) );
@@ -528,7 +528,7 @@ void ViewSfml::updateTextFromModel( const Model& model )
         {
             m_txtMode->setString( "Taper" );
             m_txtMisc1->setString( fmt::format( "Taper angle (degrees from centre): {}_",
-                model.m_input ) );
+                model.getInputString() ) );
             m_txtMisc2->setString( "" );
             m_txtMisc3->setString( "MT1 = -1.4287, MT2 = -1.4307, MT3 = -1.4377, MT4 = -1.4876" );
             m_txtMisc4->setString( "(negative angle means piece gets wider towards chuck)" );
@@ -540,7 +540,7 @@ void ViewSfml::updateTextFromModel( const Model& model )
         {
             m_txtMode->setString( "Radius" );
             m_txtMisc1->setString( fmt::format( "Radius required: {}_",
-                model.m_input ) );
+                model.getInputString() ) );
             m_txtMisc2->setString(
                 "Important! Ensure the tool is at the radius of the workpiece," );
             m_txtMisc3->setString(
@@ -595,7 +595,7 @@ void ViewSfml::updateTextFromModel( const Model& model )
             m_txtMisc4->setString( "" );
             m_txtMisc5->setString( fmt::format( "Current {} position: {}_",
                 model.m_config.read( "Axis2Label", "X" ),
-                model.m_input ) );
+                model.getInputString() ) );
             m_txtWarning->setString( "Enter to set, 'D' to enter as diameter, Esc to cancel" );
             break;
         }
@@ -610,7 +610,7 @@ void ViewSfml::updateTextFromModel( const Model& model )
             m_txtMisc4->setString( "" );
             m_txtMisc5->setString( fmt::format( "Current {} position: {}_",
                 model.m_config.read( "Axis1Label", "Z" ),
-                model.m_input ) );
+                model.getInputString() ) );
             m_txtWarning->setString( "Enter to set, Esc to cancel" );
             break;
         }
@@ -623,7 +623,7 @@ void ViewSfml::updateTextFromModel( const Model& model )
             m_txtMisc3->setString( "" );
             m_txtMisc4->setString( "" );
             m_txtMisc5->setString( fmt::format( "Position: {}_",
-                model.m_input ) );
+                model.getInputString() ) );
             m_txtWarning->setString( "Enter to set, Esc to cancel" );
             break;
         }
@@ -636,7 +636,7 @@ void ViewSfml::updateTextFromModel( const Model& model )
             m_txtMisc3->setString( "" );
             m_txtMisc4->setString( "" );
             m_txtMisc5->setString( fmt::format( "Position: {}_",
-                model.m_input ) );
+                model.getInputString() ) );
             m_txtWarning->setString( "Enter to set, Esc to cancel" );
             break;
         }
@@ -649,7 +649,7 @@ void ViewSfml::updateTextFromModel( const Model& model )
             m_txtMisc3->setString( "" );
             m_txtMisc4->setString( "" );
             m_txtMisc5->setString( fmt::format( "Offset: {}_",
-                model.m_input ) );
+                model.getInputString() ) );
             m_txtWarning->setString( "Enter to set, Esc to cancel" );
             break;
         }
@@ -662,7 +662,7 @@ void ViewSfml::updateTextFromModel( const Model& model )
             m_txtMisc3->setString( "" );
             m_txtMisc4->setString( "" );
             m_txtMisc5->setString( fmt::format( "Offset: {}_",
-                model.m_input ) );
+                model.getInputString() ) );
             m_txtWarning->setString( "Enter to set, Esc to cancel" );
             break;
         }
