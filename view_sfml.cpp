@@ -304,7 +304,7 @@ void ViewSfml::updateDisplay( const Model& model )
     m_window->clear();
     updateTextFromModel( model );
 
-    if( ! model.m_shutdown )
+    if( ! model.isShuttingDown() )
     {
         if( ! model.m_config.readBool( "DisableAxis1", false ) )
         {
@@ -394,7 +394,7 @@ void ViewSfml::updateDisplay( const Model& model )
 void ViewSfml::updateTextFromModel( const Model& model )
 {
     // Updates all the text objects with data in the model
-    if( model.m_shutdown )
+    if( model.isShuttingDown() )
     {
         m_txtAxis1Pos->setString( "SHUTTING DOWN" );
         return;

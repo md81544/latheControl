@@ -50,7 +50,7 @@ void Controller::run()
 
         m_view->updateDisplay( *m_model );
 
-        if( m_model->m_shutdown )
+        if( m_model->isShuttingDown() )
         {
             // Stop the motor threads
             m_model->m_axis2Motor.reset();
@@ -323,7 +323,7 @@ void Controller::processKeyPress()
                 #ifndef FAKE
                 m_model->stopAllMotors();
                 m_model->m_quit = true;
-                m_model->m_shutdown = true;
+                m_model->shutDown();
                 #endif
                 break;
             }

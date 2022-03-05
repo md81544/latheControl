@@ -1003,6 +1003,16 @@ void Model::setKeyPressed( int key )
     m_keyPressed = key;
 }
 
+bool Model::isShuttingDown() const
+{
+    return m_shutdown;
+}
+
+void Model::shutDown()
+{
+    m_shutdown = true;
+}
+
 void Model::acceptInputValue()
 {
     double inputValue = 0.0;

@@ -161,6 +161,9 @@ public:
     int  getKeyPressed() const;
     void setKeyPressed( int key );
 
+    bool isShuttingDown() const;
+    void shutDown();
+
     // This is called when the user presses ENTER when
     // inputting a mode parameter (e.g. taper angle)
     void acceptInputValue();
@@ -182,10 +185,10 @@ public:
     std::string m_warning;
     std::string m_input; // general-purpose string for user-entered data
     bool        m_quit{ false };
-    bool        m_shutdown{ false };
 
 private:
 
+    bool        m_shutdown{ false };
     float       m_previousZSpeed{ 40.f };
     bool        m_axis1FastReturning{ false };
     bool        m_axis2FastReturning{ false };
