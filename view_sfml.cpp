@@ -437,11 +437,11 @@ void ViewSfml::updateTextFromModel( const Model& model )
     m_txtWarning->setString( model.m_warning );
     if( model.getEnabledFunction() == Mode::Taper )
     {
-        m_txtTaperOrRadius->setString( fmt::format( "Angle: {}", model.m_taperAngle ) );
+        m_txtTaperOrRadius->setString( fmt::format( "Angle: {}", model.getTaperAngle() ) );
     }
     else if( model.getEnabledFunction() == Mode::Radius )
     {
-        m_txtTaperOrRadius->setString( fmt::format( "Radius: {}", model.m_radius ) );
+        m_txtTaperOrRadius->setString( fmt::format( "Radius: {}", model.getRadius() ) );
     }
 
     for( std::size_t n = 0; n < m_txtMemoryLabel.size(); ++n )

@@ -83,10 +83,10 @@ void Controller::processKeyPress()
             t = processLeaderKeyModeKeyPress( t );
             m_model->setKeyMode( KeyMode::None );
         }
-        m_model->m_keyPressed = t;
+        m_model->setKeyPressed( t );
         // Modify key press if it is a known axis leader key:
-        m_model->m_keyPressed = checkForAxisLeaderKeys( m_model->m_keyPressed );
-        switch( m_model->m_keyPressed )
+        m_model->setKeyPressed( checkForAxisLeaderKeys( m_model->getKeyPressed() ) );
+        switch( m_model->getKeyPressed() )
         {
             case key::None:
             {

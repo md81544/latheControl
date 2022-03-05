@@ -152,6 +152,15 @@ public:
     Mode getCurrentDisplayMode() const;
     void setCurrentDisplayMode( Mode mode );
 
+    double getRadius() const;
+    void   setRadius( double radius );
+
+    double getTaperAngle() const;
+    void   setTaperAngle( double taperAngle );
+
+    int  getKeyPressed() const;
+    void setKeyPressed( int key );
+
     // This is called when the user presses ENTER when
     // inputting a mode parameter (e.g. taper angle)
     void acceptInputValue();
@@ -174,6 +183,9 @@ public:
     std::string m_input; // general-purpose string for user-entered data
     bool        m_quit{ false };
     bool        m_shutdown{ false };
+
+private:
+
     float       m_previousZSpeed{ 40.f };
     bool        m_axis1FastReturning{ false };
     bool        m_axis2FastReturning{ false };
@@ -181,9 +193,6 @@ public:
     double      m_taperAngle{ 0.0 };
     double      m_radius{ 0.0 };
     float       m_taperPreviousXSpeed{ 40.f };
-
-private:
-
     // Stores the current function displayed on the screen:
     Mode        m_currentDisplayMode{ Mode::None };
     // Stores current function, i.e. whether tapering or threading is on

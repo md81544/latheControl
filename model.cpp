@@ -928,7 +928,7 @@ XDirection Model::getRetractionDirection() const
     return m_xRetractionDirection;
 }
 
-void Model::setRetractionDirection(XDirection direction)
+void Model::setRetractionDirection( XDirection direction )
 {
     m_xRetractionDirection = direction;
 }
@@ -938,7 +938,7 @@ bool Model::getIsAxis2Retracted() const
     return m_axis2Retracted;
 }
 
-void Model::setIsAxis2Retracted(bool flag)
+void Model::setIsAxis2Retracted( bool flag )
 {
     m_axis2Retracted = flag;
 }
@@ -948,7 +948,7 @@ KeyMode Model::getKeyMode() const
     return m_keyMode;
 }
 
-void Model::setKeyMode(KeyMode mode)
+void Model::setKeyMode( KeyMode mode )
 {
     m_keyMode = mode;
 }
@@ -958,7 +958,7 @@ Mode Model::getEnabledFunction() const
     return m_enabledFunction;
 }
 
-void Model::setEnabledFunction(Mode mode)
+void Model::setEnabledFunction( Mode mode )
 {
     m_enabledFunction = mode;
 }
@@ -968,9 +968,39 @@ Mode Model::getCurrentDisplayMode() const
     return m_currentDisplayMode;
 }
 
-void Model::setCurrentDisplayMode(Mode mode)
+void Model::setCurrentDisplayMode( Mode mode )
 {
     m_currentDisplayMode = mode;
+}
+
+double Model::getRadius() const
+{
+    return m_radius;
+}
+
+void Model::setRadius( double radius )
+{
+    m_radius = radius;
+}
+
+double Model::getTaperAngle() const
+{
+    return m_taperAngle;
+}
+
+void Model::setTaperAngle( double taperAngle )
+{
+    m_taperAngle = taperAngle;
+}
+
+int Model::getKeyPressed() const
+{
+    return m_keyPressed;
+}
+
+void Model::setKeyPressed( int key )
+{
+    m_keyPressed = key;
 }
 
 void Model::acceptInputValue()

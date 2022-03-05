@@ -59,6 +59,9 @@ fi
 cd build
 cmake ..
 make ${BUILD_TYPE} ${VERBOSE}
+if [[ $? -ne 0 ]]; then
+    exit 1
+fi
 cd ..
 rm -f lc
 ln -s build/lc

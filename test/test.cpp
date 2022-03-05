@@ -239,7 +239,7 @@ TEST_CASE( "Model:   check tapering" )
     mgo::Model model( gpio, config );
     model.initialise();
     model.changeMode( mgo::Mode::Taper );
-    model.m_taperAngle = 45;
+    model.setTaperAngle( 45.0 );
     model.axis1SetSpeed( 200.0 );
     model.axis1GoToPosition( -0.5 );
     model.axis1Wait();
@@ -257,7 +257,7 @@ TEST_CASE( "Model:   check radius" )
     mgo::Model model( gpio, config );
     model.initialise();
     model.changeMode( mgo::Mode::Radius );
-    model.m_radius = 1.0;
+    model.setRadius( 1.0 );
     model.axis1SetSpeed( 60.0 );
     model.axis1GoToPosition( 1.0 );
     model.axis1Wait();
