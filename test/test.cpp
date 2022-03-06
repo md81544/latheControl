@@ -141,7 +141,8 @@ TEST_CASE( "Stepper: Rotary Encoder RPM" )
         2000,
         35.f / 30.f
         );
-    gpio.delayMicroSeconds( 500'000 );
+    while( re.warmingUp() ) gpio.delayMicroSeconds( 1'000 );
+    gpio.delayMicroSeconds( 2'000'000 );
     REQUIRE( re.getRpm() > 0.f);
 }
 
