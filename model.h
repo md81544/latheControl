@@ -174,6 +174,11 @@ public:
     std::string getWarning() const;
     std::string getAxis1Status() const;
     std::string getAxis2Status() const;
+    std::string getGeneralStatus() const;
+
+    void selectPreviousThreadPitch();
+    void selectNextThreadPitch();
+    std::size_t getCurrentThreadPitchIndex() const;
 
     // This is called when the user presses ENTER when
     // inputting a mode parameter (e.g. taper angle)
@@ -189,11 +194,11 @@ public:
     std::vector<long> m_axis1Memory{ INF_RIGHT, INF_RIGHT, INF_RIGHT, INF_RIGHT };
     std::vector<long> m_axis2Memory{ INF_RIGHT, INF_RIGHT, INF_RIGHT, INF_RIGHT };
     std::size_t m_currentMemory{ 0 };
-    std::size_t m_threadPitchIndex{ 0 };
-    std::string m_generalStatus{ "Press F1 for help" };
 
 private:
 
+    std::size_t m_threadPitchIndex{ 0 };
+    std::string m_generalStatus{ "Press F1 for help" };
     std::string m_axis1Status{ "stopped" };
     std::string m_axis2Status{ "stopped" };
     std::string m_warning;

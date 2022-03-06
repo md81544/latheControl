@@ -427,7 +427,7 @@ void ViewSfml::updateTextFromModel( const Model& model )
             fmt::format( "{: >7}", static_cast<int>( model.m_rotaryEncoder->getRpm() ) ) );
     }
 
-    m_txtGeneralStatus->setString( model.m_generalStatus );
+    m_txtGeneralStatus->setString( model.getGeneralStatus() );
     std::string status = fmt::format( "{}: {}",
         model.m_config.read( "Axis1Label", "Z" ), model.getAxis1Status() );
     m_txtAxis1Status->setString( status );
@@ -555,7 +555,7 @@ void ViewSfml::updateTextFromModel( const Model& model )
         case Mode::Threading:
         {
             m_txtMode->setString( "Thread" );
-            ThreadPitch tp = threadPitches.at( model.m_threadPitchIndex );
+            ThreadPitch tp = threadPitches.at( model.getCurrentThreadPitchIndex() );
             m_txtMisc1->setString( fmt::format( "Thread required: {}", tp.name ) );
             m_txtMisc2->setString(
                 fmt::format( "Male   OD: {} mm, cut: {} mm", tp.maleOd, tp.cutDepthMale ) );

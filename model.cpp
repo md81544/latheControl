@@ -1053,6 +1053,40 @@ std::string Model::getAxis2Status() const
     return m_axis2Status;
 }
 
+std::string Model::getGeneralStatus() const
+{
+    return m_generalStatus;
+}
+
+void Model::selectPreviousThreadPitch()
+{
+    if( m_threadPitchIndex == 0 )
+    {
+        m_threadPitchIndex = threadPitches.size() - 1;
+    }
+    else
+    {
+        --m_threadPitchIndex;
+    }
+}
+
+void Model::selectNextThreadPitch()
+{
+    if( m_threadPitchIndex == threadPitches.size() - 1 )
+    {
+        m_threadPitchIndex = 0;
+    }
+    else
+    {
+        ++m_threadPitchIndex;
+    }
+}
+
+std::size_t Model::getCurrentThreadPitchIndex() const
+{
+    return m_threadPitchIndex;
+}
+
 void Model::acceptInputValue()
 {
     double inputValue = 0.0;
@@ -1133,6 +1167,11 @@ void Model::acceptInputValue()
         case Mode::Axis2RetractSetup:
             // no processing required for these modes
             break;
+        case Mode::Threading:
+        {
+            // m_threadPitchIndex will have been set
+            break;
+        }
         default:
             // unhandled mode
             assert( false );

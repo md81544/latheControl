@@ -4,7 +4,6 @@
 #include "keycodes.h"
 #include "log.h"
 #include "stepperControl/igpio.h"
-#include "threadpitches.h"
 #include "view_sfml.h"
 
 #include <cassert>
@@ -503,26 +502,12 @@ int Controller::processModeInputKeys( int key )
     {
         if( key == key::UP )
         {
-            if( m_model->m_threadPitchIndex == 0 )
-            {
-                m_model->m_threadPitchIndex = threadPitches.size() - 1;
-            }
-            else
-            {
-                --m_model->m_threadPitchIndex;
-            }
+            m_model->selectPreviousThreadPitch();
             return -1;
         }
         if( key == key::DOWN )
         {
-            if( m_model->m_threadPitchIndex == threadPitches.size() - 1 )
-            {
-                m_model->m_threadPitchIndex = 0;
-            }
-            else
-            {
-                ++m_model->m_threadPitchIndex;
-            }
+            m_model->selectNextThreadPitch();
             return -1;
         }
         if( key == key::ESC )
