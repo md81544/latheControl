@@ -1126,16 +1126,6 @@ void Model::clearAllAxis2Memories()
     }
 }
 
-StepperMotor* Model::axis1Motor() const
-{
-    return m_axis1Motor.get();
-}
-
-StepperMotor* Model::axis2Motor() const
-{
-    return m_axis2Motor.get();
-}
-
 void Model::setAxis1MotorSpeed(double speed)
 {
     m_axis1Motor->setSpeed( speed );
@@ -1156,6 +1146,64 @@ void Model::resetMotorThreads()
     m_axis2Motor.reset();
     m_axis1Motor.reset();
 
+}
+
+double Model::getAxis1MotorPosition() const
+{
+    if( ! m_axis1Motor ) return 0.0;
+    return m_axis1Motor->getPosition();
+}
+
+double Model::getAxis2MotorPosition() const
+{
+    if( ! m_axis2Motor ) return 0.0;
+    return m_axis2Motor->getPosition();
+}
+
+double Model::getAxis1MotorSpeed() const
+{
+    if( ! m_axis1Motor ) return 0.0;
+    return m_axis1Motor->getSpeed();
+}
+
+double Model::getAxis2MotorSpeed() const
+{
+    if( ! m_axis2Motor ) return 0.0;
+    return m_axis2Motor->getSpeed();
+}
+
+double Model::getAxis1MotorCurrentStep() const
+{
+    if( ! m_axis1Motor ) return 0.0;
+    return m_axis2Motor->getCurrentStep();
+}
+
+double Model::getAxis2MotorCurrentStep() const
+{
+    if( ! m_axis2Motor ) return 0.0;
+    return m_axis2Motor->getCurrentStep();
+}
+
+std::string Model::convertAxis1StepToPosition( long step ) const
+{
+    if( ! m_axis1Motor ) return std::string();
+    double mm = m_axis1Motor->getPosition( step );
+    if( std::abs( mm ) < 0.001 )
+    {
+        mm = 0.0;
+    }
+    return fmt::format( "{: .3f}", mm );
+}
+
+std::string Model::convertAxis2StepToPosition( long step ) const
+{
+    if( ! m_axis2Motor ) return std::string();
+    double mm = m_axis2Motor->getPosition( step );
+    if( std::abs( mm ) < 0.001 )
+    {
+        mm = 0.0;
+    }
+    return fmt::format( "{: .3f}", mm );
 }
 
 float Model::getRotaryEncoderRpm() const

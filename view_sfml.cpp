@@ -13,21 +13,8 @@ namespace mgo
 namespace
 {
 
-std::string cnv( const mgo::StepperMotor* motor, long step )
+std::string formatMotorPosition( double mm )
 {
-    if( ! motor ) return std::string();
-    double mm = motor->getPosition( step );
-    if( std::abs( mm ) < 0.001 )
-    {
-        mm = 0.0;
-    }
-    return fmt::format( "{: .3f}", mm );
-}
-
-std::string getMotorPosition( const mgo::StepperMotor* motor )
-{
-    if( ! motor ) return std::string();
-    double mm = motor->getPosition();
     if( std::abs( mm ) < 0.001 )
     {
         mm = 0.0;
@@ -400,27 +387,21 @@ void ViewSfml::updateTextFromModel( const Model& model )
         return;
     }
 
-    m_txtAxis1Pos->setString( getMotorPosition( model.axis1Motor() ) );
+    m_txtAxis1Pos->setString( formatMotorPosition( model.getAxis1MotorPosition() ) );
 
-    if( model.axis1Motor() )
-    {
-        m_txtAxis1Speed->setString(
-            fmt::format( "{:<.2f} mm/min", model.axis1Motor()->getSpeed() ) );
-    }
+    m_txtAxis1Speed->setString(
+        fmt::format( "{:<.2f} mm/min", model.getAxis1MotorSpeed() ) );
 
     if( ! model.getIsAxis2Retracted() )
     {
-        m_txtAxis2Pos->setString( getMotorPosition( model.axis2Motor() ) );
+        m_txtAxis2Pos->setString( formatMotorPosition( model.getAxis2MotorPosition() ) );
     }
     else
     {
         m_txtAxis2Pos->setString( "     ---" );
     }
-    if( model.axis2Motor() )
-    {
-        m_txtAxis2Speed->setString(
-            fmt::format( "{:<.2f} mm/min", model.axis2Motor()->getSpeed() ) );
-    }
+    m_txtAxis2Speed->setString(
+        fmt::format( "{:<.2f} mm/min", model.getAxis2MotorSpeed() ) );
     m_txtRpm->setString(
         fmt::format( "{: >7}", static_cast<int>( model.getRotaryEncoderRpm() ) ) );
 
@@ -462,7 +443,7 @@ void ViewSfml::updateTextFromModel( const Model& model )
         else
         {
             m_txtAxis1MemoryValue.at( n )->setString( fmt::format(
-                "{: >9}", cnv( model.axis1Motor(), model.getAxis1Memory( n ) ) ) );
+                "{: >9}", model.convertAxis1StepToPosition( model.getAxis1Memory( n ) ) ) );
         }
         if ( model.getAxis2Memory( n ) == INF_OUT )
         {
@@ -472,7 +453,7 @@ void ViewSfml::updateTextFromModel( const Model& model )
         {
             m_txtAxis2MemoryValue.at( n )->setString(
                 fmt::format(
-                    "{: >9}", cnv( model.axis2Motor(), model.getAxis2Memory( n ) ) ) );
+                    "{: >9}", model.convertAxis2StepToPosition( model.getAxis2Memory( n ) ) ) );
         }
     }
 
@@ -514,8 +495,8 @@ void ViewSfml::updateTextFromModel( const Model& model )
                                    "config!" );
             m_txtMisc4->setString( "" );
             m_txtMisc5->setString( fmt::format("Z step: {}   X step: {}",
-                    model.axis1Motor()->getCurrentStep(),
-                    model.axis2Motor()->getCurrentStep()
+                    model.getAxis1MotorCurrentStep(),
+                    model.getAxis2MotorCurrentStep()
                     )
                 );
             m_txtWarning->setString( "Press Esc to exit setup" );

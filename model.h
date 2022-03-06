@@ -189,12 +189,19 @@ public:
     long getAxis2Memory( std::size_t index ) const;
     void clearAllAxis2Memories();
 
-    StepperMotor* axis1Motor() const;
-    StepperMotor* axis2Motor() const;
     void setAxis1MotorSpeed( double speed );
     void setAxis2MotorSpeed( double speed );
     void setAxis2Position( double mm );
     void resetMotorThreads();
+    double getAxis1MotorPosition() const;
+    double getAxis2MotorPosition() const;
+    double getAxis1MotorSpeed() const;
+    double getAxis2MotorSpeed() const;
+    double getAxis1MotorCurrentStep() const;
+    double getAxis2MotorCurrentStep() const;
+
+    std::string convertAxis1StepToPosition( long step ) const;
+    std::string convertAxis2StepToPosition( long step ) const;
 
     float getRotaryEncoderRpm() const;
 

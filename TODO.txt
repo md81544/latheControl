@@ -1,7 +1,3 @@
-Remove model's functions to return a pointer to StepperMotor*
-(axisMotor1(), axisMotor2()) and add functions to support
-what the callers use that pointer for
-
 Support enable pin for each motor
 
 Start thinking around how to make control of two axes easier for

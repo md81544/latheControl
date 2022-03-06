@@ -243,7 +243,7 @@ TEST_CASE( "Model:   check tapering" )
     model.axis1SetSpeed( 200.0 );
     model.axis1GoToPosition( -0.5 );
     model.axis1Wait();
-    double pos = model.axis2Motor()->getPosition();
+    double pos = model.getAxis2MotorPosition();
     REQUIRE( pos < -0.495 );
     REQUIRE( pos > -0.505 );
 }
@@ -263,7 +263,7 @@ TEST_CASE( "Model:   check radius" )
     model.axis1Wait();
     model.axis2Wait();
 
-    double pos = model.axis2Motor()->getPosition();
+    double pos = model.getAxis2MotorPosition();
     REQUIRE( pos < 1.05 );
     REQUIRE( pos > 0.95 );
 
@@ -271,6 +271,6 @@ TEST_CASE( "Model:   check radius" )
     model.axis1Wait();
 
     // X position should be zero
-    pos = model.axis2Motor()->getPosition();
+    pos = model.getAxis2MotorPosition();
     REQUIRE( pos < 0.05 );
 }
