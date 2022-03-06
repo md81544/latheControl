@@ -111,7 +111,7 @@ std::string ConfigReader::read(
 unsigned long ConfigReader::readLong(
     const std::string& key,
     unsigned long defaultValue
-    )
+    ) const
 {
     auto it = m_mapLong.find( key );
     if( it != m_mapLong.end() )
@@ -126,7 +126,7 @@ unsigned long ConfigReader::readLong(
 double ConfigReader::readDouble(
     const std::string& key,
     double defaultValue
-    )
+    ) const
 {
     auto it = m_mapDouble.find( key );
     if( it != m_mapDouble.end() )
@@ -141,7 +141,7 @@ double ConfigReader::readDouble(
 bool ConfigReader::readBool(
     const std::string& key,
     bool defaultBoolValue
-    )
+    ) const
 {
     auto it = m_mapBool.find( key );
     if( it != m_mapBool.end() )

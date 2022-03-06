@@ -1087,6 +1087,86 @@ std::size_t Model::getCurrentThreadPitchIndex() const
     return m_threadPitchIndex;
 }
 
+void Model::selectPreviousMemorySlot()
+{
+    if( m_currentMemory > 0 )
+    {
+        --m_currentMemory;
+    }
+}
+
+void Model::selectNextMemorySlot()
+{
+    if( m_currentMemory < m_axis1Memory.size() - 1 )
+    {
+        ++m_currentMemory;
+    }
+}
+
+std::size_t Model::getCurrentMemorySlot() const
+{
+    return m_currentMemory;
+}
+
+long Model::getAxis1Memory(std::size_t index) const
+{
+    return m_axis1Memory.at( index );
+}
+
+long Model::getAxis2Memory(std::size_t index) const
+{
+    return m_axis2Memory.at( index );
+}
+
+void Model::clearAllAxis2Memories()
+{
+    for( auto& m : m_axis2Memory )
+    {
+        m = INF_OUT;
+    }
+}
+
+StepperMotor* Model::axis1Motor() const
+{
+    return m_axis1Motor.get();
+}
+
+StepperMotor* Model::axis2Motor() const
+{
+    return m_axis2Motor.get();
+}
+
+void Model::setAxis1MotorSpeed(double speed)
+{
+    m_axis1Motor->setSpeed( speed );
+}
+
+void Model::setAxis2MotorSpeed(double speed)
+{
+    m_axis2Motor->setSpeed( speed );
+}
+
+void Model::setAxis2Position(double mm)
+{
+    m_axis2Motor->setPosition( mm );
+}
+
+void Model::resetMotorThreads()
+{
+    m_axis2Motor.reset();
+    m_axis1Motor.reset();
+
+}
+
+float Model::getRotaryEncoderRpm() const
+{
+    if( ! m_rotaryEncoder )
+    {
+        return 0.f;
+    }
+    return m_rotaryEncoder->getRpm();
+}
+
 void Model::acceptInputValue()
 {
     double inputValue = 0.0;
@@ -1177,6 +1257,11 @@ void Model::acceptInputValue()
             assert( false );
     }
     m_currentDisplayMode = Mode::None;
+}
+
+const IConfigReader& Model::config() const
+{
+    return m_config;
 }
 
 }

@@ -16,13 +16,13 @@ public:
     virtual unsigned long readLong(
         const std::string& key,
         unsigned long defaultValue = 0
-        ) = 0;
+        ) const = 0;
     virtual double readDouble(
         const std::string& key,
-        double defaultValue = 0.0 ) = 0;
+        double defaultValue = 0.0 ) const = 0;
     virtual bool readBool(
         const std::string& key,
-        bool defaultValue ) = 0;
+        bool defaultValue ) const = 0;
 };
 
 // Note, default parameters are statically bound, but I'm leaving them
@@ -40,19 +40,19 @@ class MockConfigReader: public IConfigReader
     unsigned long readLong(
         const std::string&,
         unsigned long defaultValue = 0
-        ) override
+        ) const override
     {
         return defaultValue;
     }
     double readDouble(
         const std::string&,
-        double defaultValue = 0.0 ) override
+        double defaultValue = 0.0 ) const override
     {
         return defaultValue;
     }
     bool readBool(
         const std::string&,
-        bool defaultValue ) override
+        bool defaultValue ) const override
     {
         return defaultValue;
     }
@@ -70,21 +70,21 @@ public:
     unsigned long readLong(
         const std::string& key,
         unsigned long defaultValue = 0
-        ) override;
+        ) const override;
     double readDouble(
         const std::string& key,
-        double defaultValue = 0.0 ) override;
+        double defaultValue = 0.0 ) const override;
     bool readBool(
         const std::string& key,
-        bool defaultValue ) override;
+        bool defaultValue ) const override;
 private:
     std::unordered_map<std::string, std::string> m_map;
     // Lazy caches for bool, double, and long types.
     // We could use a map of variants, but as we only
     // support three types, it's simple enough like this.
-    std::unordered_map<std::string, bool>   m_mapBool;
-    std::unordered_map<std::string, double> m_mapDouble;
-    std::unordered_map<std::string, long>   m_mapLong;
+    mutable std::unordered_map<std::string, bool>   m_mapBool;
+    mutable std::unordered_map<std::string, double> m_mapDouble;
+    mutable std::unordered_map<std::string, long>   m_mapLong;
 };
 
 } // namespace mgo

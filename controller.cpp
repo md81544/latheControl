@@ -38,8 +38,8 @@ Controller::Controller( Model* model )
 
 void Controller::run()
 {
-    m_model->m_axis1Motor->setSpeed( m_model->m_config.readDouble( "Axis1SpeedPreset2", 40.0 ) );
-    m_model->m_axis2Motor->setSpeed( m_model->m_config.readDouble( "Axis2SpeedPreset2", 20.0 ) );
+    m_model->setAxis1MotorSpeed( m_model->config().readDouble( "Axis1SpeedPreset2", 40.0 ) );
+    m_model->setAxis2MotorSpeed( m_model->config().readDouble( "Axis2SpeedPreset2", 20.0 ) );
 
     while( ! m_model->isQuitting() )
     {
@@ -52,8 +52,7 @@ void Controller::run()
         if( m_model->isShuttingDown() )
         {
             // Stop the motor threads
-            m_model->m_axis2Motor.reset();
-            m_model->m_axis1Motor.reset();
+            m_model->resetMotorThreads();
             // Note the command used for shutdown should be made passwordless
             // in the /etc/sudoers files
             #pragma GCC diagnostic push
@@ -220,18 +219,12 @@ void Controller::processKeyPress()
             }
             case key::LBRACKET: // [
             {
-                if( m_model->m_currentMemory > 0 )
-                {
-                    --m_model->m_currentMemory;
-                }
+                m_model->selectPreviousMemorySlot();
                 break;
             }
             case key::RBRACKET: // ]
             {
-                if( m_model->m_currentMemory < m_model->m_axis1Memory.size() - 1 )
-                {
-                    ++m_model->m_currentMemory;
-                }
+                m_model->selectNextMemorySlot();
                 break;
             }
 
@@ -335,32 +328,32 @@ void Controller::processKeyPress()
             case key::f2s: // setup mode
             {
                 m_model->setEnabledFunction( Mode::None );
-                m_model->m_axis1Motor->setSpeed( 0.8f );
-                m_model->m_axis2Motor->setSpeed( 1.f );
+                m_model->setAxis1MotorSpeed( 0.8f );
+                m_model->setAxis2MotorSpeed( 1.f );
                 m_model->changeMode( Mode::Setup );
                 break;
             }
             case key::f2t: // threading mode
             {
-                if( m_model->m_config.readBool( "DisableAxis2", false ) ) break;
+                if( m_model->config().readBool( "DisableAxis2", false ) ) break;
                 m_model->changeMode( Mode::Threading );
                 break;
             }
             case key::f2p: // taper mode
             {
-                if( m_model->m_config.readBool( "DisableAxis2", false ) ) break;
+                if( m_model->config().readBool( "DisableAxis2", false ) ) break;
                 m_model->changeMode( Mode::Taper );
                 break;
             }
             case key::f2r: // X retraction setup
             {
-                if( m_model->m_config.readBool( "DisableAxis2", false ) ) break;
+                if( m_model->config().readBool( "DisableAxis2", false ) ) break;
                 m_model->changeMode( Mode::Axis2RetractSetup );
                 break;
             }
             case key::f2o: // Radius mode
             {
-                if( m_model->m_config.readBool( "DisableAxis2", false ) ) break;
+                if( m_model->config().readBool( "DisableAxis2", false ) ) break;
                 m_model->changeMode( Mode::Radius );
                 break;
             }
@@ -513,8 +506,8 @@ int Controller::processModeInputKeys( int key )
         if( key == key::ESC )
         {
             // Reset motor speed to something sane
-            m_model->m_axis1Motor->setSpeed(
-                m_model->m_config.readDouble( "Axis1SpeedPreset2", 40.0 ) );
+            m_model->setAxis1MotorSpeed(
+                m_model->config().readDouble( "Axis1SpeedPreset2", 40.0 ) );
             // fall through...
         }
     }
@@ -542,12 +535,9 @@ int Controller::processModeInputKeys( int key )
             xPos = std::abs( std::stof( m_model->getInputString() ) );
         }
         catch( ... ) {}
-        m_model->m_axis2Motor->setPosition( xPos / 2 );
+        m_model->setAxis2Position( xPos / 2 );
         // This will invalidate any memorised X positions, so we clear them
-        for( auto& m : m_model->m_axis2Memory )
-        {
-            m = INF_OUT;
-        }
+        m_model->clearAllAxis2Memories();
         m_model->setCurrentDisplayMode( Mode::None );
         m_model->diameterIsSet();
         return -1;
@@ -622,12 +612,12 @@ int Controller::checkForAxisLeaderKeys( int key )
     // We determine whether the key pressed is a leader key for
     // an axis (note the key can be remapped in config) and sets
     // the model's keyMode if so. Returns true if one was pressed, false if not.
-    if( key == static_cast<int>( m_model->m_config.readLong( "Axis1Leader", 122L ) ) )
+    if( key == static_cast<int>( m_model->config().readLong( "Axis1Leader", 122L ) ) )
     {
         m_model->setKeyMode( KeyMode::Axis1 );
         return key::None;
     }
-    if( key == static_cast<int>( m_model->m_config.readLong( "Axis2Leader", 120L ) ) )
+    if( key == static_cast<int>( m_model->config().readLong( "Axis2Leader", 120L ) ) )
     {
         m_model->setKeyMode( KeyMode::Axis2 );
         return key::None;

@@ -137,6 +137,7 @@ public:
     void repeatLastRelativeMove();
     void diameterIsSet();
 
+    // Getters/setters:
     XDirection  getRetractionDirection() const;
     void        setRetractionDirection( XDirection direction );
 
@@ -180,23 +181,39 @@ public:
     void selectNextThreadPitch();
     std::size_t getCurrentThreadPitchIndex() const;
 
+    void selectPreviousMemorySlot();
+    void selectNextMemorySlot();
+    std::size_t getCurrentMemorySlot() const;
+
+    long getAxis1Memory( std::size_t index ) const;
+    long getAxis2Memory( std::size_t index ) const;
+    void clearAllAxis2Memories();
+
+    StepperMotor* axis1Motor() const;
+    StepperMotor* axis2Motor() const;
+    void setAxis1MotorSpeed( double speed );
+    void setAxis2MotorSpeed( double speed );
+    void setAxis2Position( double mm );
+    void resetMotorThreads();
+
+    float getRotaryEncoderRpm() const;
+
     // This is called when the user presses ENTER when
     // inputting a mode parameter (e.g. taper angle)
     void acceptInputValue();
 
-    IGpio& m_gpio;
-    mgo::IConfigReader& m_config;
-    // Lead screw:
-    std::unique_ptr<mgo::StepperMotor> m_axis1Motor;
-    // Cross slide:
-    std::unique_ptr<mgo::StepperMotor> m_axis2Motor;
-    std::unique_ptr<mgo::RotaryEncoder> m_rotaryEncoder;
-    std::vector<long> m_axis1Memory{ INF_RIGHT, INF_RIGHT, INF_RIGHT, INF_RIGHT };
-    std::vector<long> m_axis2Memory{ INF_RIGHT, INF_RIGHT, INF_RIGHT, INF_RIGHT };
-    std::size_t m_currentMemory{ 0 };
+    const IConfigReader& config() const;
 
 private:
 
+    IGpio& m_gpio;
+    IConfigReader& m_config;
+    std::unique_ptr<mgo::RotaryEncoder> m_rotaryEncoder;
+    std::unique_ptr<mgo::StepperMotor> m_axis1Motor;
+    std::unique_ptr<mgo::StepperMotor> m_axis2Motor;
+    std::vector<long> m_axis1Memory{ INF_RIGHT, INF_RIGHT, INF_RIGHT, INF_RIGHT };
+    std::vector<long> m_axis2Memory{ INF_RIGHT, INF_RIGHT, INF_RIGHT, INF_RIGHT };
+    std::size_t m_currentMemory{ 0 };
     std::size_t m_threadPitchIndex{ 0 };
     std::string m_generalStatus{ "Press F1 for help" };
     std::string m_axis1Status{ "stopped" };
