@@ -58,6 +58,8 @@ private:
     std::unique_ptr<sf::Text> m_txtAxis2MemoryLabel;
     std::vector<std::unique_ptr<sf::Text>> m_txtAxis1MemoryValue;
     std::vector<std::unique_ptr<sf::Text>> m_txtAxis2MemoryValue;
+
+    std::size_t m_iteration{0};
 };
 
 } // namespace mgo

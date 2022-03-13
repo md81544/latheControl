@@ -412,7 +412,6 @@ void ViewSfml::updateTextFromModel( const Model& model )
     status = fmt::format( "{}: {}",
         model.config().read( "Axis2Label", "X" ), model.getAxis2Status() );
     m_txtAxis2Status->setString( status );
-    m_txtWarning->setString( model.getWarning() );
     if( model.getEnabledFunction() == Mode::Taper )
     {
         m_txtTaperOrRadius->setString( fmt::format( "Angle: {}", model.getTaperAngle() ) );
@@ -652,7 +651,18 @@ void ViewSfml::updateTextFromModel( const Model& model )
             m_txtMisc3->setString( "" );
             m_txtMisc4->setString( "" );
             m_txtMisc5->setString( "" );
-            m_txtWarning->setString( "" );
+            m_txtWarning->setString( model.getWarning() );
+            if( ! model.getWarning().empty() )
+            {
+                if( ++m_iteration % 6 < 3 )
+                {
+                    m_txtWarning->setFillColor( sf::Color::Red );
+                }
+                else
+                {
+                    m_txtWarning->setFillColor( sf::Color::Yellow );
+                }
+            }
             break;
         }
         default:
