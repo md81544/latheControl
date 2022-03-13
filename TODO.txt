@@ -3,9 +3,6 @@ Support enable pin for each motor
 Start thinking around how to make control of two axes easier for
 mill when Y axis is stepper-controlled
 
-Make the speeds above which the program automatically resets them
-lower after a stop to be configurable
-
 Desperately need a "scratch memory" (or collection of them) to allow
 a return to the previous stopped location. This is because I'll line
 things up, then forget to store the memory location before moving.

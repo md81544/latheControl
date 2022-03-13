@@ -159,12 +159,13 @@ void Model::checkStatus()
         {
             axis2SynchroniseOff();
         }
-        if( m_zWasRunning && m_axis1Motor->getRpm() >= 100.0 )
+        if( m_zWasRunning && m_axis1Motor->getRpm() >=
+            m_config.readDouble("Axis1SpeedResetAbove", 100.0 ) )
         {
             // We don't allow faster speeds to "stick" to avoid accidental
             // fast motion after a long fast movement
             m_axis1Motor->setSpeed(
-                m_config.readDouble( "Axis1SpeedPreset2", 40.0 ) );
+                m_config.readDouble("Axis1SpeedResetTo", 40.0 ) );
         }
         m_zWasRunning = false;
     }
@@ -188,13 +189,13 @@ void Model::checkStatus()
         }
         if( ! ( m_enabledFunction == Mode::Taper ) &&
                 m_xWasRunning &&
-                m_axis2Motor->getSpeed() >= 80.0
+                m_axis2Motor->getSpeed() >= m_config.readDouble("Axis2SpeedResetAbove", 80.0 )
             )
         {
             // We don't allow faster speeds to "stick" to avoid accidental
             // fast motion after a long fast movement
             m_axis2Motor->setSpeed(
-                m_config.readDouble( "Axis2SpeedPreset2", 20.0 ) );
+                m_config.readDouble("Axis2SpeedResetTo", 20.0 ) );
         }
         m_xWasRunning = false;
     }
