@@ -13,7 +13,8 @@
 
 TEST_CASE( "Stepper: Step once" )
 {
-    mgo::MockGpio gpio( false );
+    mgo::MockConfigReader config;
+    mgo::MockGpio gpio( false, config );
     mgo::StepperMotor motor( gpio, 0, 0, 0, 1'000, 1.0, 10'000.0 );
     motor.setRpm( 500.0 );
     motor.goToStep( 3 );
@@ -24,7 +25,8 @@ TEST_CASE( "Stepper: Step once" )
 
 TEST_CASE( "Stepper: Stop motor" )
 {
-    mgo::MockGpio gpio( false );
+    mgo::MockConfigReader config;
+    mgo::MockGpio gpio( false, config );
     mgo::StepperMotor motor( gpio, 0, 0, 0, 1'000, 1.0, 10'000.0 );
     // High number of steps:
     motor.setRpm( 500.0 );
@@ -39,7 +41,8 @@ TEST_CASE( "Stepper: Stop motor" )
 
 TEST_CASE( "Stepper: Stop stopped motor" )
 {
-    mgo::MockGpio gpio( false );
+    mgo::MockConfigReader config;
+    mgo::MockGpio gpio( false, config );
     mgo::StepperMotor motor( gpio, 0, 0, 0, 1'000, 1.0, 10'000.0 );
     motor.stop();
     motor.wait();
@@ -48,7 +51,8 @@ TEST_CASE( "Stepper: Stop stopped motor" )
 
 TEST_CASE( "Stepper: Move then move again" )
 {
-    mgo::MockGpio gpio( false );
+    mgo::MockConfigReader config;
+    mgo::MockGpio gpio( false, config );
     mgo::StepperMotor motor( gpio, 0, 0, 0, 1'000, 1.0, 10'000.0 );
     motor.setRpm( 500.0 );
     motor.goToStep( 50 );
@@ -63,7 +67,8 @@ TEST_CASE( "Stepper: Move then move again" )
 
 TEST_CASE( "Stepper: Forward and reverse" )
 {
-    mgo::MockGpio gpio( false );
+    mgo::MockConfigReader config;
+    mgo::MockGpio gpio( false, config );
     mgo::StepperMotor motor( gpio, 0, 0, 0, 1'000, 1.0, 10'000.0 );
     motor.setRpm( 500.0 );
     motor.goToStep( 100 );
@@ -76,7 +81,8 @@ TEST_CASE( "Stepper: Forward and reverse" )
 
 TEST_CASE( "Stepper: Check direction" )
 {
-    mgo::MockGpio gpio( false );
+    mgo::MockConfigReader config;
+    mgo::MockGpio gpio( false, config );
     mgo::StepperMotor motor( gpio, 0, 0, 0, 1'000, 1.0, 10'000.0 );
     motor.setRpm( 500.0 );
     REQUIRE( motor.getDirection() == mgo::Direction::forward );
@@ -93,7 +99,8 @@ TEST_CASE( "Stepper: Check direction" )
 
 TEST_CASE( "Stepper: RPM" )
 {
-    mgo::MockGpio gpio( false );
+    mgo::MockConfigReader config;
+    mgo::MockGpio gpio( false, config );
     mgo::StepperMotor motor( gpio, 0, 0, 0, 1'000, 1.0, 10'000.0 );
     motor.setRpm( 60 );
     // That's one revolution per second, and we've set steps per
@@ -110,7 +117,8 @@ TEST_CASE( "Stepper: RPM" )
 
 TEST_CASE( "Stepper: RPM Limits" )
 {
-    mgo::MockGpio gpio( false );
+    mgo::MockConfigReader config;
+    mgo::MockGpio gpio( false, config );
     mgo::StepperMotor motor( gpio, 0, 0, 0, 1'000, 1.0, 10'000.0 );
     motor.setRpm( 0 );
     motor.goToStep( 10 ); // Shouldn't take infinite time :)
@@ -121,7 +129,8 @@ TEST_CASE( "Stepper: RPM Limits" )
 
 TEST_CASE( "Stepper: Change target step while busy" )
 {
-    mgo::MockGpio gpio( false );
+    mgo::MockConfigReader config;
+    mgo::MockGpio gpio( false, config );
     mgo::StepperMotor motor( gpio, 0, 0, 0, 1'000, 1.0, 10'000.0 );
     motor.setRpm( 2'000 );
     motor.goToStep( 1'000 );
@@ -133,7 +142,8 @@ TEST_CASE( "Stepper: Change target step while busy" )
 
 TEST_CASE( "Stepper: Rotary Encoder RPM" )
 {
-    mgo::MockGpio gpio( false );
+    mgo::MockConfigReader config;
+    mgo::MockGpio gpio( false, config );
     mgo::RotaryEncoder re(
         gpio,
         23,
@@ -148,7 +158,8 @@ TEST_CASE( "Stepper: Rotary Encoder RPM" )
 
 TEST_CASE( "Stepper: Rotary Encoder Position Callback" )
 {
-    mgo::MockGpio gpio( false );
+    mgo::MockConfigReader config;
+    mgo::MockGpio gpio( false, config );
     mgo::RotaryEncoder re(
         gpio,
         23,
@@ -165,7 +176,8 @@ TEST_CASE( "Stepper: Rotary Encoder Position Callback" )
 
 TEST_CASE( "Stepper: Check backlash compensation" )
 {
-    mgo::MockGpio gpio( false );
+    mgo::MockConfigReader config;
+    mgo::MockGpio gpio( false, config );
     mgo::StepperMotor motor( gpio, 0, 0, 0, 1'000, 1.0, 10'000.0 );
     // Set backlash compensation. This sets our backlash slop to be ten
     // steps which means if we move one step in a positive manner the
@@ -195,7 +207,8 @@ TEST_CASE( "Stepper: Check backlash compensation" )
 
 TEST_CASE( "Stepper: Check motor speed ramping" )
 {
-    mgo::MockGpio gpio( false );
+    mgo::MockConfigReader config;
+    mgo::MockGpio gpio( false, config );
     double maxSpeed = 1'000.0; // mm/sec, not rpm
     long stepsPerRev = 4'000;
     double conversionFactor = 0.0005;
@@ -217,7 +230,8 @@ TEST_CASE( "Stepper: Check motor speed ramping" )
 
 TEST_CASE( "Stepper: Check motor synchronisation" )
 {
-    mgo::MockGpio gpio( false );
+    mgo::MockConfigReader config;
+    mgo::MockGpio gpio( false, config );
     mgo::StepperMotor motor1( gpio, 0, 0, 0, 1'000, 0.01, 10'000.0 );
     mgo::StepperMotor motor2( gpio, 0, 0, 0, 1'000, 0.01, 10'000.0 );
     motor1.setRpm( 500.0 );
@@ -233,10 +247,10 @@ TEST_CASE( "Stepper: Check motor synchronisation" )
 
 TEST_CASE( "Model:   check tapering" )
 {
-    mgo::MockGpio gpio( false );
+    mgo::MockConfigReader config;
+    mgo::MockGpio gpio( false, config );
     // The mock config reader just returns whatever you specify
     // as the default return value
-    mgo::MockConfigReader config;
     mgo::Model model( gpio, config );
     model.initialise();
     model.changeMode( mgo::Mode::Taper );
@@ -251,10 +265,10 @@ TEST_CASE( "Model:   check tapering" )
 
 TEST_CASE( "Model:   check radius" )
 {
-    mgo::MockGpio gpio( false );
+    mgo::MockConfigReader config;
+    mgo::MockGpio gpio( false, config );
     // The mock config reader just returns whatever you specify
     // as the default return value
-    mgo::MockConfigReader config;
     mgo::Model model( gpio, config );
     model.initialise();
     model.changeMode( mgo::Mode::Radius );

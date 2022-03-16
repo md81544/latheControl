@@ -1,3 +1,5 @@
 [submodule "stepperControl"]
 	path = stepperControl
 	url = git@github.com:md81544/stepperControl.git
+	branch = master
+	update = merge

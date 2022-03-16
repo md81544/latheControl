@@ -19,12 +19,6 @@ int main( int argc, char* argv[] )
         INIT_MGOLOG( "lc.log" );
         MGOLOG( "Program started" );
 
-        #ifdef FAKE
-            mgo::MockGpio gpio( false );
-        #else
-            mgo::Gpio gpio;
-        #endif
-
         std::string configFile = "lc.cfg";
         if( argc > 1 )
         {
@@ -37,6 +31,13 @@ int main( int argc, char* argv[] )
         }
 
         mgo::ConfigReader config( configFile );
+
+        #ifdef FAKE
+            mgo::MockGpio gpio( false, config );
+        #else
+            mgo::Gpio gpio;
+        #endif
+
         mgo::Model model( gpio, config );
 
         mgo::Controller controller( &model );
