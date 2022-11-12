@@ -3,6 +3,10 @@ cmake_minimum_required(VERSION 3.13)
 project (lc)
 enable_testing()
 
+if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+    include_directories(/opt/homebrew/include)
+endif()
+
 add_library(shared_with_test OBJECT
         stepperControl/steppermotor.cpp
         rotaryencoder.cpp
