@@ -28,7 +28,7 @@ public:
 // Note, default parameters are statically bound, but I'm leaving them
 // all on the derived classes for reference. They should never need to change.
 
-class MockConfigReader: public IConfigReader
+class MockConfigReader final : public IConfigReader
 {
     std::string read(
         const std::string&,
@@ -58,7 +58,7 @@ class MockConfigReader: public IConfigReader
     }
 };
 
-class ConfigReader : public IConfigReader
+class ConfigReader final : public IConfigReader
 {
 public:
     ConfigReader(const std::string& sConfigFileName);

@@ -10,7 +10,7 @@
 namespace mgo
 {
 
-class ViewSfml : public IView
+class ViewSfml final : public IView
 {
 public:
     virtual void initialise( const Model& ) override;
