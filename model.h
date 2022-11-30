@@ -252,7 +252,7 @@ private:
     bool        m_xWasRunning{ false };
     bool        m_spindleWasRunning{ false };
 
-    XDirection  m_xRetractionDirection;
+    XDirection  m_xRetractionDirection{ XDirection::Outwards };
     // Once the user has set the x position once then we use
     // the status bar to display the effective diameter
     bool        m_xDiameterSet{ false };

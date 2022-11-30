@@ -1,5 +1,7 @@
 Support enable pin for each motor
 
+Set initial x-axis retraction direction from config file
+
 Start thinking around how to make control of two axes easier for
 mill when Y axis is stepper-controlled
 
