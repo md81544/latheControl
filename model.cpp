@@ -384,7 +384,13 @@ void Model::axis1GoToPosition( double pos )
     {
         m_axis1Motor->goToPosition( pos );
     }
-    m_axis1Status = fmt::format( "Going to {}", pos );
+    if ( std::abs( pos ) < 0.00001 )
+    {
+        // Round to zero for display purposes, just to
+        // avoid having "-0.000" displayed
+        pos = 0.0;
+    }
+    m_axis1Status = fmt::format( "Going to {:.3f}", pos );
 }
 
 void Model::axis1GoToOffset( double offset )
@@ -573,7 +579,7 @@ void Model::axis1FastReturn()
 void Model::axis2GoToPosition( double pos )
 {
     m_axis2Motor->goToPosition( pos );
-    m_axis2Status = fmt::format( "Going to {}", pos );
+    m_axis2Status = fmt::format( "Going to {:.3f}", pos );
 }
 
 void Model::axis2GoToOffset( double offset )
