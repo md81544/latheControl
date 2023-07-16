@@ -27,8 +27,8 @@ To make the binary on a Pi, type `make release`. This will fail unless you're on
 
 To run unit tests, `make test`.
 
-## Connecting Hardware
-Note that the software will take the pin high then low for each pulse, so the pins you specify in the config file should be connected to the positive inputs for the stepper controller. All the negative input pins should be tied together and connected to the Pi's GND pin.
+## Connecting Stepper Motors
+Note that the software will take the pin high then low for each pulse to the stepper motor, so the pins you specify in the config file should be connected to the positive inputs for the stepper controller. All the negative input pins should be tied together and connected to the Pi's GND pin.
 
 ## Running, and Performance
 This is designed to run on a stock Raspberry Pi 3 Model B. Usage of the GPIO pins (via the pigpio library) requires root privileges, so run the program via `sudo`.
