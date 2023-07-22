@@ -38,3 +38,4 @@ build/*
 tags
 *.log
 .vscode/settings.json
+lldb-mi
