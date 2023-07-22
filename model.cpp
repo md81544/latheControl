@@ -89,7 +89,7 @@ void Model::initialise()
     m_axis1Motor->zeroPosition();
     m_axis2Motor->zeroPosition();
 
-    m_axis1PreviousPositions.push( m_axis1Motor->getPosition() );
+    axis1SaveBreadcrumbPosition();
 }
 
 void Model::checkStatus()
@@ -147,7 +147,7 @@ void Model::checkStatus()
             // We see that axis1 has stopped. We save the position
             // in case the user wants to return to it without
             // explicitly having saved it.
-            m_axis1PreviousPositions.push( m_axis1Motor->getPosition() );
+            axis1SaveBreadcrumbPosition();
         }
         if( m_axis1FastReturning )
         {
@@ -496,6 +496,9 @@ void Model::axis1Nudge( ZDirection direction )
     m_axis1Motor->wait();
     axis1GoToStep( m_axis1Motor->getCurrentStep() + nudgeAmount );
     m_axis1Motor->wait();
+
+    // Save position
+    axis1SaveBreadcrumbPosition();
 }
 
 void Model::axis1Zero()
@@ -649,6 +652,16 @@ void Model::axis1SpeedPreset()
             m_axis1Motor->setSpeed( m_config.readDouble( "Axis1SpeedPreset5", 1'000.0 ));
             break;
     }
+}
+
+void Model::axis1SaveBreadcrumbPosition()
+{
+    if ( ! m_axis1PreviousPositions.empty() &&
+        m_axis1PreviousPositions.top() == m_axis1Motor->getPosition() )
+    {
+        return;
+    }
+    m_axis1PreviousPositions.push( m_axis1Motor->getPosition() );
 }
 
 void Model::axis1SetSpeed( double speed )

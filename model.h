@@ -116,6 +116,7 @@ public:
     void axis1StorePosition();
     void axis1Move( ZDirection direction );
     void axis1SpeedPreset();
+    void axis1SaveBreadcrumbPosition();
 
     void axis2GoToPosition( double pos );
     void axis2GoToOffset( double pos );
