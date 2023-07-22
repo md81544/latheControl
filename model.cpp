@@ -513,6 +513,8 @@ void Model::axis1Zero()
     {
         m = INF_RIGHT;
     }
+    // Also clear any "breadcrumb" positions
+    axis1ClearBreadcrumbs();
 }
 
 void Model::axis1SpeedDecrease()
@@ -662,6 +664,12 @@ void Model::axis1SaveBreadcrumbPosition()
         return;
     }
     m_axis1PreviousPositions.push( m_axis1Motor->getPosition() );
+}
+
+void Model::axis1ClearBreadcrumbs()
+{
+    m_axis1PreviousPositions = std::stack<double>();
+    axis1SaveBreadcrumbPosition();
 }
 
 void Model::axis1SetSpeed( double speed )

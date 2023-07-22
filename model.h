@@ -117,6 +117,7 @@ public:
     void axis1Move( ZDirection direction );
     void axis1SpeedPreset();
     void axis1SaveBreadcrumbPosition();
+    void axis1ClearBreadcrumbs();
 
     void axis2GoToPosition( double pos );
     void axis2GoToOffset( double pos );
@@ -261,6 +262,7 @@ private:
     double      m_axis2LastRelativeMove{ 0.0 };
     Axis        m_lastRelativeMoveAxis;
 
+    // "Breadcrumb" trail of positions for Z axis:
     std::stack<double> m_axis1PreviousPositions;
 };
 
