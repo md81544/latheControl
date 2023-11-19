@@ -36,6 +36,10 @@ accurate rather than estimated
 Automate threading operations (or all?) to automatically return after the
 target step has been reached and a key is pressed
 
+Automatic keyway "shaping" by simply moving Z in on the lathe repeatedly
+with a tiny increment to X each time (obviously with the chuck locked
+out and stationary)
+
 Rotary encoder doesn't currently do anything with rotation direction,
 so getPositionDegrees() fails to take into account manual back-rotation
 of the chuck/spindle
