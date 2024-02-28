@@ -23,19 +23,10 @@
                 }
             ],
             "preLaunchTask": "g++ build active file",
-            "miDebuggerPath": "/usr/bin/gdb"
-        },
-        {
-            "name": "lldb - Build and debug active file",
-            "type": "cppdbg",
-            "request": "launch",
-            "program": "${workspaceFolder}/build/lc",
-            "args": [],
-            "stopAtEntry": false,
-            "cwd": "${workspaceFolder}",
-            "environment": [],
-            "externalConsole": false,
+            // Note that the following is a symlink to
+            // ~/.vscode/extensions/ms-vscode.cpptools-1.18.5-darwin-arm64/debugAdapters/lldb-mi/bin/lldb-mi
+            // this will change if/when that extension gets updated
             "miDebuggerPath": "${workspaceFolder}/lldb-mi"
-        }
+        },
     ]
 }

@@ -117,6 +117,7 @@ void Model::checkStatus()
         // revolution, there is a direct correlation between spindle
         // rpm and stepper motor rpm for a 1mm thread pitch.
         float speed = pitch * m_rotaryEncoder->getRpm();
+#ifndef FAKE
         double maxZSpeed = m_config.readDouble( "Axis1MaxMotorSpeed", 700.0 );
         if( speed > maxZSpeed * 0.8 )
         {
@@ -125,6 +126,7 @@ void Model::checkStatus()
             m_warning = "RPM too high for threading";
         }
         else
+#endif
         {
             m_warning = "";
         }
@@ -148,6 +150,11 @@ void Model::checkStatus()
             // in case the user wants to return to it without
             // explicitly having saved it.
             axis1SaveBreadcrumbPosition();
+            if ( m_enabledFunction == Mode::Threading &&
+                 m_config.readBool("ThreadingAutoRetract", false)) {
+                axis2Retract();
+                // We may want to automate the return to the start position as well
+            }
         }
         if( m_axis1FastReturning )
         {
