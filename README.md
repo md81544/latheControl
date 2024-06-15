@@ -19,6 +19,10 @@ You'll need to do the following (on deb-based systems) to install required packa
 
     sudo apt install cmake libfmt-dev libsfml-dev cppcheck exuberant-ctags
 
+on a Mac, you can use homebrew (if you've got it installed):
+
+    brew install cmake fmt sfml cppcheck ctags
+
 ## Building
 
 To make a binary to run on non-Pi hardware, just type `make`. This mocks out the pigpio library usage, and also provides mock objects for all the steppers and rotary encoder, which means you can test it on a PC without needing to be in the workshop. This build includes debugging symbols.
