@@ -1,10 +1,9 @@
-#!/bin/bash
+#!/ bin / bash
 
-mkdir -p build
-BUILD_TYPE=debug
-RUN_TESTS=n
+mkdir - p build BUILD_TYPE = debug RUN_TESTS = n
 
-while [[ "$1" != "" ]]; do
+    while[["$1" != ""]];
+do {
     case "$1" in
         "debug"|"fake" )
             BUILD_TYPE=debug
@@ -69,3 +68,5 @@ ln -s build/lc
 if [[ "${RUN_TESTS}" == "y" ]]; then
     build/test/unit_test -d y
 fi
+
+}

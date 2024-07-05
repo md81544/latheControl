@@ -1,24 +1,17 @@
 #pragma once
 
-#include <mutex>
 #include <fstream>
+#include <mutex>
 #include <sstream>
 
-namespace mgo
-{
+namespace mgo {
 
-class Logger
-{
+class Logger {
 public:
     explicit Logger(const std::string& filename);
     ~Logger();
 
-    void Log(
-        std::string const &message,
-        char const *function,
-        char const *file,
-        int line
-        );
+    void Log(std::string const& message, char const* function, char const* file, int line);
 
     Logger(const Logger&) = delete;
     Logger& operator=(const Logger&) = delete;
@@ -32,26 +25,24 @@ extern Logger* g_logger;
 
 } // namespace mgo
 
+#define INIT_MGOLOG(filename_) mgo::g_logger = new mgo::Logger(filename_);
 
-#define INIT_MGOLOG( filename_ ) \
-    mgo::g_logger = new mgo::Logger( filename_ );
-
-
-#define MGOLOG( Message_ )                                    \
-    do {                                                      \
-    if (mgo::g_logger) {                                      \
-    mgo::g_logger->Log( static_cast<std::ostringstream &>(    \
-        std::ostringstream().flush() << Message_ ).str(),     \
-        __FUNCTION__, __FILE__, __LINE__ );                   \
-    } } while(0)
+#define MGOLOG(Message_)                                                                           \
+    do {                                                                                           \
+        if (mgo::g_logger) {                                                                       \
+            mgo::g_logger->Log(                                                                    \
+                static_cast<std::ostringstream&>(std::ostringstream().flush() << Message_).str(),  \
+                __FUNCTION__,                                                                      \
+                __FILE__,                                                                          \
+                __LINE__);                                                                         \
+        }                                                                                          \
+    } while (0)
 
 // Use MGOLOG_DEBUG if you want to have logging be a NoOp in Release mode
 #ifdef NDEBUG
-#define MGOLOG_DEBUG( _ )                                     \
-    do                                                        \
-    {                                                         \
-    } while ( 0 );
+#define MGOLOG_DEBUG(_)                                                                            \
+    do {                                                                                           \
+    } while (0);
 #else
-#define MGOLOG_DEBUG( Message_ ) MGOLOG( Message_ )
+#define MGOLOG_DEBUG(Message_) MGOLOG(Message_)
 #endif
-

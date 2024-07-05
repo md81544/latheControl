@@ -7,9 +7,7 @@
 #include <stdexcept>
 #include <time.h>
 
-
-namespace
-{
+namespace {
 
 std::string NowAsString()
 {
@@ -26,21 +24,19 @@ std::string NowAsString()
     const auto currentTime = system_clock::now();
 
     // Convert to time_t (loses fractions)
-    time_t time = system_clock::to_time_t( currentTime );
+    time_t time = system_clock::to_time_t(currentTime);
 
     // Convert time_t back to time_point
-    auto currentTimeRounded = system_clock::from_time_t( time );
+    auto currentTimeRounded = system_clock::from_time_t(time);
 
     // If std::time_t has lower precision, it is implementation-
     // defined whether the value is rounded or truncated, hence :
-    if ( currentTimeRounded > currentTime )
-    {
+    if (currentTimeRounded > currentTime) {
         --time;
-        currentTimeRounded -= seconds( 1 );
+        currentTimeRounded -= seconds(1);
     }
-    long long microseconds = duration_cast<duration<int, std::micro>>(
-                           currentTime - currentTimeRounded )
-                           .count();
+    long long microseconds
+        = duration_cast<duration<int, std::micro>>(currentTime - currentTimeRounded).count();
 
     std::ostringstream oss;
     // Convert tm to UTC
@@ -50,35 +46,32 @@ std::string NowAsString()
     // Uncomment the next line and remove the following three if
     // using g++ 5 or greater
     // oss << std::put_time( &tmStruct, "%Y%m%d-%H:%M:%S" );
-    char buf[ 64 + 1 ];
+    char buf[64 + 1];
     strftime(buf, 64, "%Y-%m-%dT%H:%M:%S", &tmStruct);
     oss << buf;
 #else
     struct tm* tmStruct;
-    tmStruct = gmtime( &time );
+    tmStruct = gmtime(&time);
     // Uncomment the next line and remove the following three if
     // using g++ 5 or greater
-    //oss << std::put_time( tmStruct, "%Y%m%d-%H:%M:%S" );
-    char buf[ 64 + 1 ];
+    // oss << std::put_time( tmStruct, "%Y%m%d-%H:%M:%S" );
+    char buf[64 + 1];
     strftime(buf, 64, "%Y-%m-%dT%H:%M:%S", tmStruct);
     oss << buf;
 #endif
 
-    oss << "." << std::setfill( '0' ) << std::setw( 6 ) << microseconds;
+    oss << "." << std::setfill('0') << std::setw(6) << microseconds;
     oss << "Z";
     std::string narrow = oss.str();
     return narrow;
 }
 } // anonymous namespace
 
-
 mgo::Logger::Logger(const std::string& filename)
 {
-    m_log.open( filename, std::ios::app );
-    if (! m_log )
-    {
-        throw std::runtime_error(
-            "Could not open file " + filename + " for appending" );
+    m_log.open(filename, std::ios::app);
+    if (!m_log) {
+        throw std::runtime_error("Could not open file " + filename + " for appending");
     }
 }
 
@@ -87,19 +80,11 @@ mgo::Logger::~Logger()
     m_log.close();
 }
 
-void mgo::Logger::Log(
-    std::string const &message,
-    char const *function,
-    char const *file,
-    int line
-    )
+void mgo::Logger::Log(std::string const& message, char const* function, char const* file, int line)
 {
-    std::lock_guard<std::mutex> lock( m_mutex );
-    m_log << NowAsString() << "|"
-          << function      << "|"
-          << file          << "|"
-          << line          << "|"
-          << message << std::endl;
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_log << NowAsString() << "|" << function << "|" << file << "|" << line << "|" << message
+          << std::endl;
 }
 
-mgo::Logger* mgo::g_logger{ nullptr };
+mgo::Logger* mgo::g_logger { nullptr };

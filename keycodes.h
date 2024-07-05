@@ -1,57 +1,55 @@
 #pragma once
 
-namespace mgo
-{
+namespace mgo {
 
-namespace key
-{
+namespace key {
 
 // This is not meant to be exhaustive
 
 constexpr int None = -1;
 
-constexpr int EQUALS    = 61;
-constexpr int MINUS     = 45;
+constexpr int EQUALS = 61;
+constexpr int MINUS = 45;
 constexpr int BACKSLASH = 92;
-constexpr int PIPE      = 124;
-constexpr int ENTER     = 10;
-constexpr int UP        = 259;
-constexpr int DOWN      = 258;
-constexpr int LEFT      = 260;
-constexpr int RIGHT     = 261;
-constexpr int COMMA     = 44;
-constexpr int FULLSTOP  = 46;
-constexpr int LBRACKET  = 91; // [
-constexpr int RBRACKET  = 93; // ]
-constexpr int ASTERISK  = 42;
-constexpr int ESC       = 27;
+constexpr int PIPE = 124;
+constexpr int ENTER = 10;
+constexpr int UP = 259;
+constexpr int DOWN = 258;
+constexpr int LEFT = 260;
+constexpr int RIGHT = 261;
+constexpr int COMMA = 44;
+constexpr int FULLSTOP = 46;
+constexpr int LBRACKET = 91; // [
+constexpr int RBRACKET = 93; // ]
+constexpr int ASTERISK = 42;
+constexpr int ESC = 27;
 constexpr int BACKSPACE = 8;
-constexpr int DELETE    = 127;
-constexpr int SPACE     = 32;
+constexpr int DELETE = 127;
+constexpr int SPACE = 32;
 
-constexpr int F1  = 265;
-constexpr int F2  = 266;
-constexpr int F3  = 267;
-constexpr int F4  = 268;
-constexpr int F5  = 269;
-constexpr int F6  = 270;
-constexpr int F7  = 271;
-constexpr int F8  = 272;
-constexpr int F9  = 273;
+constexpr int F1 = 265;
+constexpr int F2 = 266;
+constexpr int F3 = 267;
+constexpr int F4 = 268;
+constexpr int F5 = 269;
+constexpr int F6 = 270;
+constexpr int F7 = 271;
+constexpr int F8 = 272;
+constexpr int F9 = 273;
 constexpr int F10 = 274;
 constexpr int F11 = 275;
 constexpr int F12 = 276;
 
-constexpr int ZERO  = 48;
-constexpr int ONE   = 49;
-constexpr int TWO   = 50;
+constexpr int ZERO = 48;
+constexpr int ONE = 49;
+constexpr int TWO = 50;
 constexpr int THREE = 51;
-constexpr int FOUR  = 52;
-constexpr int FIVE  = 53;
-constexpr int SIX   = 54;
+constexpr int FOUR = 52;
+constexpr int FIVE = 53;
+constexpr int SIX = 54;
 constexpr int SEVEN = 55;
 constexpr int EIGHT = 56;
-constexpr int NINE  = 57;
+constexpr int NINE = 57;
 
 constexpr int A = 65;
 constexpr int B = 66;
@@ -108,40 +106,40 @@ constexpr int y = 121;
 constexpr int z = 122;
 
 // Axis 1 leader-prefixed keys ( 0x1000 = bit 12 is set )
-constexpr int a1_z = z            + 0x1000;  // axis1 zero
-constexpr int a1_m = m            + 0x1000;  // axis1 memorise
-constexpr int a1_g = g            + 0x1000;  // axis1 go to number
-constexpr int a1_r = r            + 0x1000;  // axis1 go to relative offset
-constexpr int a1_s = s            + 0x1000;  // axis1 manual set
-constexpr int a1_f = f            + 0x1000;  // fast return on axis 1
-constexpr int a1_1 = ONE          + 0x1000;  // axis1 speed 1
-constexpr int a1_2 = TWO          + 0x1000;  // axis1 speed 2
-constexpr int a1_3 = THREE        + 0x1000;  // axis1 speed 3
-constexpr int a1_4 = FOUR         + 0x1000;  // axis1 speed 4
-constexpr int a1_5 = FIVE         + 0x1000;  // axis1 speed 5
-constexpr int a1_ENTER = ENTER    + 0x1000;  // axis1 return to memory
-constexpr int a1_MINUS = MINUS    + 0x1000;  // axis1 speed decrease
-constexpr int a1_EQUALS = EQUALS  + 0x1000;  // axis1 speed increase
+constexpr int a1_z = z + 0x1000; // axis1 zero
+constexpr int a1_m = m + 0x1000; // axis1 memorise
+constexpr int a1_g = g + 0x1000; // axis1 go to number
+constexpr int a1_r = r + 0x1000; // axis1 go to relative offset
+constexpr int a1_s = s + 0x1000; // axis1 manual set
+constexpr int a1_f = f + 0x1000; // fast return on axis 1
+constexpr int a1_1 = ONE + 0x1000; // axis1 speed 1
+constexpr int a1_2 = TWO + 0x1000; // axis1 speed 2
+constexpr int a1_3 = THREE + 0x1000; // axis1 speed 3
+constexpr int a1_4 = FOUR + 0x1000; // axis1 speed 4
+constexpr int a1_5 = FIVE + 0x1000; // axis1 speed 5
+constexpr int a1_ENTER = ENTER + 0x1000; // axis1 return to memory
+constexpr int a1_MINUS = MINUS + 0x1000; // axis1 speed decrease
+constexpr int a1_EQUALS = EQUALS + 0x1000; // axis1 speed increase
 
 // Axis 1 leader-prefixed keys ( 0x2000 = bit 13 is set )
-constexpr int a2_z = z            + 0x2000;  // axis2 zero
-constexpr int a2_m = m            + 0x2000;  // axis2 memorise
-constexpr int a2_g = g            + 0x2000;  // axis2 go to number
-constexpr int a2_r = r            + 0x2000;  // axis2 go to relative offset
-constexpr int a2_s = s            + 0x2000;  // axis2 manual set
-constexpr int a2_f = f            + 0x2000;  // fast return on axis 2
-constexpr int a2_1 = ONE          + 0x2000;  // axis2 speed 1
-constexpr int a2_2 = TWO          + 0x2000;  // axis2 speed 2
-constexpr int a2_3 = THREE        + 0x2000;  // axis2 speed 3
-constexpr int a2_4 = FOUR         + 0x2000;  // axis2 speed 4
-constexpr int a2_5 = FIVE         + 0x2000;  // axis2 speed 5
-constexpr int a2_ENTER = ENTER    + 0x2000;  // axis2 return to memory
-constexpr int a2_MINUS = MINUS    + 0x2000;  // axis2 speed decrease
-constexpr int a2_EQUALS = EQUALS  + 0x2000;  // axis2 speed increase
+constexpr int a2_z = z + 0x2000; // axis2 zero
+constexpr int a2_m = m + 0x2000; // axis2 memorise
+constexpr int a2_g = g + 0x2000; // axis2 go to number
+constexpr int a2_r = r + 0x2000; // axis2 go to relative offset
+constexpr int a2_s = s + 0x2000; // axis2 manual set
+constexpr int a2_f = f + 0x2000; // fast return on axis 2
+constexpr int a2_1 = ONE + 0x2000; // axis2 speed 1
+constexpr int a2_2 = TWO + 0x2000; // axis2 speed 2
+constexpr int a2_3 = THREE + 0x2000; // axis2 speed 3
+constexpr int a2_4 = FOUR + 0x2000; // axis2 speed 4
+constexpr int a2_5 = FIVE + 0x2000; // axis2 speed 5
+constexpr int a2_ENTER = ENTER + 0x2000; // axis2 return to memory
+constexpr int a2_MINUS = MINUS + 0x2000; // axis2 speed decrease
+constexpr int a2_EQUALS = EQUALS + 0x2000; // axis2 speed increase
 
 // Axis All leader-prefixed keys ( 0x4000 = bit 14 is set )
-constexpr int aAll_z = z          + 0x4000;  // All axis zero
-constexpr int aAll_ENTER = ENTER  + 0x4000;  // All axis zero
+constexpr int aAll_z = z + 0x4000; // All axis zero
+constexpr int aAll_ENTER = ENTER + 0x4000; // All axis zero
 
 // Functions, leader is F2
 constexpr int f2h = 7000; // help
@@ -151,10 +149,8 @@ constexpr int f2p = 7003; // taPer
 constexpr int f2r = 7004; // X retraction mode
 constexpr int f2o = 7005; // radius mode
 
-
 // Random others
 constexpr int CtrlQ = key::q | 0x10000; // quit
 
 } // namespace key
 } // namespace mgo
-

@@ -12,15 +12,14 @@
 
 // "Model", i.e. program state data
 
-namespace mgo
-{
+namespace mgo {
 
 class IGpio;
 
 const int INF_RIGHT = std::numeric_limits<int>::min();
-const int INF_OUT   = std::numeric_limits<int>::min();
-const int INF_LEFT  = std::numeric_limits<int>::max();
-const int INF_IN    = std::numeric_limits<int>::max();
+const int INF_OUT = std::numeric_limits<int>::min();
+const int INF_LEFT = std::numeric_limits<int>::max();
+const int INF_IN = std::numeric_limits<int>::max();
 
 constexpr double DEG_TO_RAD = 3.14159265359 / 180.0;
 
@@ -31,8 +30,7 @@ constexpr float SIDEFEED = INFEED * 0.5657727781877700776025887010584;
 
 // "Modes" allow for special behaviour (like threading and tapering)
 // or completely modal-like input / display (like help, or setup)
-enum class Mode
-{
+enum class Mode {
     None,
     Help,
     Setup,
@@ -54,8 +52,7 @@ enum class Mode
 // memorise X only. "z<Enter>" means go to the stored Z value only.
 // Pressing "m" or "<Enter>" will apply to both axes. There won't
 // be a single keypress for zeroing both axes at once - use "zz" and "xz".
-enum class KeyMode
-{
+enum class KeyMode {
     None,
     Axis1,
     Axis2,
@@ -63,65 +60,63 @@ enum class KeyMode
     Function
 };
 
-enum class XDirection
-{
-    Outwards,   // towards operator, away from centre
-    Inwards     // away from operator, towards centre
+enum class XDirection {
+    Outwards, // towards operator, away from centre
+    Inwards // away from operator, towards centre
 };
 
-enum class ZDirection
-{
+enum class ZDirection {
     Left,
     Right
 };
 
-enum class Axis
-{
+enum class Axis {
     Axis1,
     Axis2
 };
 
-class Model
-{
+class Model {
 public:
-    Model(  IGpio& gpio,
-            mgo::IConfigReader& config )
-        : m_gpio( gpio ), m_config( config ) {}
+    Model(IGpio& gpio, mgo::IConfigReader& config)
+        : m_gpio(gpio)
+        , m_config(config)
+    {
+    }
 
     void initialise();
 
     // This should be repeatedly called from the run loop
     void checkStatus();
-    void changeMode( Mode mode );
+    void changeMode(Mode mode);
     void stopAllMotors();
-    void takeUpZBacklash( ZDirection direction );
-    void startSynchronisedXMotorForTaper(  ZDirection direction );
-    void startSynchronisedXMotorForRadius( ZDirection direction );
+    void takeUpZBacklash(ZDirection direction);
+    void startSynchronisedXMotorForTaper(ZDirection direction);
+    void startSynchronisedXMotorForRadius(ZDirection direction);
 
-    void axis1GoToStep( long step );
-    void axis1GoToPosition( double pos );
-    void axis1GoToOffset( double pos );
+    void axis1GoToStep(long step);
+    void axis1GoToPosition(double pos);
+    void axis1GoToOffset(double pos);
     void axis1GoToPreviousPosition();
-    void axis1CheckForSynchronisation( ZDirection direction );
-    void axis1CheckForSynchronisation( long step );
+    void axis1CheckForSynchronisation(ZDirection direction);
+    void axis1CheckForSynchronisation(long step);
     void axis1GoToCurrentMemory();
-    void axis1Nudge( ZDirection direction );
+    void axis1Nudge(ZDirection direction);
     void axis1Zero();
     void axis1SpeedDecrease();
     void axis1SpeedIncrease();
     void axis1FastReturn();
-    void axis1SetSpeed( double speed );
+    void axis1SetSpeed(double speed);
     void axis1Wait();
     void axis1Stop();
     void axis1StorePosition();
-    void axis1Move( ZDirection direction );
+    void axis1Move(ZDirection direction);
     void axis1SpeedPreset();
     void axis1SaveBreadcrumbPosition();
     void axis1ClearBreadcrumbs();
 
-    void axis2GoToPosition( double pos );
-    void axis2GoToOffset( double pos );
-    void axis2SetSpeed( double speed );
+    void axis2GoToPosition(double pos);
+    void axis2GoToOffset(double pos);
+    void axis2SetSpeed(double speed);
     void axis2Wait();
     void axis2Stop();
     void axis2Zero();
@@ -129,40 +124,40 @@ public:
     void axis2GoToCurrentMemory();
     void axis2SpeedDecrease();
     void axis2SpeedIncrease();
-    void axis2Nudge( XDirection direction );
+    void axis2Nudge(XDirection direction);
     void axis2FastReturn();
     void axis2Retract();
     void axis2StorePosition();
-    void axis2Move( XDirection direction );
+    void axis2Move(XDirection direction);
     void axis2SpeedPreset();
 
     void repeatLastRelativeMove();
     void diameterIsSet();
 
     // Getters/setters:
-    XDirection  getRetractionDirection() const;
-    void        setRetractionDirection( XDirection direction );
+    XDirection getRetractionDirection() const;
+    void setRetractionDirection(XDirection direction);
 
     bool getIsAxis2Retracted() const;
-    void setIsAxis2Retracted( bool flag );
+    void setIsAxis2Retracted(bool flag);
 
     KeyMode getKeyMode() const;
-    void setKeyMode( KeyMode mode );
+    void setKeyMode(KeyMode mode);
 
     Mode getEnabledFunction() const;
-    void setEnabledFunction( Mode mode );
+    void setEnabledFunction(Mode mode);
 
     Mode getCurrentDisplayMode() const;
-    void setCurrentDisplayMode( Mode mode );
+    void setCurrentDisplayMode(Mode mode);
 
     double getRadius() const;
-    void   setRadius( double radius );
+    void setRadius(double radius);
 
     double getTaperAngle() const;
-    void   setTaperAngle( double taperAngle );
+    void setTaperAngle(double taperAngle);
 
-    int  getKeyPressed() const;
-    void setKeyPressed( int key );
+    int getKeyPressed() const;
+    void setKeyPressed(int key);
 
     bool isShuttingDown() const;
     void shutDown();
@@ -172,7 +167,7 @@ public:
 
     std::string getInputString() const;
     std::string& getInputString();
-    void setInputString( const std::string& str );
+    void setInputString(const std::string& str);
 
     std::string getWarning() const;
     std::string getAxis1Status() const;
@@ -187,13 +182,13 @@ public:
     void selectNextMemorySlot();
     std::size_t getCurrentMemorySlot() const;
 
-    long getAxis1Memory( std::size_t index ) const;
-    long getAxis2Memory( std::size_t index ) const;
+    long getAxis1Memory(std::size_t index) const;
+    long getAxis2Memory(std::size_t index) const;
     void clearAllAxis2Memories();
 
-    void setAxis1MotorSpeed( double speed );
-    void setAxis2MotorSpeed( double speed );
-    void setAxis2Position( double mm );
+    void setAxis1MotorSpeed(double speed);
+    void setAxis2MotorSpeed(double speed);
+    void setAxis2Position(double mm);
     void resetMotorThreads();
     double getAxis1MotorPosition() const;
     double getAxis2MotorPosition() const;
@@ -202,8 +197,8 @@ public:
     double getAxis1MotorCurrentStep() const;
     double getAxis2MotorCurrentStep() const;
 
-    std::string convertAxis1StepToPosition( long step ) const;
-    std::string convertAxis2StepToPosition( long step ) const;
+    std::string convertAxis1StepToPosition(long step) const;
+    std::string convertAxis2StepToPosition(long step) const;
 
     float getRotaryEncoderRpm() const;
 
@@ -214,53 +209,52 @@ public:
     const IConfigReader& config() const;
 
 private:
-
     IGpio& m_gpio;
     IConfigReader& m_config;
     std::unique_ptr<mgo::RotaryEncoder> m_rotaryEncoder;
     std::unique_ptr<mgo::StepperMotor> m_axis1Motor;
     std::unique_ptr<mgo::StepperMotor> m_axis2Motor;
-    std::vector<long> m_axis1Memory{ INF_RIGHT, INF_RIGHT, INF_RIGHT, INF_RIGHT };
-    std::vector<long> m_axis2Memory{ INF_RIGHT, INF_RIGHT, INF_RIGHT, INF_RIGHT };
-    std::size_t m_currentMemory{ 0 };
-    std::size_t m_threadPitchIndex{ 0 };
-    std::string m_generalStatus{ "Press F1 for help" };
-    std::string m_axis1Status{ "stopped" };
-    std::string m_axis2Status{ "stopped" };
+    std::vector<long> m_axis1Memory { INF_RIGHT, INF_RIGHT, INF_RIGHT, INF_RIGHT };
+    std::vector<long> m_axis2Memory { INF_RIGHT, INF_RIGHT, INF_RIGHT, INF_RIGHT };
+    std::size_t m_currentMemory { 0 };
+    std::size_t m_threadPitchIndex { 0 };
+    std::string m_generalStatus { "Press F1 for help" };
+    std::string m_axis1Status { "stopped" };
+    std::string m_axis2Status { "stopped" };
     std::string m_warning;
     std::string m_input; // general-purpose string for user-entered data
-    bool        m_quit{ false };
-    bool        m_shutdown{ false };
-    float       m_previousZSpeed{ 40.f };
-    bool        m_axis1FastReturning{ false };
-    bool        m_axis2FastReturning{ false };
-    int         m_keyPressed{ 0 };
-    double      m_taperAngle{ 0.0 };
-    double      m_radius{ 0.0 };
-    float       m_taperPreviousXSpeed{ 40.f };
+    bool m_quit { false };
+    bool m_shutdown { false };
+    float m_previousZSpeed { 40.f };
+    bool m_axis1FastReturning { false };
+    bool m_axis2FastReturning { false };
+    int m_keyPressed { 0 };
+    double m_taperAngle { 0.0 };
+    double m_radius { 0.0 };
+    float m_taperPreviousXSpeed { 40.f };
     // Stores the current function displayed on the screen:
-    Mode        m_currentDisplayMode{ Mode::None };
+    Mode m_currentDisplayMode { Mode::None };
     // Stores current function, i.e. whether tapering or threading is on
     // we use the same enum class as "mode"
-    Mode        m_enabledFunction{ Mode::None };
-    KeyMode     m_keyMode{ KeyMode::None };
+    Mode m_enabledFunction { Mode::None };
+    KeyMode m_keyMode { KeyMode::None };
     // Used to store position to return to after retract:
-    long        m_xOldPosition;
-    bool        m_axis2Retracted{ false };
-    float       m_previousXSpeed{ 40.f };
-    bool        m_fastRetracting{ false };
+    long m_xOldPosition;
+    bool m_axis2Retracted { false };
+    float m_previousXSpeed { 40.f };
+    bool m_fastRetracting { false };
 
-    bool        m_zWasRunning{ false };
-    bool        m_xWasRunning{ false };
-    bool        m_spindleWasRunning{ false };
+    bool m_zWasRunning { false };
+    bool m_xWasRunning { false };
+    bool m_spindleWasRunning { false };
 
-    XDirection  m_xRetractionDirection{ XDirection::Outwards };
+    XDirection m_xRetractionDirection { XDirection::Outwards };
     // Once the user has set the x position once then we use
     // the status bar to display the effective diameter
-    bool        m_xDiameterSet{ false };
-    double      m_axis1LastRelativeMove{ 0.0 };
-    double      m_axis2LastRelativeMove{ 0.0 };
-    Axis        m_lastRelativeMoveAxis;
+    bool m_xDiameterSet { false };
+    double m_axis1LastRelativeMove { 0.0 };
+    double m_axis2LastRelativeMove { 0.0 };
+    Axis m_lastRelativeMoveAxis;
 
     // "Breadcrumb" trail of positions for Z axis:
     std::stack<double> m_axis1PreviousPositions;

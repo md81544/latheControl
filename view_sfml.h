@@ -7,18 +7,17 @@
 
 #include <memory>
 
-namespace mgo
-{
+namespace mgo {
 
-class ViewSfml final : public IView
-{
+class ViewSfml final : public IView {
 public:
-    virtual void initialise( const Model& ) override;
+    virtual void initialise(const Model&) override;
     virtual void close() override;
     virtual int getInput() override;
-    virtual void updateDisplay( const Model& ) override;
+    virtual void updateDisplay(const Model&) override;
     // Non-overrides:
-    void updateTextFromModel( const Model& );
+    void updateTextFromModel(const Model&);
+
 private:
     std::unique_ptr<sf::RenderWindow> m_window;
     std::unique_ptr<sf::Font> m_font;
@@ -59,7 +58,7 @@ private:
     std::vector<std::unique_ptr<sf::Text>> m_txtAxis1MemoryValue;
     std::vector<std::unique_ptr<sf::Text>> m_txtAxis2MemoryValue;
 
-    std::size_t m_iteration{0};
+    std::size_t m_iteration { 0 };
 };
 
 } // namespace mgo
