@@ -1,6 +1,7 @@
 #pragma once
 
 #include "configreader.h"
+#include "linearscale.h"
 #include "rotaryencoder.h"
 #include "stepperControl/steppermotor.h"
 
@@ -212,6 +213,7 @@ private:
     IGpio& m_gpio;
     IConfigReader& m_config;
     std::unique_ptr<mgo::RotaryEncoder> m_rotaryEncoder;
+    std::unique_ptr<mgo::LinearScale> m_linearScaleAxis1;
     std::unique_ptr<mgo::StepperMotor> m_axis1Motor;
     std::unique_ptr<mgo::StepperMotor> m_axis2Motor;
     std::vector<long> m_axis1Memory { INF_RIGHT, INF_RIGHT, INF_RIGHT, INF_RIGHT };

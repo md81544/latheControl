@@ -40,7 +40,7 @@ public:
         }
         m_leapTickCountdown = m_revolutionsPerLeapTick;
 
-        m_gpio.setEncoderCallback(m_pinA, m_pinB, staticCallback, this);
+        m_gpio.setRotaryEncoderCallback(m_pinA, m_pinB, staticCallback, this);
     }
 
     static void staticCallback(int pin, int level, uint32_t tick, void* userData);

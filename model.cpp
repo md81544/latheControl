@@ -62,6 +62,12 @@ void Model::initialise()
         m_config.readDouble("RotaryEncoderGearingNumerator", 35.0)
             / m_config.readDouble("RotaryEncoderGearingDivisor", 30.0));
 
+    m_linearScaleAxis1 = std::make_unique<mgo::LinearScale>(
+        m_gpio,
+        m_config.readLong("LinearScaleAxis1GpioPinA", 5),
+        m_config.readLong("LinearScaleAxis1GpioPinB", 6),
+        m_config.readLong("LinearScaleAxis1StepsPerMM", 200));
+
     // We need to ensure that the motors are in a known position with regard to
     // backlash - which means moving them initially by the amount of
     // configured backlash compensation to ensure any backlash is taken up
@@ -84,6 +90,9 @@ void Model::initialise()
 
 void Model::checkStatus()
 {
+    float zpos = m_linearScaleAxis1->getPositionInMm();
+    MGOLOG("Z Pos = " << zpos << " mm");
+
     float chuckRpm = m_rotaryEncoder->getRpm();
 #ifndef FAKE
     if (m_spindleWasRunning && chuckRpm < 30.f) {

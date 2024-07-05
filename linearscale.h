@@ -21,7 +21,7 @@ public:
         , m_pinB(pinB)
         , m_stepsPerMm(stepsPerMm)
     {
-        m_gpio.setEncoderCallback(m_pinA, m_pinB, staticCallback, this);
+        m_gpio.setLinearScaleAxis1Callback(m_pinA, m_pinB, staticCallback, this);
     }
 
     static void staticCallback(int pin, int level, uint32_t tick, void* userData);

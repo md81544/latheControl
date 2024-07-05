@@ -5,28 +5,12 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "g++ - Build and debug active file",
-            "type": "cppdbg",
+            "type": "lldb",
             "request": "launch",
-            "program": "${workspaceFolder}/build/lc",
+            "name": "Debug",
+            "program": "${workspaceFolder}/lc",
             "args": [],
-            "stopAtEntry": false,
-            "cwd": "${workspaceFolder}",
-            "environment": [],
-            "externalConsole": false,
-            "MIMode": "gdb",
-            "setupCommands": [
-                {
-                    "description": "Enable pretty-printing for gdb",
-                    "text": "-enable-pretty-printing",
-                    "ignoreFailures": true
-                }
-            ],
-            "preLaunchTask": "g++ build active file",
-            // Note that the following is a symlink to
-            // ~/.vscode/extensions/ms-vscode.cpptools-1.18.5-darwin-arm64/debugAdapters/lldb-mi/bin/lldb-mi
-            // this will change if/when that extension gets updated
-            "miDebuggerPath": "${workspaceFolder}/lldb-mi"
+            "cwd": "${workspaceFolder}"
         },
     ]
 }

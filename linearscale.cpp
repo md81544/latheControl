@@ -37,7 +37,7 @@ void LinearScale::callback(int pin, int level, uint32_t /*tick*/)
 
 float LinearScale::getPositionInMm()
 {
-    return m_stepCount / m_stepsPerMm;
+    return m_stepCount / static_cast<float>(m_stepsPerMm);
 }
 
 } // end namespace
