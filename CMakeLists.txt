@@ -6,6 +6,7 @@ enable_testing()
 add_library(shared_with_test OBJECT
         stepperControl/steppermotor.cpp
         rotaryencoder.cpp
+        linearscale.cpp
         log.cpp
         model.cpp
     )
