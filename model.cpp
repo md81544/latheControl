@@ -235,6 +235,9 @@ void Model::stopAllMotors()
     m_axis2Motor->wait();
     m_axis1Status = "stopped";
     m_axis2Status = "stopped";
+#ifdef FAKE
+    m_gpio.scaleStop();
+#endif
 }
 
 void Model::takeUpZBacklash(ZDirection direction)
@@ -322,17 +325,33 @@ void Model::axis1GoToStep(long step)
 {
     axis1CheckForSynchronisation(step);
     if (m_enabledFunction == Mode::Threading) {
-        m_rotaryEncoder->callbackAtZeroDegrees([&]() { m_axis1Motor->goToStep(step); });
+        m_rotaryEncoder->callbackAtZeroDegrees([&]() {
+            m_axis1Motor->goToStep(step);
+        });
     } else {
         m_axis1Motor->goToStep(step);
     }
+#ifdef FAKE
+    // For testing/fake only, we tell the mocked linear scale on the z axis to move
+    double mm = step * m_axis1Motor->getConversionFactor();
+    uint32_t linearScaleSteps = mm * m_config.readDouble("LinearScaleAxis1StepsPerMM", 200);
+    // Need to figure out how fast the mock linear scale should be 'moving'
+    m_gpio.scaleGoToPosition(linearScaleSteps);
+    double motorSpeedMmPerSec = getAxis1MotorSpeed() / 60.0;
+    // Say we are moving at 0.5 mm/sec then steps per sec should be 200 * 0.5
+    // So motorSpeed * stepsPerMm
+    m_gpio.scaleSetSpeedStepsPerSec(
+        motorSpeedMmPerSec * m_config.readDouble("LinearScaleAxis1StepsPerMM", 200));
+#endif
 }
 
 void Model::axis1GoToPosition(double pos)
 {
     axis1CheckForSynchronisation(pos / m_axis1Motor->getConversionFactor());
     if (m_enabledFunction == Mode::Threading) {
-        m_rotaryEncoder->callbackAtZeroDegrees([&]() { m_axis1Motor->goToPosition(pos); });
+        m_rotaryEncoder->callbackAtZeroDegrees([&]() {
+            m_axis1Motor->goToPosition(pos);
+        });
     } else {
         m_axis1Motor->goToPosition(pos);
     }
@@ -408,8 +427,9 @@ void Model::axis1GoToCurrentMemory()
     // If threading, we need to start at the same point each time - we
     // wait for zero degrees on the chuck before starting:
     if (m_enabledFunction == Mode::Threading) {
-        m_rotaryEncoder->callbackAtZeroDegrees(
-            [&]() { axis1GoToStep(m_axis1Memory.at(m_currentMemory)); });
+        m_rotaryEncoder->callbackAtZeroDegrees([&]() {
+            axis1GoToStep(m_axis1Memory.at(m_currentMemory));
+        });
     } else {
         axis1GoToStep(m_axis1Memory.at(m_currentMemory));
     }

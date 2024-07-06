@@ -30,6 +30,9 @@ public:
 
     float getPositionInMm();
 
+    // Sets the current step position as zero
+    void setZero();
+
 private:
     IGpio& m_gpio;
     int m_pinA;
@@ -40,6 +43,7 @@ private:
     int m_stepsPerMm { 200 };
     int32_t m_stepCount { 0 };
     int m_previousPhase { 0 };
+    int32_t m_zeroPosition{0}; // the step count which is counted as 0.00 mm
 };
 
 } // end namespace
