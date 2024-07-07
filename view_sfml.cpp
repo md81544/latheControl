@@ -240,6 +240,10 @@ void ViewSfml::initialise(const Model& model)
     m_txtXRetractDirection->setPosition({ 860, 165 });
     m_txtXRetractDirection->setFillColor(sf::Color::Red);
     m_txtXRetractDirection->setString("-X RTRCT");
+
+    m_txtAxis1LinearScalePos = std::make_unique<sf::Text>("", *m_font, 20);
+    m_txtAxis1LinearScalePos->setPosition({ 550, 170 });
+    m_txtAxis1LinearScalePos->setFillColor({ 209, 209, 50 });
 }
 
 void ViewSfml::close()
@@ -287,6 +291,7 @@ void ViewSfml::updateDisplay(const Model& model)
             m_window->draw(*m_txtAxis1Speed);
             m_window->draw(*m_txtAxis1Status);
             m_window->draw(*m_txtAxis1MemoryLabel);
+            m_window->draw(*m_txtAxis1LinearScalePos);
         }
         if (!model.config().readBool("DisableAxis2", false)) {
             m_window->draw(*m_txtAxis2Label);
@@ -379,6 +384,11 @@ void ViewSfml::updateTextFromModel(const Model& model)
     } else if (model.getEnabledFunction() == Mode::Radius) {
         m_txtTaperOrRadius->setString(fmt::format("Radius: {}", model.getRadius()));
     }
+
+    m_txtAxis1LinearScalePos->setString(fmt::format(
+        "{} Scale: {:<.3f} mm",
+        model.config().read("Axis1Label", "Z"),
+        model.getAxis1LinearScalePosMm()));
 
     for (std::size_t n = 0; n < m_txtMemoryLabel.size(); ++n) {
         if (model.getCurrentMemorySlot() == n) {

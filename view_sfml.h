@@ -39,6 +39,7 @@ private:
     std::unique_ptr<sf::Text> m_txtAxis2Status;
     std::unique_ptr<sf::Text> m_txtWarning;
     std::unique_ptr<sf::Text> m_txtTaperOrRadius;
+    std::unique_ptr<sf::Text> m_txtAxis1LinearScalePos;
 
     // Text items which are displayed sometimes:
     std::unique_ptr<sf::Text> m_txtMode;

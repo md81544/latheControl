@@ -202,6 +202,7 @@ public:
     std::string convertAxis2StepToPosition(long step) const;
 
     float getRotaryEncoderRpm() const;
+    float getAxis1LinearScalePosMm() const;
 
     // This is called when the user presses ENTER when
     // inputting a mode parameter (e.g. taper angle)

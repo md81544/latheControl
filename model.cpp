@@ -90,9 +90,6 @@ void Model::initialise()
 
 void Model::checkStatus()
 {
-    float zpos = m_linearScaleAxis1->getPositionInMm();
-    MGOLOG("Z Pos = " << zpos << " mm");
-
     float chuckRpm = m_rotaryEncoder->getRpm();
 #ifndef FAKE
     if (m_spindleWasRunning && chuckRpm < 30.f) {
@@ -1126,6 +1123,15 @@ float Model::getRotaryEncoderRpm() const
         return 0.f;
     }
     return m_rotaryEncoder->getRpm();
+}
+
+float Model::getAxis1LinearScalePosMm() const
+{
+    if (m_linearScaleAxis1) {
+        return m_linearScaleAxis1->getPositionInMm();
+    } else {
+        return 0.f;
+    }
 }
 
 void Model::acceptInputValue()
