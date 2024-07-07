@@ -297,14 +297,14 @@ TEST_CASE("Scale:   Forward and reverse")
     // similar to the mock rotary encoder callbacker
     REQUIRE(scale.getPositionInMm() == 0.0);
     gpio.scaleSetSpeedStepsPerSec(400.0);
-    gpio.scaleGoToPosition(200);
+    gpio.scaleGoToPositionMm(1.0);
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
     // We expect to see a non-zero value. The value returned is timing dependent so
     // we just expect it to be greater than it was before.
     double mm = scale.getPositionInMm();
     REQUIRE(mm > 0.0);
     // Now reverse:
-    gpio.scaleGoToPosition(0);
+    gpio.scaleGoToPositionMm(0.0);
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
     REQUIRE(scale.getPositionInMm() < mm);
 }
@@ -321,14 +321,35 @@ TEST_CASE("Scale:   Zeroing")
     // similar to the mock rotary encoder callbacker
     REQUIRE(scale.getPositionInMm() == 0.0);
     gpio.scaleSetSpeedStepsPerSec(400.0);
-    gpio.scaleGoToPosition(200);
+    gpio.scaleGoToPositionMm(1.0);
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
     double mm = scale.getPositionInMm();
     REQUIRE(mm != 0.0);
     scale.setZeroMm();
     REQUIRE(scale.getPositionInMm() == 0.0);
-    gpio.scaleGoToPosition(0);
+    gpio.scaleGoToPositionMm(0.0);
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
     double newMm = scale.getPositionInMm();
     REQUIRE(newMm < 0.0);
+}
+
+TEST_CASE("Scale:   Sync with motor")
+{
+    mgo::MockConfigReader config;
+    mgo::MockGpio gpio(false, config);
+    // Note motor's conversion factor is 0.01, so 100 steps is 1.0mm
+    mgo::StepperMotor motor(gpio, 0, 0, 0, 1'000, 0.01, 10'000.0, true, 200);
+    mgo::LinearScale scale(gpio, 1, 2, 200);
+    motor.setRpm(500.0);
+    REQUIRE(scale.getPositionInMm() == 0.0);
+    motor.goToStep(100);
+    motor.wait();
+    REQUIRE(motor.getCurrentStep() == 100);
+    double mm = scale.getPositionInMm();
+    REQUIRE(mm > 0.0);
+    motor.goToStep(50); // This is a reverse now
+    motor.wait();
+    REQUIRE(motor.getCurrentStep() == 50);
+    mm = scale.getPositionInMm();
+    REQUIRE(mm == Approx(0.5));
 }

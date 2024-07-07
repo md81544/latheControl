@@ -32,6 +32,10 @@ void Model::initialise()
         / m_config.readDouble("Axis1ConversionDivisor", 1'000.0);
     double maxZSpeed = m_config.readDouble("Axis1MaxMotorSpeed", 1'000.0);
     long axis1StepsPerRevolution = m_config.readLong("Axis1StepsPerRev", 1'000);
+    bool usingMockLinearScale = false;
+#ifdef FAKE
+    usingMockLinearScale = true;
+#endif
     m_axis1Motor = std::make_unique<mgo::StepperMotor>(
         m_gpio,
         m_config.readLong("Axis1GpioStepPin", 8),
@@ -39,7 +43,9 @@ void Model::initialise()
         m_config.readLong("Axis1GpioEnablePin", 0),
         axis1StepsPerRevolution,
         axis1ConversionFactor,
-        std::abs(maxZSpeed / axis1ConversionFactor / axis1StepsPerRevolution));
+        std::abs(maxZSpeed / axis1ConversionFactor / axis1StepsPerRevolution),
+        usingMockLinearScale,
+        m_config.readLong("LinearScaleAxis1StepsPerMM"));
 
     double axis2ConversionFactor = m_config.readDouble("Axis2ConversionNumerator", -1.0)
         / m_config.readDouble("Axis2ConversionDivisor", 1'000.0);
@@ -328,18 +334,6 @@ void Model::axis1GoToStep(long step)
     } else {
         m_axis1Motor->goToStep(step);
     }
-#ifdef FAKE
-    // For testing/fake only, we tell the mocked linear scale on the z axis to move
-    double mm = step * m_axis1Motor->getConversionFactor();
-    uint32_t linearScaleSteps = mm * m_config.readDouble("LinearScaleAxis1StepsPerMM", 200);
-    // Need to figure out how fast the mock linear scale should be 'moving'
-    m_gpio.scaleGoToPosition(linearScaleSteps);
-    double motorSpeedMmPerSec = getAxis1MotorSpeed() / 60.0;
-    // Say we are moving at 0.5 mm/sec then steps per sec should be 200 * 0.5
-    // So motorSpeed * stepsPerMm
-    m_gpio.scaleSetSpeedStepsPerSec(
-        motorSpeedMmPerSec * m_config.readDouble("LinearScaleAxis1StepsPerMM", 200));
-#endif
 }
 
 void Model::axis1GoToPosition(double pos)
