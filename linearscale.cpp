@@ -40,7 +40,7 @@ float LinearScale::getPositionInMm()
     return (m_stepCount - m_zeroPosition) / static_cast<float>(m_stepsPerMm);
 }
 
-void LinearScale::setZero()
+void LinearScale::setZeroMm()
 {
     m_zeroPosition = m_stepCount;
 }

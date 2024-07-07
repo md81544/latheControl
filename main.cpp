@@ -29,11 +29,13 @@ int main(int argc, char* argv[])
 
         mgo::ConfigReader config(configFile);
 
-#ifdef FAKE
-        mgo::MockGpio gpio(false, config);
-#else
-        mgo::Gpio gpio;
-#endif
+        // clang-format off
+        #ifdef FAKE
+            mgo::MockGpio gpio(false, config);
+        #else
+            mgo::Gpio gpio;
+        #endif
+        // clang-format on
 
         mgo::Model model(gpio, config);
 

@@ -48,12 +48,14 @@ void Controller::run()
         if (m_model->isShuttingDown()) {
             // Stop the motor threads
             m_model->resetMotorThreads();
-// Note the command used for shutdown should be made passwordless
-// in the /etc/sudoers files
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-result"
+            // clang-format off
+            // Note the command used for shutdown should be made passwordless
+            // in the /etc/sudoers files
+            #pragma GCC diagnostic push
+            #pragma GCC diagnostic ignored "-Wunused-result"
             system("sudo shutdown -h now &");
-#pragma GCC diagnostic pop
+            #pragma GCC diagnostic pop
+            // clang-format on
         }
 
         // Small delay just to avoid the UI loop spinning
@@ -304,11 +306,13 @@ void Controller::processKeyPress()
                 }
             case key::ASTERISK: // shutdown
                 {
-#ifndef FAKE
+                    // clang-format off
+                    #ifndef FAKE
                     m_model->stopAllMotors();
                     m_model->quit();
                     m_model->shutDown();
-#endif
+                    #endif
+                    // clang-format on
                     break;
                 }
             case key::F1: // help mode
@@ -374,7 +378,7 @@ void Controller::processKeyPress()
                     m_model->changeMode(Mode::None);
                     break;
                 }
-            default: // e.g. space bar to stop all motors
+            default: // e.g. key::SPACE to stop all motors
                 {
                     m_model->stopAllMotors();
                     break;

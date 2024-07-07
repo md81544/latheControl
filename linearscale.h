@@ -7,6 +7,7 @@
 #include "stepperControl/igpio.h"
 
 #include <atomic>
+#include <cassert>
 #include <cstdint>
 #include <functional>
 #include <ostream>
@@ -21,6 +22,7 @@ public:
         , m_pinB(pinB)
         , m_stepsPerMm(stepsPerMm)
     {
+        assert(pinA != pinB);
         m_gpio.setLinearScaleAxis1Callback(m_pinA, m_pinB, staticCallback, this);
     }
 
@@ -31,19 +33,19 @@ public:
     float getPositionInMm();
 
     // Sets the current step position as zero
-    void setZero();
+    void setZeroMm();
 
 private:
     IGpio& m_gpio;
     int m_pinA;
     int m_pinB;
-    int m_levelA;
-    int m_levelB;
+    int m_levelA { 0 };
+    int m_levelB { 0 };
     int m_lastPin { 0 };
     int m_stepsPerMm { 200 };
     int32_t m_stepCount { 0 };
     int m_previousPhase { 0 };
-    int32_t m_zeroPosition{0}; // the step count which is counted as 0.00 mm
+    int32_t m_zeroPosition { 0 }; // the step count which is counted as 0.00 mm
 };
 
 } // end namespace
