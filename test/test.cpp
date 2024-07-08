@@ -6,6 +6,7 @@
 #include "stepperControl/steppermotor.h"
 
 #include <chrono>
+#include <cmath>
 #include <thread>
 
 #define CATCH_CONFIG_MAIN
@@ -345,11 +346,15 @@ TEST_CASE("Scale:   Sync with motor")
     motor.goToStep(100);
     motor.wait();
     REQUIRE(motor.getCurrentStep() == 100);
+    // Small wait just to let the mock linear scale move
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
     double mm = scale.getPositionInMm();
     REQUIRE(mm > 0.0);
     motor.goToStep(50); // This is a reverse now
     motor.wait();
     REQUIRE(motor.getCurrentStep() == 50);
+    // Small wait just to let the mock linear scale move
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
     mm = scale.getPositionInMm();
-    REQUIRE(mm == Approx(0.5));
+    REQUIRE(std::abs(mm - 0.5) < 0.1);
 }
