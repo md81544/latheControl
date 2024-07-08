@@ -45,7 +45,7 @@ void Model::initialise()
         axis1ConversionFactor,
         std::abs(maxZSpeed / axis1ConversionFactor / axis1StepsPerRevolution),
         usingMockLinearScale,
-        m_config.readLong("LinearScaleAxis1StepsPerMM"));
+        m_config.readLong("LinearScaleAxis1StepsPerMM", 200));
 
     double axis2ConversionFactor = m_config.readDouble("Axis2ConversionNumerator", -1.0)
         / m_config.readDouble("Axis2ConversionDivisor", 1'000.0);
