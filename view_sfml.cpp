@@ -223,8 +223,8 @@ void ViewSfml::initialise(const Model& model)
     m_txtWarning->setPosition({ 20, 510 });
     m_txtWarning->setFillColor(sf::Color::Red);
 
-    m_txtTaperOrRadius = std::make_unique<sf::Text>("", *m_font, 30);
-    m_txtTaperOrRadius->setPosition({ 550, 160 });
+    m_txtTaperOrRadius = std::make_unique<sf::Text>("", *m_font, 20);
+    m_txtTaperOrRadius->setPosition({ 860, 75 });
     m_txtTaperOrRadius->setFillColor(sf::Color::Red);
 
     m_txtNotification = std::make_unique<sf::Text>("", *m_font, 25);
