@@ -1,3 +1,8 @@
+Now that we have support for reading a linear scale on the Z-axis
+we need to consider how best to use it. Should position come solely
+from that, rather than continuing to rely on "dead reckoning"?
+Or should it be used just to make corrections to the expected position?
+
 Address the "Mode" concept which currently provides pseudo-modal
 "dialogs" interleaved into program flow, and is proving difficult
 to maintain. If all motors are stopped during a "dialog" then we
@@ -35,11 +40,6 @@ than having to use taper mode)
 
 All "Axis1..." and "Axis2..." references should be replaced with an
 array to allow for future expansion.
-
-Add ability to pick up existing memories if the stepper loses the plot
-
-Think about incorporating reading from scales to make position reporting
-accurate rather than estimated
 
 Rotary encoder doesn't currently do anything with rotation direction,
 so getPositionDegrees() fails to take into account manual back-rotation
