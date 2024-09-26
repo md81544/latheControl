@@ -7,6 +7,8 @@ I'd like to see the ability to use a gamepad to control many functions. For inst
 the D-pad can be the nudge. Not sure about how safe some usage might be though - for instance
 if the Z-axis was controlled by left/right on one stick and X by up/down, it might be possible to
 accidentally engage both. Some thought required.
+  - Or an ESP-32 acting as a bluetooth keyboard? With just some choice buttons for a remote
+    controller?
 
 Address the "Mode" concept which currently provides pseudo-modal
 "dialogs" interleaved into program flow, and is proving difficult
