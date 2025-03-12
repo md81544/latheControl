@@ -293,7 +293,7 @@ TEST_CASE("Scale:   Forward and reverse")
     // Important that we specify two fictitious but distinct pin numbers for the
     // scale object so that phase detection actually happens:
     mgo::LinearScale scale(gpio, 1, 2, 200);
-    // The scale class doesn't have any functions to move (obvioulsy)
+    // The scale class doesn't have any functions to move (obviously)
     // but the mock gpio class has some mock-only commands to fake the motion
     // similar to the mock rotary encoder callbacker
     REQUIRE(scale.getPositionInMm() == 0.0);
