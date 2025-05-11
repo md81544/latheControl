@@ -2,7 +2,7 @@ project (unit_tests)
 
 add_executable(unit_test test.cpp)
 
-target_compile_options(unit_test PRIVATE -std=c++17 -g -Wall -Wextra -Werror -Wpedantic)
+target_compile_options(unit_test PRIVATE -std=c++23 -g -Wall -Wextra -Werror -Wpedantic)
 
 target_include_directories(unit_test PRIVATE ..)
 

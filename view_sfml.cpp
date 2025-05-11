@@ -5,7 +5,7 @@
 #include "threadpitches.h"
 
 #include <cassert>
-#include <fmt/format.h>
+#include <format>
 
 namespace mgo {
 
@@ -16,7 +16,7 @@ std::string formatMotorPosition(double mm)
     if (std::abs(mm) < 0.001) {
         mm = 0.0;
     }
-    return fmt::format("{: >8.3f}", mm);
+    return std::format("{: >8.3f}", mm);
 }
 
 int convertKeyCode(sf::Event event)
@@ -172,7 +172,7 @@ void ViewSfml::initialise(const Model& model)
         auto lbl = std::make_unique<sf::Text>(*m_font, "", 30);
         lbl->setPosition({ 60.f + n * 200.f, 210 });
         lbl->setFillColor({ 128, 128, 128 });
-        lbl->setString(fmt::format("    Mem {}", n + 1));
+        lbl->setString(std::format("    Mem {}", n + 1));
         m_txtMemoryLabel.push_back(std::move(lbl));
         auto valZ = std::make_unique<sf::Text>(*m_font, "", 30);
         valZ->setPosition({ 60.f + n * 200.f, 245 });
@@ -373,30 +373,30 @@ void ViewSfml::updateTextFromModel(const Model& model)
 
     m_txtAxis1Pos->setString(formatMotorPosition(model.getAxis1MotorPosition()));
 
-    m_txtAxis1Speed->setString(fmt::format("{:<.2f} mm/min", model.getAxis1MotorSpeed()));
+    m_txtAxis1Speed->setString(std::format("{:<.2f} mm/min", model.getAxis1MotorSpeed()));
 
     if (!model.getIsAxis2Retracted()) {
         m_txtAxis2Pos->setString(formatMotorPosition(model.getAxis2MotorPosition()));
     } else {
         m_txtAxis2Pos->setString("     ---");
     }
-    m_txtAxis2Speed->setString(fmt::format("{:<.2f} mm/min", model.getAxis2MotorSpeed()));
-    m_txtRpm->setString(fmt::format("{: >7}", static_cast<int>(model.getRotaryEncoderRpm())));
+    m_txtAxis2Speed->setString(std::format("{:<.2f} mm/min", model.getAxis2MotorSpeed()));
+    m_txtRpm->setString(std::format("{: >7}", static_cast<int>(model.getRotaryEncoderRpm())));
 
     m_txtGeneralStatus->setString(model.getGeneralStatus());
     std::string status
-        = fmt::format("{}: {}", model.config().read("Axis1Label", "Z"), model.getAxis1Status());
+        = std::format("{}: {}", model.config().read("Axis1Label", "Z"), model.getAxis1Status());
     m_txtAxis1Status->setString(status);
-    status = fmt::format("{}: {}", model.config().read("Axis2Label", "X"), model.getAxis2Status());
+    status = std::format("{}: {}", model.config().read("Axis2Label", "X"), model.getAxis2Status());
     m_txtAxis2Status->setString(status);
     if (model.getEnabledFunction() == Mode::Taper) {
-        m_txtTaperOrRadius->setString(fmt::format("Angle: {}", model.getTaperAngle()));
+        m_txtTaperOrRadius->setString(std::format("Angle: {}", model.getTaperAngle()));
     } else if (model.getEnabledFunction() == Mode::Radius) {
-        m_txtTaperOrRadius->setString(fmt::format("Radius: {}", model.getRadius()));
+        m_txtTaperOrRadius->setString(std::format("Radius: {}", model.getRadius()));
     }
 
     m_txtAxis1LinearScalePos->setString(
-        fmt::format(
+        std::format(
             "{} Scale: {:<.3f} mm",
             model.config().read("Axis1Label", "Z"),
             model.getAxis1LinearScalePosMm()));
@@ -415,13 +415,13 @@ void ViewSfml::updateTextFromModel(const Model& model)
             m_txtAxis1MemoryValue.at(n)->setString("  not set");
         } else {
             m_txtAxis1MemoryValue.at(n)->setString(
-                fmt::format("{: >9}", model.convertAxis1StepToPosition(model.getAxis1Memory(n))));
+                std::format("{: >9}", model.convertAxis1StepToPosition(model.getAxis1Memory(n))));
         }
         if (model.getAxis2Memory(n) == INF_OUT) {
             m_txtAxis2MemoryValue.at(n)->setString("  not set");
         } else {
             m_txtAxis2MemoryValue.at(n)->setString(
-                fmt::format("{: >9}", model.convertAxis2StepToPosition(model.getAxis2Memory(n))));
+                std::format("{: >9}", model.convertAxis2StepToPosition(model.getAxis2Memory(n))));
         }
     }
 
@@ -463,7 +463,7 @@ void ViewSfml::updateTextFromModel(const Model& model)
                     "config!");
                 m_txtMisc4->setString("");
                 m_txtMisc5->setString(
-                    fmt::format(
+                    std::format(
                         "Z step: {}   X step: {}",
                         model.getAxis1MotorCurrentStep(),
                         model.getAxis2MotorCurrentStep()));
@@ -474,7 +474,7 @@ void ViewSfml::updateTextFromModel(const Model& model)
             {
                 m_txtMode->setString("Taper");
                 m_txtMisc1->setString(
-                    fmt::format("Taper angle (degrees from centre): {}_", model.getInputString()));
+                    std::format("Taper angle (degrees from centre): {}_", model.getInputString()));
                 m_txtMisc2->setString("");
                 m_txtMisc3->setString("MT1 = -1.4287, MT2 = -1.4307, MT3 = -1.4377, MT4 = -1.4876");
                 m_txtMisc4->setString("(negative angle means piece gets wider towards chuck)");
@@ -485,7 +485,7 @@ void ViewSfml::updateTextFromModel(const Model& model)
         case Mode::Radius:
             {
                 m_txtMode->setString("Radius");
-                m_txtMisc1->setString(fmt::format("Radius required: {}_", model.getInputString()));
+                m_txtMisc1->setString(std::format("Radius required: {}_", model.getInputString()));
                 m_txtMisc2->setString(
                     "Important! Ensure the tool is at the radius of the workpiece,");
                 m_txtMisc3->setString(
@@ -500,11 +500,11 @@ void ViewSfml::updateTextFromModel(const Model& model)
             {
                 m_txtMode->setString("Thread");
                 ThreadPitch tp = threadPitches.at(model.getCurrentThreadPitchIndex());
-                m_txtMisc1->setString(fmt::format("Thread required: {}", tp.name));
+                m_txtMisc1->setString(std::format("Thread required: {}", tp.name));
                 m_txtMisc2->setString(
-                    fmt::format("Male   OD: {} mm, cut: {} mm", tp.maleOd, tp.cutDepthMale));
+                    std::format("Male   OD: {} mm, cut: {} mm", tp.maleOd, tp.cutDepthMale));
                 m_txtMisc3->setString(
-                    fmt::format("Female ID: {} mm, cut: {} mm", tp.femaleId, tp.cutDepthFemale));
+                    std::format("Female ID: {} mm, cut: {} mm", tp.femaleId, tp.cutDepthFemale));
                 m_txtMisc4->setString("");
                 m_txtMisc5->setString("Press Up/Down to change.");
                 m_txtWarning->setString("Enter to keep enabled, Esc to disable");
@@ -528,15 +528,15 @@ void ViewSfml::updateTextFromModel(const Model& model)
         case Mode::Axis2PositionSetup:
             {
                 m_txtMode->setString(
-                    fmt::format("{} Position Set", model.config().read("Axis2Label", "X")));
+                    std::format("{} Position Set", model.config().read("Axis2Label", "X")));
                 m_txtMisc1->setString("");
                 m_txtMisc2->setString(
-                    fmt::format(
+                    std::format(
                         "Specify a value for {} here", model.config().read("Axis2Label", "X")));
                 m_txtMisc3->setString("");
                 m_txtMisc4->setString("");
                 m_txtMisc5->setString(
-                    fmt::format(
+                    std::format(
                         "Current {} position: {}_",
                         model.config().read("Axis2Label", "X"),
                         model.getInputString()));
@@ -546,15 +546,15 @@ void ViewSfml::updateTextFromModel(const Model& model)
         case Mode::Axis1PositionSetup:
             {
                 m_txtMode->setString(
-                    fmt::format("{} Position Set", model.config().read("Axis1Label", "Z")));
+                    std::format("{} Position Set", model.config().read("Axis1Label", "Z")));
                 m_txtMisc1->setString("");
                 m_txtMisc2->setString(
-                    fmt::format(
+                    std::format(
                         "Specify a value for {} here", model.config().read("Axis1Label", "Z")));
                 m_txtMisc3->setString("");
                 m_txtMisc4->setString("");
                 m_txtMisc5->setString(
-                    fmt::format(
+                    std::format(
                         "Current {} position: {}_",
                         model.config().read("Axis1Label", "Z"),
                         model.getInputString()));
@@ -564,52 +564,52 @@ void ViewSfml::updateTextFromModel(const Model& model)
         case Mode::Axis1GoTo:
             {
                 m_txtMode->setString(
-                    fmt::format(
+                    std::format(
                         "Go To {} Absolute Position ", model.config().read("Axis1Label", "Z")));
                 m_txtMisc1->setString("");
                 m_txtMisc2->setString("Specify a value");
                 m_txtMisc3->setString("");
                 m_txtMisc4->setString("");
-                m_txtMisc5->setString(fmt::format("Position: {}_", model.getInputString()));
+                m_txtMisc5->setString(std::format("Position: {}_", model.getInputString()));
                 m_txtWarning->setString("Enter to set, Esc to cancel");
                 break;
             }
         case Mode::Axis2GoTo:
             {
                 m_txtMode->setString(
-                    fmt::format(
+                    std::format(
                         "Go To {} Absolute Position ", model.config().read("Axis2Label", "Z")));
                 m_txtMisc1->setString("");
                 m_txtMisc2->setString("Specify a value");
                 m_txtMisc3->setString("");
                 m_txtMisc4->setString("");
-                m_txtMisc5->setString(fmt::format("Position: {}_", model.getInputString()));
+                m_txtMisc5->setString(std::format("Position: {}_", model.getInputString()));
                 m_txtWarning->setString("Enter to set, Esc to cancel");
                 break;
             }
         case Mode::Axis1GoToOffset:
             {
                 m_txtMode->setString(
-                    fmt::format(
+                    std::format(
                         "Go To {} Relative Position ", model.config().read("Axis1Label", "Z")));
                 m_txtMisc1->setString("");
                 m_txtMisc2->setString("Specify a RELATIVE value");
                 m_txtMisc3->setString("");
                 m_txtMisc4->setString("");
-                m_txtMisc5->setString(fmt::format("Offset: {}_", model.getInputString()));
+                m_txtMisc5->setString(std::format("Offset: {}_", model.getInputString()));
                 m_txtWarning->setString("Enter to set, Esc to cancel");
                 break;
             }
         case Mode::Axis2GoToOffset:
             {
                 m_txtMode->setString(
-                    fmt::format(
+                    std::format(
                         "Go To {} Relative Position ", model.config().read("Axis2Label", "Z")));
                 m_txtMisc1->setString("");
                 m_txtMisc2->setString("Specify a RELATIVE value");
                 m_txtMisc3->setString("");
                 m_txtMisc4->setString("");
-                m_txtMisc5->setString(fmt::format("Offset: {}_", model.getInputString()));
+                m_txtMisc5->setString(std::format("Offset: {}_", model.getInputString()));
                 m_txtWarning->setString("Enter to set, Esc to cancel");
                 break;
             }

@@ -10,7 +10,7 @@ add_library(shared_with_test OBJECT
         log.cpp
         model.cpp
     )
-target_compile_options(shared_with_test PRIVATE -std=c++17 -Wall -Wextra -Werror -Wpedantic)
+target_compile_options(shared_with_test PRIVATE -std=c++23 -Wall -Wextra -Werror -Wpedantic)
 
 add_executable(lc
         stepperControl/gpio.cpp
@@ -36,7 +36,7 @@ target_link_libraries(lc PRIVATE
         sfml-system
     )
 
-target_compile_options(lc PRIVATE -std=c++17 -Wall -Wextra -Werror -Wpedantic)
+target_compile_options(lc PRIVATE -std=c++23 -Wall -Wextra -Werror -Wpedantic)
 
 
 # Avoid unused variable warning:
