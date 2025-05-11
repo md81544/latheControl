@@ -265,7 +265,7 @@ int ViewSfml::getInput()
     static sf::Keyboard::Key lastKey = sf::Keyboard::Key::F15;
     static sf::Clock clock;
     clock.start();
-    auto lastTime = clock.getElapsedTime();
+    static auto lastTime = clock.getElapsedTime();
     // This loop is to quickly discard anything that's not a keypress
     // e.g. mouse movement, which we're not interested in
     std::optional<sf::Event> event;
@@ -285,7 +285,6 @@ int ViewSfml::getInput()
     }
     lastKey = event->getIf<sf::Event::KeyPressed>()->code;
     lastTime = clock.getElapsedTime();
-    // return convertKeyCode(event->getIf<sf::Event::KeyPressed>()->code);
     return convertKeyCode(*event);
 }
 
