@@ -109,7 +109,10 @@ void ViewSfml::initialise(const Model& model)
     m_window->setPosition({ 50, 50 });
 #else
     m_window = std::make_unique<sf::RenderWindow>(
-        sf::VideoMode::getDesktopMode(), "Lathe Control", sf::Style::Fullscreen);
+        sf::VideoMode::getDesktopMode(),
+        "Lathe Control",
+        sf::Style::Default,
+        sf::State::Fullscreen);
 #endif
     m_window->setKeyRepeatEnabled(false);
     m_window->setMouseCursorVisible(false);
