@@ -2,9 +2,8 @@
 #include "keycodes.h"
 #include "threadpitches.h" // for ThreadPitch, threadPitches
 
-#include "fmt/format.h"
-
 #include <cassert>
+#include <format>
 #include <sstream>
 
 namespace {
@@ -137,7 +136,7 @@ void Model::checkStatus()
     }
     if (m_xDiameterSet) {
         m_generalStatus
-            = fmt::format("Diameter: {: .3f} mm", std::abs(m_axis2Motor->getPosition() * 2));
+            = std::format("Diameter: {: .3f} mm", std::abs(m_axis2Motor->getPosition() * 2));
     }
     if (!m_axis2Motor->isRunning()) {
         m_axis2Status = "stopped";
@@ -360,7 +359,7 @@ void Model::axis1GoToPosition(double pos)
         // avoid having "-0.000" displayed
         pos = 0.0;
     }
-    m_axis1Status = fmt::format("Going to {:.3f}", pos);
+    m_axis1Status = std::format("Going to {:.3f}", pos);
 }
 
 void Model::axis1GoToOffset(double offset)
@@ -368,7 +367,7 @@ void Model::axis1GoToOffset(double offset)
     m_axis1LastRelativeMove = offset;
     m_lastRelativeMoveAxis = Axis::Axis1;
     axis1GoToPosition(m_axis1Motor->getPosition() + offset);
-    m_axis1Status = fmt::format("To offset {}", offset);
+    m_axis1Status = std::format("To offset {}", offset);
 }
 
 void Model::axis1GoToPreviousPosition()
@@ -529,7 +528,7 @@ void Model::axis1FastReturn()
 void Model::axis2GoToPosition(double pos)
 {
     m_axis2Motor->goToPosition(pos);
-    m_axis2Status = fmt::format("Going to {:.3f}", pos);
+    m_axis2Status = std::format("Going to {:.3f}", pos);
 }
 
 void Model::axis2GoToOffset(double offset)
@@ -537,7 +536,7 @@ void Model::axis2GoToOffset(double offset)
     m_axis2LastRelativeMove = offset;
     m_lastRelativeMoveAxis = Axis::Axis2;
     axis2GoToPosition(m_axis2Motor->getPosition() + offset);
-    m_axis2Status = fmt::format("To offset {}", offset);
+    m_axis2Status = std::format("To offset {}", offset);
 }
 
 void Model::axis1Move(ZDirection direction)
@@ -1114,7 +1113,7 @@ std::string Model::convertAxis1StepToPosition(long step) const
     if (std::abs(mm) < 0.001) {
         mm = 0.0;
     }
-    return fmt::format("{: .3f}", mm);
+    return std::format("{: .3f}", mm);
 }
 
 std::string Model::convertAxis2StepToPosition(long step) const
@@ -1126,7 +1125,7 @@ std::string Model::convertAxis2StepToPosition(long step) const
     if (std::abs(mm) < 0.001) {
         mm = 0.0;
     }
-    return fmt::format("{: .3f}", mm);
+    return std::format("{: .3f}", mm);
 }
 
 float Model::getRotaryEncoderRpm() const
