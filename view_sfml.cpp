@@ -21,68 +21,76 @@ std::string formatMotorPosition(double mm)
 
 int convertKeyCode(sf::Event event)
 {
-    int sfKey = event.key.code;
+    const auto k = event.getIf<sf::Event::KeyPressed>();
+    if (!k) {
+        return -1;
+    }
+    sf::Keyboard::Key sfEnumKey = event.getIf<sf::Event::KeyPressed>()->code;
+    int sfKey = static_cast<int>(sfEnumKey);
     // Letters
-    if (sfKey >= sf::Keyboard::A && sfKey <= sf::Keyboard::Z) {
-        if (event.key.control) {
+    if (sfKey >= static_cast<int>(sf::Keyboard::Key::A)
+        && sfKey <= static_cast<int>(sf::Keyboard::Key::Z)) {
+        if (k->control) {
             // Ctrl-letter has 0x10000 ORed to it
             return (key::a + sfKey) | 0x10000;
         }
         // A is defined in SFML's enum as zero
-        if (event.key.shift) {
+        if (k->shift) {
             return key::A + sfKey;
         }
         return key::a + sfKey;
     }
     // Number keys
-    if (sfKey >= sf::Keyboard::Num0 && sfKey <= sf::Keyboard::Num9) {
+    if (sfKey >= static_cast<int>(sf::Keyboard::Key::Num0)
+        && sfKey <= static_cast<int>(sf::Keyboard::Key::Num9)) {
         // Check for shift-8 (asterisk)
-        if (sfKey == sf::Keyboard::Num8 && event.key.shift) {
+        if (sfKey == static_cast<int>(sf::Keyboard::Key::Num8) && k->shift) {
             return key::ASTERISK;
         }
         return 22 + sfKey;
     }
     // Function keys
-    if (sfKey >= sf::Keyboard::F1 && sfKey <= sf::Keyboard::F15) {
+    if (sfKey >= static_cast<int>(sf::Keyboard::Key::F1)
+        && sfKey <= static_cast<int>(sf::Keyboard::Key::F15)) {
         // F1 = 85 for SFML
         return 180 + sfKey;
     }
     // Misc
     switch (sfKey) {
-        case sf::Keyboard::Return:
+        case static_cast<int>(sf::Keyboard::Key::Enter):
             return key::ENTER;
-        case sf::Keyboard::LBracket: // [
+        case static_cast<int>(sf::Keyboard::Key::LBracket): // [
             return key::LBRACKET;
-        case sf::Keyboard::RBracket: // ]
+        case static_cast<int>(sf::Keyboard::Key::RBracket): // ]
             return key::RBRACKET;
-        case sf::Keyboard::Comma:
+        case static_cast<int>(sf::Keyboard::Key::Comma):
             return key::COMMA;
-        case sf::Keyboard::Period:
+        case static_cast<int>(sf::Keyboard::Key::Period):
             return key::FULLSTOP;
-        case sf::Keyboard::Right:
+        case static_cast<int>(sf::Keyboard::Key::Right):
             return key::RIGHT;
-        case sf::Keyboard::Left:
+        case static_cast<int>(sf::Keyboard::Key::Left):
             return key::LEFT;
-        case sf::Keyboard::Up:
+        case static_cast<int>(sf::Keyboard::Key::Up):
             return key::UP;
-        case sf::Keyboard::Down:
+        case static_cast<int>(sf::Keyboard::Key::Down):
             return key::DOWN;
-        case sf::Keyboard::BackSlash:
-            if (event.key.shift) {
+        case static_cast<int>(sf::Keyboard::Key::Backslash):
+            if (k->shift) {
                 return key::PIPE;
             }
             return key::BACKSLASH;
-        case sf::Keyboard::Dash:
+        case static_cast<int>(sf::Keyboard::Key::Hyphen):
             return key::MINUS;
-        case sf::Keyboard::Equal:
+        case static_cast<int>(sf::Keyboard::Key::Equal):
             return key::EQUALS;
-        case sf::Keyboard::Space:
+        case static_cast<int>(sf::Keyboard::Key::Space):
             return key::SPACE;
-        case sf::Keyboard::Escape:
+        case static_cast<int>(sf::Keyboard::Key::Escape):
             return key::ESC;
-        case sf::Keyboard::BackSpace:
+        case static_cast<int>(sf::Keyboard::Key::Backspace):
             return key::BACKSPACE;
-        case sf::Keyboard::Delete:
+        case static_cast<int>(sf::Keyboard::Key::Delete):
             return key::DELETE;
         default:
             return -1;
@@ -96,7 +104,8 @@ void ViewSfml::initialise(const Model& model)
 {
 #ifdef FAKE
     // run in a window in "fake" mode for manual testing
-    m_window = std::make_unique<sf::RenderWindow>(sf::VideoMode(1024, 600, 32), "Lathe Control");
+    m_window
+        = std::make_unique<sf::RenderWindow>(sf::VideoMode({ 1024, 600 }, 32), "Lathe Control");
     m_window->setPosition({ 50, 50 });
 #else
     m_window = std::make_unique<sf::RenderWindow>(
@@ -105,143 +114,143 @@ void ViewSfml::initialise(const Model& model)
     m_window->setKeyRepeatEnabled(false);
     m_window->setMouseCursorVisible(false);
     m_font = std::make_unique<sf::Font>();
-    if (!m_font->loadFromFile("./lc_font.ttf")) {
+    if (!m_font->openFromFile("./lc_font.ttf")) {
         throw std::runtime_error("Could not load TTF font lc_font.ttf");
     }
 
-    m_txtAxis1Label = std::make_unique<sf::Text>("", *m_font, 60);
+    m_txtAxis1Label = std::make_unique<sf::Text>(*m_font, "", 60);
     m_txtAxis1Label->setPosition({ 20, 10 });
     m_txtAxis1Label->setFillColor({ 0, 127, 0 });
     m_txtAxis1Label->setString(model.config().read("Axis1Label", "Z") + ":");
 
-    m_txtAxis1Pos = std::make_unique<sf::Text>("", *m_font, 60);
+    m_txtAxis1Pos = std::make_unique<sf::Text>(*m_font, "", 60);
     m_txtAxis1Pos->setPosition({ 110, 10 });
     m_txtAxis1Pos->setFillColor(sf::Color::Green);
 
-    m_txtAxis1Units = std::make_unique<sf::Text>("", *m_font, 30);
+    m_txtAxis1Units = std::make_unique<sf::Text>(*m_font, "", 30);
     m_txtAxis1Units->setPosition({ 430, 40 });
     m_txtAxis1Units->setFillColor({ 0, 127, 0 });
     m_txtAxis1Units->setString(model.config().read("Axis1DisplayUnits", "mm"));
 
-    m_txtAxis1Speed = std::make_unique<sf::Text>("", *m_font, 30);
+    m_txtAxis1Speed = std::make_unique<sf::Text>(*m_font, "", 30);
     m_txtAxis1Speed->setPosition({ 550, 40 });
     m_txtAxis1Speed->setFillColor({ 209, 209, 50 });
 
-    m_txtAxis2Label = std::make_unique<sf::Text>("", *m_font, 60);
+    m_txtAxis2Label = std::make_unique<sf::Text>(*m_font, "", 60);
     m_txtAxis2Label->setPosition({ 20, 70 });
     m_txtAxis2Label->setFillColor({ 0, 127, 0 });
     m_txtAxis2Label->setString(model.config().read("Axis2Label", "X") + ":");
 
-    m_txtAxis2Pos = std::make_unique<sf::Text>("", *m_font, 60);
+    m_txtAxis2Pos = std::make_unique<sf::Text>(*m_font, "", 60);
     m_txtAxis2Pos->setPosition({ 110, 70 });
     m_txtAxis2Pos->setFillColor(sf::Color::Green);
 
-    m_txtAxis2Units = std::make_unique<sf::Text>("", *m_font, 30);
+    m_txtAxis2Units = std::make_unique<sf::Text>(*m_font, "", 30);
     m_txtAxis2Units->setPosition({ 430, 100 });
     m_txtAxis2Units->setFillColor({ 0, 127, 0 });
     m_txtAxis2Units->setString(model.config().read("Axis1DisplayUnits", "mm"));
 
-    m_txtAxis2Speed = std::make_unique<sf::Text>("", *m_font, 30);
+    m_txtAxis2Speed = std::make_unique<sf::Text>(*m_font, "", 30);
     m_txtAxis2Speed->setPosition({ 550, 100 });
     m_txtAxis2Speed->setFillColor({ 209, 209, 50 });
 
-    m_txtRpmLabel = std::make_unique<sf::Text>("", *m_font, 60);
+    m_txtRpmLabel = std::make_unique<sf::Text>(*m_font, "", 60);
     m_txtRpmLabel->setPosition({ 20, 130 });
     m_txtRpmLabel->setFillColor({ 0, 127, 0 });
     m_txtRpmLabel->setString("C:");
 
-    m_txtRpm = std::make_unique<sf::Text>("", *m_font, 60);
+    m_txtRpm = std::make_unique<sf::Text>(*m_font, "", 60);
     m_txtRpm->setPosition({ 150, 130 });
     m_txtRpm->setFillColor(sf::Color::Green);
 
-    m_txtRpmUnits = std::make_unique<sf::Text>("", *m_font, 30);
+    m_txtRpmUnits = std::make_unique<sf::Text>(*m_font, "", 30);
     m_txtRpmUnits->setPosition({ 430, 160 });
     m_txtRpmUnits->setFillColor({ 0, 127, 0 });
     m_txtRpmUnits->setString("rpm");
 
     for (int n = 0; n < 4; ++n) {
-        auto lbl = std::make_unique<sf::Text>("", *m_font, 30);
+        auto lbl = std::make_unique<sf::Text>(*m_font, "", 30);
         lbl->setPosition({ 60.f + n * 200.f, 210 });
         lbl->setFillColor({ 128, 128, 128 });
         lbl->setString(fmt::format("    Mem {}", n + 1));
         m_txtMemoryLabel.push_back(std::move(lbl));
-        auto valZ = std::make_unique<sf::Text>("", *m_font, 30);
+        auto valZ = std::make_unique<sf::Text>(*m_font, "", 30);
         valZ->setPosition({ 60.f + n * 200.f, 245 });
         valZ->setFillColor({ 128, 128, 128 });
         m_txtAxis1MemoryValue.push_back(std::move(valZ));
-        auto valX = std::make_unique<sf::Text>("", *m_font, 30);
+        auto valX = std::make_unique<sf::Text>(*m_font, "", 30);
         valX->setPosition({ 60.f + n * 200.f, 275 });
         valX->setFillColor({ 128, 128, 128 });
         m_txtAxis2MemoryValue.push_back(std::move(valX));
     }
     std::string axis1Label = model.config().read("Axis1Label", "Z") + ":";
-    m_txtAxis1MemoryLabel = std::make_unique<sf::Text>(axis1Label, *m_font, 30);
+    m_txtAxis1MemoryLabel = std::make_unique<sf::Text>(*m_font, axis1Label, 30);
     m_txtAxis1MemoryLabel->setPosition({ 24.f, 245 });
     m_txtAxis1MemoryLabel->setFillColor({ 128, 128, 128 });
     std::string axis2Label = model.config().read("Axis2Label", "X") + ":";
-    m_txtAxis2MemoryLabel = std::make_unique<sf::Text>(axis2Label, *m_font, 30);
+    m_txtAxis2MemoryLabel = std::make_unique<sf::Text>(*m_font, axis2Label, 30);
     m_txtAxis2MemoryLabel->setPosition({ 24.f, 275 });
     m_txtAxis2MemoryLabel->setFillColor({ 128, 128, 128 });
 
-    m_txtGeneralStatus = std::make_unique<sf::Text>("", *m_font, 20);
+    m_txtGeneralStatus = std::make_unique<sf::Text>(*m_font, "", 20);
     m_txtGeneralStatus->setPosition({ 20, 550 });
     m_txtGeneralStatus->setFillColor(sf::Color::Green);
 
-    m_txtAxis1Status = std::make_unique<sf::Text>("", *m_font, 20);
+    m_txtAxis1Status = std::make_unique<sf::Text>(*m_font, "", 20);
     m_txtAxis1Status->setPosition({ 450, 550 });
     m_txtAxis1Status->setFillColor(sf::Color::Green);
 
-    m_txtAxis2Status = std::make_unique<sf::Text>("", *m_font, 20);
+    m_txtAxis2Status = std::make_unique<sf::Text>(*m_font, "", 20);
     m_txtAxis2Status->setPosition({ 700, 550 });
     m_txtAxis2Status->setFillColor(sf::Color::Green);
 
-    m_txtMode = std::make_unique<sf::Text>("", *m_font, 25);
+    m_txtMode = std::make_unique<sf::Text>(*m_font, "", 25);
     m_txtMode->setPosition({ 20, 320 });
     m_txtMode->setFillColor(sf::Color::Yellow);
 
-    m_txtMisc1 = std::make_unique<sf::Text>("", *m_font, 25);
+    m_txtMisc1 = std::make_unique<sf::Text>(*m_font, "", 25);
     m_txtMisc1->setPosition({ 20, 350 });
     m_txtMisc1->setFillColor(sf::Color::White);
 
-    m_txtMisc2 = std::make_unique<sf::Text>("", *m_font, 25);
+    m_txtMisc2 = std::make_unique<sf::Text>(*m_font, "", 25);
     m_txtMisc2->setPosition({ 20, 380 });
     m_txtMisc2->setFillColor(sf::Color::White);
 
-    m_txtMisc3 = std::make_unique<sf::Text>("", *m_font, 25);
+    m_txtMisc3 = std::make_unique<sf::Text>(*m_font, "", 25);
     m_txtMisc3->setPosition({ 20, 410 });
     m_txtMisc3->setFillColor(sf::Color::White);
 
-    m_txtMisc4 = std::make_unique<sf::Text>("", *m_font, 25);
+    m_txtMisc4 = std::make_unique<sf::Text>(*m_font, "", 25);
     m_txtMisc4->setPosition({ 20, 440 });
     m_txtMisc4->setFillColor(sf::Color::White);
 
-    m_txtMisc5 = std::make_unique<sf::Text>("", *m_font, 25);
+    m_txtMisc5 = std::make_unique<sf::Text>(*m_font, "", 25);
     m_txtMisc5->setPosition({ 20, 470 });
     m_txtMisc5->setFillColor(sf::Color::White);
 
-    m_txtWarning = std::make_unique<sf::Text>("", *m_font, 20);
+    m_txtWarning = std::make_unique<sf::Text>(*m_font, "", 20);
     m_txtWarning->setPosition({ 20, 510 });
     m_txtWarning->setFillColor(sf::Color::Red);
 
-    m_txtTaperOrRadius = std::make_unique<sf::Text>("", *m_font, 20);
+    m_txtTaperOrRadius = std::make_unique<sf::Text>(*m_font, "", 20);
     m_txtTaperOrRadius->setPosition({ 860, 75 });
     m_txtTaperOrRadius->setFillColor(sf::Color::Red);
 
-    m_txtNotification = std::make_unique<sf::Text>("", *m_font, 25);
+    m_txtNotification = std::make_unique<sf::Text>(*m_font, "", 25);
     m_txtNotification->setPosition({ 860, 45 });
     m_txtNotification->setFillColor(sf::Color::Red);
 
-    m_txtXRetracted = std::make_unique<sf::Text>("", *m_font, 25);
+    m_txtXRetracted = std::make_unique<sf::Text>(*m_font, "", 25);
     m_txtXRetracted->setPosition({ 860, 105 });
     m_txtXRetracted->setFillColor(sf::Color::Red);
     m_txtXRetracted->setString("RETRACTED");
 
-    m_txtXRetractDirection = std::make_unique<sf::Text>("", *m_font, 25);
+    m_txtXRetractDirection = std::make_unique<sf::Text>(*m_font, "", 25);
     m_txtXRetractDirection->setPosition({ 860, 165 });
     m_txtXRetractDirection->setFillColor(sf::Color::Red);
     m_txtXRetractDirection->setString("-X RTRCT");
 
-    m_txtAxis1LinearScalePos = std::make_unique<sf::Text>("", *m_font, 20);
+    m_txtAxis1LinearScalePos = std::make_unique<sf::Text>(*m_font, "", 20);
     m_txtAxis1LinearScalePos->setPosition({ 550, 170 });
     m_txtAxis1LinearScalePos->setFillColor({ 209, 209, 50 });
 }
@@ -253,29 +262,31 @@ void ViewSfml::close()
 
 int ViewSfml::getInput()
 {
-    static sf::Keyboard::Key lastKey = sf::Keyboard::F15;
+    static sf::Keyboard::Key lastKey = sf::Keyboard::Key::F15;
     static sf::Clock clock;
-    static sf::Int32 lastTime = 0;
-    sf::Event event;
+    clock.start();
+    auto lastTime = clock.getElapsedTime();
     // This loop is to quickly discard anything that's not a keypress
     // e.g. mouse movement, which we're not interested in
+    std::optional<sf::Event> event;
     for (;;) {
-        if (!m_window->pollEvent(event)) {
+        event = m_window->pollEvent();
+        if (!event->is<sf::Event::KeyPressed>()) {
             return -1;
         }
-        if (event.type == sf::Event::KeyPressed) {
-            break;
-        }
+        break;
     }
 
     // We only get here if a key was pressed
-    if (lastKey == event.key.code && clock.getElapsedTime().asMilliseconds() - lastTime < 100) {
+    if (lastKey == event->getIf<sf::Event::KeyPressed>()->code
+        && clock.getElapsedTime().asMilliseconds() - lastTime.asMilliseconds() < 100) {
         // Debounce
         return -1;
     }
-    lastKey = event.key.code;
-    lastTime = clock.getElapsedTime().asMilliseconds();
-    return convertKeyCode(event);
+    lastKey = event->getIf<sf::Event::KeyPressed>()->code;
+    lastTime = clock.getElapsedTime();
+    // return convertKeyCode(event->getIf<sf::Event::KeyPressed>()->code);
+    return convertKeyCode(*event);
 }
 
 void ViewSfml::updateDisplay(const Model& model)
@@ -385,10 +396,11 @@ void ViewSfml::updateTextFromModel(const Model& model)
         m_txtTaperOrRadius->setString(fmt::format("Radius: {}", model.getRadius()));
     }
 
-    m_txtAxis1LinearScalePos->setString(fmt::format(
-        "{} Scale: {:<.3f} mm",
-        model.config().read("Axis1Label", "Z"),
-        model.getAxis1LinearScalePosMm()));
+    m_txtAxis1LinearScalePos->setString(
+        fmt::format(
+            "{} Scale: {:<.3f} mm",
+            model.config().read("Axis1Label", "Z"),
+            model.getAxis1LinearScalePosMm()));
 
     for (std::size_t n = 0; n < m_txtMemoryLabel.size(); ++n) {
         if (model.getCurrentMemorySlot() == n) {
@@ -444,15 +456,18 @@ void ViewSfml::updateTextFromModel(const Model& model)
             {
                 m_txtMode->setString("Setup");
                 m_txtMisc1->setString("This mode allows you to determine backlash compensation");
-                m_txtMisc2->setString("Use a dial indicator to find number of steps "
-                                      "backlash per axis");
-                m_txtMisc3->setString("REMEMBER to unset any previous-set backlash figures in "
-                                      "config!");
+                m_txtMisc2->setString(
+                    "Use a dial indicator to find number of steps "
+                    "backlash per axis");
+                m_txtMisc3->setString(
+                    "REMEMBER to unset any previous-set backlash figures in "
+                    "config!");
                 m_txtMisc4->setString("");
-                m_txtMisc5->setString(fmt::format(
-                    "Z step: {}   X step: {}",
-                    model.getAxis1MotorCurrentStep(),
-                    model.getAxis2MotorCurrentStep()));
+                m_txtMisc5->setString(
+                    fmt::format(
+                        "Z step: {}   X step: {}",
+                        model.getAxis1MotorCurrentStep(),
+                        model.getAxis2MotorCurrentStep()));
                 m_txtWarning->setString("Press Esc to exit setup");
                 break;
             }
@@ -516,14 +531,16 @@ void ViewSfml::updateTextFromModel(const Model& model)
                 m_txtMode->setString(
                     fmt::format("{} Position Set", model.config().read("Axis2Label", "X")));
                 m_txtMisc1->setString("");
-                m_txtMisc2->setString(fmt::format(
-                    "Specify a value for {} here", model.config().read("Axis2Label", "X")));
+                m_txtMisc2->setString(
+                    fmt::format(
+                        "Specify a value for {} here", model.config().read("Axis2Label", "X")));
                 m_txtMisc3->setString("");
                 m_txtMisc4->setString("");
-                m_txtMisc5->setString(fmt::format(
-                    "Current {} position: {}_",
-                    model.config().read("Axis2Label", "X"),
-                    model.getInputString()));
+                m_txtMisc5->setString(
+                    fmt::format(
+                        "Current {} position: {}_",
+                        model.config().read("Axis2Label", "X"),
+                        model.getInputString()));
                 m_txtWarning->setString("Enter to set, 'D' to enter as diameter, Esc to cancel");
                 break;
             }
@@ -532,21 +549,24 @@ void ViewSfml::updateTextFromModel(const Model& model)
                 m_txtMode->setString(
                     fmt::format("{} Position Set", model.config().read("Axis1Label", "Z")));
                 m_txtMisc1->setString("");
-                m_txtMisc2->setString(fmt::format(
-                    "Specify a value for {} here", model.config().read("Axis1Label", "Z")));
+                m_txtMisc2->setString(
+                    fmt::format(
+                        "Specify a value for {} here", model.config().read("Axis1Label", "Z")));
                 m_txtMisc3->setString("");
                 m_txtMisc4->setString("");
-                m_txtMisc5->setString(fmt::format(
-                    "Current {} position: {}_",
-                    model.config().read("Axis1Label", "Z"),
-                    model.getInputString()));
+                m_txtMisc5->setString(
+                    fmt::format(
+                        "Current {} position: {}_",
+                        model.config().read("Axis1Label", "Z"),
+                        model.getInputString()));
                 m_txtWarning->setString("Enter to set, Esc to cancel");
                 break;
             }
         case Mode::Axis1GoTo:
             {
-                m_txtMode->setString(fmt::format(
-                    "Go To {} Absolute Position ", model.config().read("Axis1Label", "Z")));
+                m_txtMode->setString(
+                    fmt::format(
+                        "Go To {} Absolute Position ", model.config().read("Axis1Label", "Z")));
                 m_txtMisc1->setString("");
                 m_txtMisc2->setString("Specify a value");
                 m_txtMisc3->setString("");
@@ -557,8 +577,9 @@ void ViewSfml::updateTextFromModel(const Model& model)
             }
         case Mode::Axis2GoTo:
             {
-                m_txtMode->setString(fmt::format(
-                    "Go To {} Absolute Position ", model.config().read("Axis2Label", "Z")));
+                m_txtMode->setString(
+                    fmt::format(
+                        "Go To {} Absolute Position ", model.config().read("Axis2Label", "Z")));
                 m_txtMisc1->setString("");
                 m_txtMisc2->setString("Specify a value");
                 m_txtMisc3->setString("");
@@ -569,8 +590,9 @@ void ViewSfml::updateTextFromModel(const Model& model)
             }
         case Mode::Axis1GoToOffset:
             {
-                m_txtMode->setString(fmt::format(
-                    "Go To {} Relative Position ", model.config().read("Axis1Label", "Z")));
+                m_txtMode->setString(
+                    fmt::format(
+                        "Go To {} Relative Position ", model.config().read("Axis1Label", "Z")));
                 m_txtMisc1->setString("");
                 m_txtMisc2->setString("Specify a RELATIVE value");
                 m_txtMisc3->setString("");
@@ -581,8 +603,9 @@ void ViewSfml::updateTextFromModel(const Model& model)
             }
         case Mode::Axis2GoToOffset:
             {
-                m_txtMode->setString(fmt::format(
-                    "Go To {} Relative Position ", model.config().read("Axis2Label", "Z")));
+                m_txtMode->setString(
+                    fmt::format(
+                        "Go To {} Relative Position ", model.config().read("Axis2Label", "Z")));
                 m_txtMisc1->setString("");
                 m_txtMisc2->setString("Specify a RELATIVE value");
                 m_txtMisc3->setString("");

@@ -3,6 +3,9 @@ we need to consider how best to use it. Should position come solely
 from that, rather than continuing to rely on "dead reckoning"?
 Or should it be used just to make corrections to the expected position?
 
+Support limit switches? Could have multiple switches all on one pin and
+when triggered it simply issues a stop all'
+
 I'd like to see the ability to use a gamepad to control many functions. For instance
 the D-pad can be the nudge. Not sure about how safe some usage might be though - for instance
 if the Z-axis was controlled by left/right on one stick and X by up/down, it might be possible to

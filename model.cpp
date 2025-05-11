@@ -97,6 +97,11 @@ void Model::initialise()
 void Model::checkStatus()
 {
     float chuckRpm = m_rotaryEncoder->getRpm();
+
+    if (limitSwitchTriggered()) {
+        stopAllMotors();
+    }
+
 #ifndef FAKE
     if (m_spindleWasRunning && chuckRpm < 30.f) {
         // If the chuck has stopped, we stop X/Z motors as a safety
@@ -247,9 +252,9 @@ void Model::takeUpZBacklash(ZDirection direction)
 {
     axis1Stop();
     if (direction == ZDirection::Right) {
-        m_axis1Motor->goToStep(m_axis1Motor->getCurrentStep() - 1);
+        m_axis1Motor->goToStep(getAxis1MotorCurrentStep() - 1);
     } else if (direction == ZDirection::Left) {
-        m_axis1Motor->goToStep(m_axis1Motor->getCurrentStep() + 1);
+        m_axis1Motor->goToStep(getAxis1MotorCurrentStep() + 1);
     }
     m_axis1Motor->wait();
 }
@@ -338,6 +343,10 @@ void Model::axis1GoToStep(long step)
 
 void Model::axis1GoToPosition(double pos)
 {
+    // TODO - if the linear scale is enabled, we need to perhaps go to a step close to
+    // the desired position, then start nudging while monitoring the linear scale
+    // until we get to the desired position. This could be implemented in the motor
+    // perhaps by supplying a callback that is called after each step is taken.
     axis1CheckForSynchronisation(pos / m_axis1Motor->getConversionFactor());
     if (m_enabledFunction == Mode::Threading) {
         m_rotaryEncoder->callbackAtZeroDegrees([&]() {
@@ -396,7 +405,7 @@ void Model::axis1CheckForSynchronisation(long step)
         return;
     }
     ZDirection direction;
-    if (step < m_axis1Motor->getCurrentStep()) {
+    if (step < getAxis1MotorCurrentStep()) {
         direction = ZDirection::Right;
     } else {
         direction = ZDirection::Left;
@@ -409,7 +418,7 @@ void Model::axis1GoToCurrentMemory()
     if (m_axis1Memory.at(m_currentMemory) == INF_RIGHT) {
         return;
     }
-    if (m_axis1Memory.at(m_currentMemory) == m_axis1Motor->getCurrentStep()) {
+    if (m_axis1Memory.at(m_currentMemory) == getAxis1MotorCurrentStep()) {
         return;
     }
     axis1Stop();
@@ -441,7 +450,7 @@ void Model::axis1Nudge(ZDirection direction)
     }
     m_axis1Motor->stop();
     m_axis1Motor->wait();
-    axis1GoToStep(m_axis1Motor->getCurrentStep() + nudgeAmount);
+    axis1GoToStep(getAxis1MotorCurrentStep() + nudgeAmount);
     m_axis1Motor->wait();
 
     // Save position
@@ -452,6 +461,9 @@ void Model::axis1Zero()
 {
     if (m_enabledFunction == Mode::Taper) {
         changeMode(Mode::None);
+    }
+    if (m_config.readBool("Axis1UseLinearScale", false)) {
+        m_linearScaleAxis1->setZeroMm();
     }
     m_axis1Motor->zeroPosition();
     // Zeroing will invalidate any memorised Z positions, so we clear them
@@ -502,7 +514,7 @@ void Model::axis1FastReturn()
         // If we are tapering, we need to set a speed the x-axis motor can keep up with
         m_axis1Motor->setSpeed(100.0);
         ZDirection direction = ZDirection::Left;
-        if (m_axis1Memory.at(m_currentMemory) < m_axis1Motor->getCurrentStep()) {
+        if (m_axis1Memory.at(m_currentMemory) < getAxis1MotorCurrentStep()) {
             direction = ZDirection::Right;
         }
         takeUpZBacklash(direction);
@@ -615,7 +627,7 @@ void Model::axis1Stop()
 
 void Model::axis1StorePosition()
 {
-    m_axis1Memory.at(m_currentMemory) = m_axis1Motor->getCurrentStep();
+    m_axis1Memory.at(m_currentMemory) = getAxis1MotorCurrentStep();
 }
 
 void Model::axis2SetSpeed(double speed)
@@ -1044,6 +1056,9 @@ double Model::getAxis1MotorPosition() const
     if (!m_axis1Motor) {
         return 0.0;
     }
+    if (m_config.readBool("Axis1UseLinearScale", false)) {
+        return m_linearScaleAxis1->getPositionInMm();
+    }
     return m_axis1Motor->getPosition();
 }
 
@@ -1076,7 +1091,10 @@ double Model::getAxis1MotorCurrentStep() const
     if (!m_axis1Motor) {
         return 0.0;
     }
-    return m_axis2Motor->getCurrentStep();
+    if (m_config.readBool("Axis1UseLinearScale", false)) {
+        return m_linearScaleAxis1->getPositionInMm() / m_axis1Motor->getConversionFactor();
+    }
+    return m_axis1Motor->getCurrentStep();
 }
 
 double Model::getAxis2MotorCurrentStep() const
@@ -1208,6 +1226,12 @@ void Model::acceptInputValue()
             assert(false);
     }
     m_currentDisplayMode = Mode::None;
+}
+
+bool Model::limitSwitchTriggered() const
+{
+    // TODO monitor any limit switches - needs config option for pin
+    return false;
 }
 
 const IConfigReader& Model::config() const

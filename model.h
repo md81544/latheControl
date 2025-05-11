@@ -208,12 +208,16 @@ public:
     // inputting a mode parameter (e.g. taper angle)
     void acceptInputValue();
 
+    // Checks to see whether any limit switches have been triggered
+    bool limitSwitchTriggered() const;
+
     const IConfigReader& config() const;
 
 private:
     IGpio& m_gpio;
     IConfigReader& m_config;
     std::unique_ptr<mgo::RotaryEncoder> m_rotaryEncoder;
+    // Currently only one linear scale is supported; another could be added for Axis2
     std::unique_ptr<mgo::LinearScale> m_linearScaleAxis1;
     std::unique_ptr<mgo::StepperMotor> m_axis1Motor;
     std::unique_ptr<mgo::StepperMotor> m_axis2Motor;
