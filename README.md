@@ -23,6 +23,9 @@ on a Mac, you can use homebrew (if you've got it installed):
 
     brew install cmake fmt sfml cppcheck ctags
 
+### Note!
+SFML **3.x** is now required (owing to SFML 2.x failing to compile on Mac owing to the latest clang++ failing to cope with `basic_string<int32>` used in SFML 2.x). At the time of writing, SFML 3.0 is not available on the latest Raspberry Pi repos - so you'll need to check out the sources, build (force dynamic libraries), and install manually if you want to build on Pi hardware.
+
 ## Building
 
 To make a binary to run on non-Pi hardware, just type `make`. This mocks out the pigpio library usage, and also provides mock objects for all the steppers and rotary encoder, which means you can test it on a PC without needing to be in the workshop. This build includes debugging symbols.
