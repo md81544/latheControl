@@ -17,14 +17,14 @@ As this repository contains a submodule now, use `git clone --recurse-submodules
 
 You'll need to do the following (on deb-based systems) to install required packages:
 
-    sudo apt install cmake libfmt-dev libsfml-dev cppcheck exuberant-ctags
+    sudo apt install cmake libfmt-dev libsfml-dev
 
 on a Mac, you can use homebrew (if you've got it installed):
 
-    brew install cmake fmt sfml cppcheck ctags
+    brew install cmake fmt sfml
 
 ### Note!
-SFML **3.x** is now required (owing to SFML 2.x failing to compile on Mac owing to the latest clang++ failing to cope with `basic_string<int32>` used in SFML 2.x). At the time of writing, SFML 3.0 is not available on the latest Raspberry Pi repos - so you'll need to check out the sources, build (force dynamic libraries), and install manually if you want to build on Pi hardware.
+SFML **3.x** is now required (owing to SFML 2.x failing to compile on Mac owing to the latest clang++ failing to cope with `std::basic_string<int32>` used in SFML 2.x). At the time of writing, SFML 3.0 is not available on the latest Raspberry Pi repos - so you'll need to check out the sources, install SFML's dependencies, build (use `cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=ON` to force dynamic libraries), and install manually if you want to build on Pi hardware. See https://www.sfml-dev.org/tutorials/3.0/getting-started/build-from-source/ for more information.
 
 ## Building
 
