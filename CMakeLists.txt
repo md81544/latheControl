@@ -36,6 +36,11 @@ target_link_libraries(lc PRIVATE
         sfml-system
     )
 
+# Raspberry Pi 32-bit needs atomic library:
+if(CMAKE_SYSTEM_PROCESSOR STREQUAL "armv7l")
+    target_link_libraries(shared_with_test PRIVATE atomic)
+endif()
+
 target_compile_options(lc PRIVATE -std=c++23 -Wall -Wextra -Werror -Wpedantic)
 
 
