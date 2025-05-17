@@ -44,6 +44,8 @@ This program is very time-critical. You shouldn't need to use `nice`, as, intern
 
 **Note** While working on adapting the software to work with my milling machine, I installed it on a different Pi and experienced issues with motor motion. I see approximately once-per-second noticeable pre-emption of the motor threads (which are meant to be running at highest realtime priority). This exhibits as an obvious "stutter" when the carriage (either axis) is moving. After lots of investigation, I find this is related to the kernel in use. I am not sure why yet. I reverted to an older kernel, (4.19.97, which is quite old, but is the version I was running previously for the lathe) and all works OK again. I will, at some time, attempt to bisect my way up the kernel versions to see where the issue occurs. To revert to a previous kernel on the Pi, follow [these instructions](https://isahatipoglu.com/2015/09/29/how-to-upgrade-or-downgrade-raspberrypis-kernel-servoblaster-problem-raspberry-pi2/).
 
+**Update to the above** - the problem described above does not seem to happen in more recent kernels.
+
 ## Usage
 *Note: the axes are referred to as Z and X here, but these names are configurable. Z is the primary axis (axis1) and X is the secondary (axis2).*
 
