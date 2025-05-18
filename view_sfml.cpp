@@ -275,6 +275,11 @@ int ViewSfml::getInput()
     std::optional<sf::Event> event;
     for (;;) {
         event = m_window->pollEvent();
+        // If the user closes the window or presses Cmd-Q on mac, just for
+        // convenience when running in 'fake' mode, we simulate Ctrl-Q being pressed:
+        if (event->getIf<sf::Event::Closed>()) {
+            return key::q | 0x10000;
+        }
         if (!event->is<sf::Event::KeyPressed>()) {
             return -1;
         }
