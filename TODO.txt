@@ -4,12 +4,13 @@ from that, rather than continuing to rely on "dead reckoning"?
 Or should it be used just to make corrections to the expected position?
 
 Support limit switches? Could have multiple switches all on one pin and
-when triggered it simply issues a stop all'
+when triggered it simply issues a 'stop all'
 
 I'd like to see the ability to use a gamepad to control many functions. For instance
 the D-pad can be the nudge. Not sure about how safe some usage might be though - for instance
 if the Z-axis was controlled by left/right on one stick and X by up/down, it might be possible to
-accidentally engage both. Some thought required.
+accidentally engage both. Some thought required. Maybe a large "deadzone".
+
   - Or an ESP-32 acting as a bluetooth keyboard? With just some choice buttons for a remote
     controller?
 
@@ -18,7 +19,7 @@ Address the "Mode" concept which currently provides pseudo-modal
 to maintain. If all motors are stopped during a "dialog" then we
 can put them all on a separate flow.
 
-Automate threading operations (or all?) to automatically return after the
+Automate thread-cutting operations (or all?) to automatically return after the
 target step has been reached and a key is pressed (or even fully automate)
 -- AND (these are related) --
 Automatic keyway "shaping" by simply moving Z in on the lathe repeatedly
