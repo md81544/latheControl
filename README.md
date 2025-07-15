@@ -49,11 +49,11 @@ This program is very time-critical. You shouldn't need to use `nice`, as, intern
 ## Usage
 *Note: the axes are referred to as Z and X here, but these names are configurable. Z is the primary axis (axis1) and X is the secondary (axis2).*
 
-For general **movement** of the carriages, use the arrow keys. Press the same key again (or spacebar) to stop.
+For general **movement** of the carriages, use the arrow keys. Press the same key again (or spacebar) to stop. Pressing `Alt` with an arrow key sets the carriage moving at its maximum speed (useful for moving tools out of the way, not actual cutting).
 
 Control **speed of motion** with number keys. `1`-`5` controls Z and `6`-`0` controls X. For finer control of speed, use the `-` and `+` (or `=`) keys for the Z axis, and use the leader `X` with the same keys for the X axis (for example, press `X`, then `-`).
 
-"**Nudging**" the axes can be achieved with the `W`, `A`, `S`, and `D` keys. If you're pressing these keys a lot, look at relative motion (below) instead.
+"**Nudging**" the axes can be achieved with the `W`, `A`, `S`, and `D` keys. Eacn "nudge" is 0.025mm. To move less (0.002mm), press `shift` plus a nudge key. To move more (0.1mm), press `Alt` plus a nudge key. If you're pressing these keys a lot, look at relative motion (below) instead.
 
 There are four **memory locations**, you can select which one is active by means of the `[` and `]` keys. Press `M` to store the current X and Z position in the current memory slot.
 
@@ -61,7 +61,7 @@ Axis "**leader keys**" can be used to store just the X or Z value, for example, 
 
 To **return to a position**, select the memory slot with `[` or `]` and press `ENTER`. This defaults to the Z axis unless you provide a "leader" key. For example. pressing `X`, then `ENTER` will move to the stored X value.
 
-To move to an **absolute position**, press leader + `G` - for example, `ZG` will open a dialog asking for a value for Z to go to.
+To move to an **absolute position**, press leader + `G` (for "go to") - for example, `ZG` will open a dialog asking for a value for Z to go to.
 
 **Relative motion** can be performed by pressing leader + `R` - for example `XR` will open a dialog asking for an offset for X to go to. Once a relative motion has occurred, it can be repeated by simply pressing `.`
 
