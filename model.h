@@ -101,7 +101,7 @@ public:
     void axis1CheckForSynchronisation(ZDirection direction);
     void axis1CheckForSynchronisation(long step);
     void axis1GoToCurrentMemory();
-    void axis1Nudge(ZDirection direction);
+    void axis1Nudge(ZDirection direction, double nudgeAmountMm);
     void axis1Zero();
     void axis1SpeedDecrease();
     void axis1SpeedIncrease();
@@ -125,7 +125,7 @@ public:
     void axis2GoToCurrentMemory();
     void axis2SpeedDecrease();
     void axis2SpeedIncrease();
-    void axis2Nudge(XDirection direction);
+    void axis2Nudge(XDirection direction, double nudgeAmountMm);
     void axis2FastReturn();
     void axis2Retract();
     void axis2StorePosition();

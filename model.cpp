@@ -435,22 +435,21 @@ void Model::axis1GoToCurrentMemory()
     }
 }
 
-void Model::axis1Nudge(ZDirection direction)
+void Model::axis1Nudge(ZDirection direction, double nudgeAmountMm)
 {
-    long nudgeAmount = 25L;
-    if (m_keyPressed == key::D || m_keyPressed == key::A) // extra fine with shift
-    {
-        nudgeAmount = 2L;
+    if (m_axis1Motor->isRunning()) {
+        axis1Stop();
     }
+    long steps = nudgeAmountMm / m_axis1Motor->getConversionFactor();
     if (direction == ZDirection::Right) {
-        nudgeAmount = -nudgeAmount;
+        steps = -steps;
     }
     if (m_config.readBool("Axis1MotorFlipDirection", false)) {
-        nudgeAmount = -nudgeAmount;
+        steps = -steps;
     }
     m_axis1Motor->stop();
     m_axis1Motor->wait();
-    axis1GoToStep(getAxis1MotorCurrentStep() + nudgeAmount);
+    axis1GoToStep(getAxis1MotorCurrentStep() + steps);
     m_axis1Motor->wait();
 
     // Save position
@@ -687,35 +686,19 @@ void Model::axis2SpeedIncrease()
     }
 }
 
-void Model::axis2Nudge(XDirection direction)
+void Model::axis2Nudge(XDirection direction, double nudgeAmountMm)
 {
-    if (direction == XDirection::Inwards) {
-        if (m_axis2Motor->isRunning()) {
-            axis2Stop();
-        }
-        double nudgeValue = 60.0;
-        if (m_keyPressed == key::W) {
-            // extra fine with shift
-            nudgeValue = 6.0;
-        }
-        if (m_config.readBool("Axis2MotorFlipDirection", false)) {
-            nudgeValue = -nudgeValue;
-        }
-        m_axis2Motor->goToStep(m_axis2Motor->getCurrentStep() + nudgeValue);
-    } else {
-        if (m_axis2Motor->isRunning()) {
-            axis2Stop();
-        }
-        double nudgeValue = 60.0;
-        if (m_keyPressed == key::S) {
-            // extra fine with shift
-            nudgeValue = 6.0;
-        }
-        if (m_config.readBool("Axis2MotorFlipDirection", false)) {
-            nudgeValue = -nudgeValue;
-        }
-        m_axis2Motor->goToStep(m_axis2Motor->getCurrentStep() - nudgeValue);
+    if (m_axis2Motor->isRunning()) {
+        axis2Stop();
     }
+    long steps = nudgeAmountMm / m_axis2Motor->getConversionFactor();
+    if (direction == XDirection::Inwards) {
+        steps = -steps;
+    }
+    if (m_config.readBool("Axis2MotorFlipDirection", false)) {
+        steps = -steps;
+    }
+    m_axis2Motor->goToStep(m_axis2Motor->getCurrentStep() + steps);
 }
 
 void Model::axis2FastReturn()
