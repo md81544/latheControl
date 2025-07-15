@@ -161,6 +161,7 @@ void Model::checkStatus()
         }
         if ((m_enabledFunction == Mode::Taper || m_enabledFunction == Mode::Radius)
             && m_zWasRunning) {
+            m_axis2Motor->setSpeed(m_previousXSpeed);
             axis2SynchroniseOff();
         }
         if (m_zWasRunning
@@ -512,6 +513,7 @@ void Model::axis1FastReturn()
     if (m_enabledFunction == Mode::Taper) {
         // If we are tapering, we need to set a speed the x-axis motor can keep up with
         m_axis1Motor->setSpeed(100.0);
+        m_previousXSpeed = m_axis2Motor->getSpeed();
         ZDirection direction = ZDirection::Left;
         if (m_axis1Memory.at(m_currentMemory) < getAxis1MotorCurrentStep()) {
             direction = ZDirection::Right;
