@@ -217,6 +217,26 @@ void Controller::processKeyPress()
                     m_model->axis1Move(ZDirection::Right);
                     break;
                 }
+            case key::AltUp:
+                {
+                    m_model->axis2Jog(XDirection::Inwards);
+                    break;
+                }
+            case key::AltDown:
+                {
+                    m_model->axis2Jog(XDirection::Outwards);
+                    break;
+                }
+            case key::AltLeft:
+                {
+                    m_model->axis1Jog(ZDirection::Left);
+                    break;
+                }
+            case key::AltRight:
+                {
+                    m_model->axis1Jog(ZDirection::Right);
+                    break;
+                }
             case key::a:
                 {
                     m_model->axis1Nudge(ZDirection::Left, 0.025);

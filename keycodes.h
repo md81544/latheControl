@@ -150,11 +150,18 @@ constexpr int f2r = 7004; // X retraction mode
 constexpr int f2o = 7005; // radius mode
 
 // Random others
-constexpr int CtrlQ = key::q | 0x10000; // quit
-constexpr int AltW = key::w | 0x100000; // big nudge
-constexpr int AltA = key::a | 0x100000; // big nudge
-constexpr int AltS = key::s | 0x100000; // big nudge
-constexpr int AltD = key::d | 0x100000; // big nudge
+constexpr int CTRL = 0x10000;
+constexpr int ALT = 0x100000;
+
+constexpr int CtrlQ = key::q | CTRL; // quit
+constexpr int AltW = key::w | ALT; // big nudge
+constexpr int AltA = key::a | ALT; // big nudge
+constexpr int AltS = key::s | ALT; // big nudge
+constexpr int AltD = key::d | ALT; // big nudge
+constexpr int AltLeft = key::LEFT | ALT; // jog
+constexpr int AltRight = key::RIGHT | ALT; // jog
+constexpr int AltUp = key::UP | ALT; // jog
+constexpr int AltDown = key::DOWN | ALT; // jog
 
 } // namespace key
 } // namespace mgo

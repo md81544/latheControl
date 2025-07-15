@@ -111,6 +111,7 @@ public:
     void axis1Stop();
     void axis1StorePosition();
     void axis1Move(ZDirection direction);
+    void axis1Jog(ZDirection direction);
     void axis1SpeedPreset();
     void axis1SaveBreadcrumbPosition();
     void axis1ClearBreadcrumbs();
@@ -130,6 +131,7 @@ public:
     void axis2Retract();
     void axis2StorePosition();
     void axis2Move(XDirection direction);
+    void axis2Jog(XDirection direction);
     void axis2SpeedPreset();
 
     void repeatLastRelativeMove();

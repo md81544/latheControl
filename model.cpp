@@ -564,6 +564,19 @@ void Model::axis1Move(ZDirection direction)
     }
 }
 
+void Model::axis1Jog(ZDirection direction)
+{
+    // Issuing the same command (i.e. pressing the same key)
+    // when it is already running will cause the motor to stop
+    if (m_axis1Motor->isRunning()) {
+        axis1Stop();
+        return;
+    }
+    m_previousZSpeed = m_axis1Motor->getSpeed();
+    m_axis1Motor->setSpeed(m_axis1Motor->getMaxRpm());
+    axis1Move(direction);
+}
+
 void Model::axis1SpeedPreset()
 {
     if (m_currentDisplayMode == Mode::Threading) {
@@ -770,6 +783,17 @@ void Model::axis2Move(XDirection direction)
             m_axis2Motor->goToStep(INF_OUT);
         }
     }
+}
+
+void Model::axis2Jog(XDirection direction)
+{
+    if (m_axis2Motor->isRunning()) {
+        axis2Stop();
+        return;
+    }
+    m_previousXSpeed = m_axis2Motor->getSpeed();
+    m_axis2Motor->setSpeed(m_axis2Motor->getMaxRpm());
+    axis2Move(direction);
 }
 
 void Model::axis2SpeedPreset()
