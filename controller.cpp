@@ -130,6 +130,11 @@ void Controller::processKeyPress()
                     m_model->axis2Nudge(XDirection::Inwards, 0.025);
                     break;
                 }
+            case key::AltW:
+                {
+                    m_model->axis2Nudge(XDirection::Inwards, 0.1);
+                    break;
+                }
             // Nudge out X axis
             case key::S:
                 {
@@ -139,6 +144,11 @@ void Controller::processKeyPress()
             case key::s:
                 {
                     m_model->axis2Nudge(XDirection::Outwards, 0.025);
+                    break;
+                }
+            case key::AltS:
+                {
+                    m_model->axis2Nudge(XDirection::Outwards, 0.1);
                     break;
                 }
             case key::a1_EQUALS:
@@ -217,6 +227,11 @@ void Controller::processKeyPress()
                     m_model->axis1Nudge(ZDirection::Left, 0.002);
                     break;
                 }
+            case key::AltA:
+                {
+                    m_model->axis1Nudge(ZDirection::Left, 0.1);
+                    break;
+                }
             case key::d:
                 {
                     m_model->axis1Nudge(ZDirection::Right, 0.025);
@@ -225,6 +240,11 @@ void Controller::processKeyPress()
             case key::D:
                 {
                     m_model->axis1Nudge(ZDirection::Right, 0.002);
+                    break;
+                }
+            case key::AltD:
+                {
+                    m_model->axis1Nudge(ZDirection::Right, 0.1);
                     break;
                 }
             case key::LBRACKET: // [

@@ -35,6 +35,10 @@ int convertKeyCode(sf::Event event)
             // Ctrl-letter has 0x10000 ORed to it
             return (key::a + sfKey) | 0x10000;
         }
+        if (k->alt) {
+            // Alt-letter has 0x100000 ORed to it
+            return (key::a + sfKey) | 0x100000;
+        }
         // A is defined in SFML's enum as zero
         if (k->shift) {
             return key::A + sfKey;

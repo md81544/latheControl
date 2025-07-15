@@ -441,7 +441,7 @@ void Model::axis1Nudge(ZDirection direction, double nudgeAmountMm)
         axis1Stop();
     }
     long steps = nudgeAmountMm / m_axis1Motor->getConversionFactor();
-    if (direction == ZDirection::Right) {
+    if (direction == ZDirection::Left) {
         steps = -steps;
     }
     if (m_config.readBool("Axis1MotorFlipDirection", false)) {
