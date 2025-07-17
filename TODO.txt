@@ -1,5 +1,23 @@
 Lots of refactoring needed as this grew a bit organically
 
+Thinking around some form of automation - how to define, for example,
+a cut, retract, return, nudge in, and repeat? Making this flexible
+would assist in thread cutting and keyway cutting (mentioned below)
+  - Maybe in config, could define actions, like:
+
+    repeat 5
+    zspeed 100
+    zgoto m1 (memory zero)
+    xgoto +0.1 (relative move)
+    zspeed 10
+    zgoto m0
+
+    (We're getting dangerously close to just using gcode here - maybe a
+    limited gcode interpreter rather than reinventing wheels?)
+
+Display chuck angle? Maybe useful for cuts where chuck is locked out,
+then can be manually rotated (using the angle display)
+
 Now that we have support for reading a linear scale on the Z-axis
 we need to consider how best to use it. Should position come solely
 from that, rather than continuing to rely on "dead reckoning"?
