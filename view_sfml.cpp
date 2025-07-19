@@ -73,22 +73,22 @@ int convertKeyCode(sf::Event event)
         case static_cast<int>(sf::Keyboard::Key::Period):
             return key::FULLSTOP;
         case static_cast<int>(sf::Keyboard::Key::Right):
-            if (k->alt) {
+            if (k->alt || sf::Keyboard::isKeyPressed(sf::Keyboard::Key::RAlt)) {
                 return key::AltRight;
             }
             return key::RIGHT;
         case static_cast<int>(sf::Keyboard::Key::Left):
-            if (k->alt) {
+            if (k->alt || sf::Keyboard::isKeyPressed(sf::Keyboard::Key::RAlt)) {
                 return key::AltLeft;
             }
             return key::LEFT;
         case static_cast<int>(sf::Keyboard::Key::Up):
-            if (k->alt) {
+            if (k->alt || sf::Keyboard::isKeyPressed(sf::Keyboard::Key::RAlt)) {
                 return key::AltUp;
             }
             return key::UP;
         case static_cast<int>(sf::Keyboard::Key::Down):
-            if (k->alt) {
+            if (k->alt || sf::Keyboard::isKeyPressed(sf::Keyboard::Key::RAlt)) {
                 return key::AltDown;
             }
             return key::DOWN;
