@@ -291,6 +291,15 @@ int ViewSfml::getInput()
     std::optional<sf::Event> event;
     for (;;) {
         event = m_window->pollEvent();
+        if (event->is<sf::Event::KeyReleased>()) {
+            // quick check for jog cancellation
+            auto e = event->getIf<sf::Event::KeyReleased>();
+            if ((e->code == sf::Keyboard::Key::Left || e->code == sf::Keyboard::Key::Right
+                 || e->code == sf::Keyboard::Key::Up || e->code == sf::Keyboard::Key::Down)
+                && (e->alt || sf::Keyboard::isKeyPressed(sf::Keyboard::Key::RAlt))) {
+                return key::SPACE;
+            }
+        }
         if (!event->is<sf::Event::KeyPressed>()) {
             return -1;
         }
