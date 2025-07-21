@@ -287,10 +287,14 @@ int ViewSfml::getInput()
     clock.start();
     static auto lastTime = clock.getElapsedTime();
     // This loop is to quickly discard anything that's not a keypress
-    // e.g. mouse movement, which we're not interested in
+    // e.g. mouse movement, which we're not interested in (currently)
     std::optional<sf::Event> event;
     for (;;) {
         event = m_window->pollEvent();
+        if (!event) {
+            // No events in the queue
+            return key::None;
+        }
         if (event->is<sf::Event::KeyReleased>()) {
             // quick check for jog cancellation
             auto e = event->getIf<sf::Event::KeyReleased>();
@@ -300,10 +304,9 @@ int ViewSfml::getInput()
                 return key::SPACE;
             }
         }
-        if (!event->is<sf::Event::KeyPressed>()) {
-            return -1;
+        if (event->is<sf::Event::KeyPressed>()) {
+            break;
         }
-        break;
     }
 
     // We only get here if a key was pressed
