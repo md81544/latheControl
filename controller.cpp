@@ -68,7 +68,7 @@ void Controller::processKeyPress()
 {
     int t = m_view->getInput();
     if (t != key::None) {
-        MGOLOG(std::format("Got input: {}", t));
+        MGOLOG(fmt::format("Got input: {}", t));
     }
     t = checkKeyAllowedForMode(t);
     t = processModeInputKeys(t);
