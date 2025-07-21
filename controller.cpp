@@ -46,6 +46,7 @@ void Controller::run()
         m_view->updateDisplay(*m_model);
 
         if (m_model->isShuttingDown()) {
+            MGOLOG("Shutting down");
             // Stop the motor threads
             m_model->resetMotorThreads();
             // clang-format off
@@ -66,6 +67,9 @@ void Controller::run()
 void Controller::processKeyPress()
 {
     int t = m_view->getInput();
+    if (t != key::None) {
+        MGOLOG(std::format("Got input: {}", t));
+    }
     t = checkKeyAllowedForMode(t);
     t = processModeInputKeys(t);
     if (t != key::None) {

@@ -1,5 +1,7 @@
 Lots of refactoring needed as this grew a bit organically
 
+Touchscreen support
+
 Thinking around some form of automation - how to define, for example,
 a cut, retract, return, nudge in, and repeat? Making this flexible
 would assist in thread cutting and keyway cutting (mentioned below)
