@@ -17,6 +17,8 @@ public:
     virtual void updateDisplay(const Model&) override;
     // Non-overrides:
     void updateTextFromModel(const Model&);
+    int processJoystickButton(const sf::Event& event);
+    int getJoystickState();
 
 private:
     std::unique_ptr<sf::RenderWindow> m_window;

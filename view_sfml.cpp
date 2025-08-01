@@ -297,11 +297,25 @@ int ViewSfml::getInput()
         }
         if (event->is<sf::Event::KeyReleased>()) {
             // quick check for jog cancellation
+            // TODO this fails if the alt key is released first
             auto e = event->getIf<sf::Event::KeyReleased>();
             if ((e->code == sf::Keyboard::Key::Left || e->code == sf::Keyboard::Key::Right
                  || e->code == sf::Keyboard::Key::Up || e->code == sf::Keyboard::Key::Down)
                 && (e->alt || sf::Keyboard::isKeyPressed(sf::Keyboard::Key::RAlt))) {
                 return key::SPACE;
+            }
+        }
+        if (event->is<sf::Event::JoystickButtonPressed>()) {
+            auto key = processJoystickButton(*event);
+            if (key != key::None) {
+                return key;
+            }
+        }
+        if (sf::Joystick::isConnected(0)) {
+            // If an analogue stick is not centred, we return the appropriate key
+            auto key = getJoystickState();
+            if (key != key::None) {
+                return key;
             }
         }
         if (event->is<sf::Event::KeyPressed>()) {
@@ -668,6 +682,145 @@ void ViewSfml::updateTextFromModel(const Model& model)
                 assert(false);
             }
     }
+}
+
+int ViewSfml::processJoystickButton(const sf::Event& e)
+{
+    auto event = e.getIf<sf::Event::JoystickButtonPressed>();
+    if (!event) {
+        return key::None;
+    }
+    switch (event->button) {
+        case 0:
+            // big nudge
+            return key::AltW;
+        case 1:
+            // big nudge
+            return key::AltD;
+        case 2:
+            // big nudge
+            return key::AltS;
+        case 3:
+            // big nudge
+            return key::AltA;
+        case 4:
+            return key::LBRACKET;
+        case 5:
+            return key::SPACE;
+        case 6:
+            return key::RBRACKET;
+        case 7:
+            return key::ENTER;
+        case 8:
+            return key::f;
+        case 9:
+            break;
+        case 10:
+            break;
+        case 11:
+            return key::r;
+        case 12:
+            return key::m;
+    }
+    return key::None;
+}
+
+int ViewSfml::getJoystickState()
+{
+    // Small Nudge via D-pad (although x/y are called axes, they only have on (100) or off (0) state
+    if (sf::Joystick::hasAxis(0, sf::Joystick::Axis::X)) {
+        constexpr float deadzone = 50.f;
+        float value = sf::Joystick::getAxisPosition(0, sf::Joystick::Axis::X);
+        if (value > deadzone) {
+            return key::d;
+        }
+        if (value < -deadzone) {
+            return key::a;
+        }
+    }
+    if (sf::Joystick::hasAxis(0, sf::Joystick::Axis::Y)) {
+        constexpr float deadzone = 40.f;
+        float value = sf::Joystick::getAxisPosition(0, sf::Joystick::Axis::Y);
+        if (value > deadzone) {
+            return key::s;
+        }
+        if (value < -deadzone) {
+            return key::w;
+        }
+    }
+    // Normal move via left stick. This only gives on (100) and off (0) state
+    static float previousPovXValue = 0.f;
+    static float previousPovYValue = 0.f;
+    if (sf::Joystick::hasAxis(0, sf::Joystick::Axis::PovX)) {
+        constexpr float deadzone = 50.f;
+        float value = sf::Joystick::getAxisPosition(0, sf::Joystick::Axis::PovX);
+        if (!(previousPovXValue > deadzone && value > deadzone)
+            && !(previousPovXValue < -deadzone && value < -deadzone)) {
+            previousPovXValue = value;
+            if (value > deadzone) {
+                return key::RIGHT;
+            }
+            if (value < -deadzone) {
+                return key::LEFT;
+            }
+        }
+    }
+    if (sf::Joystick::hasAxis(0, sf::Joystick::Axis::PovY)) {
+        constexpr float deadzone = 50.f;
+        float value = sf::Joystick::getAxisPosition(0, sf::Joystick::Axis::PovY);
+        if (!(previousPovYValue > deadzone && value > deadzone)
+            && !(previousPovYValue < -deadzone && value < -deadzone)) {
+            previousPovYValue = value;
+            if (value > deadzone) {
+                return key::DOWN;
+            }
+            if (value < -deadzone) {
+                return key::UP;
+            }
+        }
+    }
+    // Rapid motion via Right stick. This is properly analogue.
+    static float previousZValue = 0.f;
+    static float previousRValue = 0.f;
+    if (sf::Joystick::hasAxis(0, sf::Joystick::Axis::Z)) {
+        constexpr float deadzone = 90.f;
+        float value = sf::Joystick::getAxisPosition(0, sf::Joystick::Axis::Z);
+        if (std::abs(previousZValue) > deadzone && std::abs(value) <= deadzone) {
+            // stop rapid
+            previousZValue = value;
+            return key::SPACE;
+        }
+        if (!(previousZValue > deadzone && value > deadzone)
+            && !(previousZValue < -deadzone && value < -deadzone)) {
+            previousZValue = value;
+            if (value > deadzone) {
+                return key::AltRight;
+            }
+            if (value < -deadzone) {
+                return key::AltLeft;
+            }
+        }
+    }
+    if (sf::Joystick::hasAxis(0, sf::Joystick::Axis::R)) {
+        constexpr float deadzone = 80.f;
+        float value = sf::Joystick::getAxisPosition(0, sf::Joystick::Axis::R);
+        if (std::abs(previousRValue) > deadzone && std::abs(value) <= deadzone) {
+            // stop rapid
+            previousRValue = value;
+            return key::SPACE;
+        }
+        if (!(previousRValue > deadzone && value > deadzone)
+            && !(previousRValue < -deadzone && value < -deadzone)) {
+            previousRValue = value;
+            if (value > deadzone) {
+                return key::AltUp;
+            }
+            if (value < -deadzone) {
+                return key::AltDown;
+            }
+        }
+    }
+    return key::None;
 }
 
 } // namespace mgo
