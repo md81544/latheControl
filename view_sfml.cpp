@@ -714,6 +714,7 @@ int ViewSfml::processJoystickButton(const sf::Event& e)
         case 8:
             return key::f;
         case 9:
+            // This acts as a modifier, so we ignore this event
             break;
         case 10:
             break;
@@ -732,9 +733,15 @@ int ViewSfml::getJoystickState()
         constexpr float deadzone = 50.f;
         float value = sf::Joystick::getAxisPosition(0, sf::Joystick::Axis::X);
         if (value > deadzone) {
+            if (sf::Joystick::isButtonPressed(0, 9)) {
+                return key::D;
+            }
             return key::d;
         }
         if (value < -deadzone) {
+            if (sf::Joystick::isButtonPressed(0, 9)) {
+                return key::A;
+            }
             return key::a;
         }
     }
@@ -742,9 +749,15 @@ int ViewSfml::getJoystickState()
         constexpr float deadzone = 40.f;
         float value = sf::Joystick::getAxisPosition(0, sf::Joystick::Axis::Y);
         if (value > deadzone) {
+            if (sf::Joystick::isButtonPressed(0, 9)) {
+                return key::S;
+            }
             return key::s;
         }
         if (value < -deadzone) {
+            if (sf::Joystick::isButtonPressed(0, 9)) {
+                return key::W;
+            }
             return key::w;
         }
     }
