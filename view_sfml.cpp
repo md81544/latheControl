@@ -796,7 +796,7 @@ int ViewSfml::getJoystickState()
     static float previousZValue = 0.f;
     static float previousRValue = 0.f;
     if (sf::Joystick::hasAxis(0, sf::Joystick::Axis::Z)) {
-        constexpr float deadzone = 90.f;
+        constexpr float deadzone = 95.f;
         float value = sf::Joystick::getAxisPosition(0, sf::Joystick::Axis::Z);
         if (std::abs(previousZValue) > deadzone && std::abs(value) <= deadzone) {
             // stop rapid
@@ -815,7 +815,7 @@ int ViewSfml::getJoystickState()
         }
     }
     if (sf::Joystick::hasAxis(0, sf::Joystick::Axis::R)) {
-        constexpr float deadzone = 80.f;
+        constexpr float deadzone = 95.f;
         float value = sf::Joystick::getAxisPosition(0, sf::Joystick::Axis::R);
         if (std::abs(previousRValue) > deadzone && std::abs(value) <= deadzone) {
             // stop rapid
@@ -826,10 +826,10 @@ int ViewSfml::getJoystickState()
             && !(previousRValue < -deadzone && value < -deadzone)) {
             previousRValue = value;
             if (value > deadzone) {
-                return key::AltUp;
+                return key::AltDown;
             }
             if (value < -deadzone) {
-                return key::AltDown;
+                return key::AltUp;
             }
         }
     }
