@@ -17,7 +17,7 @@ std::string formatMotorPosition(double mm)
     if (std::abs(mm) < 0.001) {
         mm = 0.0;
     }
-    return fmt::format("{: >8.3f}", mm);
+    return fmt::format("{: >8.2f}", mm);
 }
 
 int convertKeyCode(sf::Event event)

@@ -123,12 +123,12 @@ void Controller::processKeyPress()
             // Nudge in X axis
             case key::W:
                 {
-                    m_model->axis2Nudge(XDirection::Inwards, 0.002);
+                    m_model->axis2Nudge(XDirection::Inwards, 0.01);
                     break;
                 }
             case key::w:
                 {
-                    m_model->axis2Nudge(XDirection::Inwards, 0.025);
+                    m_model->axis2Nudge(XDirection::Inwards, 0.05);
                     break;
                 }
             case key::AltW:
@@ -139,12 +139,12 @@ void Controller::processKeyPress()
             // Nudge out X axis
             case key::S:
                 {
-                    m_model->axis2Nudge(XDirection::Outwards, 0.002);
+                    m_model->axis2Nudge(XDirection::Outwards, 0.01);
                     break;
                 }
             case key::s:
                 {
-                    m_model->axis2Nudge(XDirection::Outwards, 0.025);
+                    m_model->axis2Nudge(XDirection::Outwards, 0.05);
                     break;
                 }
             case key::AltS:
@@ -240,12 +240,12 @@ void Controller::processKeyPress()
                 }
             case key::a:
                 {
-                    m_model->axis1Nudge(ZDirection::Left, 0.025);
+                    m_model->axis1Nudge(ZDirection::Left, 0.05);
                     break;
                 }
             case key::A:
                 {
-                    m_model->axis1Nudge(ZDirection::Left, 0.002);
+                    m_model->axis1Nudge(ZDirection::Left, 0.01);
                     break;
                 }
             case key::AltA:
@@ -255,12 +255,12 @@ void Controller::processKeyPress()
                 }
             case key::d:
                 {
-                    m_model->axis1Nudge(ZDirection::Right, 0.025);
+                    m_model->axis1Nudge(ZDirection::Right, 0.05);
                     break;
                 }
             case key::D:
                 {
-                    m_model->axis1Nudge(ZDirection::Right, 0.002);
+                    m_model->axis1Nudge(ZDirection::Right, 0.01);
                     break;
                 }
             case key::AltD:
