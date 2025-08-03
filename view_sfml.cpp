@@ -306,6 +306,7 @@ int ViewSfml::getInput()
             }
         }
         if (event->is<sf::Event::JoystickButtonPressed>()) {
+            MGOLOG("Got joystick button press event");
             auto key = processJoystickButton(*event);
             if (key != key::None) {
                 return key;
@@ -315,6 +316,7 @@ int ViewSfml::getInput()
             // If an analogue stick is not centred, we return the appropriate key
             auto key = getJoystickState();
             if (key != key::None) {
+                MGOLOG("Got joystick state change");
                 return key;
             }
         }
