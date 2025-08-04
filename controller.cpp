@@ -318,6 +318,11 @@ void Controller::processKeyPress()
                     m_model->axis2FastReturn();
                     break;
                 }
+            case key::aAll_f:
+                {
+                    m_model->axis1FastReturn();
+                    m_model->axis2FastReturn();
+                }
             case key::r:
             case key::R:
                 {
