@@ -728,10 +728,10 @@ int ViewSfml::processJoystickButton(const sf::Event& e)
 
 int ViewSfml::getJoystickState()
 {
-    // Small Nudge via D-pad (although x/y are called axes, they only have on (100) or off (0) state
-    if (sf::Joystick::hasAxis(0, sf::Joystick::Axis::X)) {
+    // Small Nudge via D-pad
+    if (sf::Joystick::hasAxis(0, sf::Joystick::Axis::PovX)) {
         constexpr float deadzone = 50.f;
-        float value = sf::Joystick::getAxisPosition(0, sf::Joystick::Axis::X);
+        float value = sf::Joystick::getAxisPosition(0, sf::Joystick::Axis::PovX);
         if (value > deadzone) {
             if (sf::Joystick::isButtonPressed(0, 9)) {
                 return key::D;
@@ -745,9 +745,9 @@ int ViewSfml::getJoystickState()
             return key::a;
         }
     }
-    if (sf::Joystick::hasAxis(0, sf::Joystick::Axis::Y)) {
+    if (sf::Joystick::hasAxis(0, sf::Joystick::Axis::PovY)) {
         constexpr float deadzone = 40.f;
-        float value = sf::Joystick::getAxisPosition(0, sf::Joystick::Axis::Y);
+        float value = sf::Joystick::getAxisPosition(0, sf::Joystick::Axis::PovY);
         if (value > deadzone) {
             if (sf::Joystick::isButtonPressed(0, 9)) {
                 return key::S;
@@ -761,12 +761,12 @@ int ViewSfml::getJoystickState()
             return key::w;
         }
     }
-    // Normal move via left stick. This only gives on (100) and off (0) state
+    // Normal move via left stick.
     static float previousPovXValue = 0.f;
     static float previousPovYValue = 0.f;
-    if (sf::Joystick::hasAxis(0, sf::Joystick::Axis::PovX)) {
-        constexpr float deadzone = 50.f;
-        float value = sf::Joystick::getAxisPosition(0, sf::Joystick::Axis::PovX);
+    if (sf::Joystick::hasAxis(0, sf::Joystick::Axis::X)) {
+        constexpr float deadzone = 99.f;
+        float value = sf::Joystick::getAxisPosition(0, sf::Joystick::Axis::X);
         if (!(previousPovXValue > deadzone && value > deadzone)
             && !(previousPovXValue < -deadzone && value < -deadzone)) {
             previousPovXValue = value;
@@ -778,9 +778,9 @@ int ViewSfml::getJoystickState()
             }
         }
     }
-    if (sf::Joystick::hasAxis(0, sf::Joystick::Axis::PovY)) {
-        constexpr float deadzone = 50.f;
-        float value = sf::Joystick::getAxisPosition(0, sf::Joystick::Axis::PovY);
+    if (sf::Joystick::hasAxis(0, sf::Joystick::Axis::Y)) {
+        constexpr float deadzone = 99.f;
+        float value = sf::Joystick::getAxisPosition(0, sf::Joystick::Axis::Y);
         if (!(previousPovYValue > deadzone && value > deadzone)
             && !(previousPovYValue < -deadzone && value < -deadzone)) {
             previousPovYValue = value;
@@ -792,11 +792,11 @@ int ViewSfml::getJoystickState()
             }
         }
     }
-    // Rapid motion via Right stick. This is properly analogue.
+    // Rapid motion via Right stick.
     static float previousZValue = 0.f;
     static float previousRValue = 0.f;
     if (sf::Joystick::hasAxis(0, sf::Joystick::Axis::Z)) {
-        constexpr float deadzone = 95.f;
+        constexpr float deadzone = 99.f;
         float value = sf::Joystick::getAxisPosition(0, sf::Joystick::Axis::Z);
         if (std::abs(previousZValue) > deadzone && std::abs(value) <= deadzone) {
             // stop rapid
@@ -815,7 +815,7 @@ int ViewSfml::getJoystickState()
         }
     }
     if (sf::Joystick::hasAxis(0, sf::Joystick::Axis::R)) {
-        constexpr float deadzone = 95.f;
+        constexpr float deadzone = 99.f;
         float value = sf::Joystick::getAxisPosition(0, sf::Joystick::Axis::R);
         if (std::abs(previousRValue) > deadzone && std::abs(value) <= deadzone) {
             // stop rapid
