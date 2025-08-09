@@ -221,12 +221,6 @@ void Model::changeMode(Mode mode)
             m_input = convertToString(m_taperAngle, 4);
         }
     }
-    if (mode == Mode::Axis1GoToOffset && m_axis1LastRelativeMove != 0.0) {
-        m_input = convertToString(m_axis1LastRelativeMove, 3);
-    }
-    if (mode == Mode::Axis2GoToOffset && m_axis2LastRelativeMove != 0.0) {
-        m_input = convertToString(m_axis2LastRelativeMove, 3);
-    }
 
     if (mode == Mode::Radius) {
         axis1SetSpeed(10.0);
