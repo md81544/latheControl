@@ -137,7 +137,7 @@ public:
     void axis2SaveBreadcrumbPosition();
     void axis2ClearBreadcrumbs();
 
-    void repeatLastRelativeMove();
+    void repeatLastRelativeMove(Axis axis);
     void diameterIsSet();
 
     // Getters/setters:

@@ -117,8 +117,20 @@ void Controller::processKeyPress()
                     break;
                 }
             case key::FULLSTOP:
+            case key::a1_FULLSTOP:
                 {
-                    m_model->repeatLastRelativeMove();
+                    m_model->repeatLastRelativeMove(Axis::Axis1);
+                    break;
+                }
+            case key::a2_FULLSTOP:
+                {
+                    m_model->repeatLastRelativeMove(Axis::Axis2);
+                    break;
+                }
+            case key::aAll_FULLSTOP:
+                {
+                    m_model->repeatLastRelativeMove(Axis::Axis1);
+                    m_model->repeatLastRelativeMove(Axis::Axis2);
                     break;
                 }
             case key::a2_MINUS:

@@ -1,6 +1,4 @@
-axis1 & axis2 "last relative move" (.) should be independent, so, for exanple,
-I could press type x. or z. and do the last relative move for that axis. Currently
-"." just repeats the last relative move on the last used axis
+Remove Alt-Arrows for jog once controller set up for mill
 
 Lots of refactoring needed as this grew a bit organically
 

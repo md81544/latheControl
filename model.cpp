@@ -858,16 +858,18 @@ void Model::axis2ClearBreadcrumbs() {
     axis2SaveBreadcrumbPosition();
 }
 
-void Model::repeatLastRelativeMove()
+void Model::repeatLastRelativeMove(Axis axis)
 {
-    if (m_lastRelativeMoveAxis == Axis::Axis1) {
+    if (axis == Axis::Axis1) {
         if (m_axis1LastRelativeMove != 0.0) {
             axis1GoToOffset(m_axis1LastRelativeMove);
         }
-    } else if (m_lastRelativeMoveAxis == Axis::Axis2) {
+    } else if (axis == Axis::Axis2) {
         if (m_axis2LastRelativeMove != 0.0) {
             axis2GoToOffset(m_axis2LastRelativeMove);
         }
+    } else {
+        assert(false); // Missing axis
     }
 }
 

@@ -121,8 +121,9 @@ constexpr int a1_5 = FIVE + 0x1000; // axis1 speed 5
 constexpr int a1_ENTER = ENTER + 0x1000; // axis1 return to memory
 constexpr int a1_MINUS = MINUS + 0x1000; // axis1 speed decrease
 constexpr int a1_EQUALS = EQUALS + 0x1000; // axis1 speed increase
+constexpr int a1_FULLSTOP = '.' + 0x1000;
 
-// Axis 1 leader-prefixed keys ( 0x2000 = bit 13 is set )
+// Axis 2 leader-prefixed keys ( 0x2000 = bit 13 is set )
 constexpr int a2_z = z + 0x2000; // axis2 zero
 constexpr int a2_m = m + 0x2000; // axis2 memorise
 constexpr int a2_g = g + 0x2000; // axis2 go to number
@@ -138,12 +139,14 @@ constexpr int a2_5 = FIVE + 0x2000; // axis2 speed 5
 constexpr int a2_ENTER = ENTER + 0x2000; // axis2 return to memory
 constexpr int a2_MINUS = MINUS + 0x2000; // axis2 speed decrease
 constexpr int a2_EQUALS = EQUALS + 0x2000; // axis2 speed increase
+constexpr int a2_FULLSTOP = '.' + 0x2000;
 
 // Axis All leader-prefixed keys ( 0x4000 = bit 14 is set )
 constexpr int aAll_z = z + 0x4000; // All axis zero
 constexpr int aAll_ENTER = ENTER + 0x4000; // All axis zero
 constexpr int aAll_f = f + 0x4000;
 constexpr int aAll_l = l + 0x4000; // last position on both axes
+constexpr int aAll_FULLSTOP = '.' + 0x4000;
 
 // Functions, leader is F2
 constexpr int f2h = 7000; // help
