@@ -92,6 +92,7 @@ void Model::initialise()
     m_axis2Motor->zeroPosition();
 
     axis1SaveBreadcrumbPosition();
+    axis2SaveBreadcrumbPosition();
 }
 
 void Model::checkStatus()
@@ -176,6 +177,10 @@ void Model::checkStatus()
     }
 
     if (!m_axis2Motor->isRunning()) {
+        m_axis2Status = "stopped";
+        if (m_xWasRunning){
+            axis2SaveBreadcrumbPosition();
+        }
         if (m_fastRetracting) {
             m_axis2Motor->setSpeed(m_previousXSpeed);
             m_fastRetracting = false;
@@ -532,6 +537,22 @@ void Model::axis2GoToOffset(double offset)
     m_axis2Status = fmt::format("To offset {}", offset);
 }
 
+void Model::axis2GoToPreviousPosition() {
+    axis2Stop();
+    while (!m_axis2PreviousPositions.empty()
+           && (std::abs(m_axis2PreviousPositions.top() - m_axis2Motor->getPosition()) < 0.0001)) {
+        if (m_axis2PreviousPositions.size() == 1) {
+            return;
+        }
+        m_axis2PreviousPositions.pop();
+    }
+    if (m_axis2PreviousPositions.empty()) {
+        return;
+    }
+    axis2GoToPosition(m_axis2PreviousPositions.top());
+    m_axis2PreviousPositions.pop();
+}
+
 void Model::axis1Move(ZDirection direction)
 {
     // Issuing the same command (i.e. pressing the same key)
@@ -656,6 +677,8 @@ void Model::axis2Zero()
     for (auto& m : m_axis2Memory) {
         m = INF_OUT;
     }
+    // Also clear any "breadcrumb" positions
+    axis2ClearBreadcrumbs();
 }
 
 void Model::axis2SynchroniseOff()
@@ -705,6 +728,10 @@ void Model::axis2Nudge(XDirection direction, double nudgeAmountMm)
         steps = -steps;
     }
     m_axis2Motor->goToStep(m_axis2Motor->getCurrentStep() + steps);
+    m_axis2Motor->wait();
+
+    // Save position
+    axis2SaveBreadcrumbPosition();
 }
 
 void Model::axis2FastReturn()
@@ -816,6 +843,19 @@ void Model::axis2SpeedPreset()
             m_axis2Motor->setSpeed(m_config.readDouble("Axis2SpeedPreset5", 1'00.0));
             break;
     }
+}
+
+void Model::axis2SaveBreadcrumbPosition() {
+    if (!m_axis2PreviousPositions.empty()
+        && m_axis2PreviousPositions.top() == m_axis2Motor->getPosition()) {
+        return;
+    }
+    m_axis2PreviousPositions.push(m_axis2Motor->getPosition());
+}
+
+void Model::axis2ClearBreadcrumbs() {
+    m_axis2PreviousPositions = std::stack<double>();
+    axis2SaveBreadcrumbPosition();
 }
 
 void Model::repeatLastRelativeMove()

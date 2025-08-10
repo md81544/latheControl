@@ -118,6 +118,7 @@ public:
 
     void axis2GoToPosition(double pos);
     void axis2GoToOffset(double pos);
+    void axis2GoToPreviousPosition();
     void axis2SetSpeed(double speed);
     void axis2Wait();
     void axis2Stop();
@@ -133,6 +134,8 @@ public:
     void axis2Move(XDirection direction);
     void axis2Jog(XDirection direction);
     void axis2SpeedPreset();
+    void axis2SaveBreadcrumbPosition();
+    void axis2ClearBreadcrumbs();
 
     void repeatLastRelativeMove();
     void diameterIsSet();
@@ -265,8 +268,9 @@ private:
     double m_axis2LastRelativeMove { 0.0 };
     Axis m_lastRelativeMoveAxis;
 
-    // "Breadcrumb" trail of positions for Z axis:
+    // "Breadcrumb" trail of positions for axes:
     std::stack<double> m_axis1PreviousPositions;
+    std::stack<double> m_axis2PreviousPositions;
 };
 
 } // end namespace

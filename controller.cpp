@@ -80,7 +80,8 @@ void Controller::processKeyPress()
         m_model->setKeyPressed(t);
         // Modify key press if it is a known axis leader key:
         m_model->setKeyPressed(checkForAxisLeaderKeys(m_model->getKeyPressed()));
-        switch (m_model->getKeyPressed()) {
+        int kp = m_model->getKeyPressed();
+        switch (kp) {
             case key::None:
                 {
                     break;
@@ -99,8 +100,20 @@ void Controller::processKeyPress()
                 }
             case key::l:
             case key::L:
+            case key::a1_l:
                 {
                     m_model->axis1GoToPreviousPosition();
+                    break;
+                }
+            case key::a2_l:
+                {
+                    m_model->axis2GoToPreviousPosition();
+                    break;
+                }
+            case key::aAll_l:
+                {
+                    m_model->axis1GoToPreviousPosition();
+                    m_model->axis2GoToPreviousPosition();
                     break;
                 }
             case key::FULLSTOP:

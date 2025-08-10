@@ -714,12 +714,12 @@ int ViewSfml::processJoystickButton(const sf::Event& e)
         case 8:
             return key::f;
         case 9:
-            // This acts as a modifier, so we ignore this event
+            // This acts as a modifier, so we ignore this event here
             break;
         case 10:
             break;
         case 11:
-            return key::r;
+            break;
         case 12:
             return key::m;
     }
@@ -728,18 +728,19 @@ int ViewSfml::processJoystickButton(const sf::Event& e)
 
 int ViewSfml::getJoystickState()
 {
+    constexpr int JOYSTICK_SHIFT = 9;
     // Small Nudge via D-pad
     if (sf::Joystick::hasAxis(0, sf::Joystick::Axis::PovX)) {
         constexpr float deadzone = 50.f;
         float value = sf::Joystick::getAxisPosition(0, sf::Joystick::Axis::PovX);
         if (value > deadzone) {
-            if (sf::Joystick::isButtonPressed(0, 9)) {
+            if (sf::Joystick::isButtonPressed(0, JOYSTICK_SHIFT)) {
                 return key::D;
             }
             return key::d;
         }
         if (value < -deadzone) {
-            if (sf::Joystick::isButtonPressed(0, 9)) {
+            if (sf::Joystick::isButtonPressed(0, JOYSTICK_SHIFT)) {
                 return key::A;
             }
             return key::a;
@@ -749,13 +750,13 @@ int ViewSfml::getJoystickState()
         constexpr float deadzone = 40.f;
         float value = sf::Joystick::getAxisPosition(0, sf::Joystick::Axis::PovY);
         if (value > deadzone) {
-            if (sf::Joystick::isButtonPressed(0, 9)) {
+            if (sf::Joystick::isButtonPressed(0, JOYSTICK_SHIFT)) {
                 return key::S;
             }
             return key::s;
         }
         if (value < -deadzone) {
-            if (sf::Joystick::isButtonPressed(0, 9)) {
+            if (sf::Joystick::isButtonPressed(0, JOYSTICK_SHIFT)) {
                 return key::W;
             }
             return key::w;
@@ -785,6 +786,10 @@ int ViewSfml::getJoystickState()
             && !(previousPovYValue < -deadzone && value < -deadzone)) {
             previousPovYValue = value;
             if (value > deadzone) {
+                // "shift" plus down = retract
+                if (sf::Joystick::isButtonPressed(0, JOYSTICK_SHIFT)) {
+                    return key::r;
+                }
                 return key::DOWN;
             }
             if (value < -deadzone) {
