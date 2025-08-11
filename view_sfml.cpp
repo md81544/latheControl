@@ -122,7 +122,7 @@ void ViewSfml::initialise(const Model& model)
 #ifdef FAKE
     // run in a window in "fake" mode for manual testing
     m_window
-        = std::make_unique<sf::RenderWindow>(sf::VideoMode({ 1024, 600 }, 32), "Lathe Control");
+        = std::make_unique<sf::RenderWindow>(sf::VideoMode({ 1280, 720 }, 32), "Lathe Control");
     m_window->setPosition({ 50, 50 });
 #else
     m_window = std::make_unique<sf::RenderWindow>(
