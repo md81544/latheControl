@@ -1,3 +1,6 @@
+We seem to have more screen real-estate than when the program
+was originally written... we could add more data now
+
 Remove Alt-Arrows for jog once controller set up for mill
 
 Lots of refactoring needed as this grew a bit organically

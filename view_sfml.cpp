@@ -131,6 +131,11 @@ void ViewSfml::initialise(const Model& model)
         sf::Style::Default,
         sf::State::Fullscreen);
 #endif
+    MGOLOG(
+        fmt::format(
+            "Desktop mode is {} x {}",
+            sf::VideoMode::getDesktopMode().size.x,
+            sf::VideoMode::getDesktopMode().size.y));
     m_window->setKeyRepeatEnabled(false);
     m_window->setMouseCursorVisible(false);
     m_font = std::make_unique<sf::Font>();
