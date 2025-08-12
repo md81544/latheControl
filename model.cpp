@@ -178,7 +178,7 @@ void Model::checkStatus()
 
     if (!m_axis2Motor->isRunning()) {
         m_axis2Status = "stopped";
-        if (m_xWasRunning){
+        if (m_xWasRunning) {
             axis2SaveBreadcrumbPosition();
         }
         if (m_fastRetracting) {
@@ -209,8 +209,10 @@ void Model::changeMode(Mode mode)
     if (mode == Mode::Threading || mode == Mode::Taper || mode == Mode::Radius) {
         // We do not want motor speed ramping on tapering or threading
         m_axis1Motor->enableRamping(false);
+        m_axis2Motor->enableRamping(false);
     } else {
         m_axis1Motor->enableRamping(true);
+        m_axis2Motor->enableRamping(true);
     }
     if (m_enabledFunction == Mode::Taper && mode != Mode::Taper) {
         m_axis2Motor->setSpeed(m_taperPreviousXSpeed);
@@ -277,9 +279,10 @@ void Model::startSynchronisedXMotorForTaper(ZDirection direction)
     m_axis2Motor->goToStep(m_axis2Motor->getCurrentStep() + stepAdd);
     m_axis2Motor->wait();
     double angleConversion = std::tan(m_taperAngle * DEG_TO_RAD);
-    m_axis2Motor->synchroniseOn(m_axis1Motor.get(), [angleConversion](double zPosDelta, double) {
-        return zPosDelta * angleConversion;
-    });
+    m_axis2Motor->synchroniseOn(
+        m_axis1Motor.get(), [angleConversion](double zPosDelta, double) -> double {
+            return zPosDelta * angleConversion;
+        });
 }
 
 void Model::startSynchronisedXMotorForRadius(ZDirection direction)
@@ -537,7 +540,8 @@ void Model::axis2GoToOffset(double offset)
     m_axis2Status = fmt::format("To offset {}", offset);
 }
 
-void Model::axis2GoToPreviousPosition() {
+void Model::axis2GoToPreviousPosition()
+{
     axis2Stop();
     while (!m_axis2PreviousPositions.empty()
            && (std::abs(m_axis2PreviousPositions.top() - m_axis2Motor->getPosition()) < 0.0001)) {
@@ -845,7 +849,8 @@ void Model::axis2SpeedPreset()
     }
 }
 
-void Model::axis2SaveBreadcrumbPosition() {
+void Model::axis2SaveBreadcrumbPosition()
+{
     if (!m_axis2PreviousPositions.empty()
         && m_axis2PreviousPositions.top() == m_axis2Motor->getPosition()) {
         return;
@@ -853,7 +858,8 @@ void Model::axis2SaveBreadcrumbPosition() {
     m_axis2PreviousPositions.push(m_axis2Motor->getPosition());
 }
 
-void Model::axis2ClearBreadcrumbs() {
+void Model::axis2ClearBreadcrumbs()
+{
     m_axis2PreviousPositions = std::stack<double>();
     axis2SaveBreadcrumbPosition();
 }

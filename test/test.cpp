@@ -259,6 +259,23 @@ TEST_CASE("Model:   check tapering")
     REQUIRE(pos > -0.505);
 }
 
+TEST_CASE("Model:   check tapering (small angle)")
+{
+    mgo::MockConfigReader config;
+    mgo::MockGpio gpio(false, config);
+    // The mock config reader just returns whatever you specify
+    // as the default return value
+    mgo::Model model(gpio, config);
+    model.initialise();
+    model.changeMode(mgo::Mode::Taper);
+    model.setTaperAngle(-1.42);
+    model.axis1SetSpeed(200.0);
+    model.axis1GoToPosition(-0.5);
+    model.axis1Wait();
+    double pos = model.getAxis2MotorPosition();
+    REQUIRE(pos != 0.0);
+}
+
 TEST_CASE("Model:   check radius")
 {
     mgo::MockConfigReader config;
