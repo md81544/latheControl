@@ -200,6 +200,9 @@ void Model::checkStatus()
     } else {
         m_xWasRunning = true;
     }
+    if (m_enabledFunction == Mode::Taper || m_enabledFunction == Mode::Radius) {
+        m_axis2Status = "synchronised";
+    }
 }
 
 void Model::changeMode(Mode mode)
