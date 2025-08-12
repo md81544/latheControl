@@ -72,6 +72,11 @@ int convertKeyCode(sf::Event event)
             return key::COMMA;
         case static_cast<int>(sf::Keyboard::Key::Period):
             return key::FULLSTOP;
+        case static_cast<int>(sf::Keyboard::Key::Semicolon):
+            if (k->shift) {
+                return key::COLON;
+            }
+            break;
         case static_cast<int>(sf::Keyboard::Key::Right):
             if (k->alt || sf::Keyboard::isKeyPressed(sf::Keyboard::Key::RAlt)) {
                 return key::AltRight;

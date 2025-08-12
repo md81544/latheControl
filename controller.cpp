@@ -86,6 +86,7 @@ void Controller::processKeyPress()
                 {
                     break;
                 }
+            case key::COLON:
             case key::F2:
                 {
                     m_model->setKeyMode(KeyMode::Function);
