@@ -39,6 +39,7 @@ private:
     std::unique_ptr<sf::Text> m_txtGeneralStatus;
     std::unique_ptr<sf::Text> m_txtAxis1Status;
     std::unique_ptr<sf::Text> m_txtAxis2Status;
+    std::unique_ptr<sf::Text> m_txtChuckRpm;
     std::unique_ptr<sf::Text> m_txtLeaderNotifier;
     std::unique_ptr<sf::Text> m_txtWarning;
     std::unique_ptr<sf::Text> m_txtTaperOrRadius;

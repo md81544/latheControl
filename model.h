@@ -204,6 +204,8 @@ public:
     double getAxis1MotorCurrentStep() const;
     double getAxis2MotorCurrentStep() const;
 
+    float getChuckAngle() const;
+
     std::string convertAxis1StepToPosition(long step) const;
     std::string convertAxis2StepToPosition(long step) const;
 

@@ -1161,6 +1161,14 @@ double Model::getAxis2MotorCurrentStep() const
     return m_axis2Motor->getCurrentStep();
 }
 
+float Model::getChuckAngle() const
+{
+    if (!m_rotaryEncoder) {
+        return 0.f;
+    }
+    return m_rotaryEncoder->getPositionDegrees();
+}
+
 std::string Model::convertAxis1StepToPosition(long step) const
 {
     if (!m_axis1Motor) {

@@ -187,7 +187,7 @@ void ViewSfml::initialise(const Model& model)
     m_txtRpmLabel = std::make_unique<sf::Text>(*m_font, "", 60);
     m_txtRpmLabel->setPosition({ 20, 130 });
     m_txtRpmLabel->setFillColor({ 0, 127, 0 });
-    m_txtRpmLabel->setString("C:");
+    m_txtRpmLabel->setString("R:");
 
     m_txtRpm = std::make_unique<sf::Text>(*m_font, "", 60);
     m_txtRpm->setPosition({ 150, 130 });
@@ -231,12 +231,16 @@ void ViewSfml::initialise(const Model& model)
     m_txtGeneralStatus->setFillColor(sf::Color::Green);
 
     m_txtAxis1Status = std::make_unique<sf::Text>(*m_font, "", 20);
-    m_txtAxis1Status->setPosition({ 450, STATUS_BAR_Y });
+    m_txtAxis1Status->setPosition({ 350, STATUS_BAR_Y });
     m_txtAxis1Status->setFillColor(sf::Color::Green);
 
     m_txtAxis2Status = std::make_unique<sf::Text>(*m_font, "", 20);
-    m_txtAxis2Status->setPosition({ 700, STATUS_BAR_Y });
+    m_txtAxis2Status->setPosition({ 550, STATUS_BAR_Y });
     m_txtAxis2Status->setFillColor(sf::Color::Green);
+
+    m_txtChuckRpm = std::make_unique<sf::Text>(*m_font, "", 20);
+    m_txtChuckRpm->setPosition({ 750, STATUS_BAR_Y });
+    m_txtChuckRpm->setFillColor(sf::Color::Green);
 
     m_txtLeaderNotifier = std::make_unique<sf::Text>(*m_font, "", 20);
     m_txtLeaderNotifier->setPosition({ 1000, STATUS_BAR_Y });
@@ -385,6 +389,7 @@ void ViewSfml::updateDisplay(const Model& model)
             m_window->draw(*m_txtRpmUnits);
         }
         m_window->draw(*m_txtLeaderNotifier);
+        m_window->draw(*m_txtChuckRpm);
         m_window->draw(*m_txtGeneralStatus);
         m_window->draw(*m_txtWarning);
         m_window->draw(*m_txtNotification);
@@ -468,6 +473,7 @@ void ViewSfml::updateTextFromModel(const Model& model)
     } else {
         m_txtLeaderNotifier->setString("");
     }
+    m_txtChuckRpm->setString(fmt::format("C: {: >5.1f} deg", model.getChuckAngle()));
 
     m_txtAxis1LinearScalePos->setString(
         fmt::format(
