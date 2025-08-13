@@ -198,6 +198,7 @@ void ViewSfml::initialise(const Model& model)
     m_txtRpmUnits->setFillColor({ 0, 127, 0 });
     m_txtRpmUnits->setString("rpm");
 
+    // Memory banks
     constexpr int MEMORY_Y = 250;
     for (unsigned n = 0; n < model.getMemorySize(); ++n) {
         auto lbl = std::make_unique<sf::Text>(*m_font, "", 30);
@@ -223,6 +224,7 @@ void ViewSfml::initialise(const Model& model)
     m_txtAxis2MemoryLabel->setPosition({ 24.f, MEMORY_Y + 55 });
     m_txtAxis2MemoryLabel->setFillColor({ 128, 128, 128 });
 
+    // STATUS BAR (at bottom of screen)
     constexpr int STATUS_BAR_Y = 670;
     m_txtGeneralStatus = std::make_unique<sf::Text>(*m_font, "", 20);
     m_txtGeneralStatus->setPosition({ 20, STATUS_BAR_Y });
@@ -236,6 +238,12 @@ void ViewSfml::initialise(const Model& model)
     m_txtAxis2Status->setPosition({ 700, STATUS_BAR_Y });
     m_txtAxis2Status->setFillColor(sf::Color::Green);
 
+    m_txtLeaderNotifier = std::make_unique<sf::Text>(*m_font, "", 20);
+    m_txtLeaderNotifier->setPosition({ 1000, STATUS_BAR_Y });
+    m_txtLeaderNotifier->setFillColor(sf::Color::Green);
+
+    // Miscellaneous - this is the bank of text which contains, for example,
+    // the help, or text for, say, threading
     constexpr int MISC_Y = 380;
 
     m_txtMode = std::make_unique<sf::Text>(*m_font, "", 25);
@@ -376,6 +384,7 @@ void ViewSfml::updateDisplay(const Model& model)
             m_window->draw(*m_txtRpm);
             m_window->draw(*m_txtRpmUnits);
         }
+        m_window->draw(*m_txtLeaderNotifier);
         m_window->draw(*m_txtGeneralStatus);
         m_window->draw(*m_txtWarning);
         m_window->draw(*m_txtNotification);
@@ -453,6 +462,11 @@ void ViewSfml::updateTextFromModel(const Model& model)
         m_txtTaperOrRadius->setString(fmt::format("Angle: {}", model.getTaperAngle()));
     } else if (model.getEnabledFunction() == Mode::Radius) {
         m_txtTaperOrRadius->setString(fmt::format("Radius: {}", model.getRadius()));
+    }
+    if (model.getKeyMode() == KeyMode::Function) {
+        m_txtLeaderNotifier->setString(": (select function)");
+    } else {
+        m_txtLeaderNotifier->setString("");
     }
 
     m_txtAxis1LinearScalePos->setString(
