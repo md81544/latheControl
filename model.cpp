@@ -1074,6 +1074,11 @@ long Model::getAxis2Memory(std::size_t index) const
     return m_axis2Memory.at(index);
 }
 
+unsigned Model::getMemorySize() const
+{
+    return m_axis1Memory.size();
+}
+
 void Model::clearAllAxis2Memories()
 {
     for (auto& m : m_axis2Memory) {
@@ -1165,7 +1170,7 @@ std::string Model::convertAxis1StepToPosition(long step) const
     if (std::abs(mm) < 0.001) {
         mm = 0.0;
     }
-    return fmt::format("{: .3f}", mm);
+    return fmt::format("{: .2f}", mm);
 }
 
 std::string Model::convertAxis2StepToPosition(long step) const
@@ -1177,7 +1182,7 @@ std::string Model::convertAxis2StepToPosition(long step) const
     if (std::abs(mm) < 0.001) {
         mm = 0.0;
     }
-    return fmt::format("{: .3f}", mm);
+    return fmt::format("{: .2f}", mm);
 }
 
 float Model::getRotaryEncoderRpm() const

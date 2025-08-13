@@ -198,18 +198,18 @@ void ViewSfml::initialise(const Model& model)
     m_txtRpmUnits->setFillColor({ 0, 127, 0 });
     m_txtRpmUnits->setString("rpm");
 
-    for (int n = 0; n < 4; ++n) {
+    for (unsigned n = 0; n < model.getMemorySize(); ++n) {
         auto lbl = std::make_unique<sf::Text>(*m_font, "", 30);
-        lbl->setPosition({ 60.f + n * 200.f, 210 });
+        lbl->setPosition({ 60.f + n * 180.f, 210 });
         lbl->setFillColor({ 128, 128, 128 });
         lbl->setString(fmt::format("    Mem {}", n + 1));
         m_txtMemoryLabel.push_back(std::move(lbl));
         auto valZ = std::make_unique<sf::Text>(*m_font, "", 30);
-        valZ->setPosition({ 60.f + n * 200.f, 245 });
+        valZ->setPosition({ 60.f + n * 180.f, 245 });
         valZ->setFillColor({ 128, 128, 128 });
         m_txtAxis1MemoryValue.push_back(std::move(valZ));
         auto valX = std::make_unique<sf::Text>(*m_font, "", 30);
-        valX->setPosition({ 60.f + n * 200.f, 275 });
+        valX->setPosition({ 60.f + n * 180.f, 275 });
         valX->setFillColor({ 128, 128, 128 });
         m_txtAxis2MemoryValue.push_back(std::move(valX));
     }
@@ -468,13 +468,13 @@ void ViewSfml::updateTextFromModel(const Model& model)
             m_txtAxis2MemoryValue.at(n)->setFillColor({ 100, 100, 100 });
         }
         if (model.getAxis1Memory(n) == INF_RIGHT) {
-            m_txtAxis1MemoryValue.at(n)->setString("  not set");
+            m_txtAxis1MemoryValue.at(n)->setString("        -");
         } else {
             m_txtAxis1MemoryValue.at(n)->setString(
                 fmt::format("{: >9}", model.convertAxis1StepToPosition(model.getAxis1Memory(n))));
         }
         if (model.getAxis2Memory(n) == INF_OUT) {
-            m_txtAxis2MemoryValue.at(n)->setString("  not set");
+            m_txtAxis2MemoryValue.at(n)->setString("        -");
         } else {
             m_txtAxis2MemoryValue.at(n)->setString(
                 fmt::format("{: >9}", model.convertAxis2StepToPosition(model.getAxis2Memory(n))));

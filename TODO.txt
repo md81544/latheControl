@@ -31,6 +31,8 @@ Now that we have support for reading a linear scale on the Z-axis
 we need to consider how best to use it. Should position come solely
 from that, rather than continuing to rely on "dead reckoning"?
 Or should it be used just to make corrections to the expected position?
+For the latter maybe we just periodically call setPosition() on axis1's
+motor? Or we give the motor a callback function to determine position?
 
 Support limit switches? Could have multiple switches all on one pin and
 when triggered it simply issues a 'stop all'

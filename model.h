@@ -190,6 +190,7 @@ public:
 
     long getAxis1Memory(std::size_t index) const;
     long getAxis2Memory(std::size_t index) const;
+    unsigned getMemorySize() const;
     void clearAllAxis2Memories();
 
     void setAxis1MotorSpeed(double speed);
@@ -226,8 +227,8 @@ private:
     std::unique_ptr<mgo::LinearScale> m_linearScaleAxis1;
     std::unique_ptr<mgo::StepperMotor> m_axis1Motor;
     std::unique_ptr<mgo::StepperMotor> m_axis2Motor;
-    std::vector<long> m_axis1Memory { INF_RIGHT, INF_RIGHT, INF_RIGHT, INF_RIGHT };
-    std::vector<long> m_axis2Memory { INF_RIGHT, INF_RIGHT, INF_RIGHT, INF_RIGHT };
+    std::vector<long> m_axis1Memory { INF_RIGHT, INF_RIGHT, INF_RIGHT, INF_RIGHT, INF_RIGHT, INF_RIGHT };
+    std::vector<long> m_axis2Memory { INF_OUT, INF_OUT, INF_OUT, INF_OUT, INF_OUT, INF_OUT };
     std::size_t m_currentMemory { 0 };
     std::size_t m_threadPitchIndex { 0 };
     std::string m_generalStatus { "Press F1 for help" };
