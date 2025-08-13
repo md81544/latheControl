@@ -94,6 +94,7 @@ void Controller::processKeyPress()
                 }
             // End of "Leader" keys ==============
             case key::CtrlQ:
+            case key::f2q:
                 {
                     m_model->stopAllMotors();
                     m_model->quit();
@@ -679,6 +680,10 @@ int Controller::processLeaderKeyModeKeyPress(int keyPress)
             case key::o:
             case key::O:
                 keyPress = key::f2o;
+                break;
+            case key::q:
+            case key::Q:
+                keyPress = key::f2q;
                 break;
             default:
                 keyPress = key::None;

@@ -149,13 +149,14 @@ constexpr int aAll_f = f + 0x4000;
 constexpr int aAll_l = l + 0x4000; // last position on both axes
 constexpr int aAll_FULLSTOP = '.' + 0x4000;
 
-// Functions, leader is F2
+// Functions, leader is F2 (or colon)
 constexpr int f2h = 7000; // help
 constexpr int f2s = 7001; // setup
 constexpr int f2t = 7002; // threading
 constexpr int f2p = 7003; // taPer
 constexpr int f2r = 7004; // X retraction mode
 constexpr int f2o = 7005; // radius mode
+constexpr int f2q = 7006; // quit (i.e. :q)
 
 // Random others
 constexpr int CTRL = 0x10000;
