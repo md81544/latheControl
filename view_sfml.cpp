@@ -198,68 +198,72 @@ void ViewSfml::initialise(const Model& model)
     m_txtRpmUnits->setFillColor({ 0, 127, 0 });
     m_txtRpmUnits->setString("rpm");
 
+    constexpr int MEMORY_Y = 250;
     for (unsigned n = 0; n < model.getMemorySize(); ++n) {
         auto lbl = std::make_unique<sf::Text>(*m_font, "", 30);
-        lbl->setPosition({ 60.f + n * 180.f, 210 });
+        lbl->setPosition({ 60.f + n * 180.f, MEMORY_Y });
         lbl->setFillColor({ 128, 128, 128 });
         lbl->setString(fmt::format("    Mem {}", n + 1));
         m_txtMemoryLabel.push_back(std::move(lbl));
         auto valZ = std::make_unique<sf::Text>(*m_font, "", 30);
-        valZ->setPosition({ 60.f + n * 180.f, 245 });
+        valZ->setPosition({ 60.f + n * 180.f, MEMORY_Y + 25 });
         valZ->setFillColor({ 128, 128, 128 });
         m_txtAxis1MemoryValue.push_back(std::move(valZ));
         auto valX = std::make_unique<sf::Text>(*m_font, "", 30);
-        valX->setPosition({ 60.f + n * 180.f, 275 });
+        valX->setPosition({ 60.f + n * 180.f, MEMORY_Y + 55 });
         valX->setFillColor({ 128, 128, 128 });
         m_txtAxis2MemoryValue.push_back(std::move(valX));
     }
     std::string axis1Label = model.config().read("Axis1Label", "Z") + ":";
     m_txtAxis1MemoryLabel = std::make_unique<sf::Text>(*m_font, axis1Label, 30);
-    m_txtAxis1MemoryLabel->setPosition({ 24.f, 245 });
+    m_txtAxis1MemoryLabel->setPosition({ 24.f, MEMORY_Y + 25 });
     m_txtAxis1MemoryLabel->setFillColor({ 128, 128, 128 });
     std::string axis2Label = model.config().read("Axis2Label", "X") + ":";
     m_txtAxis2MemoryLabel = std::make_unique<sf::Text>(*m_font, axis2Label, 30);
-    m_txtAxis2MemoryLabel->setPosition({ 24.f, 275 });
+    m_txtAxis2MemoryLabel->setPosition({ 24.f, MEMORY_Y + 55 });
     m_txtAxis2MemoryLabel->setFillColor({ 128, 128, 128 });
 
+    constexpr int STATUS_BAR_Y = 670;
     m_txtGeneralStatus = std::make_unique<sf::Text>(*m_font, "", 20);
-    m_txtGeneralStatus->setPosition({ 20, 550 });
+    m_txtGeneralStatus->setPosition({ 20, STATUS_BAR_Y });
     m_txtGeneralStatus->setFillColor(sf::Color::Green);
 
     m_txtAxis1Status = std::make_unique<sf::Text>(*m_font, "", 20);
-    m_txtAxis1Status->setPosition({ 450, 550 });
+    m_txtAxis1Status->setPosition({ 450, STATUS_BAR_Y });
     m_txtAxis1Status->setFillColor(sf::Color::Green);
 
     m_txtAxis2Status = std::make_unique<sf::Text>(*m_font, "", 20);
-    m_txtAxis2Status->setPosition({ 700, 550 });
+    m_txtAxis2Status->setPosition({ 700, STATUS_BAR_Y });
     m_txtAxis2Status->setFillColor(sf::Color::Green);
 
+    constexpr int MISC_Y = 380;
+
     m_txtMode = std::make_unique<sf::Text>(*m_font, "", 25);
-    m_txtMode->setPosition({ 20, 320 });
+    m_txtMode->setPosition({ 20, MISC_Y });
     m_txtMode->setFillColor(sf::Color::Yellow);
 
     m_txtMisc1 = std::make_unique<sf::Text>(*m_font, "", 25);
-    m_txtMisc1->setPosition({ 20, 350 });
+    m_txtMisc1->setPosition({ 20, MISC_Y + 30 });
     m_txtMisc1->setFillColor(sf::Color::White);
 
     m_txtMisc2 = std::make_unique<sf::Text>(*m_font, "", 25);
-    m_txtMisc2->setPosition({ 20, 380 });
+    m_txtMisc2->setPosition({ 20, MISC_Y + 60 });
     m_txtMisc2->setFillColor(sf::Color::White);
 
     m_txtMisc3 = std::make_unique<sf::Text>(*m_font, "", 25);
-    m_txtMisc3->setPosition({ 20, 410 });
+    m_txtMisc3->setPosition({ 20, MISC_Y + 90 });
     m_txtMisc3->setFillColor(sf::Color::White);
 
     m_txtMisc4 = std::make_unique<sf::Text>(*m_font, "", 25);
-    m_txtMisc4->setPosition({ 20, 440 });
+    m_txtMisc4->setPosition({ 20, MISC_Y + 120 });
     m_txtMisc4->setFillColor(sf::Color::White);
 
     m_txtMisc5 = std::make_unique<sf::Text>(*m_font, "", 25);
-    m_txtMisc5->setPosition({ 20, 470 });
+    m_txtMisc5->setPosition({ 20, MISC_Y + 150 });
     m_txtMisc5->setFillColor(sf::Color::White);
 
     m_txtWarning = std::make_unique<sf::Text>(*m_font, "", 20);
-    m_txtWarning->setPosition({ 20, 510 });
+    m_txtWarning->setPosition({ 20, MISC_Y + 200 });
     m_txtWarning->setFillColor(sf::Color::Red);
 
     m_txtTaperOrRadius = std::make_unique<sf::Text>(*m_font, "", 20);
