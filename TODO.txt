@@ -1,5 +1,5 @@
-We seem to have more screen real-estate than when the program
-was originally written... we could add more data now
+Chuck angle appears to over-report by about 25 degrees per revolution?
+  - to test. Does this impact threading?
 
 Remove Alt-Arrows for jog once controller set up for mill
 

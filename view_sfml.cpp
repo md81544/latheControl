@@ -426,13 +426,11 @@ void ViewSfml::updateDisplay(const Model& model)
         if (model.getCurrentDisplayMode() != Mode::None) {
             m_window->draw(*m_txtMode);
         }
-        if (model.getCurrentDisplayMode() != Mode::None) {
-            m_window->draw(*m_txtMisc1);
-            m_window->draw(*m_txtMisc2);
-            m_window->draw(*m_txtMisc3);
-            m_window->draw(*m_txtMisc4);
-            m_window->draw(*m_txtMisc5);
-        }
+        m_window->draw(*m_txtMisc1);
+        m_window->draw(*m_txtMisc2);
+        m_window->draw(*m_txtMisc3);
+        m_window->draw(*m_txtMisc4);
+        m_window->draw(*m_txtMisc5);
     }
     m_window->display();
 }
@@ -578,13 +576,7 @@ void ViewSfml::updateTextFromModel(const Model& model)
             }
         case Mode::Threading:
             {
-                m_txtMode->setString("Thread");
-                ThreadPitch tp = threadPitches.at(model.getCurrentThreadPitchIndex());
-                m_txtMisc1->setString(fmt::format("Thread required: {}", tp.name));
-                m_txtMisc2->setString(
-                    fmt::format("Male   OD: {} mm, cut: {} mm", tp.maleOd, tp.cutDepthMale));
-                m_txtMisc3->setString(
-                    fmt::format("Female ID: {} mm, cut: {} mm", tp.femaleId, tp.cutDepthFemale));
+                updateThreadData(model);
                 m_txtMisc4->setString("");
                 m_txtMisc5->setString("Press Up/Down to change.");
                 m_txtWarning->setString("Enter to keep enabled, Esc to disable");
@@ -716,6 +708,26 @@ void ViewSfml::updateTextFromModel(const Model& model)
                 assert(false);
             }
     }
+    // Finally keep threading data on screen if in threading mode
+    if (model.getEnabledFunction() == Mode::Threading) {
+        updateThreadData(model);
+    }
+}
+
+void ViewSfml::updateThreadData(const mgo::Model& model)
+{
+    m_txtMode->setString("Thread");
+    ThreadPitch tp = threadPitches.at(model.getCurrentThreadPitchIndex());
+    m_txtMisc1->setString(fmt::format("Thread required: {}", tp.name));
+    m_txtMisc2->setString(
+        fmt::format(
+            "Male   OD: {} mm, cut: {} mm, pitch: {} mm", tp.maleOd, tp.cutDepthMale, tp.pitchMm));
+    m_txtMisc3->setString(
+        fmt::format(
+            "Female ID: {} mm, cut: {} mm, pitch {} mm",
+            tp.femaleId,
+            tp.cutDepthFemale,
+            tp.pitchMm));
 }
 
 int ViewSfml::processJoystickButton(const sf::Event& e)

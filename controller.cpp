@@ -592,11 +592,11 @@ int Controller::processModeInputKeys(int key)
     }
     if (m_model->getCurrentDisplayMode() == Mode::Threading) {
         if (key == key::UP) {
-            m_model->selectPreviousThreadPitch();
+            m_model->selectNextThreadPitch();
             return -1;
         }
         if (key == key::DOWN) {
-            m_model->selectNextThreadPitch();
+            m_model->selectPreviousThreadPitch();
             return -1;
         }
         if (key == key::ESC) {

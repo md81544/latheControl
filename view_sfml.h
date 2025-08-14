@@ -17,6 +17,7 @@ public:
     virtual void updateDisplay(const Model&) override;
     // Non-overrides:
     void updateTextFromModel(const Model&);
+    void updateThreadData(const mgo::Model& model);
     int processJoystickButton(const sf::Event& event);
     int getJoystickState();
 
