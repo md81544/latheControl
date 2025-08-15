@@ -3,7 +3,7 @@ Chuck angle appears to over-report by about 25 degrees per revolution?
 
 Remove Alt-Arrows for jog once controller set up for mill
 
-Lots of refactoring needed as this grew a bit organically
+Lots of refactoring still needed as this grew a bit organically
 
 Implement a proper menu (like level_designer)
 
@@ -80,6 +80,7 @@ of the chuck/spindle
 Consider adding support for some form of switch / sensor to prevent
 carriage movement outside of specific points (or mandate position
 checks at start-up to do this in software only?)
+  - Display warning if chuck is running in reverse
 
 Support display in thousands of an inch as an option - should be simple
 to just update in the view (and keep everything metric underneath)
