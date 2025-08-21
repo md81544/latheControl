@@ -1,3 +1,5 @@
+Make use of the keys on the right (#, Del, Home, PgUp, PgDn, End)
+
 Chuck angle appears to over-report by about 25 degrees per revolution?
   - to test. Does this impact threading?
 
