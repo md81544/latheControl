@@ -157,6 +157,7 @@ constexpr int f2p = 7003; // taPer
 constexpr int f2r = 7004; // X retraction mode
 constexpr int f2o = 7005; // radius mode
 constexpr int f2q = 7006; // quit (i.e. :q)
+constexpr int f2m = 7007; // multipass
 
 // Random others
 constexpr int CTRL = 0x10000;

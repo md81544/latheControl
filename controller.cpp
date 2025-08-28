@@ -427,6 +427,14 @@ void Controller::processKeyPress()
                     m_model->changeMode(Mode::Threading);
                     break;
                 }
+            case key::f2m: // multi-pass mode
+                {
+                    if (m_model->config().readBool("DisableAxis2", false)) {
+                        break;
+                    }
+                    m_model->changeMode(Mode::MultiPass);
+                    break;
+                }
             case key::f2p: // taper mode
                 {
                     if (m_model->config().readBool("DisableAxis2", false)) {
@@ -537,6 +545,7 @@ int Controller::checkKeyAllowedForMode(int key)
         case Mode::Axis1GoToOffset:
         case Mode::Axis2GoToOffset:
         case Mode::Radius:
+        case Mode::MultiPass:
             if (key >= key::ZERO && key <= key::NINE) {
                 return key;
             }
@@ -565,7 +574,8 @@ int Controller::processModeInputKeys(int key)
         || m_model->getCurrentDisplayMode() == Mode::Axis2GoTo
         || m_model->getCurrentDisplayMode() == Mode::Axis1GoToOffset
         || m_model->getCurrentDisplayMode() == Mode::Axis2GoToOffset
-        || m_model->getCurrentDisplayMode() == Mode::Radius) {
+        || m_model->getCurrentDisplayMode() == Mode::Radius
+        || m_model->getCurrentDisplayMode() == Mode::MultiPass) {
         if (key >= key::ZERO && key <= key::NINE) {
             m_model->getInputString() += static_cast<char>(key);
             return -1;
@@ -680,6 +690,10 @@ int Controller::processLeaderKeyModeKeyPress(int keyPress)
             case key::o:
             case key::O:
                 keyPress = key::f2o;
+                break;
+            case key::m:
+            case key::M:
+                keyPress = key::f2m;
                 break;
             case key::q:
             case key::Q:

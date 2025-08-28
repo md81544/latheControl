@@ -220,6 +220,13 @@ void Model::changeMode(Mode mode)
     if (m_enabledFunction == Mode::Taper && mode != Mode::Taper) {
         m_axis2Motor->setSpeed(m_taperPreviousXSpeed);
     }
+    if (mode == Mode::MultiPass) {
+        if (m_axis1Memory[0] == INF_RIGHT || m_axis1Memory[1] == INF_RIGHT) {
+            // Mode is invalid, we need the first two axis1 memories to specify
+            // the from->to positions on the primary axis.
+            return;
+        }
+    }
     m_warning = "";
     m_currentDisplayMode = mode;
     m_enabledFunction = mode;
@@ -238,6 +245,7 @@ void Model::changeMode(Mode mode)
             m_input = convertToString(m_radius, 4);
         }
     }
+
 }
 
 void Model::stopAllMotors()
@@ -1275,6 +1283,11 @@ void Model::acceptInputValue()
         case Mode::Radius:
             {
                 m_radius = inputValue;
+                break;
+            }
+        case Mode::MultiPass:
+            {
+                m_stepOver = inputValue;
                 break;
             }
         case Mode::Axis2RetractSetup:

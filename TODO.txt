@@ -1,4 +1,10 @@
-Make use of the keys on the right (#, Del, Home, PgUp, PgDn, End)
+Make a mode that does multiple passes on axis1 with a specified step-over
+on axis2 each pass. Maybe will use Mem1 & Mem2 (allowing one to specify
+start and end locations? Will be useful on the mill for facing, but also
+on the lathe for removing stock in multiple passes.
+    - Name of mode? multipass?
+
+Make use of the keys on the right (#, Del, Home, PgUp, PgDn, End)?
 
 Chuck angle appears to over-report by about 25 degrees per revolution?
   - to test. Does this impact threading?

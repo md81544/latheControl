@@ -44,7 +44,8 @@ enum class Mode {
     Axis2GoTo,
     Axis1GoToOffset,
     Axis2GoToOffset,
-    Radius
+    Radius,
+    MultiPass
 };
 
 // "Key Modes" allow for two-key actions, a bit like vim.
@@ -246,6 +247,7 @@ private:
     int m_keyPressed { 0 };
     double m_taperAngle { 0.0 };
     double m_radius { 0.0 };
+    double m_stepOver { 0.0 };
     float m_taperPreviousXSpeed { 40.f };
     // Stores the current function displayed on the screen:
     Mode m_currentDisplayMode { Mode::None };
