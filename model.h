@@ -77,6 +77,14 @@ enum class Axis {
     Axis2
 };
 
+enum class MultiPassStage {
+    NotStarted,
+    Cutting,
+    StepOver,
+    NextCut,
+    Finished
+};
+
 class Model {
 public:
     Model(IGpio& gpio, mgo::IConfigReader& config)
@@ -230,7 +238,8 @@ private:
     std::unique_ptr<mgo::LinearScale> m_linearScaleAxis1;
     std::unique_ptr<mgo::StepperMotor> m_axis1Motor;
     std::unique_ptr<mgo::StepperMotor> m_axis2Motor;
-    std::vector<long> m_axis1Memory { INF_RIGHT, INF_RIGHT, INF_RIGHT, INF_RIGHT, INF_RIGHT, INF_RIGHT };
+    std::vector<long> m_axis1Memory { INF_RIGHT, INF_RIGHT, INF_RIGHT,
+                                      INF_RIGHT, INF_RIGHT, INF_RIGHT };
     std::vector<long> m_axis2Memory { INF_OUT, INF_OUT, INF_OUT, INF_OUT, INF_OUT, INF_OUT };
     std::size_t m_currentMemory { 0 };
     std::size_t m_threadPitchIndex { 0 };
@@ -241,7 +250,7 @@ private:
     std::string m_input; // general-purpose string for user-entered data
     bool m_quit { false };
     bool m_shutdown { false };
-    float m_previousZSpeed { 40.f };
+    float m_previousAxis1Speed { 40.f };
     bool m_axis1FastReturning { false };
     bool m_axis2FastReturning { false };
     int m_keyPressed { 0 };
@@ -258,11 +267,11 @@ private:
     // Used to store position to return to after retract:
     long m_xOldPosition;
     bool m_axis2Retracted { false };
-    float m_previousXSpeed { 40.f };
+    float m_previousAxis2Speed { 40.f };
     bool m_fastRetracting { false };
 
-    bool m_zWasRunning { false };
-    bool m_xWasRunning { false };
+    bool m_axis1WasRunning { false };
+    bool m_axis2WasRunning { false };
     bool m_spindleWasRunning { false };
 
     XDirection m_xRetractionDirection { XDirection::Outwards };
@@ -276,6 +285,7 @@ private:
     // "Breadcrumb" trail of positions for axes:
     std::stack<double> m_axis1PreviousPositions;
     std::stack<double> m_axis2PreviousPositions;
+    MultiPassStage m_multiPassStage { MultiPassStage::NotStarted };
 };
 
 } // end namespace

@@ -513,6 +513,9 @@ void ViewSfml::updateTextFromModel(const Model& model)
         case Mode::Radius:
             m_txtNotification->setString("RADIUS");
             break;
+        case Mode::MultiPass:
+            m_txtNotification->setString("MULTI-PASS");
+            break;
         default:
             m_txtNotification->setString("");
     }

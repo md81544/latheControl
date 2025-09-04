@@ -138,14 +138,69 @@ void Model::checkStatus()
     }
     if (m_xDiameterSet) {
         m_generalStatus
-            = fmt::format("Diameter: {: .3f} mm", std::abs(m_axis2Motor->getPosition() * 2));
+            = fmt::format("Diameter: {: .2f} mm", std::abs(m_axis2Motor->getPosition() * 2));
     }
+    if (m_enabledFunction == Mode::MultiPass && m_axis1Motor->isRunning()
+        && m_multiPassStage == MultiPassStage::NotStarted) {
+        // The user has started motion of the tool
+        m_multiPassStage = MultiPassStage::Cutting;
+    }
+    if (m_enabledFunction == Mode::MultiPass && !m_axis1Motor->isRunning()
+        && !m_axis2Motor->isRunning()) {
+        switch (m_multiPassStage) {
+            case MultiPassStage::Cutting:
+                // We have come to the end of a cut
+                m_currentMemory = 0;
+                axis1FastReturn();
+                m_multiPassStage = MultiPassStage::StepOver;
+                break;
+            case MultiPassStage::StepOver:
+                {
+                    double stepOver = m_stepOver;
+                    // Note! steps are reversed, higher = nearer axis. Position (in mm) is reported
+                    // the other way around because Axis2ConversionNumerator is negative
+                    if (m_axis2Memory[1] > m_axis2Motor->getCurrentStep()) {
+                        stepOver = -stepOver;
+                    }
+                    // TODO: an improvement would be to determine if we are under one step-over
+                    // away from the target, and step over by just the right amount on the last pass
+                    // to avoid overshooting (which might be a problem in something like keyway cutting,
+                    // but less so on just a facing passs on the mill)
+                    if ((m_axis2Memory[0] > m_axis2Memory[1]
+                         && m_axis2Motor->getCurrentStep() <= m_axis2Memory[1])
+                        || (m_axis2Memory[0] < m_axis2Memory[1]
+                            && m_axis2Motor->getCurrentStep() >= m_axis2Memory[1])) {
+                        m_multiPassStage = MultiPassStage::Finished;
+                    } else {
+                        m_multiPassStage = MultiPassStage::NextCut;
+                        double targetPos = m_axis2Motor->getPosition() + stepOver;
+                        m_axis2Motor->goToPosition(targetPos);
+                    }
+                }
+                break;
+            case MultiPassStage::NextCut:
+                m_axis1Motor->goToStep(m_axis1Memory[1]);
+                m_axis1Status = "next pass";
+                m_multiPassStage = MultiPassStage::Cutting;
+                break;
+            case MultiPassStage::Finished:
+                m_multiPassStage = MultiPassStage::NotStarted;
+                m_enabledFunction = Mode::None;
+                break;
+            case MultiPassStage::NotStarted:
+                // Do nothing until the user initiates the first cut
+                break;
+            default:
+                assert(false); // Unhandled MultiPassStage item
+        }
+    }
+
     if (!m_axis2Motor->isRunning()) {
         m_axis2Status = "stopped";
     }
     if (!m_axis1Motor->isRunning()) {
         m_axis1Status = "stopped";
-        if (m_zWasRunning) {
+        if (m_axis1WasRunning) {
             // We see that axis1 has stopped. We save the position
             // in case the user wants to return to it without
             // explicitly having saved it.
@@ -157,48 +212,48 @@ void Model::checkStatus()
             }
         }
         if (m_axis1FastReturning) {
-            m_axis1Motor->setSpeed(m_previousZSpeed);
+            m_axis1Motor->setSpeed(m_previousAxis1Speed);
             m_axis1FastReturning = false;
         }
         if ((m_enabledFunction == Mode::Taper || m_enabledFunction == Mode::Radius)
-            && m_zWasRunning) {
-            m_axis2Motor->setSpeed(m_previousXSpeed);
+            && m_axis1WasRunning) {
+            m_axis2Motor->setSpeed(m_previousAxis2Speed);
             axis2SynchroniseOff();
         }
-        if (m_zWasRunning
-            && m_axis1Motor->getRpm() >= m_config.readDouble("Axis1SpeedResetAbove", 100.0)) {
+        if (m_axis1WasRunning
+            && m_axis1Motor->getSpeed() > m_config.readDouble("Axis1SpeedResetAbove", 100.0)) {
             // We don't allow faster speeds to "stick" to avoid accidental
             // fast motion after a long fast movement
             m_axis1Motor->setSpeed(m_config.readDouble("Axis1SpeedResetTo", 40.0));
         }
-        m_zWasRunning = false;
+        m_axis1WasRunning = false;
     } else {
-        m_zWasRunning = true;
+        m_axis1WasRunning = true;
     }
 
     if (!m_axis2Motor->isRunning()) {
         m_axis2Status = "stopped";
-        if (m_xWasRunning) {
+        if (m_axis2WasRunning) {
             axis2SaveBreadcrumbPosition();
         }
         if (m_fastRetracting) {
-            m_axis2Motor->setSpeed(m_previousXSpeed);
+            m_axis2Motor->setSpeed(m_previousAxis2Speed);
             m_fastRetracting = false;
             m_axis2Retracted = false;
         }
         if (m_axis2FastReturning) {
-            m_axis2Motor->setSpeed(m_previousXSpeed);
+            m_axis2Motor->setSpeed(m_previousAxis2Speed);
             m_axis2FastReturning = false;
         }
-        if (!(m_enabledFunction == Mode::Taper) && m_xWasRunning
+        if (!(m_enabledFunction == Mode::Taper) && m_axis2WasRunning
             && m_axis2Motor->getSpeed() >= m_config.readDouble("Axis2SpeedResetAbove", 80.0)) {
             // We don't allow faster speeds to "stick" to avoid accidental
             // fast motion after a long fast movement
             m_axis2Motor->setSpeed(m_config.readDouble("Axis2SpeedResetTo", 20.0));
         }
-        m_xWasRunning = false;
+        m_axis2WasRunning = false;
     } else {
-        m_xWasRunning = true;
+        m_axis2WasRunning = true;
     }
     if (m_enabledFunction == Mode::Taper || m_enabledFunction == Mode::Radius) {
         m_axis2Status = "synchronised";
@@ -245,7 +300,6 @@ void Model::changeMode(Mode mode)
             m_input = convertToString(m_radius, 4);
         }
     }
-
 }
 
 void Model::stopAllMotors()
@@ -517,13 +571,13 @@ void Model::axis1FastReturn()
     if (m_axis1Memory.at(m_currentMemory) == INF_RIGHT || m_axis1FastReturning) {
         return;
     }
-    m_previousZSpeed = m_axis1Motor->getSpeed();
+    m_previousAxis1Speed = m_axis1Motor->getSpeed();
     m_axis1FastReturning = true;
     axis1Stop();
     if (m_enabledFunction == Mode::Taper) {
         // If we are tapering, we need to set a speed the x-axis motor can keep up with
         m_axis1Motor->setSpeed(100.0);
-        m_previousXSpeed = m_axis2Motor->getSpeed();
+        m_previousAxis2Speed = m_axis2Motor->getSpeed();
         ZDirection direction = ZDirection::Left;
         if (m_axis1Memory.at(m_currentMemory) < getAxis1MotorCurrentStep()) {
             direction = ZDirection::Right;
@@ -601,7 +655,7 @@ void Model::axis1Jog(ZDirection direction)
         axis1Stop();
         return;
     }
-    m_previousZSpeed = m_axis1Motor->getSpeed();
+    m_previousAxis1Speed = m_axis1Motor->getSpeed();
     m_axis1Motor->setSpeed(m_axis1Motor->getMaxRpm());
     axis1Move(direction);
 }
@@ -754,7 +808,7 @@ void Model::axis2FastReturn()
     if (m_axis2Memory.at(m_currentMemory) == INF_RIGHT || m_axis2FastReturning) {
         return;
     }
-    m_previousZSpeed = m_axis2Motor->getSpeed();
+    m_previousAxis2Speed = m_axis2Motor->getSpeed();
     m_axis2FastReturning = true;
     axis2Stop();
     m_axis2Motor->setSpeed(m_axis2Motor->getMaxRpm());
@@ -776,7 +830,7 @@ void Model::axis2Retract()
         m_fastRetracting = true;
     } else {
         m_xOldPosition = m_axis2Motor->getCurrentStep();
-        m_previousXSpeed = m_axis2Motor->getSpeed();
+        m_previousAxis2Speed = m_axis2Motor->getSpeed();
         m_axis2Motor->setSpeed(100.0);
         int direction = -1;
         if (m_xRetractionDirection == XDirection::Inwards) {
@@ -826,7 +880,7 @@ void Model::axis2Jog(XDirection direction)
         axis2Stop();
         return;
     }
-    m_previousXSpeed = m_axis2Motor->getSpeed();
+    m_previousAxis2Speed = m_axis2Motor->getSpeed();
     m_axis2Motor->setSpeed(m_axis2Motor->getMaxRpm());
     axis2Move(direction);
 }
@@ -1315,5 +1369,4 @@ const IConfigReader& Model::config() const
 {
     return m_config;
 }
-
 }
