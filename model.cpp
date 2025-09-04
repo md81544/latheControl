@@ -162,10 +162,13 @@ void Model::checkStatus()
                     if (m_axis2Memory[1] > m_axis2Motor->getCurrentStep()) {
                         stepOver = -stepOver;
                     }
-                    // TODO: an improvement would be to determine if we are under one step-over
-                    // away from the target, and step over by just the right amount on the last pass
-                    // to avoid overshooting (which might be a problem in something like keyway cutting,
-                    // but less so on just a facing passs on the mill)
+                    // Check we don't go over the target step
+                    if (m_axis2Motor->getCurrentStep()
+                            + stepOver / m_axis2Motor->getConversionFactor()
+                        > m_axis2Memory[1]) {
+                        stepOver = (m_axis2Memory[1] - m_axis2Motor->getCurrentStep())
+                            * m_axis2Motor->getConversionFactor();
+                    }
                     if ((m_axis2Memory[0] > m_axis2Memory[1]
                          && m_axis2Motor->getCurrentStep() <= m_axis2Memory[1])
                         || (m_axis2Memory[0] < m_axis2Memory[1]
