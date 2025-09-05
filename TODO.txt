@@ -1,8 +1,5 @@
-Make a mode that does multiple passes on axis1 with a specified step-over
-on axis2 each pass. Maybe will use Mem1 & Mem2 (allowing one to specify
-start and end locations? Will be useful on the mill for facing, but also
-on the lathe for removing stock in multiple passes.
-    - Name of mode? multipass?
+Multi-pass: when completion of the last pass has occurred, it shouldn't
+fast return on axis1, to avoid potentially marring the work
 
 Make use of the keys on the right (#, Del, Home, PgUp, PgDn, End)?
 
@@ -13,27 +10,14 @@ Remove Alt-Arrows for jog once controller set up for mill
 
 Lots of refactoring still needed as this grew a bit organically
 
-Implement a proper menu (like level_designer)
+Implement a proper menu/dialog (see level_designer)
 
-Touchscreen support
+(related to above) Address the "Mode" concept which currently provides
+pseudo-modal "dialogs" interleaved into program flow, and is proving
+difficult to maintain. If all motors are stopped during a "dialog" then
+we can put them all on a separate flow
 
-Thinking around some form of automation - how to define, for example,
-a cut, retract, return, nudge in, and repeat? Making this flexible
-would assist in thread cutting and keyway cutting (mentioned below)
-  - Maybe in config, could define actions, like:
-
-    repeat 5
-    zspeed 100
-    zgoto m1 (memory zero)
-    xgoto +0.1 (relative move)
-    zspeed 10
-    zgoto m0
-
-    (We're getting dangerously close to just using gcode here - maybe a
-    limited gcode interpreter rather than reinventing wheels?)
-
-Display chuck angle? Maybe useful for cuts where chuck is locked out,
-then can be manually rotated (using the angle display)
+Touchscreen support (not that I have touch screens yet)
 
 Now that we have support for reading a linear scale on the Z-axis
 we need to consider how best to use it. Should position come solely
@@ -42,21 +26,9 @@ Or should it be used just to make corrections to the expected position?
 For the latter maybe we just periodically call setPosition() on axis1's
 motor? Or we give the motor a callback function to determine position?
 
-Support limit switches? Could have multiple switches all on one pin and
-when triggered it simply issues a 'stop all'
-
-Address the "Mode" concept which currently provides pseudo-modal
-"dialogs" interleaved into program flow, and is proving difficult
-to maintain. If all motors are stopped during a "dialog" then we
-can put them all on a separate flow.
-
-Automate thread-cutting operations (or all?) to automatically return after the
-target step has been reached and a key is pressed (or even fully automate)
--- AND (these are related) --
-Automatic keyway "shaping" by simply moving Z in on the lathe repeatedly
-with a tiny increment to X each time (obviously with the chuck locked
-out and stationary). This would also give the ability to cut internal
-squares / hexes etc.
+Support limit switches. Could have multiple switches all on one pin and
+when triggered it simply issues a 'stop all'. This is partially
+implemented (see limitSwitchTriggered())
 
 Support enable pin for each motor
 
