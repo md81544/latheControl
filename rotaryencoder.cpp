@@ -109,7 +109,7 @@ float RotaryEncoder::getPositionDegrees()
     // TODO this only works in one direction currently, we need to
     // take rotation direction into account
 
-    return 360.f * (m_tickCount / m_pulsesPerSpindleRev);
+    return 360.f * (static_cast<float>(m_tickCount) / m_pulsesPerSpindleRev);
 }
 
 RotationDirection RotaryEncoder::getRotationDirection()
