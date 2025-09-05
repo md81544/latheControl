@@ -30,16 +30,8 @@ public:
         , m_pinB(pinB)
         , m_pulsesPerRev(pulsesPerRev)
         , m_gearing(gearing)
-        , m_revolutionsPerLeapTick(0)
     {
         m_pulsesPerSpindleRev = m_pulsesPerRev * m_gearing;
-        float remainder = m_pulsesPerSpindleRev - static_cast<int>(m_pulsesPerSpindleRev);
-        if (remainder > 0.01f) {
-            m_revolutionsPerLeapTick = 1.f / remainder;
-            MGOLOG("Revolutions per leap tick = " << m_revolutionsPerLeapTick);
-        }
-        m_leapTickCountdown = m_revolutionsPerLeapTick;
-
         m_gpio.setRotaryEncoderCallback(m_pinA, m_pinB, staticCallback, this);
     }
 
@@ -76,15 +68,11 @@ private:
     bool m_warmingUp { true };
     uint32_t m_lastTick;
     std::atomic<uint32_t> m_lastZeroDegreesTick { 0 }; // TODO other members need to be atomic too
-    uint32_t m_tickCount { 0 };
+    uint32_t m_pulseCount { 0 };
     uint32_t m_tickDiffTotal { 0 };
     float m_averageTickDelta { 0.f };
     RotationDirection m_direction;
     float m_advanceValueMicroseconds { 0.f };
-    // Values to deal with a non-integer number of ticks per
-    // spindle revolution (owing to gearing)
-    int m_leapTickCountdown;
-    int m_revolutionsPerLeapTick;
 };
 
 } // end namespace

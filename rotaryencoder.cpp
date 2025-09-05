@@ -35,37 +35,46 @@ void RotaryEncoder::callback(int pin, int level, uint32_t tick)
 
     if (pin == m_pinA && level == 1) {
         if (m_levelB) {
-            m_direction = RotationDirection::normal;
+            m_direction = RotationDirection::reversed;
         }
     } else if (pin == m_pinB && level == 1) {
         if (m_levelA) {
-            m_direction = RotationDirection::reversed;
+            m_direction = RotationDirection::normal;
         }
     }
 
     // Note - we only count one pin's pulses, and measure from
     // rising edge to next rising edge
     if (pin == m_pinA && level == 1) {
-        ++m_tickCount;
-        // Because of gearing, we have a non-integer number of pulses
-        // per spindle revolution which means as it stands, over five minutes,
-        // our zero position will be off by about 90°. This can be addressed
-        // by altering the gearing, or by countering this in code with the
-        // "leap tick" approach below.
-        uint32_t zeroTick = static_cast<uint32_t>(m_pulsesPerSpindleRev);
-        if (m_leapTickCountdown == 1) {
-            ++zeroTick;
+        if (m_direction == RotationDirection::normal) {
+            ++m_pulseCount;
+        } else {
+            --m_pulseCount;
         }
-        if (m_tickCount == zeroTick) {
-            if (m_revolutionsPerLeapTick > 0) {
-                --m_leapTickCountdown;
-                if (m_leapTickCountdown == 0) {
-                    m_leapTickCountdown = m_revolutionsPerLeapTick;
-                }
+        // When physically setting up the rotary encoder, it's important
+        // to set gearing such that there are a round number of pulses
+        // per spindle revolution, otherwise we'll get a drift in the
+        // apparent position of pulse zero.
+        // Current gearing on my lathe is 35:100
+        // so the rotary encoder does 0.35 revolutions per spindle revolution.
+        // The RE has 2'000 pulses per rev, which means we get a round 700 pulses
+        // per chuck revolution.
+        bool hitZeroPulse = false;
+        if (m_direction == RotationDirection::normal) {
+            if (m_pulseCount == static_cast<uint32_t>(m_pulsesPerSpindleRev)) {
+                hitZeroPulse = true;
+                m_pulseCount = 0;
             }
-            m_averageTickDelta = m_tickDiffTotal / static_cast<float>(zeroTick);
+        } else {
+            if (m_pulseCount > static_cast<uint32_t>(m_pulsesPerSpindleRev)) {
+                // if it's greater we can assume we've wrapped on the unsigned
+                hitZeroPulse = true;
+                m_pulseCount = static_cast<uint32_t>(m_pulsesPerSpindleRev) - 1;
+            }
+        }
+        if (hitZeroPulse) {
+            m_averageTickDelta = m_tickDiffTotal / static_cast<float>(m_pulsesPerSpindleRev);
             m_tickDiffTotal = 0;
-            m_tickCount = 0;
             // We remember what the tick was at the last zero degrees position
             // (we arbitrarily call the start position zero) so we can extrapolate
             // out to the next one for accurate starting when waiting to cut a
@@ -109,7 +118,7 @@ float RotaryEncoder::getPositionDegrees()
     // TODO this only works in one direction currently, we need to
     // take rotation direction into account
 
-    return 360.f * (static_cast<float>(m_tickCount) / m_pulsesPerSpindleRev);
+    return 360.f * (static_cast<float>(m_pulseCount) / m_pulsesPerSpindleRev);
 }
 
 RotationDirection RotaryEncoder::getRotationDirection()
