@@ -1,5 +1,8 @@
 Maybe allow zeroing of chuck angle?
 
+Adding an extra axis on the mill should allow for usage of the
+rotary table in conjunction with axis1 to do thread milling
+
 Make use of the keys on the right (#, Del, Home, PgUp, PgDn, End)?
 
 Remove Alt-Arrows for jog once controller set up for mill
