@@ -1,7 +1,6 @@
-Make use of the keys on the right (#, Del, Home, PgUp, PgDn, End)?
+Maybe allow zeroing of chuck angle?
 
-Chuck angle appears to over-report by about 25 degrees per revolution?
-  - to test. Does this impact threading?
+Make use of the keys on the right (#, Del, Home, PgUp, PgDn, End)?
 
 Remove Alt-Arrows for jog once controller set up for mill
 
