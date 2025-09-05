@@ -1,6 +1,3 @@
-Multi-pass: when completion of the last pass has occurred, it shouldn't
-fast return on axis1, to avoid potentially marring the work
-
 Make use of the keys on the right (#, Del, Home, PgUp, PgDn, End)?
 
 Chuck angle appears to over-report by about 25 degrees per revolution?

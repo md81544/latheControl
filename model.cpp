@@ -151,7 +151,13 @@ void Model::checkStatus()
             case MultiPassStage::Cutting:
                 // We have come to the end of a cut
                 m_currentMemory = 0;
-                axis1FastReturn();
+                // Fast return unless it's the last pass
+                if (!((m_axis2Memory[0] > m_axis2Memory[1]
+                       && m_axis2Motor->getCurrentStep() <= m_axis2Memory[1])
+                      || (m_axis2Memory[0] < m_axis2Memory[1]
+                          && m_axis2Motor->getCurrentStep() >= m_axis2Memory[1]))) {
+                    axis1FastReturn();
+                }
                 m_multiPassStage = MultiPassStage::StepOver;
                 break;
             case MultiPassStage::StepOver:
