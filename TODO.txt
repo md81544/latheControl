@@ -52,10 +52,6 @@ All "Axis1..." and "Axis2..." references should be replaced with an
 array to allow for future expansion. Might be difficult owing to different
 behaviours of the axes.
 
-Rotary encoder doesn't currently do anything with rotation direction,
-so getPositionDegrees() fails to take into account manual back-rotation
-of the chuck/spindle
-
 Consider adding support for some form of switch / sensor to prevent
 carriage movement outside of specific points (or mandate position
 checks at start-up to do this in software only?)
