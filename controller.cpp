@@ -273,24 +273,28 @@ void Controller::processKeyPress()
                     if (!m_model->isAxis1MotorRunning()) {
                         m_model->axis2Rapid(XDirection::Inwards);
                     }
+		    break;
                 }
             case key::js_rapid_down:
                 {
                     if (!m_model->isAxis1MotorRunning()) {
                         m_model->axis2Rapid(XDirection::Outwards);
                     }
+		    break;
                 }
             case key::js_rapid_left:
                 {
                     if (!m_model->isAxis2MotorRunning()) {
                         m_model->axis1Rapid(ZDirection::Left);
                     }
+		    break;
                 }
             case key::js_rapid_right:
                 {
                     if (!m_model->isAxis2MotorRunning()) {
                         m_model->axis1Rapid(ZDirection::Right);
                     }
+		    break;
                 }
             // Joystick-specific motion
             // Note we disallow motion on both axes at once to avoid
@@ -300,24 +304,28 @@ void Controller::processKeyPress()
                     if (!m_model->isAxis1MotorRunning()) {
                         m_model->axis2Move(XDirection::Inwards);
                     }
+		    break;
                 }
             case key::js_down:
                 {
                     if (!m_model->isAxis1MotorRunning()) {
                         m_model->axis2Move(XDirection::Outwards);
                     }
+		    break;
                 }
             case key::js_left:
                 {
                     if (!m_model->isAxis2MotorRunning()) {
                         m_model->axis1Move(ZDirection::Left);
                     }
+		    break;
                 }
             case key::js_right:
                 {
                     if (!m_model->isAxis2MotorRunning()) {
                         m_model->axis1Move(ZDirection::Right);
                     }
+		    break;
                 }
     
             case key::a:
