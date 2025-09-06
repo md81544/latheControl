@@ -159,6 +159,17 @@ constexpr int f2o = 7005; // radius mode
 constexpr int f2q = 7006; // quit (i.e. :q)
 constexpr int f2m = 7007; // multipass
 
+// Joystick specific "keys"
+// Note some joystick commands just return regular keycodes.
+constexpr int js_left = 8000;
+constexpr int js_right = 8001;
+constexpr int js_up = 8002;
+constexpr int js_down = 8003;
+constexpr int js_rapid_left = 8004;
+constexpr int js_rapid_right = 8005;
+constexpr int js_rapid_up = 8006;
+constexpr int js_rapid_down = 8007;
+
 // Random others
 constexpr int CTRL = 0x10000;
 constexpr int ALT = 0x100000;
@@ -168,10 +179,10 @@ constexpr int AltW = key::w | ALT; // big nudge
 constexpr int AltA = key::a | ALT; // big nudge
 constexpr int AltS = key::s | ALT; // big nudge
 constexpr int AltD = key::d | ALT; // big nudge
-constexpr int AltLeft = key::LEFT | ALT; // jog
-constexpr int AltRight = key::RIGHT | ALT; // jog
-constexpr int AltUp = key::UP | ALT; // jog
-constexpr int AltDown = key::DOWN | ALT; // jog
+constexpr int AltLeft = key::LEFT | ALT; // rapid
+constexpr int AltRight = key::RIGHT | ALT; // rapid
+constexpr int AltUp = key::UP | ALT; // rapid
+constexpr int AltDown = key::DOWN | ALT; // rapid
 
 } // namespace key
 } // namespace mgo

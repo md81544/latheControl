@@ -1,11 +1,11 @@
-Maybe allow zeroing of chuck angle?
+Maybe allow zeroing of chuck angle? (use offset in reporting)
 
 Adding an extra axis on the mill should allow for usage of the
 rotary table in conjunction with axis1 to do thread milling
 
 Make use of the keys on the right (#, Del, Home, PgUp, PgDn, End)?
 
-Remove Alt-Arrows for jog once controller set up for mill
+Remove Alt-Arrows for rapids once controller set up for mill
 
 Lots of refactoring still needed as this grew a bit organically
 

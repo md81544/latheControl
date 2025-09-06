@@ -247,24 +247,79 @@ void Controller::processKeyPress()
                 }
             case key::AltUp:
                 {
-                    m_model->axis2Jog(XDirection::Inwards);
+                    m_model->axis2Rapid(XDirection::Inwards);
                     break;
                 }
             case key::AltDown:
                 {
-                    m_model->axis2Jog(XDirection::Outwards);
+                    m_model->axis2Rapid(XDirection::Outwards);
                     break;
                 }
             case key::AltLeft:
                 {
-                    m_model->axis1Jog(ZDirection::Left);
+                    m_model->axis1Rapid(ZDirection::Left);
                     break;
                 }
             case key::AltRight:
                 {
-                    m_model->axis1Jog(ZDirection::Right);
+                    m_model->axis1Rapid(ZDirection::Right);
                     break;
                 }
+            // Joystick-specific rapids
+            // Note we disallow motion on both axes at once to avoid
+            // accidental triggering of both with the stick
+            case key::js_rapid_up:
+                {
+                    if (!m_model->isAxis1MotorRunning()) {
+                        m_model->axis2Rapid(XDirection::Inwards);
+                    }
+                }
+            case key::js_rapid_down:
+                {
+                    if (!m_model->isAxis1MotorRunning()) {
+                        m_model->axis2Rapid(XDirection::Outwards);
+                    }
+                }
+            case key::js_rapid_left:
+                {
+                    if (!m_model->isAxis2MotorRunning()) {
+                        m_model->axis1Rapid(ZDirection::Left);
+                    }
+                }
+            case key::js_rapid_right:
+                {
+                    if (!m_model->isAxis2MotorRunning()) {
+                        m_model->axis1Rapid(ZDirection::Right);
+                    }
+                }
+            // Joystick-specific motion
+            // Note we disallow motion on both axes at once to avoid
+            // accidental triggering of both with the stick
+            case key::js_up:
+                {
+                    if (!m_model->isAxis1MotorRunning()) {
+                        m_model->axis2Move(XDirection::Inwards);
+                    }
+                }
+            case key::js_down:
+                {
+                    if (!m_model->isAxis1MotorRunning()) {
+                        m_model->axis2Move(XDirection::Outwards);
+                    }
+                }
+            case key::js_left:
+                {
+                    if (!m_model->isAxis2MotorRunning()) {
+                        m_model->axis1Move(ZDirection::Left);
+                    }
+                }
+            case key::js_right:
+                {
+                    if (!m_model->isAxis2MotorRunning()) {
+                        m_model->axis1Move(ZDirection::Right);
+                    }
+                }
+    
             case key::a:
                 {
                     m_model->axis1Nudge(ZDirection::Left, 0.05);

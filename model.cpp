@@ -656,7 +656,7 @@ void Model::axis1Move(ZDirection direction)
     }
 }
 
-void Model::axis1Jog(ZDirection direction)
+void Model::axis1Rapid(ZDirection direction)
 {
     // Issuing the same command (i.e. pressing the same key)
     // when it is already running will cause the motor to stop
@@ -883,7 +883,7 @@ void Model::axis2Move(XDirection direction)
     }
 }
 
-void Model::axis2Jog(XDirection direction)
+void Model::axis2Rapid(XDirection direction)
 {
     if (m_axis2Motor->isRunning()) {
         axis2Stop();
@@ -1230,6 +1230,16 @@ double Model::getAxis2MotorCurrentStep() const
         return 0.0;
     }
     return m_axis2Motor->getCurrentStep();
+}
+
+bool Model::isAxis1MotorRunning() const
+{
+    return m_axis1Motor->isRunning();
+}
+
+bool Model::isAxis2MotorRunning() const
+{
+    return m_axis2Motor->isRunning();
 }
 
 float Model::getChuckAngle() const

@@ -322,7 +322,7 @@ int ViewSfml::getInput()
             return key::None;
         }
         if (event->is<sf::Event::KeyReleased>()) {
-            // quick check for jog cancellation
+            // quick check for rapid cancellation
             // TODO this fails if the alt key is released first
             auto e = event->getIf<sf::Event::KeyReleased>();
             if ((e->code == sf::Keyboard::Key::Left || e->code == sf::Keyboard::Key::Right
@@ -834,10 +834,10 @@ int ViewSfml::getJoystickState()
             && !(previousPovXValue < -deadzone && value < -deadzone)) {
             previousPovXValue = value;
             if (value > deadzone) {
-                return key::RIGHT;
+                return key::js_right;
             }
             if (value < -deadzone) {
-                return key::LEFT;
+                return key::js_left;
             }
         }
     }
@@ -852,10 +852,10 @@ int ViewSfml::getJoystickState()
                 if (sf::Joystick::isButtonPressed(0, JOYSTICK_SHIFT)) {
                     return key::r;
                 }
-                return key::DOWN;
+                return key::js_down;
             }
             if (value < -deadzone) {
-                return key::UP;
+                return key::js_up;
             }
         }
     }
@@ -874,10 +874,10 @@ int ViewSfml::getJoystickState()
             && !(previousZValue < -deadzone && value < -deadzone)) {
             previousZValue = value;
             if (value > deadzone) {
-                return key::AltRight;
+                return key::js_rapid_right;
             }
             if (value < -deadzone) {
-                return key::AltLeft;
+                return key::js_rapid_left;
             }
         }
     }
@@ -893,10 +893,10 @@ int ViewSfml::getJoystickState()
             && !(previousRValue < -deadzone && value < -deadzone)) {
             previousRValue = value;
             if (value > deadzone) {
-                return key::AltDown;
+                return key::js_rapid_down;
             }
             if (value < -deadzone) {
-                return key::AltUp;
+                return key::js_rapid_up;
             }
         }
     }
