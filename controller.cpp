@@ -532,6 +532,24 @@ void Controller::processKeyPress()
                     m_model->changeMode(Mode::Axis1PositionSetup);
                     break;
                 }
+            case key::i:
+            case key::I:
+            case key::a1_i:
+                {
+                    m_model->stopAllMotors();
+                    const std::string axisName = m_model->config().read("Axis1Label", "Z");
+                    const double entry = m_view->getNumericInput("Enter " + axisName + " memory value", 0.0);
+                    m_model->axis1StorePosition(entry);
+                    break;
+                }
+            case key::a2_i:
+                {
+                    m_model->stopAllMotors();
+                    const std::string axisName = m_model->config().read("Axis2Label", "X");
+                    const double entry = m_view->getNumericInput("Enter " + axisName + " memory value", 0.0);
+                    m_model->axis2StorePosition(entry);
+                    break;
+                }
             case key::ESC: // return to normal mode
                 {
                     // Cancel any retract as well

@@ -18,6 +18,7 @@ add_executable(lc
         controller.cpp
         main.cpp
         configreader.cpp
+        sfml_dialog.cpp
     )
 
 if(DEFINED FAKE)

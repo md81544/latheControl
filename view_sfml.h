@@ -14,6 +14,9 @@ public:
     virtual void initialise(const Model&) override;
     virtual void close() override;
     virtual int getInput() override;
+    virtual std::string
+    getTextInput(const std::string& prompt, const std::string& defaultEntry) override;
+    virtual double getNumericInput(const std::string& prompt, double defaultEntry) override;
     virtual void updateDisplay(const Model&) override;
     // Non-overrides:
     void updateTextFromModel(const Model&);

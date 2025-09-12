@@ -1,5 +1,8 @@
 Maybe allow zeroing of chuck angle? (use offset in reporting)
 
+Support three axes, to enable X,Y, and a rotary table (or z,
+x, and manual rotation of chuck on the lathe)
+
 Adding an extra axis on the mill should allow for usage of the
 rotary table in conjunction with axis1 to do thread milling
 

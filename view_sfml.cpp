@@ -2,9 +2,12 @@
 
 #include "keycodes.h"
 #include "model.h"
+#include "sfml_dialog.h"
 #include "threadpitches.h"
 
 #include <cassert>
+#include <iomanip>
+#include <sstream>
 
 #include <fmt/format.h>
 
@@ -360,6 +363,27 @@ int ViewSfml::getInput()
     return convertKeyCode(*event);
 }
 
+std::string ViewSfml::getTextInput(const std::string& prompt, const std::string& defaultEntry)
+{
+    return getInputFromDialog(*m_window, *m_font, prompt, defaultEntry);
+}
+
+double ViewSfml::getNumericInput(const std::string& prompt, double defaultEntry)
+{
+    std::ostringstream oss;
+    oss << std::fixed << std::setprecision(2) << defaultEntry;
+    const std::string defaultValueString = oss.str();
+    std::string result;
+    try {
+        result = getInputFromDialog(
+            *m_window, *m_font, prompt, defaultValueString, InputType::numeric);
+        return std::stod(result);
+    } catch (const std::exception& e) {
+        MGOLOG("Error converting string \"" + result + "\" to double");
+        return defaultEntry;
+    }
+}
+
 void ViewSfml::updateDisplay(const Model& model)
 {
     m_window->clear();
@@ -694,7 +718,8 @@ void ViewSfml::updateTextFromModel(const Model& model)
                     fmt::format(
                         "{} axis step-over per pass ", model.config().read("Axis2Label", "Z")));
                 m_txtMisc1->setString("");
-                m_txtMisc2->setString("This mode will automatically move from m1.x,m1.y to m2.x,m2.y");
+                m_txtMisc2->setString(
+                    "This mode will automatically move from m1.x,m1.y to m2.x,m2.y");
                 m_txtMisc3->setString("with the step-over value you specify below:");
                 m_txtMisc4->setString("");
                 m_txtMisc5->setString(fmt::format("Step-over (mm): {}_", model.getInputString()));

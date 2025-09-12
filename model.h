@@ -119,6 +119,7 @@ public:
     void axis1Wait();
     void axis1Stop();
     void axis1StorePosition();
+    void axis1StorePosition(double mm);
     void axis1Move(ZDirection direction);
     void axis1Rapid(ZDirection direction);
     void axis1SpeedPreset();
@@ -140,6 +141,7 @@ public:
     void axis2FastReturn();
     void axis2Retract();
     void axis2StorePosition();
+    void axis2StorePosition(double mm);
     void axis2Move(XDirection direction);
     void axis2Rapid(XDirection direction);
     void axis2SpeedPreset();
