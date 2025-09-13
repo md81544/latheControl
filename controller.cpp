@@ -536,23 +536,17 @@ void Controller::processKeyPress()
             case key::I:
             case key::a1_i:
                 {
-                    // We stop all motors as we're displaying a modal dialog
-                    m_model->stopAllMotors();
+                    // Note all motors will be stopped when a dialog is displayed
                     const std::string axisName = m_model->config().read("Axis1Label", "Z");
-                    const double entry = m_view->getNumericInput("Enter " + axisName + " memory value", 0.0);
+                    const double entry = getNumericInput("Enter " + axisName + " memory value", 0.0);
                     m_model->axis1StorePosition(entry);
                     break;
                 }
             case key::a2_i: // Input axis 2 memory value directly
                 {
-                    // We stop all motors as we're displaying a modal dialog
-                    // TODO: we should have a function in the controller which passes through
-                    // the call to the input function so we have a common place where the
-                    // motors are stopped to avoid a dialog being displayed while motors
-                    // are running
-                    m_model->stopAllMotors();
+                    // Note all motors will be stopped when a dialog is displayed
                     const std::string axisName = m_model->config().read("Axis2Label", "X");
-                    const double entry = m_view->getNumericInput("Enter " + axisName + " memory value", 0.0);
+                    const double entry = getNumericInput("Enter " + axisName + " memory value", 0.0);
                     m_model->axis2StorePosition(entry);
                     break;
                 }
@@ -812,6 +806,18 @@ int Controller::checkForAxisLeaderKeys(int key)
         return key::None;
     }
     return key;
+}
+
+double Controller::getNumericInput(const std::string& prompt, double defaultEntry)
+{
+    m_model->stopAllMotors();
+    return m_view->getNumericInput(prompt, defaultEntry);
+}
+
+std::string Controller::getTextInput(const std::string& prompt, const std::string& defaultEntry)
+{
+    m_model->stopAllMotors();
+    return m_view->getTextInput(prompt, defaultEntry);
 }
 
 } // end namespace

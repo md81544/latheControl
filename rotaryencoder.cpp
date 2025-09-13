@@ -109,14 +109,11 @@ float RotaryEncoder::getPositionDegrees()
     // There will be latency in this as the pigpio thread which calls back to
     // the callback in the anonymous namespace above only does so approx once
     // per millisecond (it batches up the callbacks and calls us maybe thirty
-    // times per batch). So this shouldn't be relied upon* - use the
+    // times per batch). So this shouldn't be used in real time - use the
     // callbackAtPositionDegrees() function which extrapolates out based on
     // previous data.
 
-    // * But it's useful for unit testing :)
-
-    // TODO this only works in one direction currently, we need to
-    // take rotation direction into account
+    // However this is useful for manual chuck rotation.
 
     return 360.f * (static_cast<float>(m_pulseCount) / m_pulsesPerSpindleRev);
 }

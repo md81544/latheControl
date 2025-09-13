@@ -24,6 +24,8 @@ private:
     int processModeInputKeys(int key);
     int processLeaderKeyModeKeyPress(int key);
     int checkForAxisLeaderKeys(int key);
+    double getNumericInput(const std::string& prompt, double defaultEntry);
+    std::string getTextInput(const std::string& prompt, const std::string& defaultEntry);
 };
 
 } // end namespace
