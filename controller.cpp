@@ -532,18 +532,24 @@ void Controller::processKeyPress()
                     m_model->changeMode(Mode::Axis1PositionSetup);
                     break;
                 }
-            case key::i:
+            case key::i:  // Input axis 1 memory value directly
             case key::I:
             case key::a1_i:
                 {
+                    // We stop all motors as we're displaying a modal dialog
                     m_model->stopAllMotors();
                     const std::string axisName = m_model->config().read("Axis1Label", "Z");
                     const double entry = m_view->getNumericInput("Enter " + axisName + " memory value", 0.0);
                     m_model->axis1StorePosition(entry);
                     break;
                 }
-            case key::a2_i:
+            case key::a2_i: // Input axis 2 memory value directly
                 {
+                    // We stop all motors as we're displaying a modal dialog
+                    // TODO: we should have a function in the controller which passes through
+                    // the call to the input function so we have a common place where the
+                    // motors are stopped to avoid a dialog being displayed while motors
+                    // are running
                     m_model->stopAllMotors();
                     const std::string axisName = m_model->config().read("Axis2Label", "X");
                     const double entry = m_view->getNumericInput("Enter " + axisName + " memory value", 0.0);
