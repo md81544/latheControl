@@ -1,3 +1,8 @@
+Expand use of dialog. For instance the help screen could be
+much larger. Will require a resizable (or dynamically expanding)
+box for display of information. May want multiple inputs within
+such a display box.
+
 Maybe allow zeroing of chuck angle? (use offset in reporting)
 
 Support three axes, to enable X,Y, and a rotary table (or z,

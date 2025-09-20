@@ -596,8 +596,8 @@ void ViewSfml::updateTextFromModel(const Model& model)
                 m_txtMisc3->setString(
                     "near the end, and set axes to ZERO (this drives the operation).");
                 m_txtMisc4->setString(
-                    "Then cut OUTWARDS, and move INWARDS gradually for subsequent cuts.");
-                m_txtMisc5->setString("Re-zero each time and use relative movement for each cut.");
+                    "Then cut away from chuck. Return to zero, then nudge towards chuck, rezero, repeat.");
+                m_txtMisc5->setString("Memorising the new zero position each time will help the return.");
                 m_txtWarning->setString("Enter to keep enabled, Esc to disable, Del to clear");
                 break;
             }

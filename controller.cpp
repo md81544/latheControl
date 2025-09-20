@@ -449,6 +449,7 @@ void Controller::processKeyPress()
                 }
             case key::a1_r:
                 {
+                    // Relative motion
                     m_model->changeMode(Mode::Axis1GoToOffset);
                     break;
                 }
