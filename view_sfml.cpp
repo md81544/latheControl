@@ -594,10 +594,17 @@ void ViewSfml::updateTextFromModel(const Model& model)
                 m_txtMisc2->setString(
                     "Important! Ensure the tool is at the radius of the workpiece,");
                 m_txtMisc3->setString(
-                    "near the end, and set axes to ZERO (this drives the operation).");
+                    fmt::format(
+                        "near the end, and set axes to ZERO (this drives the operation). Keep {} "
+                        "constant.",
+                        model.config().read("Axis2Label", "X")));
                 m_txtMisc4->setString(
-                    "Then cut away from chuck. Return to zero, then nudge towards chuck, rezero, repeat.");
-                m_txtMisc5->setString("Memorising the new zero position each time will help the return.");
+                    fmt::format(
+                        "Then cut away from chuck. Return to zero, then nudge {} inwards, re-zero, "
+                        "repeat.",
+                        model.config().read("Axis1Label", "Z")));
+                m_txtMisc5->setString(
+                    "Memorising the new zero position each time will make returning easier.");
                 m_txtWarning->setString("Enter to keep enabled, Esc to disable, Del to clear");
                 break;
             }
