@@ -561,7 +561,7 @@ void Controller::processKeyPress()
                     break;
                 }
             case key::h:
-            case key::H:
+            case key::H: // quick chamfer
                 {
                     m_model->setTaperAngle(-45.0);
                     m_model->setEnabledFunction(Mode::Taper);
