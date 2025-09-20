@@ -273,28 +273,28 @@ void Controller::processKeyPress()
                     if (!m_model->isAxis1MotorRunning()) {
                         m_model->axis2Rapid(XDirection::Inwards);
                     }
-		    break;
+                    break;
                 }
             case key::js_rapid_down:
                 {
                     if (!m_model->isAxis1MotorRunning()) {
                         m_model->axis2Rapid(XDirection::Outwards);
                     }
-		    break;
+                    break;
                 }
             case key::js_rapid_left:
                 {
                     if (!m_model->isAxis2MotorRunning()) {
                         m_model->axis1Rapid(ZDirection::Left);
                     }
-		    break;
+                    break;
                 }
             case key::js_rapid_right:
                 {
                     if (!m_model->isAxis2MotorRunning()) {
                         m_model->axis1Rapid(ZDirection::Right);
                     }
-		    break;
+                    break;
                 }
             // Joystick-specific motion
             // Note we disallow motion on both axes at once to avoid
@@ -304,30 +304,30 @@ void Controller::processKeyPress()
                     if (!m_model->isAxis1MotorRunning()) {
                         m_model->axis2Move(XDirection::Inwards);
                     }
-		    break;
+                    break;
                 }
             case key::js_down:
                 {
                     if (!m_model->isAxis1MotorRunning()) {
                         m_model->axis2Move(XDirection::Outwards);
                     }
-		    break;
+                    break;
                 }
             case key::js_left:
                 {
                     if (!m_model->isAxis2MotorRunning()) {
                         m_model->axis1Move(ZDirection::Left);
                     }
-		    break;
+                    break;
                 }
             case key::js_right:
                 {
                     if (!m_model->isAxis2MotorRunning()) {
                         m_model->axis1Move(ZDirection::Right);
                     }
-		    break;
+                    break;
                 }
-    
+
             case key::a:
                 {
                     m_model->axis1Nudge(ZDirection::Left, 0.05);
@@ -533,13 +533,14 @@ void Controller::processKeyPress()
                     m_model->changeMode(Mode::Axis1PositionSetup);
                     break;
                 }
-            case key::i:  // Input axis 1 memory value directly
+            case key::i: // Input axis 1 memory value directly
             case key::I:
             case key::a1_i:
                 {
                     // Note all motors will be stopped when a dialog is displayed
                     const std::string axisName = m_model->config().read("Axis1Label", "Z");
-                    const double entry = getNumericInput("Enter " + axisName + " memory value", 0.0);
+                    const double entry
+                        = getNumericInput("Enter " + axisName + " memory value", 0.0);
                     m_model->axis1StorePosition(entry);
                     break;
                 }
@@ -547,7 +548,8 @@ void Controller::processKeyPress()
                 {
                     // Note all motors will be stopped when a dialog is displayed
                     const std::string axisName = m_model->config().read("Axis2Label", "X");
-                    const double entry = getNumericInput("Enter " + axisName + " memory value", 0.0);
+                    const double entry
+                        = getNumericInput("Enter " + axisName + " memory value", 0.0);
                     m_model->axis2StorePosition(entry);
                     break;
                 }
@@ -556,6 +558,13 @@ void Controller::processKeyPress()
                     // Cancel any retract as well
                     m_model->setIsAxis2Retracted(false);
                     m_model->changeMode(Mode::None);
+                    break;
+                }
+            case key::h:
+            case key::H:
+                {
+                    m_model->setTaperAngle(-45.0);
+                    m_model->setEnabledFunction(Mode::Taper);
                     break;
                 }
             default: // e.g. key::SPACE to stop all motors
