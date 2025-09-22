@@ -326,12 +326,18 @@ int ViewSfml::getInput()
         }
         if (event->is<sf::Event::KeyReleased>()) {
             // quick check for rapid cancellation
-            // TODO this fails if the alt key is released first
             auto e = event->getIf<sf::Event::KeyReleased>();
-            if ((e->code == sf::Keyboard::Key::Left || e->code == sf::Keyboard::Key::Right
-                 || e->code == sf::Keyboard::Key::Up || e->code == sf::Keyboard::Key::Down)
-                && (e->alt || sf::Keyboard::isKeyPressed(sf::Keyboard::Key::RAlt))) {
-                return key::SPACE;
+            if (e) {
+                // Check for alt key release in case it was released before the arrow
+                if (e->scancode == sf::Keyboard::Scan::LAlt
+                    || e->scancode == sf::Keyboard::Scan::RAlt) {
+                    return key::SPACE;
+                }
+                if ((e->code == sf::Keyboard::Key::Left || e->code == sf::Keyboard::Key::Right
+                     || e->code == sf::Keyboard::Key::Up || e->code == sf::Keyboard::Key::Down)
+                    && (e->alt || sf::Keyboard::isKeyPressed(sf::Keyboard::Key::RAlt))) {
+                    return key::SPACE;
+                }
             }
         }
         if (event->is<sf::Event::JoystickButtonPressed>()) {
@@ -595,12 +601,14 @@ void ViewSfml::updateTextFromModel(const Model& model)
                     "Important! Ensure the tool is at the radius of the workpiece,");
                 m_txtMisc3->setString(
                     fmt::format(
-                        "near the end, and set axes to ZERO (this drives the operation). Keep {} "
+                        "near the end, and set axes to ZERO (this drives the operation). Keep "
+                        "{} "
                         "constant.",
                         model.config().read("Axis2Label", "X")));
                 m_txtMisc4->setString(
                     fmt::format(
-                        "Then cut away from chuck. Return to zero, then nudge {} inwards, re-zero, "
+                        "Then cut away from chuck. Return to zero, then nudge {} inwards, "
+                        "re-zero, "
                         "repeat.",
                         model.config().read("Axis1Label", "Z")));
                 m_txtMisc5->setString(
