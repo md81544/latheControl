@@ -39,6 +39,10 @@ implemented (see limitSwitchTriggered())
 
 Support enable pin for each motor
 
+I defined some constants for a slight z infeed when cutting threads
+(see INFEED and SIDEFEED) but never used them. Maybe implement to
+simulate the use of topslide)
+
 Set initial x-axis retraction direction from config file
 
 Start thinking around a setting for adding a tiny amount of x motion
