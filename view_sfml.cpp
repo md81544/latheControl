@@ -153,7 +153,6 @@ void ViewSfml::initialise(const Model& model)
 
     m_txtAxis1Label = std::make_unique<sf::Text>(*m_font, "", 60);
     m_txtAxis1Label->setPosition({ 20, 10 });
-    m_txtAxis1Label->setFillColor({ 0, 127, 0 });
     m_txtAxis1Label->setString(model.config().read("Axis1Label", "Z") + ":");
 
     m_txtAxis1Pos = std::make_unique<sf::Text>(*m_font, "", 60);
@@ -171,7 +170,6 @@ void ViewSfml::initialise(const Model& model)
 
     m_txtAxis2Label = std::make_unique<sf::Text>(*m_font, "", 60);
     m_txtAxis2Label->setPosition({ 20, 70 });
-    m_txtAxis2Label->setFillColor({ 0, 127, 0 });
     m_txtAxis2Label->setString(model.config().read("Axis2Label", "X") + ":");
 
     m_txtAxis2Pos = std::make_unique<sf::Text>(*m_font, "", 60);
@@ -189,7 +187,7 @@ void ViewSfml::initialise(const Model& model)
 
     m_txtRpmLabel = std::make_unique<sf::Text>(*m_font, "", 60);
     m_txtRpmLabel->setPosition({ 20, 130 });
-    m_txtRpmLabel->setFillColor({ 0, 127, 0 });
+    m_txtRpmLabel->setFillColor({ 0, 192, 0 });
     m_txtRpmLabel->setString("R:");
 
     m_txtRpm = std::make_unique<sf::Text>(*m_font, "", 60);
@@ -397,6 +395,11 @@ void ViewSfml::updateDisplay(const Model& model)
 
     if (!model.isShuttingDown()) {
         if (!model.config().readBool("DisableAxis1", false)) {
+            if (model.isAxisLocked(1)) {
+                m_txtAxis1Label->setFillColor({ 90, 90, 90 });
+            } else {
+                m_txtAxis1Label->setFillColor({ 0, 192, 0 });
+            }
             m_window->draw(*m_txtAxis1Label);
             m_window->draw(*m_txtAxis1Pos);
             m_window->draw(*m_txtAxis1Units);
@@ -406,6 +409,11 @@ void ViewSfml::updateDisplay(const Model& model)
             m_window->draw(*m_txtAxis1LinearScalePos);
         }
         if (!model.config().readBool("DisableAxis2", false)) {
+            if (model.isAxisLocked(2)) {
+                m_txtAxis2Label->setFillColor({ 90, 90, 90 });
+            } else {
+                m_txtAxis2Label->setFillColor({ 0, 192, 0 });
+            }
             m_window->draw(*m_txtAxis2Label);
             m_window->draw(*m_txtAxis2Pos);
             m_window->draw(*m_txtAxis2Units);

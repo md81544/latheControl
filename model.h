@@ -8,6 +8,7 @@
 #include <cmath>
 #include <limits>
 #include <memory>
+#include <set>
 #include <stack>
 #include <vector>
 
@@ -233,6 +234,10 @@ public:
     // Checks to see whether any limit switches have been triggered
     bool limitSwitchTriggered() const;
 
+    void lockAxis(unsigned axisNumber);
+    void unlockAxis(unsigned axisNumber);
+    bool isAxisLocked(unsigned axisNumber) const;
+
     const IConfigReader& config() const;
 
 private:
@@ -291,6 +296,8 @@ private:
     std::stack<double> m_axis1PreviousPositions;
     std::stack<double> m_axis2PreviousPositions;
     MultiPassStage m_multiPassStage { MultiPassStage::NotStarted };
+
+    std::set<unsigned> m_axisLocks;
 };
 
 } // end namespace

@@ -734,7 +734,8 @@ void Model::axis1StorePosition()
     m_axis1Memory.at(m_currentMemory) = getAxis1MotorCurrentStep();
 }
 
-void Model::axis1StorePosition(double mm) {
+void Model::axis1StorePosition(double mm)
+{
     const auto stepValue = mm / m_axis1Motor->getConversionFactor();
     m_axis1Memory.at(m_currentMemory) = stepValue;
 }
@@ -865,7 +866,8 @@ void Model::axis2StorePosition()
     m_axis2Memory.at(m_currentMemory) = m_axis2Motor->getCurrentStep();
 }
 
-void Model::axis2StorePosition(double mm) {
+void Model::axis2StorePosition(double mm)
+{
     const auto stepValue = mm / m_axis2Motor->getConversionFactor();
     m_axis2Memory.at(m_currentMemory) = stepValue;
 }
@@ -1394,8 +1396,31 @@ bool Model::limitSwitchTriggered() const
     return false;
 }
 
+void Model::lockAxis(unsigned axisNumber)
+{
+    m_axisLocks.insert(axisNumber);
+}
+
+void Model::unlockAxis(unsigned axisNumber)
+{
+    auto it = m_axisLocks.find(axisNumber);
+    if (it != m_axisLocks.end()) {
+        m_axisLocks.erase(it);
+    }
+}
+
+bool Model::isAxisLocked(unsigned axisNumber) const
+{
+    auto it = m_axisLocks.find(axisNumber);
+    if (it != m_axisLocks.end()) {
+        return true;
+    }
+    return false;
+}
+
 const IConfigReader& Model::config() const
 {
     return m_config;
 }
+
 }

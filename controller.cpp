@@ -270,6 +270,9 @@ void Controller::processKeyPress()
             // accidental triggering of both with the stick
             case key::js_rapid_up:
                 {
+                    if (m_model->isAxisLocked(2)) {
+                        break;
+                    }
                     if (!m_model->isAxis1MotorRunning()) {
                         m_model->axis2Rapid(XDirection::Inwards);
                     }
@@ -277,6 +280,9 @@ void Controller::processKeyPress()
                 }
             case key::js_rapid_down:
                 {
+                    if (m_model->isAxisLocked(2)) {
+                        break;
+                    }
                     if (!m_model->isAxis1MotorRunning()) {
                         m_model->axis2Rapid(XDirection::Outwards);
                     }
@@ -284,6 +290,9 @@ void Controller::processKeyPress()
                 }
             case key::js_rapid_left:
                 {
+                    if (m_model->isAxisLocked(1)) {
+                        break;
+                    }
                     if (!m_model->isAxis2MotorRunning()) {
                         m_model->axis1Rapid(ZDirection::Left);
                     }
@@ -291,6 +300,9 @@ void Controller::processKeyPress()
                 }
             case key::js_rapid_right:
                 {
+                    if (m_model->isAxisLocked(1)) {
+                        break;
+                    }
                     if (!m_model->isAxis2MotorRunning()) {
                         m_model->axis1Rapid(ZDirection::Right);
                     }
@@ -301,6 +313,9 @@ void Controller::processKeyPress()
             // accidental triggering of both with the stick
             case key::js_up:
                 {
+                    if (m_model->isAxisLocked(2)) {
+                        break;
+                    }
                     if (!m_model->isAxis1MotorRunning()) {
                         m_model->axis2Move(XDirection::Inwards);
                     }
@@ -308,6 +323,9 @@ void Controller::processKeyPress()
                 }
             case key::js_down:
                 {
+                    if (m_model->isAxisLocked(2)) {
+                        break;
+                    }
                     if (!m_model->isAxis1MotorRunning()) {
                         m_model->axis2Move(XDirection::Outwards);
                     }
@@ -315,6 +333,9 @@ void Controller::processKeyPress()
                 }
             case key::js_left:
                 {
+                    if (m_model->isAxisLocked(1)) {
+                        break;
+                    }
                     if (!m_model->isAxis2MotorRunning()) {
                         m_model->axis1Move(ZDirection::Left);
                     }
@@ -322,6 +343,9 @@ void Controller::processKeyPress()
                 }
             case key::js_right:
                 {
+                    if (m_model->isAxisLocked(1)) {
+                        break;
+                    }
                     if (!m_model->isAxis2MotorRunning()) {
                         m_model->axis1Move(ZDirection::Right);
                     }
@@ -565,6 +589,24 @@ void Controller::processKeyPress()
                 {
                     m_model->setTaperAngle(-45.0);
                     m_model->setEnabledFunction(Mode::Taper);
+                    break;
+                }
+            case key::a1_k: // lock axis 1
+                {
+                    if (m_model->isAxisLocked(1)) {
+                        m_model->unlockAxis(1);
+                    } else {
+                        m_model->lockAxis(1);
+                    }
+                    break;
+                }
+            case key::a2_k: // lock axis 2
+                {
+                    if (m_model->isAxisLocked(2)) {
+                        m_model->unlockAxis(2);
+                    } else {
+                        m_model->lockAxis(2);
+                    }
                     break;
                 }
             default: // e.g. key::SPACE to stop all motors
