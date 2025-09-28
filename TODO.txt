@@ -1,3 +1,5 @@
+Rapid movement should cancel any modes (e.g. taper)
+
 Expand use of dialog. For instance the help screen could be
 much larger. Will require a resizable (or dynamically expanding)
 box for display of information. May want multiple inputs within
