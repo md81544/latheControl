@@ -1,3 +1,9 @@
+Need a way to detect loss of steps. Probably not possible without
+hooking into linear scales.
+
+Locked axes perhaps should prevent manual motion (left/right/up/down)
+and only work with memory slots
+
 Expand use of dialog. For instance the help screen could be
 much larger. Will require a resizable (or dynamically expanding)
 box for display of information. May want multiple inputs within
