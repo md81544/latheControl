@@ -1181,6 +1181,11 @@ void Model::setAxis2MotorSpeed(double speed)
     m_axis2Motor->setSpeed(speed);
 }
 
+void Model::setAxis1Position(double mm)
+{
+    m_axis1Motor->setPosition(mm);
+}
+
 void Model::setAxis2Position(double mm)
 {
     m_axis2Motor->setPosition(mm);
@@ -1418,6 +1423,14 @@ bool Model::isAxisLocked(unsigned axisNumber) const
         return true;
     }
     return false;
+}
+
+RotationDirection Model::getChuckRotationDirection() const
+{
+    if (m_rotaryEncoder) {
+        return m_rotaryEncoder->getRotationDirection();
+    }
+    return RotationDirection::normal;
 }
 
 const IConfigReader& Model::config() const

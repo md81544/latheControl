@@ -1,5 +1,7 @@
+If Z memory slot is empty but X isn't, ENTER should use X for "go to"
+
 Need a way to detect loss of steps. Probably not possible without
-hooking into linear scales.
+hooking into linear scales (possible mod to sender unit)
 
 Locked axes perhaps should prevent manual motion (left/right/up/down)
 and only work with memory slots

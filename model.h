@@ -207,6 +207,7 @@ public:
 
     void setAxis1MotorSpeed(double speed);
     void setAxis2MotorSpeed(double speed);
+    void setAxis1Position(double mm);
     void setAxis2Position(double mm);
     void resetMotorThreads();
     double getAxis1MotorPosition() const;
@@ -237,6 +238,8 @@ public:
     void lockAxis(unsigned axisNumber);
     void unlockAxis(unsigned axisNumber);
     bool isAxisLocked(unsigned axisNumber) const;
+
+    RotationDirection getChuckRotationDirection() const;
 
     const IConfigReader& config() const;
 

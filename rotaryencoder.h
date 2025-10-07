@@ -71,7 +71,7 @@ private:
     uint32_t m_pulseCount { 0 };
     uint32_t m_tickDiffTotal { 0 };
     float m_averageTickDelta { 0.f };
-    RotationDirection m_direction;
+    RotationDirection m_direction { RotationDirection::normal};
     float m_advanceValueMicroseconds { 0.f };
 };
 
