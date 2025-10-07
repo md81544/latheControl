@@ -1427,7 +1427,7 @@ bool Model::isAxisLocked(unsigned axisNumber) const
 
 RotationDirection Model::getChuckRotationDirection() const
 {
-    if (m_rotaryEncoder) {
+    if (m_rotaryEncoder && m_rotaryEncoder->getRpm() > 50.f) {
         return m_rotaryEncoder->getRotationDirection();
     }
     return RotationDirection::normal;
