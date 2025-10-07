@@ -187,13 +187,7 @@ void ViewSfml::initialise(const Model& model)
 
     m_txtRpmLabel = std::make_unique<sf::Text>(*m_font, "", 60);
     m_txtRpmLabel->setPosition({ 20, 130 });
-    if (model.getChuckRotationDirection() == RotationDirection::reversed) {
-        m_txtRpmLabel->setFillColor({ 255, 0, 0 });
-        m_txtRpmLabel->setString("ᴙ:");
-    } else {
-        m_txtRpmLabel->setFillColor({ 0, 192, 0 });
-        m_txtRpmLabel->setString("R:");
-    }
+    m_txtRpmLabel->setString("R:");
 
     m_txtRpm = std::make_unique<sf::Text>(*m_font, "", 60);
     m_txtRpm->setPosition({ 150, 130 });
@@ -428,6 +422,11 @@ void ViewSfml::updateDisplay(const Model& model)
         }
         if (!model.config().readBool("DisableRpm", false)) {
             m_window->draw(*m_txtRpmLabel);
+            if (model.getChuckRotationDirection() == RotationDirection::reversed) {
+                m_txtRpmLabel->setFillColor({ 255, 0, 0 });
+            } else {
+                m_txtRpmLabel->setFillColor({ 0, 192, 0 });
+            }
             m_window->draw(*m_txtRpm);
             m_window->draw(*m_txtRpmUnits);
         }
@@ -667,7 +666,9 @@ void ViewSfml::updateTextFromModel(const Model& model)
                         "Current {} position: {}_",
                         model.config().read("Axis2Label", "X"),
                         model.getInputString()));
-                m_txtWarning->setString("Enter to set, 'D' to enter as diameter, 'A' adjusts (keeps mem slots), Esc to cancel");
+                m_txtWarning->setString(
+                    "Enter to set, 'D' to enter as diameter, 'A' adjusts (keeps mem slots), Esc to "
+                    "cancel");
                 break;
             }
         case Mode::Axis1PositionSetup:

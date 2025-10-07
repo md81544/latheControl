@@ -35,11 +35,11 @@ void RotaryEncoder::callback(int pin, int level, uint32_t tick)
 
     if (pin == m_pinA && level == 1) {
         if (m_levelB) {
-            m_direction = RotationDirection::reversed;
+            m_direction = RotationDirection::normal;
         }
     } else if (pin == m_pinB && level == 1) {
         if (m_levelA) {
-            m_direction = RotationDirection::normal;
+            m_direction = RotationDirection::reversed;
         }
     }
 
@@ -47,9 +47,9 @@ void RotaryEncoder::callback(int pin, int level, uint32_t tick)
     // rising edge to next rising edge
     if (pin == m_pinA && level == 1) {
         if (m_direction == RotationDirection::normal) {
-            ++m_pulseCount;
-        } else {
             --m_pulseCount;
+        } else {
+            ++m_pulseCount;
         }
         // When physically setting up the rotary encoder, it's important
         // to set gearing such that there are a round number of pulses
@@ -60,14 +60,13 @@ void RotaryEncoder::callback(int pin, int level, uint32_t tick)
         // The RE has 2'000 pulses per rev, which means we get a round 700 pulses
         // per chuck revolution.
         bool hitZeroPulse = false;
-        if (m_direction == RotationDirection::normal) {
+        if (m_direction == RotationDirection::reversed) {
             if (m_pulseCount == static_cast<uint32_t>(m_pulsesPerSpindleRev)) {
                 hitZeroPulse = true;
                 m_pulseCount = 0;
             }
         } else {
             if (m_pulseCount > static_cast<uint32_t>(m_pulsesPerSpindleRev)) {
-                // if it's greater we can assume we've wrapped on the unsigned
                 hitZeroPulse = true;
                 m_pulseCount = static_cast<uint32_t>(m_pulsesPerSpindleRev) - 1;
             }
