@@ -100,6 +100,9 @@ float RotaryEncoder::getRpm()
     if (rpm > 5'000.f) {
         rpm = 0.f;
     }
+    if (rpm > 100.f) {
+        return static_cast<int>(rpm / 50) * 50.f;
+    }
     return rpm;
 }
 

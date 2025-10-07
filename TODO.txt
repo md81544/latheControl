@@ -1,3 +1,7 @@
+RPM on real hardware seems erratic past about 1200 rpm. Cannot
+reproduce using mocks, so maybe we're hitting a limitation on
+the rotary encoder?
+
 If Z memory slot is empty but X isn't, ENTER should use X for "go to"
 
 Need a way to detect loss of steps. Probably not possible without
