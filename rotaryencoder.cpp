@@ -89,7 +89,6 @@ void RotaryEncoder::callback(int pin, int level, uint32_t tick)
 
 float RotaryEncoder::getRpm()
 {
-    static float lastRpm = 0.f;
     // Ticks are in microseconds
     if (warmingUp()) {
         return 0.f;
@@ -101,8 +100,6 @@ float RotaryEncoder::getRpm()
     if (rpm > 5'000.f) {
         rpm = 0.f;
     }
-    if (rpm < lastRpm - 500) return lastRpm; // filter out drop-outs
-    lastRpm = rpm;
     if (rpm > 100.f) {
         return static_cast<int>(rpm / 50) * 50.f;
     }
