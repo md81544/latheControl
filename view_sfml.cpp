@@ -531,13 +531,13 @@ void ViewSfml::updateTextFromModel(const Model& model)
             m_txtAxis1MemoryValue.at(n)->setFillColor({ 100, 100, 100 });
             m_txtAxis2MemoryValue.at(n)->setFillColor({ 100, 100, 100 });
         }
-        if (model.getAxis1Memory(n) == INF_RIGHT) {
+        if (model.getAxis1Memory(n) == AXIS1_UNSET) {
             m_txtAxis1MemoryValue.at(n)->setString("        -");
         } else {
             m_txtAxis1MemoryValue.at(n)->setString(
                 fmt::format("{: >9}", model.convertAxis1StepToPosition(model.getAxis1Memory(n))));
         }
-        if (model.getAxis2Memory(n) == INF_OUT) {
+        if (model.getAxis2Memory(n) == AXIS2_UNSET) {
             m_txtAxis2MemoryValue.at(n)->setString("        -");
         } else {
             m_txtAxis2MemoryValue.at(n)->setString(

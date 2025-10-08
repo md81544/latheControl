@@ -18,10 +18,12 @@ namespace mgo {
 
 class IGpio;
 
-const int INF_RIGHT = std::numeric_limits<int>::min();
-const int INF_OUT = std::numeric_limits<int>::min();
-const int INF_LEFT = std::numeric_limits<int>::max();
-const int INF_IN = std::numeric_limits<int>::max();
+constexpr int INF_RIGHT = std::numeric_limits<int>::min();
+constexpr int INF_OUT = std::numeric_limits<int>::min();
+constexpr int INF_LEFT = std::numeric_limits<int>::max();
+constexpr int INF_IN = std::numeric_limits<int>::max();
+constexpr int AXIS1_UNSET = INF_RIGHT;
+constexpr int AXIS2_UNSET = INF_OUT;
 
 constexpr double DEG_TO_RAD = 3.14159265359 / 180.0;
 
@@ -251,9 +253,10 @@ private:
     std::unique_ptr<mgo::LinearScale> m_linearScaleAxis1;
     std::unique_ptr<mgo::StepperMotor> m_axis1Motor;
     std::unique_ptr<mgo::StepperMotor> m_axis2Motor;
-    std::vector<long> m_axis1Memory { INF_RIGHT, INF_RIGHT, INF_RIGHT,
-                                      INF_RIGHT, INF_RIGHT, INF_RIGHT };
-    std::vector<long> m_axis2Memory { INF_OUT, INF_OUT, INF_OUT, INF_OUT, INF_OUT, INF_OUT };
+    std::vector<long> m_axis1Memory { AXIS1_UNSET, AXIS1_UNSET, AXIS1_UNSET,
+                                      AXIS1_UNSET, AXIS1_UNSET, AXIS1_UNSET };
+    std::vector<long> m_axis2Memory { AXIS2_UNSET, AXIS2_UNSET, AXIS2_UNSET,
+                                      AXIS2_UNSET, AXIS2_UNSET, AXIS2_UNSET };
     std::size_t m_currentMemory { 0 };
     std::size_t m_threadPitchIndex { 0 };
     std::string m_generalStatus { "Press F1 for help" };

@@ -222,6 +222,11 @@ void Controller::processKeyPress()
             case key::ENTER:
             case key::a1_ENTER:
                 {
+                    if (m_model->getAxis1Memory(m_model->getCurrentMemorySlot()) == AXIS1_UNSET) {
+                        if (m_model->getAxis2Memory(m_model->getCurrentMemorySlot()) != AXIS2_UNSET) {
+                            m_model->axis2GoToCurrentMemory();
+                        }
+                    }
                     m_model->axis1GoToCurrentMemory();
                     break;
                 }
