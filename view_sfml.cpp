@@ -495,7 +495,12 @@ void ViewSfml::updateTextFromModel(const Model& model)
         m_txtAxis2Pos->setString("     ---");
     }
     m_txtAxis2Speed->setString(fmt::format("{:<.2f} mm/min", model.getAxis2MotorSpeed()));
-    m_txtRpm->setString(fmt::format("{: >7}", static_cast<int>(model.getRotaryEncoderRpm())));
+    float rpm = model.getRotaryEncoderRpm();
+    if (rpm > 0.f) {
+        // Round to nearest 50 to keep display more constant
+        rpm = static_cast<int>(rpm / 50.f) * 50.f;
+    }
+    m_txtRpm->setString(fmt::format("{: >7}", static_cast<int>(rpm)));
 
     m_txtGeneralStatus->setString(model.getGeneralStatus());
     std::string status

@@ -223,7 +223,11 @@ void Controller::processKeyPress()
             case key::a1_ENTER:
                 {
                     if (m_model->getAxis1Memory(m_model->getCurrentMemorySlot()) == AXIS1_UNSET) {
-                        if (m_model->getAxis2Memory(m_model->getCurrentMemorySlot()) != AXIS2_UNSET) {
+                        if (m_model->config().readBool("DisableAxis2", false)) {
+                            break;
+                        }
+                        if (m_model->getAxis2Memory(m_model->getCurrentMemorySlot())
+                            != AXIS2_UNSET) {
                             m_model->axis2GoToCurrentMemory();
                         }
                     }
