@@ -44,6 +44,7 @@ void Model::initialise()
         axis1StepsPerRevolution,
         axis1ConversionFactor,
         std::abs(maxZSpeed / axis1ConversionFactor / axis1StepsPerRevolution),
+        m_config.readDouble("Axis1RampingSpeed", 100.0),
         usingMockLinearScale,
         m_config.readLong("LinearScaleAxis1StepsPerMM", 200));
 
@@ -58,7 +59,8 @@ void Model::initialise()
         m_config.readLong("Axis2GpioEnablePin", 0),
         axis2StepsPerRevolution,
         axis2ConversionFactor,
-        std::abs(maxXSpeed / axis2ConversionFactor / axis2StepsPerRevolution));
+        std::abs(maxXSpeed / axis2ConversionFactor / axis2StepsPerRevolution),
+        m_config.readDouble("Axis2RampingSpeed", 100.0));
 
     m_rotaryEncoder = std::make_unique<mgo::RotaryEncoder>(
         m_gpio,
