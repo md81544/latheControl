@@ -187,7 +187,6 @@ void ViewSfml::initialise(const Model& model)
 
     m_txtRpmLabel = std::make_unique<sf::Text>(*m_font, "", 60);
     m_txtRpmLabel->setPosition({ 20, 130 });
-    m_txtRpmLabel->setFillColor({ 0, 192, 0 });
     m_txtRpmLabel->setString("R:");
 
     m_txtRpm = std::make_unique<sf::Text>(*m_font, "", 60);
@@ -226,7 +225,7 @@ void ViewSfml::initialise(const Model& model)
     m_txtAxis2MemoryLabel->setFillColor({ 128, 128, 128 });
 
     // STATUS BAR (at bottom of screen)
-    constexpr int STATUS_BAR_Y = 670;
+    constexpr int STATUS_BAR_Y = 650;
     m_txtGeneralStatus = std::make_unique<sf::Text>(*m_font, "", 20);
     m_txtGeneralStatus->setPosition({ 20, STATUS_BAR_Y });
     m_txtGeneralStatus->setFillColor(sf::Color::Green);
@@ -423,6 +422,11 @@ void ViewSfml::updateDisplay(const Model& model)
         }
         if (!model.config().readBool("DisableRpm", false)) {
             m_window->draw(*m_txtRpmLabel);
+            if (model.getChuckRotationDirection() == RotationDirection::reversed) {
+                m_txtRpmLabel->setFillColor({ 255, 0, 0 });
+            } else {
+                m_txtRpmLabel->setFillColor({ 0, 192, 0 });
+            }
             m_window->draw(*m_txtRpm);
             m_window->draw(*m_txtRpmUnits);
         }
@@ -491,7 +495,12 @@ void ViewSfml::updateTextFromModel(const Model& model)
         m_txtAxis2Pos->setString("     ---");
     }
     m_txtAxis2Speed->setString(fmt::format("{:<.2f} mm/min", model.getAxis2MotorSpeed()));
-    m_txtRpm->setString(fmt::format("{: >7}", static_cast<int>(model.getRotaryEncoderRpm())));
+    float rpm = model.getRotaryEncoderRpm();
+    if (rpm > 0.f) {
+        // Round to nearest 50 to keep display more constant
+        rpm = static_cast<int>(rpm / 50.f) * 50.f;
+    }
+    m_txtRpm->setString(fmt::format("{: >7}", static_cast<int>(rpm)));
 
     m_txtGeneralStatus->setString(model.getGeneralStatus());
     std::string status
@@ -527,13 +536,13 @@ void ViewSfml::updateTextFromModel(const Model& model)
             m_txtAxis1MemoryValue.at(n)->setFillColor({ 100, 100, 100 });
             m_txtAxis2MemoryValue.at(n)->setFillColor({ 100, 100, 100 });
         }
-        if (model.getAxis1Memory(n) == INF_RIGHT) {
+        if (model.getAxis1Memory(n) == AXIS1_UNSET) {
             m_txtAxis1MemoryValue.at(n)->setString("        -");
         } else {
             m_txtAxis1MemoryValue.at(n)->setString(
                 fmt::format("{: >9}", model.convertAxis1StepToPosition(model.getAxis1Memory(n))));
         }
-        if (model.getAxis2Memory(n) == INF_OUT) {
+        if (model.getAxis2Memory(n) == AXIS2_UNSET) {
             m_txtAxis2MemoryValue.at(n)->setString("        -");
         } else {
             m_txtAxis2MemoryValue.at(n)->setString(
@@ -662,7 +671,9 @@ void ViewSfml::updateTextFromModel(const Model& model)
                         "Current {} position: {}_",
                         model.config().read("Axis2Label", "X"),
                         model.getInputString()));
-                m_txtWarning->setString("Enter to set, 'D' to enter as diameter, Esc to cancel");
+                m_txtWarning->setString(
+                    "Enter to set, 'D' to enter as diameter, 'A' adjusts (keeps mem slots), Esc to "
+                    "cancel");
                 break;
             }
         case Mode::Axis1PositionSetup:
@@ -680,7 +691,8 @@ void ViewSfml::updateTextFromModel(const Model& model)
                         "Current {} position: {}_",
                         model.config().read("Axis1Label", "Z"),
                         model.getInputString()));
-                m_txtWarning->setString("Enter to set, Esc to cancel");
+                m_txtWarning->setString(
+                    "Enter to set, 'A' adjusts (keeps mem slots), Esc to cancel");
                 break;
             }
         case Mode::Axis1GoTo:

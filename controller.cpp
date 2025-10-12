@@ -222,6 +222,15 @@ void Controller::processKeyPress()
             case key::ENTER:
             case key::a1_ENTER:
                 {
+                    if (m_model->getAxis1Memory(m_model->getCurrentMemorySlot()) == AXIS1_UNSET) {
+                        if (m_model->config().readBool("DisableAxis2", false)) {
+                            break;
+                        }
+                        if (m_model->getAxis2Memory(m_model->getCurrentMemorySlot())
+                            != AXIS2_UNSET) {
+                            m_model->axis2GoToCurrentMemory();
+                        }
+                    }
                     m_model->axis1GoToCurrentMemory();
                     break;
                 }
@@ -657,6 +666,7 @@ int Controller::checkKeyAllowedForMode(int key)
             }
             return -1;
         // Any modes that have numerical input:
+        case Mode::Axis1PositionSetup:
         case Mode::Axis2PositionSetup:
             if (key >= key::ZERO && key <= key::NINE) {
                 return key;
@@ -667,11 +677,10 @@ int Controller::checkKeyAllowedForMode(int key)
             if (key == key::MINUS) {
                 return key;
             }
-            if (key == key::d || key == key::D) {
+            if (key == key::d || key == key::D || key == key::a || key == key::A) {
                 return key;
             }
             return -1;
-        case Mode::Axis1PositionSetup:
         case Mode::Taper:
         case Mode::Axis1GoTo:
         case Mode::Axis2GoTo:
@@ -772,6 +781,32 @@ int Controller::processModeInputKeys(int key)
         m_model->clearAllAxis2Memories();
         m_model->setCurrentDisplayMode(Mode::None);
         m_model->diameterIsSet();
+        return -1;
+    }
+
+    // Adjust axis value without affecting memory slots (useful for
+    // adjusting manually from a DRO if we have lost steps)
+    if (m_model->getCurrentDisplayMode() == Mode::Axis1PositionSetup
+        && (key == key::a || key == key::A)) {
+        float pos = 0;
+        try {
+            pos = std::abs(std::stof(m_model->getInputString()));
+        } catch (...) {
+        }
+        m_model->setAxis1Position(pos);
+        m_model->setCurrentDisplayMode(Mode::None);
+        return -1;
+    }
+    if (m_model->getCurrentDisplayMode() == Mode::Axis2PositionSetup
+        && (key == key::a || key == key::A)) {
+        float pos = 0;
+        try {
+            pos = std::abs(std::stof(m_model->getInputString()));
+
+        } catch (...) {
+        }
+        m_model->setAxis2Position(pos);
+        m_model->setCurrentDisplayMode(Mode::None);
         return -1;
     }
 

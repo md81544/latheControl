@@ -285,7 +285,7 @@ void Model::changeMode(Mode mode)
         m_axis2Motor->setSpeed(m_taperPreviousXSpeed);
     }
     if (mode == Mode::MultiPass) {
-        if (m_axis1Memory[0] == INF_RIGHT || m_axis1Memory[1] == INF_RIGHT) {
+        if (m_axis1Memory[0] == AXIS1_UNSET || m_axis1Memory[1] == AXIS1_UNSET) {
             // Mode is invalid, we need the first two axis1 memories to specify
             // the from->to positions on the primary axis.
             return;
@@ -492,7 +492,7 @@ void Model::axis1CheckForSynchronisation(long step)
 
 void Model::axis1GoToCurrentMemory()
 {
-    if (m_axis1Memory.at(m_currentMemory) == INF_RIGHT) {
+    if (m_axis1Memory.at(m_currentMemory) == AXIS1_UNSET) {
         return;
     }
     if (m_axis1Memory.at(m_currentMemory) == getAxis1MotorCurrentStep()) {
@@ -541,7 +541,7 @@ void Model::axis1Zero()
     m_axis1Motor->zeroPosition();
     // Zeroing will invalidate any memorised Z positions, so we clear them
     for (auto& m : m_axis1Memory) {
-        m = INF_RIGHT;
+        m = AXIS1_UNSET;
     }
     // Also clear any "breadcrumb" positions
     axis1ClearBreadcrumbs();
@@ -577,7 +577,7 @@ void Model::axis1SpeedIncrease()
 
 void Model::axis1FastReturn()
 {
-    if (m_axis1Memory.at(m_currentMemory) == INF_RIGHT || m_axis1FastReturning) {
+    if (m_axis1Memory.at(m_currentMemory) == AXIS1_UNSET || m_axis1FastReturning) {
         return;
     }
     m_previousAxis1Speed = m_axis1Motor->getSpeed();
@@ -760,7 +760,7 @@ void Model::axis2Zero()
     m_axis2Motor->zeroPosition();
     // Zeroing will invalidate any memorised X positions, so we clear them
     for (auto& m : m_axis2Memory) {
-        m = INF_OUT;
+        m = AXIS2_UNSET;
     }
     // Also clear any "breadcrumb" positions
     axis2ClearBreadcrumbs();
@@ -773,7 +773,7 @@ void Model::axis2SynchroniseOff()
 
 void Model::axis2GoToCurrentMemory()
 {
-    if (m_axis2Memory.at(m_currentMemory) == INF_RIGHT
+    if (m_axis2Memory.at(m_currentMemory) == AXIS2_UNSET
         || m_axis2Memory.at(m_currentMemory) == m_axis2Motor->getCurrentStep()) {
         return;
     }
@@ -821,7 +821,7 @@ void Model::axis2Nudge(XDirection direction, double nudgeAmountMm)
 
 void Model::axis2FastReturn()
 {
-    if (m_axis2Memory.at(m_currentMemory) == INF_RIGHT || m_axis2FastReturning) {
+    if (m_axis2Memory.at(m_currentMemory) == AXIS2_UNSET || m_axis2FastReturning) {
         return;
     }
     m_previousAxis2Speed = m_axis2Motor->getSpeed();
@@ -1181,6 +1181,11 @@ void Model::setAxis2MotorSpeed(double speed)
     m_axis2Motor->setSpeed(speed);
 }
 
+void Model::setAxis1Position(double mm)
+{
+    m_axis1Motor->setPosition(mm);
+}
+
 void Model::setAxis2Position(double mm)
 {
     m_axis2Motor->setPosition(mm);
@@ -1330,7 +1335,7 @@ void Model::acceptInputValue()
                 m_axis1Motor->setPosition(inputValue);
                 // This will invalidate any memorised Z positions, so we clear them
                 for (auto& m : m_axis1Memory) {
-                    m = INF_RIGHT;
+                    m = AXIS1_UNSET;
                 }
                 break;
             }
@@ -1418,6 +1423,14 @@ bool Model::isAxisLocked(unsigned axisNumber) const
         return true;
     }
     return false;
+}
+
+RotationDirection Model::getChuckRotationDirection() const
+{
+    if (m_rotaryEncoder && m_rotaryEncoder->getRpm() > 50.f) {
+        return m_rotaryEncoder->getRotationDirection();
+    }
+    return RotationDirection::normal;
 }
 
 const IConfigReader& Model::config() const
