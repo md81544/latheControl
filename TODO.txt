@@ -1,6 +1,11 @@
+Make ramping configurable - (a) whether to enable it, and (b)
+speed of ramp (maybe just as an arbitrary 1-100 value, with
+100 being the fastest ramp)
+
 RPM on real hardware seems erratic past about 1200 rpm. Cannot
 reproduce using mocks, so maybe we're hitting a limitation on
-the rotary encoder?
+the rotary encoder? (not relevant currently now I've lowered
+the gearing on the lathe's spindle)
 
 Need a way to detect loss of steps. Probably not possible without
 hooking into linear scales (possible mod to sender unit)
