@@ -55,9 +55,9 @@ void RotaryEncoder::callback(int pin, int level, uint32_t tick)
         // to set gearing such that there are a round number of pulses
         // per spindle revolution, otherwise we'll get a drift in the
         // apparent position of pulse zero.
-        // Current gearing on my lathe is 35:100
+        // Current gearing of the RE on my lathe is 35:100
         // so the rotary encoder does 0.35 revolutions per spindle revolution.
-        // The RE has 2'000 pulses per rev, which means we get a round 700 pulses
+        // The RE has 2'000 pulses per rev, which means we get 700 pulses
         // per chuck revolution.
         bool hitZeroPulse = false;
         if (m_direction == RotationDirection::reversed) {
@@ -130,6 +130,7 @@ void RotaryEncoder::callbackAtZeroDegrees(std::function<void()> cb)
     // Because there is a latency on the callback (the pigpio
     // library batches up the callbacks), we interpolate here
     // for better accuracy.
+    // Note: ramping should be turned off for threading operations
     if (m_warmingUp) {
         return; // spindle not running?
     }
