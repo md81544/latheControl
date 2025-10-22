@@ -179,7 +179,7 @@ void ViewSfml::initialise(const Model& model)
     m_txtAxis2Units = std::make_unique<sf::Text>(*m_font, "", 30);
     m_txtAxis2Units->setPosition({ 430, 100 });
     m_txtAxis2Units->setFillColor({ 0, 127, 0 });
-    m_txtAxis2Units->setString(model.config().read("Axis1DisplayUnits", "mm"));
+    m_txtAxis2Units->setString(model.config().read("Axis2DisplayUnits", "mm"));
 
     m_txtAxis2Speed = std::make_unique<sf::Text>(*m_font, "", 30);
     m_txtAxis2Speed->setPosition({ 550, 100 });
