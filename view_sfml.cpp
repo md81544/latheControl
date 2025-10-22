@@ -487,14 +487,22 @@ void ViewSfml::updateTextFromModel(const Model& model)
 
     m_txtAxis1Pos->setString(formatMotorPosition(model.getAxis1MotorPosition()));
 
-    m_txtAxis1Speed->setString(fmt::format("{:<.2f} mm/min", model.getAxis1MotorSpeed()));
+    m_txtAxis1Speed->setString(
+        fmt::format(
+            "{:<.2f} {}/min",
+            model.getAxis1MotorSpeed(),
+            model.config().read("Axis1DisplayUnits", "mm")));
 
     if (!model.getIsAxis2Retracted()) {
         m_txtAxis2Pos->setString(formatMotorPosition(model.getAxis2MotorPosition()));
     } else {
         m_txtAxis2Pos->setString("     ---");
     }
-    m_txtAxis2Speed->setString(fmt::format("{:<.2f} mm/min", model.getAxis2MotorSpeed()));
+    m_txtAxis2Speed->setString(
+        fmt::format(
+            "{:<.2f} {}/min",
+            model.getAxis2MotorSpeed(),
+            model.config().read("Axis2DisplayUnits", "mm")));
     float rpm = model.getRotaryEncoderRpm();
     if (rpm > 0.f) {
         // Round to nearest 50 to keep display more constant
