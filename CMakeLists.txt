@@ -19,6 +19,7 @@ add_executable(lc
         main.cpp
         configreader.cpp
         sfml_dialog.cpp
+        axis.cpp
     )
 
 if(DEFINED FAKE)

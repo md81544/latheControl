@@ -1,3 +1,9 @@
+Support three axes, to enable X,Y, and a rotary table (or z,
+x, and manual rotation of chuck on the lathe)
+  - axes should just be a collection of axis types
+  - specific axes which require specialised behaviour
+    can have attributes perhaps (e.g. retraction)
+      - Determine which specialised behaviour needs extracting
 
 RPM on real hardware seems erratic past about 1200 rpm. Cannot
 reproduce using mocks, so maybe we're hitting a limitation on
@@ -13,12 +19,6 @@ box for display of information. May want multiple inputs within
 such a display box.
 
 Maybe allow zeroing of chuck angle? (use offset in reporting)
-
-Support three axes, to enable X,Y, and a rotary table (or z,
-x, and manual rotation of chuck on the lathe)
-
-Adding an extra axis on the mill should allow for usage of the
-rotary table in conjunction with axis1 to do thread milling
 
 Make use of the keys on the right (#, Del, Home, PgUp, PgDn, End)?
 
