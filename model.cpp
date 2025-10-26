@@ -519,6 +519,8 @@ void Model::axis1Nudge(ZDirection direction, double nudgeAmountMm)
     if (m_axis1Motor->isRunning()) {
         axis1Stop();
     }
+    const double oldSpeed = m_axis1Motor->getSpeed();
+    m_axis1Motor->setSpeed(m_axis1Motor->getMaxRpm() / 10.0);
     long steps = nudgeAmountMm / m_axis1Motor->getConversionFactor();
     if (direction == ZDirection::Left) {
         steps = -steps;
@@ -527,6 +529,7 @@ void Model::axis1Nudge(ZDirection direction, double nudgeAmountMm)
     m_axis1Motor->wait();
     axis1GoToStep(getAxis1MotorCurrentStep() + steps);
     m_axis1Motor->wait();
+    m_axis1Motor->setSpeed(oldSpeed);
 
     // Save position
     axis1SaveBreadcrumbPosition();
@@ -807,6 +810,8 @@ void Model::axis2Nudge(XDirection direction, double nudgeAmountMm)
     if (m_axis2Motor->isRunning()) {
         axis2Stop();
     }
+    const double oldSpeed = m_axis2Motor->getSpeed();
+    m_axis2Motor->setSpeed(m_axis2Motor->getMaxRpm() / 10.0);
     long steps = nudgeAmountMm / m_axis2Motor->getConversionFactor();
     if (direction == XDirection::Inwards) {
         steps = -steps;
@@ -816,6 +821,7 @@ void Model::axis2Nudge(XDirection direction, double nudgeAmountMm)
     }
     m_axis2Motor->goToStep(m_axis2Motor->getCurrentStep() + steps);
     m_axis2Motor->wait();
+    m_axis2Motor->setSpeed(oldSpeed);
 
     // Save position
     axis2SaveBreadcrumbPosition();
