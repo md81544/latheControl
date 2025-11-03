@@ -222,9 +222,10 @@ void Model::checkStatus()
                 // We may want to automate the return to the start position as well
             }
         }
-        if (m_axis1FastReturning) {
+        if (m_axis1FastReturning || m_axis1RapidInProgress) {
             m_axis1Motor->setSpeed(m_previousAxis1Speed);
             m_axis1FastReturning = false;
+            m_axis1RapidInProgress = false;
         }
         if ((m_enabledFunction == Mode::Taper || m_enabledFunction == Mode::Radius)
             && m_axis1WasRunning) {
@@ -252,9 +253,10 @@ void Model::checkStatus()
             m_fastRetracting = false;
             m_axis2Retracted = false;
         }
-        if (m_axis2FastReturning) {
+        if (m_axis2FastReturning || m_axis2RapidInProgress) {
             m_axis2Motor->setSpeed(m_previousAxis2Speed);
             m_axis2FastReturning = false;
+            m_axis2RapidInProgress = false;
         }
         if (!(m_enabledFunction == Mode::Taper) && m_axis2WasRunning
             && m_axis2Motor->getSpeed() >= m_config.readDouble("Axis2SpeedResetAbove", 80.0)) {
@@ -671,6 +673,7 @@ void Model::axis1Rapid(ZDirection direction)
         return;
     }
     m_previousAxis1Speed = m_axis1Motor->getSpeed();
+    m_axis1RapidInProgress = true;
     m_axis1Motor->setSpeed(m_axis1Motor->getMaxRpm());
     axis1Move(direction);
 }
@@ -912,6 +915,7 @@ void Model::axis2Rapid(XDirection direction)
         return;
     }
     m_previousAxis2Speed = m_axis2Motor->getSpeed();
+    m_axis2RapidInProgress = true;
     m_axis2Motor->setSpeed(m_axis2Motor->getMaxRpm());
     axis2Move(direction);
 }

@@ -269,6 +269,8 @@ private:
     float m_previousAxis1Speed { 40.f };
     bool m_axis1FastReturning { false };
     bool m_axis2FastReturning { false };
+    bool m_axis1RapidInProgress { false };
+    bool m_axis2RapidInProgress { false };
     int m_keyPressed { 0 };
     double m_taperAngle { 0.0 };
     double m_radius { 0.0 };
