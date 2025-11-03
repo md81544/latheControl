@@ -842,7 +842,7 @@ int ViewSfml::processJoystickButton(const sf::Event& e)
         case 7:
             return key::ENTER;
         case 8:
-            return key::f;
+            return key::a1_f;
         case 9:
             // This acts as a modifier, so we ignore this event here
             break;

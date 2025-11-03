@@ -1,6 +1,3 @@
-"F" key is too close to nudge keys - maybe make fast return
-require a modifier key?
-
 Rapids should reset speed to previous speed when complete
 
 Support three axes, to enable X,Y, and a rotary table (or z,

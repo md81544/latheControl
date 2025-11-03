@@ -475,8 +475,6 @@ void Controller::processKeyPress()
                     m_model->axis2SpeedPreset();
                     break;
                 }
-            case key::f:
-            case key::F:
             case key::a1_f:
                 {
                     // Fast return to point
