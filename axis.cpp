@@ -13,11 +13,13 @@ Axis::Axis(
     long stepsPerRevolution,
     double conversionFactor,
     double maxRpm,
+    bool supportsRetract,
     bool usingMockLinearScale)
     : m_number(number)
     , m_name(name)
     , m_units(units)
     , m_maxRpm(maxRpm)
+    , m_supportsRetract(supportsRetract)
 {
     const std::string configPrefix = fmt::format("Axis{}", number);
     const double maxSpeed
@@ -87,6 +89,16 @@ void Axis::fastReturn() const { }
 
 void Axis::zero() { }
 
-void Axis::retract() { }
+void Axis::retract()
+{
+    if (!m_supportsRetract) {
+        return;
+    }
+}
+
+bool Axis::isRetracted()
+{
+    return m_retracted;
+}
 
 } // namespace mgo

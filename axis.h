@@ -19,6 +19,7 @@ public:
         long stepsPerRevolution,
         double conversionFactor,
         double maxRpm,
+        bool supportsRetract,
         bool usingMockLinearScale);
 
     unsigned number() const;
@@ -39,6 +40,7 @@ public:
     void fastReturn() const;
     void zero();
     void retract();
+    bool isRetracted();
 
 private:
     unsigned m_number;
@@ -46,6 +48,8 @@ private:
     std::string m_units;
     double m_maxRpm;
     std::unique_ptr<mgo::StepperMotor> m_stepper;
+    bool m_retracted { false };
+    bool m_supportsRetract{ false };
 };
 
 } // namespace mgo
