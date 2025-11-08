@@ -665,7 +665,10 @@ void Model::axis1Move(ZDirection direction)
 
 void Model::axis1Rapid(ZDirection direction)
 {
-    changeMode(Mode::None);
+    // Don't allow rapids if in a mode;
+    if (m_enabledFunction != Mode::None) {
+        return;
+    }
     // Issuing the same command (i.e. pressing the same key)
     // when it is already running will cause the motor to stop
     if (m_axis1Motor->isRunning()) {
@@ -909,7 +912,10 @@ void Model::axis2Move(XDirection direction)
 
 void Model::axis2Rapid(XDirection direction)
 {
-    changeMode(Mode::None);
+    // Don't allow rapids if in a mode;
+    if (m_enabledFunction != Mode::None) {
+        return;
+    }
     if (m_axis2Motor->isRunning()) {
         axis2Stop();
         return;
