@@ -1,3 +1,8 @@
+Automation of repeated cut - maybe a mode? Like multi-pass,
+Where it cuts from Mem 1 to Mem 2, then fast returns, then
+waits for a key press and repeats until cancelled (thinking
+about making repeated cuts down to depth easier)
+
 Support three axes, to enable X,Y, and a rotary table (or z,
 x, and manual rotation of chuck on the lathe)
   - axes should just be a collection of axis types
