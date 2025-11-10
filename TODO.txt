@@ -1,3 +1,8 @@
+Rapids don't work at times until Esc is pressed - maybe
+m_enabledFunction isn't being cleared?
+
+Need a way to clear a memory slot (maybe backspace?)
+
 Automation of repeated cut - maybe a mode? Like multi-pass,
 Where it cuts from Mem 1 to Mem 2, then fast returns, then
 waits for a key press and repeats until cancelled (thinking
