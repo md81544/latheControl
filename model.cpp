@@ -1328,7 +1328,8 @@ float Model::getAxis1LinearScalePosMm() const
     }
 }
 
-void Model::clearCurrentMemorySlot(Axis axis) {
+void Model::clearCurrentMemorySlot(Axis axis)
+{
     if (axis == Axis::Axis1) {
         m_axis1Memory.at(m_currentMemory) = AXIS1_UNSET;
     }
@@ -1422,6 +1423,7 @@ void Model::acceptInputValue()
             assert(false);
     }
     m_currentDisplayMode = Mode::None;
+    changeMode(Mode::None);
 }
 
 bool Model::limitSwitchTriggered() const
