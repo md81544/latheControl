@@ -1328,6 +1328,15 @@ float Model::getAxis1LinearScalePosMm() const
     }
 }
 
+void Model::clearCurrentMemorySlot(Axis axis) {
+    if (axis == Axis::Axis1) {
+        m_axis1Memory.at(m_currentMemory) = AXIS1_UNSET;
+    }
+    if (axis == Axis::Axis2) {
+        m_axis2Memory.at(m_currentMemory) = AXIS2_UNSET;
+    }
+}
+
 void Model::acceptInputValue()
 {
     double inputValue = 0.0;

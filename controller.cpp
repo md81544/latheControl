@@ -664,6 +664,23 @@ void Controller::processKeyPress()
                     }
                     break;
                 }
+            case key::a1_DELETE:
+                {
+                    m_model->clearCurrentMemorySlot(Axis::Axis1);
+                    break;
+                }
+            case key::a2_DELETE:
+                {
+                    m_model->clearCurrentMemorySlot(Axis::Axis2);
+                    break;
+                }
+            case key::DELETE:
+            case key::aAll_DELETE:
+                {
+                    m_model->clearCurrentMemorySlot(Axis::Axis1);
+                    m_model->clearCurrentMemorySlot(Axis::Axis2);
+                    break;
+                }
             default: // e.g. key::SPACE to stop all motors
                 {
                     m_model->stopAllMotors();

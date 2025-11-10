@@ -230,6 +230,8 @@ public:
     float getRotaryEncoderRpm() const;
     float getAxis1LinearScalePosMm() const;
 
+    void clearCurrentMemorySlot(Axis axis);
+
     // This is called when the user presses ENTER when
     // inputting a mode parameter (e.g. taper angle)
     void acceptInputValue();
