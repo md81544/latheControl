@@ -1,3 +1,6 @@
+Fast return on rotary table is slow - investigate why it doesn't
+run at full speed
+
 Rapids don't work at times until Esc is pressed - maybe
 m_enabledFunction isn't being cleared?
 
