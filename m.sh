@@ -13,6 +13,10 @@ while [[ "$1" != "" ]]; do
             rm -rf build/*
             exit 0
             ;;
+        "latest" )
+            git pull --recurse-submodules
+            BUILD_TYPE=release
+            ;;
         "release" )
             BUILD_TYPE=release
             ;;

@@ -22,3 +22,6 @@ test:
 
 sub:
 	./m.sh sub
+
+latest:
+	./m.sh latest
