@@ -505,8 +505,8 @@ void ViewSfml::updateTextFromModel(const Model& model)
             model.config().read("Axis2DisplayUnits", "mm")));
     float rpm = model.getRotaryEncoderRpm();
     if (rpm > 0.f) {
-        // Round to nearest 50 to keep display more constant
-        rpm = static_cast<int>(rpm / 50.f) * 50.f;
+        // Round to nearest 10 to keep display more constant
+        rpm = static_cast<int>(rpm / 10.f) * 10.f;
     }
     m_txtRpm->setString(fmt::format("{: >7}", static_cast<int>(rpm)));
 
