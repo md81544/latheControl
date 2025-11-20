@@ -275,7 +275,9 @@ void Model::checkStatus()
 
 void Model::changeMode(Mode mode)
 {
-    stopAllMotors();
+    if (mode != Mode::None) {
+        stopAllMotors();
+    }
     axis2SynchroniseOff();
     if (mode == Mode::Threading || mode == Mode::Taper || mode == Mode::Radius) {
         // We do not want motor speed ramping on tapering or threading
@@ -449,7 +451,7 @@ void Model::axis1GoToOffset(double offset)
     m_axis1LastRelativeMove = offset;
     m_lastRelativeMoveAxis = Axis::Axis1;
     axis1GoToPosition(m_axis1Motor->getPosition() + offset);
-    m_axis1Status = fmt::format("To offset {}", offset);
+    m_axis1Status = fmt::format("To rel {}", offset);
 }
 
 void Model::axis1GoToPreviousPosition()
@@ -618,7 +620,7 @@ void Model::axis2GoToOffset(double offset)
     m_axis2LastRelativeMove = offset;
     m_lastRelativeMoveAxis = Axis::Axis2;
     axis2GoToPosition(m_axis2Motor->getPosition() + offset);
-    m_axis2Status = fmt::format("To offset {}", offset);
+    m_axis2Status = fmt::format("To rel {}", offset);
 }
 
 void Model::axis2GoToPreviousPosition()
