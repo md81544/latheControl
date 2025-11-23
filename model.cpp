@@ -22,6 +22,44 @@ std::string convertToString(double number, int decimalPlaces)
     return oss.str();
 }
 
+std::string translate_mode(mgo::Mode mode) {
+    switch(mode) {
+    case mgo::Mode::None:
+        return "None";
+    case mgo::Mode::Help:
+        return "Help";
+    case mgo::Mode::Setup:
+        return "Setup";
+    case mgo::Mode::Threading:
+        return "Threading";
+    case mgo::Mode::Taper:
+        return "Taper";
+    case mgo::Mode::Axis2RetractSetup:
+        return "Axis2RetractSetup";
+    case mgo::Mode::Axis1PositionSetup:
+        return "Axis1PositionSetup";
+    case mgo::Mode::Axis2PositionSetup:
+        return "Axis2PositionSetup";
+    case mgo::Mode::Axis1GoTo:
+        return "Axis1GoTo";
+    case mgo::Mode::Axis2GoTo:
+        return "Axis2GoTo";
+    case mgo::Mode::Axis1GoToOffset:
+        return "Axis1GoToOffset";
+    case mgo::Mode::Axis2GoToOffset:
+        return "Axis2GoToOffset";
+    case mgo::Mode::Radius:
+        return "Radius";
+    case mgo::Mode::MultiPass:
+        return "MultiPass";
+    default:
+        // As this function is just used for debugging there's
+        // no need for an assert here.
+        MGOLOG("Missing mode in translate_mode");
+        return "";
+    }
+}
+
 } // anonymous namepace
 
 namespace mgo {
@@ -669,6 +707,7 @@ void Model::axis1Rapid(ZDirection direction)
 {
     // Don't allow rapids if in a mode;
     if (m_enabledFunction != Mode::None) {
+        MGOLOG("Disallowing rapid. Mode = " + translate_mode(m_enabledFunction));
         return;
     }
     // Issuing the same command (i.e. pressing the same key)
