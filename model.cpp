@@ -1425,7 +1425,6 @@ void Model::acceptInputValue()
             assert(false);
     }
     m_currentDisplayMode = Mode::None;
-    changeMode(Mode::None);
 }
 
 bool Model::limitSwitchTriggered() const
