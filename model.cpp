@@ -68,7 +68,7 @@ void Model::initialise()
 {
     double axis1ConversionFactor = m_config.readDouble("Axis1ConversionNumerator", -1.0)
         / m_config.readDouble("Axis1ConversionDivisor", 1'000.0);
-    double maxAxis1Speed = m_config.readDouble("Axis1MaxMotorSpeed", 1'000.0);
+    double maxAxis1Rpm = m_config.readDouble("Axis1MaxMotorRpm", 1'000.0);
     long axis1StepsPerRevolution = m_config.readLong("Axis1StepsPerRev", 1'000);
     bool usingMockLinearScale = false;
 #ifdef FAKE
@@ -81,14 +81,14 @@ void Model::initialise()
         m_config.readLong("Axis1GpioEnablePin", 0),
         axis1StepsPerRevolution,
         axis1ConversionFactor,
-        maxAxis1Speed,
+        maxAxis1Rpm,
         m_config.readDouble("Axis1RampingSpeed", 100.0),
         usingMockLinearScale,
         m_config.readLong("LinearScaleAxis1StepsPerMM", 200));
 
     double axis2ConversionFactor = m_config.readDouble("Axis2ConversionNumerator", -1.0)
         / m_config.readDouble("Axis2ConversionDivisor", 1'000.0);
-    double maxAxis2Speed = m_config.readDouble("Axis2MaxMotorSpeed", 1'000.0);
+    double maxAxis2Rpm = m_config.readDouble("Axis2MaxMotorRpm", 1'000.0);
     long axis2StepsPerRevolution = m_config.readLong("Axis2StepsPerRev", 800);
     m_axis2Motor = std::make_unique<mgo::StepperMotor>(
         m_gpio,
@@ -97,7 +97,7 @@ void Model::initialise()
         m_config.readLong("Axis2GpioEnablePin", 0),
         axis2StepsPerRevolution,
         axis2ConversionFactor,
-        maxAxis2Speed,
+        maxAxis2Rpm,
         m_config.readDouble("Axis2RampingSpeed", 100.0));
 
     m_rotaryEncoder = std::make_unique<mgo::RotaryEncoder>(
@@ -164,7 +164,7 @@ void Model::checkStatus()
         // rpm and stepper motor rpm for a 1mm thread pitch.
         float speed = pitch * m_rotaryEncoder->getRpm();
 #ifndef FAKE
-        double maxZSpeed = m_config.readDouble("Axis1MaxMotorSpeed", 700.0);
+        double maxZSpeed = m_config.readDouble("Axis1MaxMotorRpm", 700.0);
         if (speed > maxZSpeed * 0.8) {
             m_axis1Motor->stop();
             m_axis1Motor->wait();
@@ -616,7 +616,7 @@ void Model::axis1SpeedIncrease()
     if (m_axis1Motor->getSpeed() < 20.0) {
         m_axis1Motor->setSpeed(m_axis1Motor->getSpeed() + 1.0);
     } else {
-        if (m_axis1Motor->getSpeed() <= m_config.readDouble("Axis1MaxMotorSpeed", 1'000.0) - 20) {
+        if (m_axis1Motor->getSpeed() <= m_config.readDouble("Axis1MaxMotorRpm", 1'000.0) - 20) {
             m_axis1Motor->setSpeed(m_axis1Motor->getSpeed() + 20.0);
         }
     }
@@ -847,7 +847,7 @@ void Model::axis2SpeedIncrease()
 {
     if (m_axis2Motor->getSpeed() < 10.0) {
         m_axis2Motor->setSpeed(m_axis2Motor->getSpeed() + 2.0);
-    } else if (m_axis2Motor->getSpeed() < m_config.readDouble("Axis2MaxMotorSpeed", 1'000.0)) {
+    } else if (m_axis2Motor->getSpeed() < m_config.readDouble("Axis2MaxMotorRpm", 1'000.0)) {
         m_axis2Motor->setSpeed(m_axis2Motor->getSpeed() + 10.0);
     }
 }
