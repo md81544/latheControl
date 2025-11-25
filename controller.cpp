@@ -844,6 +844,7 @@ int Controller::processModeInputKeys(int key)
         m_model->clearAllAxis2Memories();
         m_model->setCurrentDisplayMode(Mode::None);
         m_model->diameterIsSet();
+        m_model->changeMode(Mode::None);
         return -1;
     }
 
@@ -857,7 +858,7 @@ int Controller::processModeInputKeys(int key)
         } catch (...) {
         }
         m_model->setAxis1Position(pos);
-        m_model->setCurrentDisplayMode(Mode::None);
+        m_model->changeMode(Mode::None);
         return -1;
     }
     if (m_model->getCurrentDisplayMode() == Mode::Axis2PositionSetup
@@ -869,12 +870,13 @@ int Controller::processModeInputKeys(int key)
         } catch (...) {
         }
         m_model->setAxis2Position(pos);
-        m_model->setCurrentDisplayMode(Mode::None);
+        m_model->changeMode(Mode::None);
         return -1;
     }
 
     if (m_model->getCurrentDisplayMode() != Mode::None && key == key::ENTER) {
         m_model->acceptInputValue();
+        m_model->changeMode(Mode::None);
         return -1;
     }
     return key;

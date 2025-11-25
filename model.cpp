@@ -22,6 +22,7 @@ std::string convertToString(double number, int decimalPlaces)
     return oss.str();
 }
 
+[[maybe_unused]] // Currently just here for debugging
 std::string translate_mode(mgo::Mode mode) {
     switch(mode) {
     case mgo::Mode::None:
@@ -707,7 +708,6 @@ void Model::axis1Rapid(ZDirection direction)
 {
     // Don't allow rapids if in a mode;
     if (m_enabledFunction != Mode::None) {
-        MGOLOG("Disallowing rapid. Mode = " + translate_mode(m_enabledFunction));
         return;
     }
     // Issuing the same command (i.e. pressing the same key)
