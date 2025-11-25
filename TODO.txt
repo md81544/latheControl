@@ -1,5 +1,5 @@
-Fast return on rotary table is slow - investigate why it doesn't
-run at full speed
+Regression: modes (e.g. taper or threading) disappear as soon as the
+"dialog" is dismissed.
 
 Not sure how realistic this is... consider tool numbers with
 both Z and X offsets to offer repeatable positioning after
