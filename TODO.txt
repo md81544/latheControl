@@ -1,6 +1,3 @@
-Regression: modes (e.g. taper or threading) disappear as soon as the
-"dialog" is dismissed.
-
 Not sure how realistic this is... consider tool numbers with
 both Z and X offsets to offer repeatable positioning after
 a tool swap. Maybe some form of probing like on the CNC?

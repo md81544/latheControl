@@ -876,7 +876,7 @@ int Controller::processModeInputKeys(int key)
 
     if (m_model->getCurrentDisplayMode() != Mode::None && key == key::ENTER) {
         m_model->acceptInputValue();
-        m_model->changeMode(Mode::None);
+        m_model->setCurrentDisplayMode(Mode::None);
         return -1;
     }
     return key;

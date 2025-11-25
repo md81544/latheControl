@@ -1395,7 +1395,7 @@ void Model::acceptInputValue()
                 m_axis2Motor->setPosition(inputValue);
                 // This will invalidate any memorised X positions, so we clear them
                 for (auto& m : m_axis2Memory) {
-                    m = INF_OUT;
+                    m = AXIS2_UNSET;
                 }
                 break;
             }
