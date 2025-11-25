@@ -3,7 +3,9 @@ run at full speed
 
 Not sure how realistic this is... consider tool numbers with
 both Z and X offsets to offer repeatable positioning after
-a tool swap.
+a tool swap. Maybe some form of probing like on the CNC?
+
+Probing (see above) sounds useful anyway as a way to touch off?
 
 Automation of repeated cut - maybe a mode? Like multi-pass,
 Where it cuts from Mem 1 to Mem 2, then fast returns, then
