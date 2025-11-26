@@ -583,6 +583,15 @@ void Controller::processKeyPress()
                     if (m_model->config().readBool("DisableAxis2", false)) {
                         break;
                     }
+                    // Note all motors will be stopped when a dialog is displayed
+                    const double taper = getNumericInput(
+                        "Enter taper value",
+                        m_model->getTaperAngle(),
+                        "MT1 = -1.4287, MT2 = -1.4307",
+                        "MT3 = -1.4377, MT4 = -1.4876",
+                        "(negative angle means piece gets wider towards chuck)",
+                        "Enter to keep enabled, Esc to disable, Del to clear");
+                    m_model->setTaperAngle(taper);
                     m_model->changeMode(Mode::Taper);
                     break;
                 }
@@ -745,6 +754,8 @@ int Controller::checkKeyAllowedForMode(int key)
             }
             return -1;
         case Mode::Taper:
+            // Now handled by new dialog
+            return key;
         case Mode::Axis1GoTo:
         case Mode::Axis2GoTo:
         case Mode::Axis1GoToOffset:
@@ -960,16 +971,32 @@ int Controller::checkForAxisLeaderKeys(int key)
     return key;
 }
 
-double Controller::getNumericInput(const std::string& prompt, double defaultEntry)
+double Controller::getNumericInput(
+    const std::string& prompt,
+    double defaultEntry,
+    const std::string& additionalText1 /* = "" */,
+    const std::string& additionalText2 /* = "" */,
+    const std::string& additionalText3 /* = "" */,
+    const std::string& additionalText4 /* = "" */
+)
 {
     m_model->stopAllMotors();
-    return m_view->getNumericInput(prompt, defaultEntry);
+    return m_view->getNumericInput(
+        prompt, defaultEntry, additionalText1, additionalText2, additionalText3, additionalText4);
 }
 
-std::string Controller::getTextInput(const std::string& prompt, const std::string& defaultEntry)
+std::string Controller::getTextInput(
+    const std::string& prompt,
+    const std::string& defaultEntry,
+    const std::string& additionalText1 /* = "" */,
+    const std::string& additionalText2 /* = "" */,
+    const std::string& additionalText3 /* = "" */,
+    const std::string& additionalText4 /* = "" */
+)
 {
     m_model->stopAllMotors();
-    return m_view->getTextInput(prompt, defaultEntry);
+    return m_view->getTextInput(
+        prompt, defaultEntry, additionalText1, additionalText2, additionalText3, additionalText4);
 }
 
 } // end namespace

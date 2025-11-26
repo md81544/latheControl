@@ -24,8 +24,18 @@ private:
     int processModeInputKeys(int key);
     int processLeaderKeyModeKeyPress(int key);
     int checkForAxisLeaderKeys(int key);
-    double getNumericInput(const std::string& prompt, double defaultEntry);
-    std::string getTextInput(const std::string& prompt, const std::string& defaultEntry);
+    double getNumericInput(const std::string& prompt, double defaultEntry,
+        const std::string& additionalText1 = "",
+        const std::string& additionalText2 = "",
+        const std::string& additionalText3 = "",
+        const std::string& additionalText4 = ""
+    );
+    std::string getTextInput(const std::string& prompt, const std::string& defaultEntry,
+        const std::string& additionalText1 = "",
+        const std::string& additionalText2 = "",
+        const std::string& additionalText3 = "",
+        const std::string& additionalText4 = ""
+    );
 };
 
 } // end namespace

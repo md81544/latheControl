@@ -9,7 +9,11 @@ std::string getInputFromDialog(
     sf::Font& font,
     const std::string& prompt,
     const std::string& defaultEntry, /* ="" */
-    InputType inputType /* = InputType::string */)
+    InputType inputType, /* = InputType::string */
+    const std::string& additionalText1, /* ="" */
+    const std::string& additionalText2, /* ="" */
+    const std::string& additionalText3, /* ="" */
+    const std::string& additionalText4) /* ="" */
 {
     // Save the existing main window's contents so we're not displaying on a black screen
     sf::Texture windowContent(sf::Vector2u(window.getSize().x, window.getSize().y));
@@ -37,12 +41,37 @@ std::string getInputFromDialog(
     inputBox.setFillColor(sf::Color::White);
     inputBox.setOutlineColor({ 192, 0, 0 });
     inputBox.setOutlineThickness(2);
-    inputBox.setPosition({ bgPos.x + 20.f, bgPos.y + 80.f });
+    inputBox.setPosition({ bgPos.x + 20.f, bgPos.y + 60.f });
 
     sf::Text inputText(font, "", 20);
     inputText.setFillColor(sf::Color::Black);
-    inputText.setPosition({ bgPos.x + 25.f, bgPos.y + 85.f });
+    inputText.setPosition({ bgPos.x + 25.f, bgPos.y + 65.f });
     inputText.setString(defaultEntry + "_");
+
+    constexpr float addTextYPos = 140.f;
+    constexpr float lineSpacing = 28.f;
+    constexpr sf::Color addTextColour = { 192, 192, 192 };
+    constexpr unsigned addTextFontSize = 16;
+
+    sf::Text addText1(font, prompt, addTextFontSize);
+    addText1.setFillColor(addTextColour);
+    addText1.setPosition({ bgPos.x + 25.f, bgPos.y + addTextYPos });
+    addText1.setString(additionalText1);
+
+    sf::Text addText2(font, prompt, addTextFontSize);
+    addText2.setFillColor(addTextColour);
+    addText2.setPosition({ bgPos.x + 25.f, bgPos.y + addTextYPos + lineSpacing });
+    addText2.setString(additionalText2);
+
+    sf::Text addText3(font, prompt, addTextFontSize);
+    addText3.setFillColor(addTextColour);
+    addText3.setPosition({ bgPos.x + 25.f, bgPos.y + addTextYPos + lineSpacing * 2 });
+    addText3.setString(additionalText3);
+
+    sf::Text addText4(font, prompt, addTextFontSize);
+    addText4.setFillColor(addTextColour);
+    addText4.setPosition({ bgPos.x + 25.f, bgPos.y + addTextYPos + lineSpacing * 3 });
+    addText4.setString(additionalText4);
 
     std::string input = defaultEntry;
     bool enterPressed = false;
@@ -101,6 +130,10 @@ std::string getInputFromDialog(
         window.draw(promptText);
         window.draw(inputBox);
         window.draw(inputText);
+        window.draw(addText1);
+        window.draw(addText2);
+        window.draw(addText3);
+        window.draw(addText4);
         window.display();
     }
     return input;

@@ -366,12 +366,33 @@ int ViewSfml::getInput()
     return convertKeyCode(*event);
 }
 
-std::string ViewSfml::getTextInput(const std::string& prompt, const std::string& defaultEntry)
+std::string ViewSfml::getTextInput(
+    const std::string& prompt,
+    const std::string& defaultEntry,
+    const std::string& additionalText1 /* = "" */,
+    const std::string& additionalText2 /* = "" */,
+    const std::string& additionalText3 /* = "" */,
+    const std::string& additionalText4 /* = "" */)
 {
-    return getInputFromDialog(*m_window, *m_font, prompt, defaultEntry);
+    return getInputFromDialog(
+        *m_window,
+        *m_font,
+        prompt,
+        defaultEntry,
+        InputType::string,
+        additionalText1,
+        additionalText2,
+        additionalText3,
+        additionalText4);
 }
 
-double ViewSfml::getNumericInput(const std::string& prompt, double defaultEntry)
+double ViewSfml::getNumericInput(
+    const std::string& prompt,
+    double defaultEntry,
+    const std::string& additionalText1 /* = "" */,
+    const std::string& additionalText2 /* = "" */,
+    const std::string& additionalText3 /* = "" */,
+    const std::string& additionalText4 /* = "" */)
 {
     std::ostringstream oss;
     oss << std::fixed << std::setprecision(2) << defaultEntry;
@@ -379,7 +400,15 @@ double ViewSfml::getNumericInput(const std::string& prompt, double defaultEntry)
     std::string result;
     try {
         result = getInputFromDialog(
-            *m_window, *m_font, prompt, defaultValueString, InputType::numeric);
+            *m_window,
+            *m_font,
+            prompt,
+            defaultValueString,
+            InputType::numeric,
+            additionalText1,
+            additionalText2,
+            additionalText3,
+            additionalText4);
         return std::stod(result);
     } catch (const std::exception& e) {
         MGOLOG("Error converting string \"" + result + "\" to double");
@@ -608,14 +637,7 @@ void ViewSfml::updateTextFromModel(const Model& model)
             }
         case Mode::Taper:
             {
-                m_txtMode->setString("Taper");
-                m_txtMisc1->setString(
-                    fmt::format("Taper angle (degrees from centre): {}_", model.getInputString()));
-                m_txtMisc2->setString("");
-                m_txtMisc3->setString("MT1 = -1.4287, MT2 = -1.4307, MT3 = -1.4377, MT4 = -1.4876");
-                m_txtMisc4->setString("(negative angle means piece gets wider towards chuck)");
-                m_txtMisc5->setString("");
-                m_txtWarning->setString("Enter to keep enabled, Esc to disable, Del to clear");
+                // Now handled by new dialog
                 break;
             }
         case Mode::Radius:

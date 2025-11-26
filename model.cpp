@@ -1438,7 +1438,7 @@ void Model::acceptInputValue()
             }
         case Mode::Taper:
             {
-                m_taperAngle = inputValue;
+                // Now handled by new dialog
                 break;
             }
         case Mode::Radius:
