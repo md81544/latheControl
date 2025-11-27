@@ -1,5 +1,9 @@
 The interleaved "dialog" is becoming unmanageable. Need
-to move all input to the new modal dialog system
+to move all input to the new modal dialog system (WIP)
+
+Need a dialog which just gives options like a menu
+Should also function as a simple "Press any key to
+continue" for pausing on multi-pass
 
 Not sure how realistic this is... consider tool numbers with
 both Z and X offsets to offer repeatable positioning after
