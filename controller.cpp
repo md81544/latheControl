@@ -518,23 +518,40 @@ void Controller::processKeyPress()
                 }
             case key::a1_g:
                 {
-                    m_model->changeMode(Mode::Axis1GoTo);
+                    // Note all motors will be stopped when a dialog is displayed
+                    const std::string axisName = m_model->config().read("Axis1Label", "Z");
+                    const double entry = getNumericInput(
+                        "Go to " + axisName + " absolute position", 0.0, "Specify a value");
+                    m_model->axis1GoToPosition(entry);
                     break;
                 }
             case key::a2_g:
                 {
-                    m_model->changeMode(Mode::Axis2GoTo);
+                    // Note all motors will be stopped when a dialog is displayed
+                    const std::string axisName = m_model->config().read("Axis2Label", "X");
+                    const double entry = getNumericInput(
+                        "Go to " + axisName + " absolute position", 0.0, "Specify a value");
+                    m_model->axis2GoToPosition(entry);
                     break;
                 }
             case key::a1_r:
                 {
                     // Relative motion
-                    m_model->changeMode(Mode::Axis1GoToOffset);
+                    // Note all motors will be stopped when a dialog is displayed
+                    const std::string axisName = m_model->config().read("Axis1Label", "Z");
+                    const double entry = getNumericInput(
+                        "Go to " + axisName + " relative position", 0.0, "Specify a RELATIVE value");
+                    m_model->axis1GoToOffset(entry);
                     break;
                 }
             case key::a2_r:
                 {
-                    m_model->changeMode(Mode::Axis2GoToOffset);
+                    // Relative motion
+                    // Note all motors will be stopped when a dialog is displayed
+                    const std::string axisName = m_model->config().read("Axis2Label", "X");
+                    const double entry = getNumericInput(
+                        "Go to " + axisName + " relative position", 0.0, "Specify a RELATIVE value");
+                    m_model->axis2GoToOffset(entry);
                     break;
                 }
             case key::ASTERISK: // shutdown
@@ -611,14 +628,17 @@ void Controller::processKeyPress()
                     m_model->changeMode(Mode::Radius);
                     break;
                 }
-            case key::a2_s: // X position set
-                {
-                    m_model->changeMode(Mode::Axis2PositionSetup);
-                    break;
-                }
             case key::a1_s: // Z position set
                 {
+                    // Note, new dialog needs to support "hot keys" for "A" (adjust)
                     m_model->changeMode(Mode::Axis1PositionSetup);
+                    break;
+                }
+            case key::a2_s: // X position set
+                {
+                    // Note, new dialog needs to support "hot keys" for "A" (adjust)
+                    // and "D" diameter.
+                    m_model->changeMode(Mode::Axis2PositionSetup);
                     break;
                 }
             case key::i: // Input axis 1 memory value directly
