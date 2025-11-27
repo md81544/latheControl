@@ -3,7 +3,10 @@ to move all input to the new modal dialog system (WIP)
 
 Need a dialog which just gives options like a menu
 Should also function as a simple "Press any key to
-continue" for pausing on multi-pass
+continue" for pausing on multi-pass.
+  - also "check boxes" - maybe the hot keys could
+    work just as selectors rather than act as enter?
+      - would need graphical display of selection(s)
 
 Not sure how realistic this is... consider tool numbers with
 both Z and X offsets to offer repeatable positioning after
@@ -14,7 +17,9 @@ Probing (see above) sounds useful anyway as a way to touch off?
 Automation of repeated cut - maybe a mode? Like multi-pass,
 Where it cuts from Mem 1 to Mem 2, then fast returns, then
 waits for a key press and repeats until cancelled (thinking
-about making repeated cuts down to depth easier)
+about making repeated cuts down to depth easier). This could
+be implemented by just using multi-pass with a "press any
+key" between passes.
 
 Support three axes, to enable X,Y, and a rotary table (or z,
 x, and manual rotation of chuck on the lathe)
@@ -30,6 +35,10 @@ the gearing on the lathe's spindle)
 
 Need a way to detect loss of steps. Probably not possible without
 hooking into linear scales (possible mod to sender unit)
+  - on the lathe, the z axis controller has pins to detect
+    loss of steps directly. If this is triggered, we could
+    stop the z axis. Not sure how accurate the position will
+    be after this. To test once wired up.
 
 Expand use of dialog. For instance the help screen could be
 much larger. Will require a resizable (or dynamically expanding)
