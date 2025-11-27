@@ -4,16 +4,17 @@
 
 namespace mgo {
 
-std::string getInputFromDialog(
+std::tuple<std::string, std::string> getInputFromDialog(
     sf::RenderWindow& window,
     sf::Font& font,
     const std::string& prompt,
     const std::string& defaultEntry, /* ="" */
     InputType inputType, /* = InputType::string */
-    const std::string& additionalText1, /* ="" */
-    const std::string& additionalText2, /* ="" */
-    const std::string& additionalText3, /* ="" */
-    const std::string& additionalText4) /* ="" */
+    const std::string& additionalText1, /* = "" */
+    const std::string& additionalText2, /* = "" */
+    const std::string& additionalText3, /* = "" */
+    const std::string& additionalText4, /* = "" */
+    const std::string& hotkeys) /* = "" */
 {
     // Save the existing main window's contents so we're not displaying on a black screen
     sf::Texture windowContent(sf::Vector2u(window.getSize().x, window.getSize().y));
@@ -76,6 +77,7 @@ std::string getInputFromDialog(
     std::string input = defaultEntry;
     bool enterPressed = false;
     bool firstKeyPress = true;
+    std::string hotkeyReturn;
 
     // Dialog loop
     std::optional event = window.pollEvent(); // Clear the keypress that got us here
@@ -102,6 +104,10 @@ std::string getInputFromDialog(
                 } else if (keyPress > 31 && keyPress < 128) { // ASCII characters
                     auto c = static_cast<char>(keyPress);
                     if (inputType == InputType::numeric) {
+                        if (hotkeys.contains(c)) {
+                            hotkeyReturn += c;
+                            enterPressed = true;
+                        }
                         if (std::isdigit(c) || c == '.' || (input.length() == 0 && c == '-')) {
                             firstKeyPress = false;
                             input += c;
@@ -115,7 +121,7 @@ std::string getInputFromDialog(
             } else if (event->is<sf::Event::KeyPressed>()) {
                 if (event->getIf<sf::Event::KeyPressed>()->scancode
                     == sf::Keyboard::Scancode::Escape) { // Escape to cancel
-                    return "";
+                    return {"", ""};
                 }
             }
         }
@@ -136,7 +142,7 @@ std::string getInputFromDialog(
         window.draw(addText4);
         window.display();
     }
-    return input;
+    return {input, hotkeyReturn};
 }
 
 } // end namespace mgo

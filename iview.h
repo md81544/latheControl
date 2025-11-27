@@ -1,6 +1,7 @@
 #pragma once
 
 #include "model.h"
+#include <tuple>
 
 // The "view" object abstracts the the graphical toolkit being used.
 // This allows for easier switching of UI libraries used - for instance,
@@ -22,13 +23,14 @@ public:
         const std::string& additionalText3 = "",
         const std::string& additionalText4 = "")
         = 0;
-    virtual double getNumericInput(
+    virtual std::tuple<double, std::string> getNumericInput(
         const std::string& prompt,
         double defaultEntry,
         const std::string& additionalText1 = "",
         const std::string& additionalText2 = "",
         const std::string& additionalText3 = "",
-        const std::string& additionalText4 = "")
+        const std::string& additionalText4 = "",
+        const std::string& hotkeys = "")
         = 0;
     virtual void updateDisplay(const Model&) = 0;
     virtual ~IView() { };

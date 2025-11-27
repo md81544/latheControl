@@ -374,7 +374,7 @@ std::string ViewSfml::getTextInput(
     const std::string& additionalText3 /* = "" */,
     const std::string& additionalText4 /* = "" */)
 {
-    return getInputFromDialog(
+    return std::get<0>(getInputFromDialog(
         *m_window,
         *m_font,
         prompt,
@@ -383,21 +383,22 @@ std::string ViewSfml::getTextInput(
         additionalText1,
         additionalText2,
         additionalText3,
-        additionalText4);
+        additionalText4));
 }
 
-double ViewSfml::getNumericInput(
+std::tuple<double, std::string> ViewSfml::getNumericInput(
     const std::string& prompt,
     double defaultEntry,
     const std::string& additionalText1 /* = "" */,
     const std::string& additionalText2 /* = "" */,
     const std::string& additionalText3 /* = "" */,
-    const std::string& additionalText4 /* = "" */)
+    const std::string& additionalText4 /* = "" */,
+    const std::string& hotkeys) /* = "" */
 {
     std::ostringstream oss;
     oss << std::fixed << std::setprecision(2) << defaultEntry;
     const std::string defaultValueString = oss.str();
-    std::string result;
+    std::tuple<std::string, std::string> result;
     try {
         result = getInputFromDialog(
             *m_window,
@@ -408,11 +409,12 @@ double ViewSfml::getNumericInput(
             additionalText1,
             additionalText2,
             additionalText3,
-            additionalText4);
-        return std::stod(result);
+            additionalText4,
+            hotkeys);
+        return { std::stod(std::get<0>(result)), std::get<1>(result) };
     } catch (const std::exception& e) {
-        MGOLOG("Error converting string \"" + result + "\" to double");
-        return defaultEntry;
+        MGOLOG("Error converting string \"" + std::get<0>(result) + "\" to double");
+        return { defaultEntry, "" };
     }
 }
 

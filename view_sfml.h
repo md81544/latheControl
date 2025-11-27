@@ -21,13 +21,14 @@ public:
         const std::string& additionalText2 = "",
         const std::string& additionalText3 = "",
         const std::string& additionalText4 = "") override;
-    virtual double getNumericInput(
+    virtual std::tuple<double, std::string> getNumericInput(
         const std::string& prompt,
         double defaultEntry,
         const std::string& additionalText1 = "",
         const std::string& additionalText2 = "",
         const std::string& additionalText3 = "",
-        const std::string& additionalText4 = "") override;
+        const std::string& additionalText4 = "",
+        const std::string& hotkeys = "") override;
     virtual void updateDisplay(const Model&) override;
     // Non-overrides:
     void updateTextFromModel(const Model&);

@@ -520,8 +520,8 @@ void Controller::processKeyPress()
                 {
                     // Note all motors will be stopped when a dialog is displayed
                     const std::string axisName = m_model->config().read("Axis1Label", "Z");
-                    const double entry = getNumericInput(
-                        "Go to " + axisName + " absolute position", 0.0, "Specify a value");
+                    const double entry = std::get<0>(getNumericInput(
+                        "Go to " + axisName + " absolute position", 0.0, "Specify a value"));
                     m_model->axis1GoToPosition(entry);
                     break;
                 }
@@ -529,8 +529,8 @@ void Controller::processKeyPress()
                 {
                     // Note all motors will be stopped when a dialog is displayed
                     const std::string axisName = m_model->config().read("Axis2Label", "X");
-                    const double entry = getNumericInput(
-                        "Go to " + axisName + " absolute position", 0.0, "Specify a value");
+                    const double entry = std::get<0>(getNumericInput(
+                        "Go to " + axisName + " absolute position", 0.0, "Specify a value"));
                     m_model->axis2GoToPosition(entry);
                     break;
                 }
@@ -539,8 +539,10 @@ void Controller::processKeyPress()
                     // Relative motion
                     // Note all motors will be stopped when a dialog is displayed
                     const std::string axisName = m_model->config().read("Axis1Label", "Z");
-                    const double entry = getNumericInput(
-                        "Go to " + axisName + " relative position", 0.0, "Specify a RELATIVE value");
+                    const double entry = std::get<0>(getNumericInput(
+                        "Go to " + axisName + " relative position",
+                        0.0,
+                        "Specify a RELATIVE value"));
                     m_model->axis1GoToOffset(entry);
                     break;
                 }
@@ -549,8 +551,10 @@ void Controller::processKeyPress()
                     // Relative motion
                     // Note all motors will be stopped when a dialog is displayed
                     const std::string axisName = m_model->config().read("Axis2Label", "X");
-                    const double entry = getNumericInput(
-                        "Go to " + axisName + " relative position", 0.0, "Specify a RELATIVE value");
+                    const double entry = std::get<0>(getNumericInput(
+                        "Go to " + axisName + " relative position",
+                        0.0,
+                        "Specify a RELATIVE value"));
                     m_model->axis2GoToOffset(entry);
                     break;
                 }
@@ -601,13 +605,13 @@ void Controller::processKeyPress()
                         break;
                     }
                     // Note all motors will be stopped when a dialog is displayed
-                    const double taper = getNumericInput(
+                    const double taper = std::get<0>(getNumericInput(
                         "Enter taper value",
                         m_model->getTaperAngle(),
                         "MT1 = -1.4287, MT2 = -1.4307",
                         "MT3 = -1.4377, MT4 = -1.4876",
                         "(negative angle means piece gets wider towards chuck)",
-                        "Enter to keep enabled, Esc to disable, Del to clear");
+                        "Enter to keep enabled, Esc to disable, Del to clear"));
                     m_model->setTaperAngle(taper);
                     m_model->changeMode(Mode::Taper);
                     break;
@@ -648,7 +652,7 @@ void Controller::processKeyPress()
                     // Note all motors will be stopped when a dialog is displayed
                     const std::string axisName = m_model->config().read("Axis1Label", "Z");
                     const double entry
-                        = getNumericInput("Enter " + axisName + " memory value", 0.0);
+                        = std::get<0>(getNumericInput("Enter " + axisName + " memory value", 0.0));
                     m_model->axis1StorePosition(entry);
                     break;
                 }
@@ -657,7 +661,7 @@ void Controller::processKeyPress()
                     // Note all motors will be stopped when a dialog is displayed
                     const std::string axisName = m_model->config().read("Axis2Label", "X");
                     const double entry
-                        = getNumericInput("Enter " + axisName + " memory value", 0.0);
+                        = std::get<0>(getNumericInput("Enter " + axisName + " memory value", 0.0));
                     m_model->axis2StorePosition(entry);
                     break;
                 }
@@ -991,18 +995,25 @@ int Controller::checkForAxisLeaderKeys(int key)
     return key;
 }
 
-double Controller::getNumericInput(
+std::tuple<double, std::string> Controller::getNumericInput(
     const std::string& prompt,
     double defaultEntry,
     const std::string& additionalText1 /* = "" */,
     const std::string& additionalText2 /* = "" */,
     const std::string& additionalText3 /* = "" */,
-    const std::string& additionalText4 /* = "" */
+    const std::string& additionalText4 /* = "" */,
+    const std::string& hotkeys /* = "" */
 )
 {
     m_model->stopAllMotors();
     return m_view->getNumericInput(
-        prompt, defaultEntry, additionalText1, additionalText2, additionalText3, additionalText4);
+        prompt,
+        defaultEntry,
+        additionalText1,
+        additionalText2,
+        additionalText3,
+        additionalText4,
+        hotkeys);
 }
 
 std::string Controller::getTextInput(

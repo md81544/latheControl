@@ -10,7 +10,7 @@ enum class InputType {
     numeric
 };
 
-std::string getInputFromDialog(
+std::tuple<std::string, std::string> getInputFromDialog(
     sf::RenderWindow& window,
     sf::Font& font,
     const std::string& prompt,
@@ -19,6 +19,7 @@ std::string getInputFromDialog(
     const std::string& additionalText1 = "",
     const std::string& additionalText2 = "",
     const std::string& additionalText3 = "",
-    const std::string& additionalText4 = "");
+    const std::string& additionalText4 = "",
+    const std::string& hotkeys = "");
 
 } // end namespace mgo
