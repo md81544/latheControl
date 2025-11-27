@@ -1,5 +1,6 @@
-The interleaved "dialog" is becoming unmanageable. Need
-to move all input to the new modal dialog system (WIP)
+The interleaved "dialog" is becoming unmanageable and
+requires changes all over the place when changed/added to.
+Need to move all input to the new modal dialog system (WIP)
 
 Need a dialog which just gives options like a menu
 Should also function as a simple "Press any key to
