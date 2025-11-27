@@ -607,6 +607,15 @@ void ViewSfml::updateTextFromModel(const Model& model)
     }
 
     switch (model.getCurrentDisplayMode()) {
+        // The following are all handled now by the new dialog:
+        case Mode::Taper:
+        case Mode::Axis2PositionSetup:
+        case Mode::Axis1PositionSetup:
+        case Mode::Axis1GoTo:
+        case Mode::Axis2GoTo:
+        case Mode::Axis1GoToOffset:
+        case Mode::Axis2GoToOffset:
+            break;
         case Mode::Help:
             {
                 m_txtMode->setString("Help");
@@ -620,6 +629,7 @@ void ViewSfml::updateTextFromModel(const Model& model)
             }
         case Mode::Setup:
             {
+                // TODO probably remove this
                 m_txtMode->setString("Setup");
                 m_txtMisc1->setString("This mode allows you to determine backlash compensation");
                 m_txtMisc2->setString(
@@ -637,13 +647,9 @@ void ViewSfml::updateTextFromModel(const Model& model)
                 m_txtWarning->setString("Press Esc to exit setup");
                 break;
             }
-        case Mode::Taper:
-            {
-                // Now handled by new dialog
-                break;
-            }
         case Mode::Radius:
             {
+                // TODO move to new dialog
                 m_txtMode->setString("Radius");
                 m_txtMisc1->setString(fmt::format("Radius required: {}_", model.getInputString()));
                 m_txtMisc2->setString(
@@ -667,6 +673,7 @@ void ViewSfml::updateTextFromModel(const Model& model)
             }
         case Mode::Threading:
             {
+                // TODO move to new dialog (will need new functionality)
                 updateThreadData(model);
                 m_txtMisc4->setString("");
                 m_txtMisc5->setString("Press Up/Down to change.");
@@ -675,6 +682,7 @@ void ViewSfml::updateTextFromModel(const Model& model)
             }
         case Mode::Axis2RetractSetup:
             {
+                // TODO move to new dialog (could be performed with two hotkeys)
                 m_txtMode->setString("X Axis retraction mode");
                 m_txtMisc1->setString("Normal X retraction is 2mm outwards");
                 m_txtMisc2->setString("In a boring operation, retraction should be INWARDS.");
@@ -688,99 +696,9 @@ void ViewSfml::updateTextFromModel(const Model& model)
                 m_txtWarning->setString("Enter to close screen");
                 break;
             }
-        case Mode::Axis2PositionSetup:
-            {
-                m_txtMode->setString(
-                    fmt::format("{} Position Set", model.config().read("Axis2Label", "X")));
-                m_txtMisc1->setString("");
-                m_txtMisc2->setString(
-                    fmt::format(
-                        "Specify a value for {} here", model.config().read("Axis2Label", "X")));
-                m_txtMisc3->setString("");
-                m_txtMisc4->setString("");
-                m_txtMisc5->setString(
-                    fmt::format(
-                        "Current {} position: {}_",
-                        model.config().read("Axis2Label", "X"),
-                        model.getInputString()));
-                m_txtWarning->setString(
-                    "Enter to set, 'D' to enter as diameter, 'A' adjusts (keeps mem slots), Esc to "
-                    "cancel");
-                break;
-            }
-        case Mode::Axis1PositionSetup:
-            {
-                m_txtMode->setString(
-                    fmt::format("{} Position Set", model.config().read("Axis1Label", "Z")));
-                m_txtMisc1->setString("");
-                m_txtMisc2->setString(
-                    fmt::format(
-                        "Specify a value for {} here", model.config().read("Axis1Label", "Z")));
-                m_txtMisc3->setString("");
-                m_txtMisc4->setString("");
-                m_txtMisc5->setString(
-                    fmt::format(
-                        "Current {} position: {}_",
-                        model.config().read("Axis1Label", "Z"),
-                        model.getInputString()));
-                m_txtWarning->setString(
-                    "Enter to set, 'A' adjusts (keeps mem slots), Esc to cancel");
-                break;
-            }
-        case Mode::Axis1GoTo:
-            {
-                m_txtMode->setString(
-                    fmt::format(
-                        "Go To {} Absolute Position ", model.config().read("Axis1Label", "Z")));
-                m_txtMisc1->setString("");
-                m_txtMisc2->setString("Specify a value");
-                m_txtMisc3->setString("");
-                m_txtMisc4->setString("");
-                m_txtMisc5->setString(fmt::format("Position: {}_", model.getInputString()));
-                m_txtWarning->setString("Enter to set, Esc to cancel");
-                break;
-            }
-        case Mode::Axis2GoTo:
-            {
-                m_txtMode->setString(
-                    fmt::format(
-                        "Go To {} Absolute Position ", model.config().read("Axis2Label", "Z")));
-                m_txtMisc1->setString("");
-                m_txtMisc2->setString("Specify a value");
-                m_txtMisc3->setString("");
-                m_txtMisc4->setString("");
-                m_txtMisc5->setString(fmt::format("Position: {}_", model.getInputString()));
-                m_txtWarning->setString("Enter to set, Esc to cancel");
-                break;
-            }
-        case Mode::Axis1GoToOffset:
-            {
-                m_txtMode->setString(
-                    fmt::format(
-                        "Go To {} Relative Position ", model.config().read("Axis1Label", "Z")));
-                m_txtMisc1->setString("");
-                m_txtMisc2->setString("Specify a RELATIVE value");
-                m_txtMisc3->setString("");
-                m_txtMisc4->setString("");
-                m_txtMisc5->setString(fmt::format("Offset: {}_", model.getInputString()));
-                m_txtWarning->setString("Enter to set, Esc to cancel");
-                break;
-            }
-        case Mode::Axis2GoToOffset:
-            {
-                m_txtMode->setString(
-                    fmt::format(
-                        "Go To {} Relative Position ", model.config().read("Axis2Label", "Z")));
-                m_txtMisc1->setString("");
-                m_txtMisc2->setString("Specify a RELATIVE value");
-                m_txtMisc3->setString("");
-                m_txtMisc4->setString("");
-                m_txtMisc5->setString(fmt::format("Offset: {}_", model.getInputString()));
-                m_txtWarning->setString("Enter to set, Esc to cancel");
-                break;
-            }
         case Mode::MultiPass:
             {
+                // TODO move to new dialog
                 m_txtMode->setString(
                     fmt::format(
                         "{} axis step-over per pass ", model.config().read("Axis2Label", "Z")));

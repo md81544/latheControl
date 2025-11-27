@@ -542,7 +542,7 @@ void Controller::processKeyPress()
                     const double entry = std::get<0>(getNumericInput(
                         "Go to " + axisName + " relative position",
                         0.0,
-                        "Specify a RELATIVE value"));
+                        "Specify a RELATIVE offset value"));
                     m_model->axis1GoToOffset(entry);
                     break;
                 }
@@ -554,7 +554,7 @@ void Controller::processKeyPress()
                     const double entry = std::get<0>(getNumericInput(
                         "Go to " + axisName + " relative position",
                         0.0,
-                        "Specify a RELATIVE value"));
+                        "Specify a RELATIVE offset value"));
                     m_model->axis2GoToOffset(entry);
                     break;
                 }
@@ -632,17 +632,49 @@ void Controller::processKeyPress()
                     m_model->changeMode(Mode::Radius);
                     break;
                 }
-            case key::a1_s: // Z position set
+            case key::a1_s: // Axis1 position set
                 {
-                    // Note, new dialog needs to support "hot keys" for "A" (adjust)
-                    m_model->changeMode(Mode::Axis1PositionSetup);
+                    const std::string axisName = m_model->config().read("Axis1Label", "Z");
+                    auto result = getNumericInput(
+                        axisName + " position set",
+                        0.0,
+                        "Enter to set",
+                        "'A' adjusts (keeps memory slots)",
+                        "",
+                        "",
+                        "a");
+                    float position = std::get<0>(result);
+                    m_model->setAxis1Position(position);
+                    // This will invalidate any memorised Z positions, so we clear them
+                    // unless the user specified not to with 'A'
+                    if (std::get<1>(result) != "a") {
+                        m_model->clearAllAxis1Memories();
+                    }
                     break;
                 }
-            case key::a2_s: // X position set
+            case key::a2_s: // Axis2 position set
                 {
-                    // Note, new dialog needs to support "hot keys" for "A" (adjust)
-                    // and "D" diameter.
-                    m_model->changeMode(Mode::Axis2PositionSetup);
+                    // Note all motors will be stopped when a dialog is displayed
+                    const std::string axisName = m_model->config().read("Axis2Label", "X");
+                    auto result = getNumericInput(
+                        axisName + " position set",
+                        0.0,
+                        "Enter to set",
+                        "'D' enters as diameter",
+                        "'A' adjusts (keeps memory slots)",
+                        "",
+                        "ad");
+                    float position = std::get<0>(result);
+                    if (std::get<1>(result) == "d") {
+                        position /= 2;
+                        m_model->diameterIsSet();
+                    }
+                    m_model->setAxis2Position(position);
+                    // This will invalidate any memorised X positions, so we clear them
+                    // unless the user specified not to with 'A'
+                    if (std::get<1>(result) != "a") {
+                        m_model->clearAllAxis2Memories();
+                    }
                     break;
                 }
             case key::i: // Input axis 1 memory value directly

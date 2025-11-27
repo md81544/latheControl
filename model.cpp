@@ -1224,10 +1224,16 @@ unsigned Model::getMemorySize() const
     return m_axis1Memory.size();
 }
 
+void Model::clearAllAxis1Memories() { 
+    for (auto& m : m_axis1Memory) {
+        m = AXIS1_UNSET;
+    }
+}
+
 void Model::clearAllAxis2Memories()
 {
     for (auto& m : m_axis2Memory) {
-        m = INF_OUT;
+        m = AXIS2_UNSET;
     }
 }
 

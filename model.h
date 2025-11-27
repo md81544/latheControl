@@ -205,6 +205,7 @@ public:
     long getAxis1Memory(std::size_t index) const;
     long getAxis2Memory(std::size_t index) const;
     unsigned getMemorySize() const;
+    void clearAllAxis1Memories();
     void clearAllAxis2Memories();
 
     void setAxis1MotorSpeed(double speed);
