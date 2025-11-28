@@ -374,12 +374,12 @@ std::string ViewSfml::getTextInput(
     const std::string& additionalText3 /* = "" */,
     const std::string& additionalText4 /* = "" */)
 {
-    return std::get<0>(getInputFromDialog(
+    return std::get<0>(dialog::getInput(
         *m_window,
         *m_font,
         prompt,
         defaultEntry,
-        InputType::string,
+        dialog::InputType::string,
         additionalText1,
         additionalText2,
         additionalText3,
@@ -400,12 +400,12 @@ std::tuple<double, std::string> ViewSfml::getNumericInput(
     const std::string defaultValueString = oss.str();
     std::tuple<std::string, std::string> result;
     try {
-        result = getInputFromDialog(
+        result = dialog::getInput(
             *m_window,
             *m_font,
             prompt,
             defaultValueString,
-            InputType::numeric,
+            dialog::InputType::numeric,
             additionalText1,
             additionalText2,
             additionalText3,
@@ -416,6 +416,10 @@ std::tuple<double, std::string> ViewSfml::getNumericInput(
         MGOLOG("Error converting string \"" + std::get<0>(result) + "\" to double");
         return { defaultEntry, "" };
     }
+}
+
+void ViewSfml::pressAnyKey(std::string_view prompt) {
+    dialog::pressAnyKey(*m_window, *m_font, prompt);
 }
 
 void ViewSfml::updateDisplay(const Model& model)

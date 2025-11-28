@@ -32,6 +32,7 @@ public:
         const std::string& additionalText4 = "",
         const std::string& hotkeys = "")
         = 0;
+    virtual void pressAnyKey(std::string_view prompt) = 0;
     virtual void updateDisplay(const Model&) = 0;
     virtual ~IView() { };
 };

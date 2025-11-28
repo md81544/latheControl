@@ -29,6 +29,7 @@ public:
         const std::string& additionalText3 = "",
         const std::string& additionalText4 = "",
         const std::string& hotkeys = "") override;
+    virtual void pressAnyKey(std::string_view prompt) override;
     virtual void updateDisplay(const Model&) override;
     // Non-overrides:
     void updateTextFromModel(const Model&);

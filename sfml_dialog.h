@@ -4,13 +4,14 @@
 #include <string>
 
 namespace mgo {
+namespace dialog {
 
 enum class InputType {
     string,
     numeric
 };
 
-std::tuple<std::string, std::string> getInputFromDialog(
+std::tuple<std::string, std::string> getInput(
     sf::RenderWindow& window,
     sf::Font& font,
     const std::string& prompt,
@@ -22,4 +23,10 @@ std::tuple<std::string, std::string> getInputFromDialog(
     const std::string& additionalText4 = "",
     const std::string& hotkeys = "");
 
+void pressAnyKey(
+    sf::RenderWindow& window,
+    sf::Font& font,
+    std::string_view prompt = "Press any key to continue");
+
+} // end namespace dialog
 } // end namespace mgo

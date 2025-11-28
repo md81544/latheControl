@@ -3,8 +3,9 @@
 // Note this has its own event loop so acts as a modal dialog
 
 namespace mgo {
+namespace dialog {
 
-std::tuple<std::string, std::string> getInputFromDialog(
+std::tuple<std::string, std::string> getInput(
     sf::RenderWindow& window,
     sf::Font& font,
     const std::string& prompt,
@@ -121,7 +122,7 @@ std::tuple<std::string, std::string> getInputFromDialog(
             } else if (event->is<sf::Event::KeyPressed>()) {
                 if (event->getIf<sf::Event::KeyPressed>()->scancode
                     == sf::Keyboard::Scancode::Escape) { // Escape to cancel
-                    return {"", ""};
+                    return { "", "" };
                 }
             }
         }
@@ -142,7 +143,55 @@ std::tuple<std::string, std::string> getInputFromDialog(
         window.draw(addText4);
         window.display();
     }
-    return {input, hotkeyReturn};
+    return { input, hotkeyReturn };
 }
 
+void pressAnyKey(sf::RenderWindow& window, sf::Font& font, std::string_view prompt)
+{
+    // Save the existing main window's contents so we're not displaying on a black screen
+    sf::Texture windowContent(sf::Vector2u(window.getSize().x, window.getSize().y));
+    windowContent.update(window);
+
+    sf::Vector2f screenCentre;
+    screenCentre.x = window.getSize().x / 2.f;
+    screenCentre.y = window.getSize().y / 2.f;
+
+    // Background box
+    sf::RectangleShape backgroundBox(sf::Vector2f(400, 100));
+    backgroundBox.setFillColor({ 40, 40, 40 });
+    backgroundBox.setOutlineColor({ 128, 128, 128 });
+    backgroundBox.setOutlineThickness(2);
+    backgroundBox.setPosition(
+        { screenCentre.x - backgroundBox.getSize().x / 2, screenCentre.y - 150.f });
+
+    const auto bgPos = backgroundBox.getPosition();
+
+    // Text and input box elements
+    sf::Text promptText(font, std::string(prompt), 20);
+    promptText.setFillColor(sf::Color::White);
+    promptText.setPosition({ bgPos.x + 25.f, bgPos.y + 20.f });
+
+    // Dialog loop
+    std::optional event = window.pollEvent(); // Clear the keypress that got us here
+    for (;;) {
+        event = window.pollEvent();
+        if (!event.has_value()) {
+            continue;
+        }
+        if (event->is<sf::Event::KeyPressed>()) {
+            return;
+        }
+        // Clear and redraw the window
+        window.clear(sf::Color::Black);
+        sf::Sprite sprite(windowContent);
+        sprite.setColor({ 120, 120, 120 }); // dim it a bit
+        window.draw(sprite); // draw the static main window content
+
+        window.draw(backgroundBox);
+        window.draw(promptText);
+        window.display();
+    }
+}
+
+} // end namespace dialog
 } // end namespace mgo
