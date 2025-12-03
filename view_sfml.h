@@ -13,7 +13,7 @@ class ViewSfml final : public IView {
 public:
     virtual void initialise(const Model&) override;
     virtual void close() override;
-    virtual int getInput() override;
+    virtual int getEvents() override;
     virtual std::string getTextInput(
         const std::string& prompt,
         const std::string& defaultEntry,

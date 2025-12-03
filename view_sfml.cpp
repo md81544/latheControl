@@ -306,7 +306,7 @@ void ViewSfml::close()
     m_window->close();
 }
 
-int ViewSfml::getInput()
+int ViewSfml::getEvents()
 {
     static sf::Keyboard::Key lastKey = sf::Keyboard::Key::F15;
     static sf::Clock clock;

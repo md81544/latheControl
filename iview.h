@@ -14,7 +14,7 @@ public:
     virtual void initialise(const Model&) = 0;
     virtual void close() = 0;
     // keypresses should be returned as ASCII codes. Should not block.
-    virtual int getInput() = 0;
+    virtual int getEvents() = 0;
     virtual std::string getTextInput(
         const std::string& prompt,
         const std::string& defaultEntry,

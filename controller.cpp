@@ -66,7 +66,7 @@ void Controller::run()
 
 void Controller::processKeyPress()
 {
-    int t = m_view->getInput();
+    int t = m_view->getEvents();
     t = checkKeyAllowedForMode(t);
     t = processModeInputKeys(t);
     if (t != key::None) {
