@@ -1,6 +1,6 @@
 #pragma once
 
-#include "iview.h"
+#include "iview.h" // For Input::*
 
 #include <SFML/Audio.hpp>
 #include <SFML/Graphics.hpp>
@@ -14,6 +14,13 @@ public:
     virtual void initialise(const Model&) override;
     virtual void close() override;
     virtual int getEvents() override;
+    virtual Input::Return getInput(
+        Input::Return type,
+        std::string_view prompt,
+        std::vector<std::string>& additionalText,
+        std::optional<std::vector<char>> hotkeys = std::nullopt,
+        std::optional<std::vector<std::string>> listItems = std::nullopt
+    ) override;
     virtual std::string getTextInput(
         const std::string& prompt,
         const std::string& defaultEntry,

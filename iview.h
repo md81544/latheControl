@@ -1,6 +1,7 @@
 #pragma once
 
 #include "model.h"
+#include <optional>
 #include <tuple>
 
 // The "view" object abstracts the the graphical toolkit being used.
@@ -9,12 +10,42 @@
 
 namespace mgo {
 
+namespace Input {
+
+enum class Type {
+    Text,
+    Numeric,
+    ListPicker,
+    PressAnyKey
+};
+
+// Return type of getInput()
+struct Return {
+    std::optional<std::string> text;
+    std::optional<double> number;
+    std::optional<std::set<char>> options;
+    std::optional<std::size_t> pickedItem;
+};
+
+} // namedpace Input
+
 class IView {
 public:
     virtual void initialise(const Model&) = 0;
     virtual void close() = 0;
     // keypresses should be returned as ASCII codes. Should not block.
     virtual int getEvents() = 0;
+    // getInput should be able to handle text entry, number entry,
+    // selecting one option from a list, and a simple "Press a key
+    // to continue". The user should be able to select options when
+    // entering text or numbers.
+    virtual Input::Return getInput(
+        Input::Return type,
+        std::string_view prompt,
+        std::vector<std::string>& additionalText,
+        std::optional<std::vector<char>> hotkeys = std::nullopt,
+        std::optional<std::vector<std::string>> listItems = std::nullopt
+    ) = 0;
     virtual std::string getTextInput(
         const std::string& prompt,
         const std::string& defaultEntry,

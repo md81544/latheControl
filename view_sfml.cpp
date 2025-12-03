@@ -366,6 +366,21 @@ int ViewSfml::getEvents()
     return convertKeyCode(*event);
 }
 
+Input::Return ViewSfml::getInput(
+    Input::Return type,
+    std::string_view prompt,
+    std::vector<std::string>& additionalText,
+    std::optional<std::vector<char>> hotkeys,
+    std::optional<std::vector<std::string>> listItems)
+{
+    (void) type;
+    (void) prompt;
+    (void) additionalText;
+    (void) hotkeys;
+    (void) listItems;
+    return Input::Return();
+}
+
 std::string ViewSfml::getTextInput(
     const std::string& prompt,
     const std::string& defaultEntry,
