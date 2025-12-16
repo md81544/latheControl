@@ -631,7 +631,15 @@ void Controller::processKeyPress()
                     if (m_model->config().readBool("DisableAxis2", false)) {
                         break;
                     }
-                    m_model->changeMode(Mode::Axis2RetractSetup);
+                    const auto rc = listPicker(
+                        "Choose retraction direction", { "Normal (outwards)", "Boring (inwards)" });
+                    if (rc.has_value()) {
+                        if (rc.value() == 0) {
+                            m_model->setRetractionDirection(XDirection::Outwards);
+                        } else {
+                            m_model->setRetractionDirection(XDirection::Inwards);
+                        }
+                    }
                     break;
                 }
             case key::f2o: // Radius mode
@@ -799,14 +807,8 @@ int Controller::checkKeyAllowedForMode(int key)
     switch (m_model->getCurrentDisplayMode()) {
         case Mode::None:
             return key;
-        case Mode::Axis1PositionSetup:
-        case Mode::Axis2PositionSetup:
         case Mode::Taper:
         case Mode::Radius:
-        case Mode::Axis1GoTo:
-        case Mode::Axis2GoTo:
-        case Mode::Axis1GoToOffset:
-        case Mode::Axis2GoToOffset:
             // Now handled by new dialog
             return key;
         case Mode::Help:
@@ -820,11 +822,6 @@ int Controller::checkKeyAllowedForMode(int key)
             }
             return -1;
         case Mode::Threading:
-            if (key == key::UP || key == key::DOWN) {
-                return key;
-            }
-            return -1;
-        case Mode::Axis2RetractSetup:
             if (key == key::UP || key == key::DOWN) {
                 return key;
             }
@@ -847,19 +844,11 @@ int Controller::checkKeyAllowedForMode(int key)
     }
 }
 
-int Controller::processModeInputKeys(int key)
+int Controller::processModeInputKeys(int key) // TODO this can be deleted eventually
 {
     // If we are in a "mode" then certain keys (e.g. the number keys) are used for input
     // so are processed here before allowing them to fall through to the main key processing
-    if (m_model->getCurrentDisplayMode() == Mode::Taper
-        || m_model->getCurrentDisplayMode() == Mode::Axis2PositionSetup
-        || m_model->getCurrentDisplayMode() == Mode::Axis1PositionSetup
-        || m_model->getCurrentDisplayMode() == Mode::Axis1GoTo
-        || m_model->getCurrentDisplayMode() == Mode::Axis2GoTo
-        || m_model->getCurrentDisplayMode() == Mode::Axis1GoToOffset
-        || m_model->getCurrentDisplayMode() == Mode::Axis2GoToOffset
-        || m_model->getCurrentDisplayMode() == Mode::Radius
-        || m_model->getCurrentDisplayMode() == Mode::MultiPass) {
+    if (m_model->getCurrentDisplayMode() == Mode::MultiPass) {
         if (key >= key::ZERO && key <= key::NINE) {
             m_model->getInputString() += static_cast<char>(key);
             return -1;
@@ -899,60 +888,6 @@ int Controller::processModeInputKeys(int key)
             // fall through...
         }
     }
-    if (m_model->getCurrentDisplayMode() == Mode::Axis2RetractSetup) {
-        if (key == key::UP) {
-            m_model->setRetractionDirection(XDirection::Inwards);
-            return -1;
-        }
-        if (key == key::DOWN) {
-            m_model->setRetractionDirection(XDirection::Outwards);
-            return -1;
-        }
-    }
-
-    // Diameter set
-    if (m_model->getCurrentDisplayMode() == Mode::Axis2PositionSetup
-        && (key == key::d || key == key::D)) {
-        float xPos = 0;
-        try {
-            xPos = std::abs(std::stof(m_model->getInputString()));
-        } catch (...) {
-        }
-        m_model->setAxis2Position(xPos / 2);
-        // This will invalidate any memorised X positions, so we clear them
-        m_model->clearAllAxis2Memories();
-        m_model->setCurrentDisplayMode(Mode::None);
-        m_model->diameterIsSet();
-        m_model->changeMode(Mode::None);
-        return -1;
-    }
-
-    // Adjust axis value without affecting memory slots (useful for
-    // adjusting manually from a DRO if we have lost steps)
-    if (m_model->getCurrentDisplayMode() == Mode::Axis1PositionSetup
-        && (key == key::a || key == key::A)) {
-        float pos = 0;
-        try {
-            pos = std::abs(std::stof(m_model->getInputString()));
-        } catch (...) {
-        }
-        m_model->setAxis1Position(pos);
-        m_model->changeMode(Mode::None);
-        return -1;
-    }
-    if (m_model->getCurrentDisplayMode() == Mode::Axis2PositionSetup
-        && (key == key::a || key == key::A)) {
-        float pos = 0;
-        try {
-            pos = std::abs(std::stof(m_model->getInputString()));
-
-        } catch (...) {
-        }
-        m_model->setAxis2Position(pos);
-        m_model->changeMode(Mode::None);
-        return -1;
-    }
-
     if (m_model->getCurrentDisplayMode() != Mode::None && key == key::ENTER) {
         m_model->acceptInputValue();
         m_model->setCurrentDisplayMode(Mode::None);

@@ -36,20 +36,6 @@ std::string translate_mode(mgo::Mode mode)
             return "Threading";
         case mgo::Mode::Taper:
             return "Taper";
-        case mgo::Mode::Axis2RetractSetup:
-            return "Axis2RetractSetup";
-        case mgo::Mode::Axis1PositionSetup:
-            return "Axis1PositionSetup";
-        case mgo::Mode::Axis2PositionSetup:
-            return "Axis2PositionSetup";
-        case mgo::Mode::Axis1GoTo:
-            return "Axis1GoTo";
-        case mgo::Mode::Axis2GoTo:
-            return "Axis2GoTo";
-        case mgo::Mode::Axis1GoToOffset:
-            return "Axis1GoToOffset";
-        case mgo::Mode::Axis2GoToOffset:
-            return "Axis2GoToOffset";
         case mgo::Mode::Radius:
             return "Radius";
         case mgo::Mode::MultiPass:
@@ -1390,52 +1376,21 @@ void Model::clearCurrentMemorySlot(Axis axis)
 void Model::acceptInputValue()
 {
     double inputValue = 0.0;
-    bool valid = true;
     try {
         inputValue = std::stod(m_input);
     } catch (...) {
-        valid = false;
     }
 
     switch (m_currentDisplayMode) {
         // The following are now handled by the new dialog:
-        case Mode::Axis1GoTo:
-        case Mode::Axis2GoTo:
-        case Mode::Axis1GoToOffset:
-        case Mode::Axis2GoToOffset:
         case Mode::Taper:
         case Mode::Radius:
             break;
-        case Mode::Axis1PositionSetup:
-            {
-                if (valid) {
-                    m_axis1Motor->setPosition(inputValue);
-                    // This will invalidate any memorised Z positions, so we clear them
-                    for (auto& m : m_axis1Memory) {
-                        m = AXIS1_UNSET;
-                    }
-                }
-                break;
-            }
-        case Mode::Axis2PositionSetup:
-            {
-                if (valid) {
-                    m_axis2Motor->setPosition(inputValue);
-                    // This will invalidate any memorised X positions, so we clear them
-                    for (auto& m : m_axis2Memory) {
-                        m = AXIS2_UNSET;
-                    }
-                }
-                break;
-            }
         case Mode::MultiPass:
             {
                 m_stepOver = inputValue;
                 break;
             }
-        case Mode::Axis2RetractSetup:
-            // no processing required for these modes
-            break;
         case Mode::Threading:
             {
                 // m_threadPitchIndex will have been set

@@ -575,12 +575,6 @@ void ViewSfml::updateTextFromModel(const Model& model)
     switch (model.getCurrentDisplayMode()) {
         // The following are all handled now by the new dialog:
         case Mode::Taper:
-        case Mode::Axis2PositionSetup:
-        case Mode::Axis1PositionSetup:
-        case Mode::Axis1GoTo:
-        case Mode::Axis2GoTo:
-        case Mode::Axis1GoToOffset:
-        case Mode::Axis2GoToOffset:
         case Mode::Radius:
             break;
         case Mode::Help:
@@ -621,22 +615,6 @@ void ViewSfml::updateTextFromModel(const Model& model)
                 m_txtMisc4->setString("");
                 m_txtMisc5->setString("Press Up/Down to change.");
                 m_txtWarning->setString("Enter to keep enabled, Esc to disable");
-                break;
-            }
-        case Mode::Axis2RetractSetup:
-            {
-                // TODO move to new dialog (could be performed with two hotkeys)
-                m_txtMode->setString("X Axis retraction mode");
-                m_txtMisc1->setString("Normal X retraction is 2mm outwards");
-                m_txtMisc2->setString("In a boring operation, retraction should be INWARDS.");
-                m_txtMisc3->setString("Current setting: ");
-                if (model.getRetractionDirection() == XDirection::Inwards) {
-                    m_txtMisc4->setString("Inwards (i.e. away from you, for boring)");
-                } else {
-                    m_txtMisc4->setString("Normal (i.e. towards you)");
-                }
-                m_txtMisc5->setString("(Press up / down to change)");
-                m_txtWarning->setString("Enter to close screen");
                 break;
             }
         case Mode::MultiPass:

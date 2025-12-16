@@ -156,6 +156,7 @@ Input::Return getInput(
             listText.push_back(t);
             ++liCount;
         }
+        height += 25.f; // Bit more for bottom margin
     }
 
     sf::Text promptText(font, std::string(prompt), 20);

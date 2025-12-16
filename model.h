@@ -40,13 +40,6 @@ enum class Mode {
     Setup,
     Threading,
     Taper,
-    Axis2RetractSetup,
-    Axis1PositionSetup,
-    Axis2PositionSetup,
-    Axis1GoTo,
-    Axis2GoTo,
-    Axis1GoToOffset,
-    Axis2GoToOffset,
     Radius,
     MultiPass
 };
