@@ -522,8 +522,8 @@ void Controller::processKeyPress()
                     // Note all motors will be stopped when a dialog is displayed
                     const std::string axisName = m_model->config().read("Axis1Label", "Z");
                     const auto rc = getNumericInput(
-                        "Go to " + axisName + " absolute position", {"Specify a value"}, 0.0);
-                    if(!rc.cancelled){
+                        "Go to " + axisName + " absolute position", { "Specify a value" }, 0.0);
+                    if (!rc.cancelled) {
                         m_model->axis1GoToPosition(rc.value);
                     }
                     break;
@@ -533,8 +533,8 @@ void Controller::processKeyPress()
                     // Note all motors will be stopped when a dialog is displayed
                     const std::string axisName = m_model->config().read("Axis2Label", "X");
                     const auto rc = getNumericInput(
-                        "Go to " + axisName + " absolute position", {"Specify a value"}, 0.0);
-                    if(!rc.cancelled){
+                        "Go to " + axisName + " absolute position", { "Specify a value" }, 0.0);
+                    if (!rc.cancelled) {
                         m_model->axis2GoToPosition(rc.value);
                     }
                     break;
@@ -544,11 +544,13 @@ void Controller::processKeyPress()
                     // Relative motion
                     // Note all motors will be stopped when a dialog is displayed
                     const std::string axisName = m_model->config().read("Axis1Label", "Z");
-                    const double entry = std::get<0>(getNumericInputOld(
+                    const auto rc = getNumericInput(
                         "Go to " + axisName + " relative position",
-                        0.0,
-                        "Specify a RELATIVE offset value"));
-                    m_model->axis1GoToOffset(entry);
+                        { "Specify a RELATIVE offset value" },
+                        0.0);
+                    if (!rc.cancelled) {
+                        m_model->axis1GoToOffset(rc.value);
+                    }
                     break;
                 }
             case key::a2_r:
@@ -556,11 +558,13 @@ void Controller::processKeyPress()
                     // Relative motion
                     // Note all motors will be stopped when a dialog is displayed
                     const std::string axisName = m_model->config().read("Axis2Label", "X");
-                    const double entry = std::get<0>(getNumericInputOld(
+                    const auto rc = getNumericInput(
                         "Go to " + axisName + " relative position",
-                        0.0,
-                        "Specify a RELATIVE offset value"));
-                    m_model->axis2GoToOffset(entry);
+                        { "Specify a RELATIVE offset value" },
+                        0.0);
+                    if (!rc.cancelled) {
+                        m_model->axis2GoToOffset(rc.value);
+                    }
                     break;
                 }
             case key::ASTERISK: // shutdown
@@ -610,15 +614,16 @@ void Controller::processKeyPress()
                         break;
                     }
                     // Note all motors will be stopped when a dialog is displayed
-                    const double taper = std::get<0>(getNumericInputOld(
+                    const auto rc = getNumericInput(
                         "Enter taper value",
-                        m_model->getTaperAngle(),
-                        "MT1 = -1.4287, MT2 = -1.4307",
-                        "MT3 = -1.4377, MT4 = -1.4876",
-                        "(negative angle means piece gets wider towards chuck)",
-                        "Enter to keep enabled, Esc to disable, Del to clear"));
-                    m_model->setTaperAngle(taper);
-                    m_model->changeMode(Mode::Taper);
+                        { "MT1 = -1.4287, MT2 = -1.4307",
+                          "MT3 = -1.4377, MT4 = ff-1.4876",
+                          "(negative angle means piece gets wider towards chuck)" },
+                        m_model->getTaperAngle());
+                    if (!rc.cancelled) {
+                        m_model->setTaperAngle(rc.value);
+                        m_model->changeMode(Mode::Taper);
+                    }
                     break;
                 }
             case key::f2r: // X retraction setup
@@ -640,20 +645,15 @@ void Controller::processKeyPress()
             case key::a1_s: // Axis1 position set
                 {
                     const std::string axisName = m_model->config().read("Axis1Label", "Z");
-                    auto result = getNumericInputOld( // TODO migrate to new function
-                        axisName + " position set",
-                        0.0,
-                        "Enter to set",
-                        "'A' adjusts (keeps memory slots)",
-                        "",
-                        "",
-                        "a");
-                    float position = std::get<0>(result);
-                    m_model->setAxis1Position(position);
-                    // This will invalidate any memorised Z positions, so we clear them
-                    // unless the user specified not to with 'A'
-                    if (std::get<1>(result) != "a") {
-                        m_model->clearAllAxis1Memories();
+                    const auto result = getNumericInput(
+                        axisName + " position set", { "[&A] adjust (keeps memory slots)" }, 0.0);
+                    if (!result.cancelled) {
+                        m_model->setAxis1Position(result.value);
+                        // This will invalidate any memorised Z positions, so we clear them
+                        // unless the user specified not to with 'A'
+                        if (!result.optionsSelected.contains('a')) {
+                            m_model->clearAllAxis1Memories();
+                        }
                     }
                     break;
                 }
@@ -686,18 +686,21 @@ void Controller::processKeyPress()
                 {
                     // Note all motors will be stopped when a dialog is displayed
                     const std::string axisName = m_model->config().read("Axis1Label", "Z");
-                    const double entry
-                        = std::get<0>(getNumericInputOld("Enter " + axisName + " memory value", 0.0));
-                    m_model->axis1StorePosition(entry);
+                    const auto rc = getNumericInput("Enter " + axisName + " memory value", {}, 0.0);
+                    if (!rc.cancelled) {
+                        m_model->axis1StorePosition(rc.value);
+                    }
                     break;
                 }
             case key::a2_i: // Input axis 2 memory value directly
                 {
                     // Note all motors will be stopped when a dialog is displayed
                     const std::string axisName = m_model->config().read("Axis2Label", "X");
-                    const double entry
-                        = std::get<0>(getNumericInputOld("Enter " + axisName + " memory value", 0.0));
-                    m_model->axis2StorePosition(entry);
+                    const auto rc = 
+                        getNumericInput("Enter " + axisName + " memory value", {}, 0.0);
+                    if (!rc.cancelled) {
+                        m_model->axis2StorePosition(rc.value);
+                    }
                     break;
                 }
             case key::ESC: // return to normal mode
@@ -1030,69 +1033,25 @@ int Controller::checkForAxisLeaderKeys(int key)
     return key;
 }
 
-// TODO replace with new version of getNumericInput()
-[[deprecated("Replace with getInput")]]
-std::tuple<double, std::string> Controller::getNumericInputOld(
-    const std::string& prompt,
-    double defaultEntry,
-    const std::string& additionalText1 /* = "" */,
-    const std::string& additionalText2 /* = "" */,
-    const std::string& additionalText3 /* = "" */,
-    const std::string& additionalText4 /* = "" */,
-    const std::string& hotkeys /* = "" */
-)
-{
-    m_model->stopAllMotors();
-    return m_view->getNumericInput(
-        prompt,
-        defaultEntry,
-        additionalText1,
-        additionalText2,
-        additionalText3,
-        additionalText4,
-        hotkeys);
-}
-
-// TODO replace with getInput() & rename getTextInputNew to getTextInput
-[[deprecated("replace with getTextInputNew")]]
-std::string Controller::getTextInput(
-    const std::string& prompt,
-    const std::string& defaultEntry,
-    const std::string& additionalText1 /* = "" */,
-    const std::string& additionalText2 /* = "" */,
-    const std::string& additionalText3 /* = "" */,
-    const std::string& additionalText4 /* = "" */
-)
-{
-    m_model->stopAllMotors();
-    return m_view->getTextInput(
-        prompt, defaultEntry, additionalText1, additionalText2, additionalText3, additionalText4);
-}
-
-Input::Return Controller::getInput(
-    Input::Type type,
-    std::string_view prompt,
-    std::vector<std::string> additionalText,
-    std::string_view defaultEntry,
-    std::optional<std::vector<std::string>> listItems)
-{
-    m_model->stopAllMotors();
-    return m_view->getInput(type, prompt, additionalText, defaultEntry, listItems);
-}
-
 NumericInputReturn Controller::getNumericInput(
     std::string_view prompt,
     std::vector<std::string> additionalText,
     double defaultEntry)
 {
     m_model->stopAllMotors();
-    std::string defaultEntryAsString
-        = std::to_string(defaultEntry).substr(0, std::to_string(defaultEntry).find(".") + 3);
+    std::string defaultEntryAsString = std::to_string(defaultEntry);
+    // Remove excess trailing zeros after decimal point (if it exists)
+    if (defaultEntryAsString.contains(".")) {
+        defaultEntryAsString.erase(defaultEntryAsString.find_last_not_of('0') + 1);
+        if (defaultEntryAsString.back()=='.') {
+            defaultEntryAsString += "00";
+        }
+    }
     auto rc = m_view->getInput(Input::Type::Numeric, prompt, additionalText, defaultEntryAsString);
     return { rc.cancelled, rc.number, rc.optionsSelected };
 }
 
-TextInputReturn Controller::getTextInputNew(
+TextInputReturn Controller::getTextInput(
     std::string_view prompt,
     std::vector<std::string> additionalText,
     std::string_view defaultEntry)

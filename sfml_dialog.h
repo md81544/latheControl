@@ -11,18 +11,6 @@ enum class InputType {
     numeric
 };
 
-std::tuple<std::string, std::string> getInputOld(
-    sf::RenderWindow& window,
-    sf::Font& font,
-    const std::string& prompt,
-    const std::string& defaultEntry = "",
-    InputType inputType = InputType::string,
-    const std::string& additionalText1 = "",
-    const std::string& additionalText2 = "",
-    const std::string& additionalText3 = "",
-    const std::string& additionalText4 = "",
-    const std::string& hotkeys = "");
-
 Input::Return getInput(
     sf::RenderWindow& window,
     sf::Font& font,

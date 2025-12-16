@@ -55,24 +55,6 @@ public:
         std::string_view defaultEntry = "",
         std::optional<std::vector<std::string>> listItems = std::nullopt
     ) = 0;
-    virtual std::string getTextInput( // TODO REMOVE
-        const std::string& prompt,
-        const std::string& defaultEntry,
-        const std::string& additionalText1 = "",
-        const std::string& additionalText2 = "",
-        const std::string& additionalText3 = "",
-        const std::string& additionalText4 = "")
-        = 0;
-    virtual std::tuple<double, std::string> getNumericInput( // TODO REMOVE
-        const std::string& prompt,
-        double defaultEntry,
-        const std::string& additionalText1 = "",
-        const std::string& additionalText2 = "",
-        const std::string& additionalText3 = "",
-        const std::string& additionalText4 = "",
-        const std::string& hotkeys = "")
-        = 0;
-    virtual void pressAnyKey(std::string_view prompt) = 0; // TODO REMOVE
     virtual void updateDisplay(const Model&) = 0;
     virtual ~IView() { };
 };

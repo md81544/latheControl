@@ -384,63 +384,6 @@ Input::Return ViewSfml::getInput(
         *m_window, *m_font, type, prompt, additionalText, defaultEntry, listItems);
 }
 
-std::string ViewSfml::getTextInput(
-    const std::string& prompt,
-    const std::string& defaultEntry,
-    const std::string& additionalText1 /* = "" */,
-    const std::string& additionalText2 /* = "" */,
-    const std::string& additionalText3 /* = "" */,
-    const std::string& additionalText4 /* = "" */)
-{
-    return std::get<0>(dialog::getInputOld(
-        *m_window,
-        *m_font,
-        prompt,
-        defaultEntry,
-        dialog::InputType::string,
-        additionalText1,
-        additionalText2,
-        additionalText3,
-        additionalText4));
-}
-
-std::tuple<double, std::string> ViewSfml::getNumericInput(
-    const std::string& prompt,
-    double defaultEntry,
-    const std::string& additionalText1 /* = "" */,
-    const std::string& additionalText2 /* = "" */,
-    const std::string& additionalText3 /* = "" */,
-    const std::string& additionalText4 /* = "" */,
-    const std::string& hotkeys) /* = "" */
-{
-    std::ostringstream oss;
-    oss << std::fixed << std::setprecision(2) << defaultEntry;
-    const std::string defaultValueString = oss.str();
-    std::tuple<std::string, std::string> result;
-    try {
-        result = dialog::getInputOld(
-            *m_window,
-            *m_font,
-            prompt,
-            defaultValueString,
-            dialog::InputType::numeric,
-            additionalText1,
-            additionalText2,
-            additionalText3,
-            additionalText4,
-            hotkeys);
-        return { std::stod(std::get<0>(result)), std::get<1>(result) };
-    } catch (const std::exception& e) {
-        MGOLOG("Error converting string \"" + std::get<0>(result) + "\" to double");
-        return { defaultEntry, "" };
-    }
-}
-
-void ViewSfml::pressAnyKey(std::string_view prompt)
-{
-    dialog::pressAnyKey(*m_window, *m_font, prompt);
-}
-
 void ViewSfml::updateDisplay(const Model& model)
 {
     m_window->clear();

@@ -34,35 +34,13 @@ private:
     int processModeInputKeys(int key);
     int processLeaderKeyModeKeyPress(int key);
     int checkForAxisLeaderKeys(int key);
-    std::tuple<double, std::string> getNumericInputOld(
-        const std::string& prompt,
-        double defaultEntry,
-        const std::string& additionalText1 = "",
-        const std::string& additionalText2 = "",
-        const std::string& additionalText3 = "",
-        const std::string& additionalText4 = "",
-        const std::string& hotkeys = "");
-    std::string getTextInput(
-        const std::string& prompt,
-        const std::string& defaultEntry,
-        const std::string& additionalText1 = "",
-        const std::string& additionalText2 = "",
-        const std::string& additionalText3 = "",
-        const std::string& additionalText4 = "");
-
     // While sfml_dialog getInput() is multi-functional, for
     // ease of use we specialise calls to it by these functions.
-    Input::Return getInput( // TODO remove & replace by more specialised call
-        Input::Type type,
-        std::string_view prompt,
-        std::vector<std::string> additionalText,
-        std::string_view defaultEntry = "",
-        std::optional<std::vector<std::string>> listItems = std::nullopt);
     NumericInputReturn getNumericInput(
         std::string_view prompt,
         std::vector<std::string> additionalText,
         double defaultEntry);
-    TextInputReturn getTextInputNew( // change name when getTextInput() is retired
+    TextInputReturn getTextInput(
         std::string_view prompt,
         std::vector<std::string> additionalText,
         std::string_view defaultEntry = "");
