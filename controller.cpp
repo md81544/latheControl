@@ -639,7 +639,28 @@ void Controller::processKeyPress()
                     if (m_model->config().readBool("DisableAxis2", false)) {
                         break;
                     }
-                    m_model->changeMode(Mode::Radius);
+                    const std::string axis1Name = m_model->config().read("Axis1Label", "Z");
+                    const std::string axis2Name = m_model->config().read("Axis2Label", "X");
+                    const auto rc = getNumericInput(
+                        "Enter radius value required:",
+                        { "Important! Ensure the tool is at the radius of the workpiece,",
+                          "near the end, and set axes to ZERO (this drives the operation).",
+                          fmt::format(
+                              "Keep "
+                              "{} "
+                              "constant.",
+                              axis2Name),
+                          fmt::format(
+                              "Then cut away from chuck. Return to zero, then nudge {} inwards, "
+                              "re-zero, repeat.",
+                              axis1Name),
+                          "Memorising the new zero position each time will make returning "
+                          "easier." },
+                        m_model->getRadius());
+                    if (!rc.cancelled) {
+                        m_model->setRadius(rc.value);
+                        m_model->changeMode(Mode::Radius);
+                    }
                     break;
                 }
             case key::a1_s: // Axis1 position set
@@ -696,8 +717,7 @@ void Controller::processKeyPress()
                 {
                     // Note all motors will be stopped when a dialog is displayed
                     const std::string axisName = m_model->config().read("Axis2Label", "X");
-                    const auto rc = 
-                        getNumericInput("Enter " + axisName + " memory value", {}, 0.0);
+                    const auto rc = getNumericInput("Enter " + axisName + " memory value", {}, 0.0);
                     if (!rc.cancelled) {
                         m_model->axis2StorePosition(rc.value);
                     }
@@ -779,6 +799,16 @@ int Controller::checkKeyAllowedForMode(int key)
     switch (m_model->getCurrentDisplayMode()) {
         case Mode::None:
             return key;
+        case Mode::Axis1PositionSetup:
+        case Mode::Axis2PositionSetup:
+        case Mode::Taper:
+        case Mode::Radius:
+        case Mode::Axis1GoTo:
+        case Mode::Axis2GoTo:
+        case Mode::Axis1GoToOffset:
+        case Mode::Axis2GoToOffset:
+            // Now handled by new dialog
+            return key;
         case Mode::Help:
             return key;
         case Mode::Setup:
@@ -799,30 +829,6 @@ int Controller::checkKeyAllowedForMode(int key)
                 return key;
             }
             return -1;
-        // Any modes that have numerical input:
-        case Mode::Axis1PositionSetup:
-        case Mode::Axis2PositionSetup:
-            if (key >= key::ZERO && key <= key::NINE) {
-                return key;
-            }
-            if (key == key::FULLSTOP || key == key::BACKSPACE || key == key::DELETE) {
-                return key;
-            }
-            if (key == key::MINUS) {
-                return key;
-            }
-            if (key == key::d || key == key::D || key == key::a || key == key::A) {
-                return key;
-            }
-            return -1;
-        case Mode::Taper:
-            // Now handled by new dialog
-            return key;
-        case Mode::Axis1GoTo:
-        case Mode::Axis2GoTo:
-        case Mode::Axis1GoToOffset:
-        case Mode::Axis2GoToOffset:
-        case Mode::Radius:
         case Mode::MultiPass:
             if (key >= key::ZERO && key <= key::NINE) {
                 return key;
@@ -1043,7 +1049,7 @@ NumericInputReturn Controller::getNumericInput(
     // Remove excess trailing zeros after decimal point (if it exists)
     if (defaultEntryAsString.contains(".")) {
         defaultEntryAsString.erase(defaultEntryAsString.find_last_not_of('0') + 1);
-        if (defaultEntryAsString.back()=='.') {
+        if (defaultEntryAsString.back() == '.') {
             defaultEntryAsString += "00";
         }
     }

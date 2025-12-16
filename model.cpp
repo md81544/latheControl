@@ -1404,6 +1404,7 @@ void Model::acceptInputValue()
         case Mode::Axis1GoToOffset:
         case Mode::Axis2GoToOffset:
         case Mode::Taper:
+        case Mode::Radius:
             break;
         case Mode::Axis1PositionSetup:
             {
@@ -1425,11 +1426,6 @@ void Model::acceptInputValue()
                         m = AXIS2_UNSET;
                     }
                 }
-                break;
-            }
-        case Mode::Radius:
-            {
-                m_radius = inputValue;
                 break;
             }
         case Mode::MultiPass:

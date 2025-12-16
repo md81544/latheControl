@@ -581,6 +581,7 @@ void ViewSfml::updateTextFromModel(const Model& model)
         case Mode::Axis2GoTo:
         case Mode::Axis1GoToOffset:
         case Mode::Axis2GoToOffset:
+        case Mode::Radius:
             break;
         case Mode::Help:
             {
@@ -611,30 +612,6 @@ void ViewSfml::updateTextFromModel(const Model& model)
                         model.getAxis1MotorCurrentStep(),
                         model.getAxis2MotorCurrentStep()));
                 m_txtWarning->setString("Press Esc to exit setup");
-                break;
-            }
-        case Mode::Radius:
-            {
-                // TODO move to new dialog
-                m_txtMode->setString("Radius");
-                m_txtMisc1->setString(fmt::format("Radius required: {}_", model.getInputString()));
-                m_txtMisc2->setString(
-                    "Important! Ensure the tool is at the radius of the workpiece,");
-                m_txtMisc3->setString(
-                    fmt::format(
-                        "near the end, and set axes to ZERO (this drives the operation). Keep "
-                        "{} "
-                        "constant.",
-                        model.config().read("Axis2Label", "X")));
-                m_txtMisc4->setString(
-                    fmt::format(
-                        "Then cut away from chuck. Return to zero, then nudge {} inwards, "
-                        "re-zero, "
-                        "repeat.",
-                        model.config().read("Axis1Label", "Z")));
-                m_txtMisc5->setString(
-                    "Memorising the new zero position each time will make returning easier.");
-                m_txtWarning->setString("Enter to keep enabled, Esc to disable, Del to clear");
                 break;
             }
         case Mode::Threading:
