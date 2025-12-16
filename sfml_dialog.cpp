@@ -81,7 +81,7 @@ Input::Return getInput(
     std::optional<std::vector<std::string>> listItems)
 {
     // Parameter checks, this shouldn't be an issue
-    // as this functionm is designed to be called from
+    // as this function is designed to be called from
     // more specialised wrappers in controller. But just
     // to check...
     if (additionalText.size() > 0) {
