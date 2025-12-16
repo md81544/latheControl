@@ -1,6 +1,7 @@
 #include "controller.h"
 
 #include "fmt/format.h"
+#include "iview.h" // For Input::*;
 #include "keycodes.h"
 #include "log.h"
 #include "stepperControl/igpio.h"
@@ -520,18 +521,22 @@ void Controller::processKeyPress()
                 {
                     // Note all motors will be stopped when a dialog is displayed
                     const std::string axisName = m_model->config().read("Axis1Label", "Z");
-                    const double entry = std::get<0>(getNumericInput(
-                        "Go to " + axisName + " absolute position", 0.0, "Specify a value"));
-                    m_model->axis1GoToPosition(entry);
+                    const auto rc = getNumericInput(
+                        "Go to " + axisName + " absolute position", {"Specify a value"}, 0.0);
+                    if(!rc.cancelled){
+                        m_model->axis1GoToPosition(rc.value);
+                    }
                     break;
                 }
             case key::a2_g:
                 {
                     // Note all motors will be stopped when a dialog is displayed
                     const std::string axisName = m_model->config().read("Axis2Label", "X");
-                    const double entry = std::get<0>(getNumericInput(
-                        "Go to " + axisName + " absolute position", 0.0, "Specify a value"));
-                    m_model->axis2GoToPosition(entry);
+                    const auto rc = getNumericInput(
+                        "Go to " + axisName + " absolute position", {"Specify a value"}, 0.0);
+                    if(!rc.cancelled){
+                        m_model->axis2GoToPosition(rc.value);
+                    }
                     break;
                 }
             case key::a1_r:
@@ -539,7 +544,7 @@ void Controller::processKeyPress()
                     // Relative motion
                     // Note all motors will be stopped when a dialog is displayed
                     const std::string axisName = m_model->config().read("Axis1Label", "Z");
-                    const double entry = std::get<0>(getNumericInput(
+                    const double entry = std::get<0>(getNumericInputOld(
                         "Go to " + axisName + " relative position",
                         0.0,
                         "Specify a RELATIVE offset value"));
@@ -551,7 +556,7 @@ void Controller::processKeyPress()
                     // Relative motion
                     // Note all motors will be stopped when a dialog is displayed
                     const std::string axisName = m_model->config().read("Axis2Label", "X");
-                    const double entry = std::get<0>(getNumericInput(
+                    const double entry = std::get<0>(getNumericInputOld(
                         "Go to " + axisName + " relative position",
                         0.0,
                         "Specify a RELATIVE offset value"));
@@ -605,7 +610,7 @@ void Controller::processKeyPress()
                         break;
                     }
                     // Note all motors will be stopped when a dialog is displayed
-                    const double taper = std::get<0>(getNumericInput(
+                    const double taper = std::get<0>(getNumericInputOld(
                         "Enter taper value",
                         m_model->getTaperAngle(),
                         "MT1 = -1.4287, MT2 = -1.4307",
@@ -635,7 +640,7 @@ void Controller::processKeyPress()
             case key::a1_s: // Axis1 position set
                 {
                     const std::string axisName = m_model->config().read("Axis1Label", "Z");
-                    auto result = getNumericInput(
+                    auto result = getNumericInputOld( // TODO migrate to new function
                         axisName + " position set",
                         0.0,
                         "Enter to set",
@@ -658,22 +663,20 @@ void Controller::processKeyPress()
                     const std::string axisName = m_model->config().read("Axis2Label", "X");
                     auto result = getNumericInput(
                         axisName + " position set",
-                        0.0,
-                        "Enter to set",
-                        "'D' enters as diameter",
-                        "'A' adjusts (keeps memory slots)",
-                        "",
-                        "ad");
-                    float position = std::get<0>(result);
-                    if (std::get<1>(result) == "d") {
-                        position /= 2;
-                        m_model->diameterIsSet();
-                    }
-                    m_model->setAxis2Position(position);
-                    // This will invalidate any memorised X positions, so we clear them
-                    // unless the user specified not to with 'A'
-                    if (std::get<1>(result) != "a") {
-                        m_model->clearAllAxis2Memories();
+                        { "[&D] set as diameter", "[&A] adjusts (keeps memory slots)" },
+                        0.0);
+                    if (!result.cancelled) {
+                        float position = result.value;
+                        if (result.optionsSelected.contains('d')) {
+                            position /= 2;
+                            m_model->diameterIsSet();
+                        }
+                        m_model->setAxis2Position(position);
+                        // This will invalidate any memorised X positions, so we clear them
+                        // unless the user specified not to with 'A'
+                        if (!result.optionsSelected.contains('a')) {
+                            m_model->clearAllAxis2Memories();
+                        }
                     }
                     break;
                 }
@@ -684,7 +687,7 @@ void Controller::processKeyPress()
                     // Note all motors will be stopped when a dialog is displayed
                     const std::string axisName = m_model->config().read("Axis1Label", "Z");
                     const double entry
-                        = std::get<0>(getNumericInput("Enter " + axisName + " memory value", 0.0));
+                        = std::get<0>(getNumericInputOld("Enter " + axisName + " memory value", 0.0));
                     m_model->axis1StorePosition(entry);
                     break;
                 }
@@ -693,7 +696,7 @@ void Controller::processKeyPress()
                     // Note all motors will be stopped when a dialog is displayed
                     const std::string axisName = m_model->config().read("Axis2Label", "X");
                     const double entry
-                        = std::get<0>(getNumericInput("Enter " + axisName + " memory value", 0.0));
+                        = std::get<0>(getNumericInputOld("Enter " + axisName + " memory value", 0.0));
                     m_model->axis2StorePosition(entry);
                     break;
                 }
@@ -1027,7 +1030,9 @@ int Controller::checkForAxisLeaderKeys(int key)
     return key;
 }
 
-std::tuple<double, std::string> Controller::getNumericInput(
+// TODO replace with new version of getNumericInput()
+[[deprecated("Replace with getInput")]]
+std::tuple<double, std::string> Controller::getNumericInputOld(
     const std::string& prompt,
     double defaultEntry,
     const std::string& additionalText1 /* = "" */,
@@ -1048,6 +1053,8 @@ std::tuple<double, std::string> Controller::getNumericInput(
         hotkeys);
 }
 
+// TODO replace with getInput() & rename getTextInputNew to getTextInput
+[[deprecated("replace with getTextInputNew")]]
 std::string Controller::getTextInput(
     const std::string& prompt,
     const std::string& defaultEntry,
@@ -1060,6 +1067,52 @@ std::string Controller::getTextInput(
     m_model->stopAllMotors();
     return m_view->getTextInput(
         prompt, defaultEntry, additionalText1, additionalText2, additionalText3, additionalText4);
+}
+
+Input::Return Controller::getInput(
+    Input::Type type,
+    std::string_view prompt,
+    std::vector<std::string> additionalText,
+    std::string_view defaultEntry,
+    std::optional<std::vector<std::string>> listItems)
+{
+    m_model->stopAllMotors();
+    return m_view->getInput(type, prompt, additionalText, defaultEntry, listItems);
+}
+
+NumericInputReturn Controller::getNumericInput(
+    std::string_view prompt,
+    std::vector<std::string> additionalText,
+    double defaultEntry)
+{
+    m_model->stopAllMotors();
+    std::string defaultEntryAsString
+        = std::to_string(defaultEntry).substr(0, std::to_string(defaultEntry).find(".") + 3);
+    auto rc = m_view->getInput(Input::Type::Numeric, prompt, additionalText, defaultEntryAsString);
+    return { rc.cancelled, rc.number, rc.optionsSelected };
+}
+
+TextInputReturn Controller::getTextInputNew(
+    std::string_view prompt,
+    std::vector<std::string> additionalText,
+    std::string_view defaultEntry)
+{
+    m_model->stopAllMotors();
+    const auto rc = m_view->getInput(Input::Type::Text, prompt, additionalText, defaultEntry);
+    return { rc.cancelled, rc.text, rc.optionsSelected };
+}
+
+std::optional<std::size_t>
+Controller::listPicker(std::string_view prompt, std::vector<std::string> listItems)
+{
+    m_model->stopAllMotors();
+    return m_view->getInput(Input::Type::ListPicker, prompt, {}, "", listItems).pickedItem;
+}
+
+void Controller::pressAnyKey(std::string_view prompt)
+{
+    m_model->stopAllMotors();
+    m_view->getInput(Input::Type::PressAnyKey, prompt, {}, {});
 }
 
 } // end namespace

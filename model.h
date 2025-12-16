@@ -25,7 +25,7 @@ constexpr int INF_IN = std::numeric_limits<int>::max();
 constexpr int AXIS1_UNSET = INF_RIGHT;
 constexpr int AXIS2_UNSET = INF_OUT;
 
-constexpr double DEG_TO_RAD = 3.14159265359 / 180.0;
+constexpr double DEG_TO_RAD = M_PI / 180.0;
 
 constexpr float INFEED = 0.05f; // mm
 // The large number below is tan 29.5°

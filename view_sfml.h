@@ -15,10 +15,10 @@ public:
     virtual void close() override;
     virtual int getEvents() override;
     virtual Input::Return getInput(
-        Input::Return type,
+        Input::Type type,
         std::string_view prompt,
-        std::vector<std::string>& additionalText,
-        std::optional<std::vector<char>> hotkeys = std::nullopt,
+        std::vector<std::string> additionalText,
+        std::string_view defaultEntry = "",
         std::optional<std::vector<std::string>> listItems = std::nullopt
     ) override;
     virtual std::string getTextInput(

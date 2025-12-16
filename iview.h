@@ -2,6 +2,7 @@
 
 #include "model.h"
 #include <optional>
+#include <set>
 #include <tuple>
 
 // The "view" object abstracts the the graphical toolkit being used.
@@ -16,15 +17,17 @@ enum class Type {
     Text,
     Numeric,
     ListPicker,
-    PressAnyKey
+    PressAnyKey,
+    OkCancel
 };
 
 // Return type of getInput()
 struct Return {
-    std::optional<std::string> text;
-    std::optional<double> number;
-    std::optional<std::set<char>> options;
-    std::optional<std::size_t> pickedItem;
+    bool cancelled {true};
+    std::string text;
+    double number;
+    std::set<char> optionsSelected;
+    std::optional<std::size_t> pickedItem = std::nullopt;
 };
 
 } // namedpace Input
@@ -39,14 +42,20 @@ public:
     // selecting one option from a list, and a simple "Press a key
     // to continue". The user should be able to select options when
     // entering text or numbers.
+    // It is expected that the additionalText strings can contain
+    // ampersands, which, if directly preceding a non-space character,
+    // constitutes a "hot key". So for example if the string is "&Hello"
+    // then "Hello" is displayed and an option (say) can be checked
+    // or acted upon by the user pressing a modifier (e.g. Alt) and H
+    // (in this example).
     virtual Input::Return getInput(
-        Input::Return type,
+        Input::Type type,
         std::string_view prompt,
-        std::vector<std::string>& additionalText,
-        std::optional<std::vector<char>> hotkeys = std::nullopt,
+        std::vector<std::string> additionalText,
+        std::string_view defaultEntry = "",
         std::optional<std::vector<std::string>> listItems = std::nullopt
     ) = 0;
-    virtual std::string getTextInput(
+    virtual std::string getTextInput( // TODO REMOVE
         const std::string& prompt,
         const std::string& defaultEntry,
         const std::string& additionalText1 = "",
@@ -54,7 +63,7 @@ public:
         const std::string& additionalText3 = "",
         const std::string& additionalText4 = "")
         = 0;
-    virtual std::tuple<double, std::string> getNumericInput(
+    virtual std::tuple<double, std::string> getNumericInput( // TODO REMOVE
         const std::string& prompt,
         double defaultEntry,
         const std::string& additionalText1 = "",
@@ -63,7 +72,7 @@ public:
         const std::string& additionalText4 = "",
         const std::string& hotkeys = "")
         = 0;
-    virtual void pressAnyKey(std::string_view prompt) = 0;
+    virtual void pressAnyKey(std::string_view prompt) = 0; // TODO REMOVE
     virtual void updateDisplay(const Model&) = 0;
     virtual ~IView() { };
 };

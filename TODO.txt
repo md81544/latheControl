@@ -1,3 +1,21 @@
+Display Vc (surface speed in m/min) if diameter is set
+Note the SI unit is metres per minute, not mm. So:
+Vc = (M_PI * D * n) / 1000.0;
+
+Probing
+  X probing: would need an insulated known diameter bar
+  held in the spindle.
+  
+  Z probing: would need an insulated known length bar
+  which could be held on the end of a workpiece.
+
+  Will need a dedicated pin on the Pi for monitoring
+
+Make display more "modular" (display elements should be
+in definable boxes). This will make layout easier to
+modify and will make it easier to support touch interaction.
+Maybe create a class which encapsulates a display element.
+
 The interleaved "dialog" is becoming unmanageable and
 requires changes all over the place when changed/added to.
 Need to move all input to the new modal dialog system (WIP)

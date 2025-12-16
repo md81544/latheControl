@@ -1,5 +1,5 @@
 #pragma once
-
+#include "iview.h" // for Input::*
 #include <SFML/Graphics.hpp>
 #include <string>
 
@@ -11,7 +11,7 @@ enum class InputType {
     numeric
 };
 
-std::tuple<std::string, std::string> getInput(
+std::tuple<std::string, std::string> getInputOld(
     sf::RenderWindow& window,
     sf::Font& font,
     const std::string& prompt,
@@ -22,6 +22,15 @@ std::tuple<std::string, std::string> getInput(
     const std::string& additionalText3 = "",
     const std::string& additionalText4 = "",
     const std::string& hotkeys = "");
+
+Input::Return getInput(
+    sf::RenderWindow& window,
+    sf::Font& font,
+    Input::Type type,
+    std::string_view prompt,
+    std::vector<std::string> additionalText,
+    std::string_view defaultEntry,
+    std::optional<std::vector<std::string>> listItems = std::nullopt);
 
 void pressAnyKey(
     sf::RenderWindow& window,

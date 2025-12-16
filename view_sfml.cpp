@@ -123,6 +123,11 @@ int convertKeyCode(sf::Event event)
     return -1;
 }
 
+int checkMouseClick(const sf::Event::MouseButtonPressed& e) {
+    (void) e;
+    return -1;
+}
+
 } // end anonymous namespace
 
 void ViewSfml::initialise(const Model& model)
@@ -145,7 +150,7 @@ void ViewSfml::initialise(const Model& model)
             sf::VideoMode::getDesktopMode().size.x,
             sf::VideoMode::getDesktopMode().size.y));
     m_window->setKeyRepeatEnabled(false);
-    m_window->setMouseCursorVisible(false);
+    //m_window->setMouseCursorVisible(false);
     m_font = std::make_unique<sf::Font>();
     if (!m_font->openFromFile("./lc_font.ttf")) {
         throw std::runtime_error("Could not load TTF font lc_font.ttf");
@@ -187,7 +192,7 @@ void ViewSfml::initialise(const Model& model)
 
     m_txtRpmLabel = std::make_unique<sf::Text>(*m_font, "", 60);
     m_txtRpmLabel->setPosition({ 20, 130 });
-    m_txtRpmLabel->setString("R:");
+    m_txtRpmLabel->setString("n:");
 
     m_txtRpm = std::make_unique<sf::Text>(*m_font, "", 60);
     m_txtRpm->setPosition({ 150, 130 });
@@ -312,14 +317,16 @@ int ViewSfml::getEvents()
     static sf::Clock clock;
     clock.start();
     static auto lastTime = clock.getElapsedTime();
-    // This loop is to quickly discard anything that's not a keypress
-    // e.g. mouse movement, which we're not interested in (currently)
     std::optional<sf::Event> event;
     for (;;) {
         event = m_window->pollEvent();
         if (!event) {
             // No events in the queue
             return key::None;
+        }
+        if(event->is<sf::Event::MouseButtonPressed>()) {
+            auto e = event->getIf<sf::Event::MouseButtonPressed>();
+            return checkMouseClick(*e);
         }
         if (event->is<sf::Event::KeyReleased>()) {
             // quick check for rapid cancellation
@@ -367,18 +374,14 @@ int ViewSfml::getEvents()
 }
 
 Input::Return ViewSfml::getInput(
-    Input::Return type,
+    Input::Type type,
     std::string_view prompt,
-    std::vector<std::string>& additionalText,
-    std::optional<std::vector<char>> hotkeys,
+    std::vector<std::string> additionalText,
+    std::string_view defaultEntry,
     std::optional<std::vector<std::string>> listItems)
 {
-    (void) type;
-    (void) prompt;
-    (void) additionalText;
-    (void) hotkeys;
-    (void) listItems;
-    return Input::Return();
+    return dialog::getInput(
+        *m_window, *m_font, type, prompt, additionalText, defaultEntry, listItems);
 }
 
 std::string ViewSfml::getTextInput(
@@ -389,7 +392,7 @@ std::string ViewSfml::getTextInput(
     const std::string& additionalText3 /* = "" */,
     const std::string& additionalText4 /* = "" */)
 {
-    return std::get<0>(dialog::getInput(
+    return std::get<0>(dialog::getInputOld(
         *m_window,
         *m_font,
         prompt,
@@ -415,7 +418,7 @@ std::tuple<double, std::string> ViewSfml::getNumericInput(
     const std::string defaultValueString = oss.str();
     std::tuple<std::string, std::string> result;
     try {
-        result = dialog::getInput(
+        result = dialog::getInputOld(
             *m_window,
             *m_font,
             prompt,
@@ -433,7 +436,8 @@ std::tuple<double, std::string> ViewSfml::getNumericInput(
     }
 }
 
-void ViewSfml::pressAnyKey(std::string_view prompt) {
+void ViewSfml::pressAnyKey(std::string_view prompt)
+{
     dialog::pressAnyKey(*m_window, *m_font, prompt);
 }
 
