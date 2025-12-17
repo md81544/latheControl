@@ -582,13 +582,15 @@ void Controller::processKeyPress()
             case key::F1: // help mode
             case key::f2h:
                 {
+                    const std::string axis1name = m_model->config().read("Axis1Label", "Z");
+                    const std::string axis2name = m_model->config().read("Axis2Label", "X");
                     pressAnyKey(
                         "Help",
-                        { "Modes: (F2=Leader) s=Setup t=Thread p=taPerr=Retract",
+                        { "Modes: (F2=Leader) s=Setup t=Thread p=taPer r=Retract, o=radius",
                           "",
-                          "Z axis speed: 1-5, X axis speed: 6-0",
-                          "[ and ] select mem to use. M store, Enter return (F fast).",
-                          "WASD = nudge 0.025mm. Space to stop all motors. R retract.",
+                          axis1name + " axis speed: 1-5, " + axis2name + " axis speed: 6-0",
+                          "[ and ] select memory slot to use. M store, Enter return (F fast).",
+                          "WASD = nudge 0.025mm (shift for finer). Space to stop all motors. R retract.",
                           "",
                           "Press any key" });
                     break;
