@@ -191,6 +191,9 @@ Input::Return getInput(
     inputText.setString(std::string(defaultEntry) + "_");
 
     float addTextYPos = 140.f;
+    if (type == Input::Type::PressAnyKey) {
+        addTextYPos = 60.f;
+    }
     constexpr float lineSpacing = 28.f;
 
     for (auto& t : addText) {

@@ -577,17 +577,6 @@ void ViewSfml::updateTextFromModel(const Model& model)
         case Mode::Taper:
         case Mode::Radius:
             break;
-        case Mode::Help:
-            {
-                m_txtMode->setString("Help");
-                m_txtMisc1->setString("Modes: (F2=Leader) s=Setup t=Thread p=taPer r=Retract");
-                m_txtMisc2->setString("");
-                m_txtMisc3->setString("Z axis speed: 1-5, X axis speed: 6-0");
-                m_txtMisc4->setString("[ and ] select mem to use. M store, Enter return (F fast).");
-                m_txtMisc5->setString("WASD = nudge 0.025mm. Space to stop all motors. R retract.");
-                m_txtWarning->setString("Press Esc to exit help");
-                break;
-            }
         case Mode::Setup:
             {
                 // TODO probably remove this

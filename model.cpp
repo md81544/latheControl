@@ -28,8 +28,6 @@ std::string translate_mode(mgo::Mode mode)
     switch (mode) {
         case mgo::Mode::None:
             return "None";
-        case mgo::Mode::Help:
-            return "Help";
         case mgo::Mode::Setup:
             return "Setup";
         case mgo::Mode::Threading:

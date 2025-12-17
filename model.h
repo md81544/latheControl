@@ -33,10 +33,8 @@ constexpr float INFEED = 0.05f; // mm
 constexpr float SIDEFEED = INFEED * 0.5657727781877700776025887010584;
 
 // "Modes" allow for special behaviour (like threading and tapering)
-// or completely modal-like input / display (like help, or setup)
 enum class Mode {
     None,
-    Help,
     Setup,
     Threading,
     Taper,

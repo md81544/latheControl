@@ -7,13 +7,13 @@
 
 namespace mgo {
 
-struct NumericInputReturn{
+struct NumericInputReturn {
     bool cancelled;
     double value;
     std::set<char> optionsSelected;
 };
 
-struct TextInputReturn{
+struct TextInputReturn {
     bool cancelled;
     std::string value;
     std::set<char> optionsSelected;
@@ -44,10 +44,9 @@ private:
         std::string_view prompt,
         std::vector<std::string> additionalText,
         std::string_view defaultEntry = "");
-    std::optional<std::size_t> listPicker(
-        std::string_view prompt,
-        std::vector<std::string> listItems);
-    void pressAnyKey( std::string_view prompt);
+    std::optional<std::size_t>
+    listPicker(std::string_view prompt, std::vector<std::string> listItems);
+    void pressAnyKey(std::string_view prompt, std::vector<std::string> additionalText);
 };
 
 } // end namespace

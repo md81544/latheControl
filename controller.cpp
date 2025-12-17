@@ -582,7 +582,15 @@ void Controller::processKeyPress()
             case key::F1: // help mode
             case key::f2h:
                 {
-                    m_model->changeMode(Mode::Help);
+                    pressAnyKey(
+                        "Help",
+                        { "Modes: (F2=Leader) s=Setup t=Thread p=taPerr=Retract",
+                          "",
+                          "Z axis speed: 1-5, X axis speed: 6-0",
+                          "[ and ] select mem to use. M store, Enter return (F fast).",
+                          "WASD = nudge 0.025mm. Space to stop all motors. R retract.",
+                          "",
+                          "Press any key" });
                     break;
                 }
             case key::f2s: // setup mode
@@ -821,8 +829,6 @@ int Controller::checkKeyAllowedForMode(int key)
         case Mode::Threading:
             // Now handled by new dialog
             return key;
-        case Mode::Help:
-            return key;
         case Mode::Setup:
             if (key == key::LEFT || key == key::RIGHT || key == key::UP || key == key::DOWN) {
                 return key;
@@ -1006,10 +1012,10 @@ Controller::listPicker(std::string_view prompt, std::vector<std::string> listIte
     return m_view->getInput(Input::Type::ListPicker, prompt, {}, "", listItems).pickedItem;
 }
 
-void Controller::pressAnyKey(std::string_view prompt)
+void Controller::pressAnyKey(std::string_view prompt, std::vector<std::string> additionalText)
 {
     m_model->stopAllMotors();
-    m_view->getInput(Input::Type::PressAnyKey, prompt, {}, {});
+    m_view->getInput(Input::Type::PressAnyKey, prompt, additionalText, {});
 }
 
 } // end namespace
