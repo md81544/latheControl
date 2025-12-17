@@ -590,7 +590,8 @@ void Controller::processKeyPress()
                           "",
                           axis1name + " axis speed: 1-5, " + axis2name + " axis speed: 6-0",
                           "[ and ] select memory slot to use. M store, Enter return (F fast).",
-                          "WASD = nudge 0.025mm (shift for finer). Space to stop all motors. R retract.",
+                          "WASD = nudge 0.025mm (shift for finer). Space to stop all motors. R "
+                          "retract.",
                           "",
                           "Press any key" });
                     break;
@@ -624,7 +625,36 @@ void Controller::processKeyPress()
                     if (m_model->config().readBool("DisableAxis2", false)) {
                         break;
                     }
-                    m_model->changeMode(Mode::MultiPass);
+                    if (m_model->getAxis1Memory(0) == AXIS1_UNSET
+                        || m_model->getAxis1Memory(1) == AXIS1_UNSET
+                        || m_model->getAxis2Memory(0) == AXIS2_UNSET
+                        || m_model->getAxis2Memory(1) == AXIS2_UNSET) {
+                        pressAnyKey(
+                            "Invalid Conditions",
+                            { "Memory slots 1 and 2 must be filled before using "
+                              "Multi-pass mode",
+                              "",
+                              "Press a key",
+                              "" });
+                        break;
+                    }
+                    const std::string axis1name = m_model->config().read("Axis1Label", "Z");
+                    const std::string axis2name = m_model->config().read("Axis2Label", "X");
+                    const auto rc = getNumericInput(
+                        "Multi-Pass",
+                        { "Enter " + axis1name + " step-over per pass.",
+                          "",
+                          "This mode will automatically move from m1." + axis1name + ",m1."
+                              + axis2name + " to m2." + axis1name + ",m2." + axis2name,
+                          "with the step-over you specify above.",
+                          "",
+                          "[Alt-&P]: pause between passes" },
+                        0.0);
+                    if (!rc.cancelled) {
+                        m_model->setStepOver(rc.value);
+                        m_model->changeMode(Mode::MultiPass);
+                        // TODO use the pause between passes option
+                    }
                     break;
                 }
             case key::f2p: // taper mode
@@ -694,7 +724,9 @@ void Controller::processKeyPress()
                 {
                     const std::string axisName = m_model->config().read("Axis1Label", "Z");
                     const auto result = getNumericInput(
-                        axisName + " position set", { "[&A] adjust (keeps memory slots)" }, 0.0);
+                        axisName + " position set",
+                        { "[Alt-&A] adjust (keeps memory slots)" },
+                        0.0);
                     if (!result.cancelled) {
                         m_model->setAxis1Position(result.value);
                         // This will invalidate any memorised Z positions, so we clear them
@@ -711,7 +743,7 @@ void Controller::processKeyPress()
                     const std::string axisName = m_model->config().read("Axis2Label", "X");
                     auto result = getNumericInput(
                         axisName + " position set",
-                        { "[&D] set as diameter", "[&A] adjusts (keeps memory slots)" },
+                        { "[Alt-&D] set as diameter", "[Alt-&A] adjusts (keeps memory slots)" },
                         0.0);
                     if (!result.cancelled) {
                         float position = result.value;
@@ -829,6 +861,7 @@ int Controller::checkKeyAllowedForMode(int key)
         case Mode::Taper:
         case Mode::Radius:
         case Mode::Threading:
+        case Mode::MultiPass:
             // Now handled by new dialog
             return key;
         case Mode::Setup:
@@ -838,18 +871,6 @@ int Controller::checkKeyAllowedForMode(int key)
             if (key == key::SPACE) {
                 return key;
             }
-            return -1;
-        case Mode::MultiPass:
-            if (key >= key::ZERO && key <= key::NINE) {
-                return key;
-            }
-            if (key == key::FULLSTOP || key == key::BACKSPACE || key == key::DELETE) {
-                return key;
-            }
-            if (key == key::MINUS) {
-                return key;
-            }
-            return -1;
         default:
             // unhandled mode
             assert(false);
@@ -859,44 +880,13 @@ int Controller::checkKeyAllowedForMode(int key)
 
 int Controller::processModeInputKeys(int key) // TODO this can be deleted eventually
 {
-    // If we are in a "mode" then certain keys (e.g. the number keys) are used for input
-    // so are processed here before allowing them to fall through to the main key processing
-    if (m_model->getCurrentDisplayMode() == Mode::MultiPass) {
-        if (key >= key::ZERO && key <= key::NINE) {
-            m_model->getInputString() += static_cast<char>(key);
-            return -1;
-        }
-        if (key == key::FULLSTOP) {
-            if (m_model->getInputString().find(".") == std::string::npos) {
-                m_model->getInputString() += static_cast<char>(key);
-            }
-            return -1;
-        }
-        if (key == key::DELETE) {
-            m_model->setInputString("");
-        }
-        if (key == key::BACKSPACE) {
-            if (!m_model->getInputString().empty()) {
-                m_model->getInputString().pop_back();
-            }
-            return -1;
-        }
-        if (key == key::MINUS && m_model->getInputString().empty()) {
-            m_model->setInputString("-");
-            return -1;
-        }
-    }
+    // Any special processing required when in a mode:
     if (m_model->getCurrentDisplayMode() == Mode::Threading) {
         if (key == key::ESC) {
             // Reset motor speed to something sane
             m_model->setAxis1MotorSpeed(m_model->config().readDouble("Axis1SpeedPreset2", 40.0));
         }
         return key;
-    }
-    if (m_model->getCurrentDisplayMode() != Mode::None && key == key::ENTER) {
-        m_model->acceptInputValue();
-        m_model->setCurrentDisplayMode(Mode::None);
-        return -1;
     }
     return key;
 }

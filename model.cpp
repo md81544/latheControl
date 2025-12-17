@@ -184,6 +184,8 @@ void Model::checkStatus()
                           && m_axis2Motor->getCurrentStep() >= m_axis2Memory[1]))) {
                     axis1FastReturn();
                 }
+                // TODO set stage to MultiPassStage::Pause here if requested when multi-pass
+                // was set up?
                 m_multiPassStage = MultiPassStage::StepOver;
                 break;
             case MultiPassStage::StepOver:
@@ -313,13 +315,6 @@ void Model::changeMode(Mode mode)
     }
     if (m_enabledFunction == Mode::Taper && mode != Mode::Taper) {
         m_axis2Motor->setSpeed(m_taperPreviousXSpeed);
-    }
-    if (mode == Mode::MultiPass) {
-        if (m_axis1Memory[0] == AXIS1_UNSET || m_axis1Memory[1] == AXIS1_UNSET) {
-            // Mode is invalid, we need the first two axis1 memories to specify
-            // the from->to positions on the primary axis.
-            return;
-        }
     }
     m_warning = "";
     m_currentDisplayMode = mode;
@@ -1151,13 +1146,13 @@ std::string Model::getGeneralStatus() const
     return m_generalStatus;
 }
 
-
 std::size_t Model::getCurrentThreadPitchIndex() const
 {
     return m_threadPitchIndex;
 }
 
-void Model::setThreadPitch(std::size_t index) {
+void Model::setThreadPitch(std::size_t index)
+{
     m_threadPitchIndex = index;
 }
 
@@ -1358,32 +1353,6 @@ void Model::clearCurrentMemorySlot(Axis axis)
     }
 }
 
-void Model::acceptInputValue()
-{
-    double inputValue = 0.0;
-    try {
-        inputValue = std::stod(m_input);
-    } catch (...) {
-    }
-
-    switch (m_currentDisplayMode) {
-        // The following are now handled by the new dialog:
-        case Mode::Taper:
-        case Mode::Radius:
-        case Mode::Threading:
-            break;
-        case Mode::MultiPass:
-            {
-                m_stepOver = inputValue;
-                break;
-            }
-        default:
-            // unhandled mode
-            assert(false);
-    }
-    m_currentDisplayMode = Mode::None;
-}
-
 bool Model::limitSwitchTriggered() const
 {
     // TODO monitor any limit switches - needs config option for pin
@@ -1423,6 +1392,11 @@ RotationDirection Model::getChuckRotationDirection() const
 const IConfigReader& Model::config() const
 {
     return m_config;
+}
+
+void Model::setStepOver(double stepover)
+{
+    m_stepOver = stepover;
 }
 
 }

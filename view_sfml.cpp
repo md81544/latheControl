@@ -576,6 +576,7 @@ void ViewSfml::updateTextFromModel(const Model& model)
         // The following are all handled now by the new dialog:
         case Mode::Taper:
         case Mode::Radius:
+        case Mode::MultiPass:
             break;
         case Mode::Setup:
             {
@@ -603,21 +604,6 @@ void ViewSfml::updateTextFromModel(const Model& model)
                 m_txtMisc4->setString("");
                 m_txtMisc5->setString("");
                 m_txtWarning->setString("");
-                break;
-            }
-        case Mode::MultiPass:
-            {
-                // TODO move to new dialog
-                m_txtMode->setString(
-                    fmt::format(
-                        "{} axis step-over per pass ", model.config().read("Axis2Label", "Z")));
-                m_txtMisc1->setString("");
-                m_txtMisc2->setString(
-                    "This mode will automatically move from m1.x,m1.y to m2.x,m2.y");
-                m_txtMisc3->setString("with the step-over value you specify below:");
-                m_txtMisc4->setString("");
-                m_txtMisc5->setString(fmt::format("Step-over (mm): {}_", model.getInputString()));
-                m_txtWarning->setString("Enter to set, Esc to cancel");
                 break;
             }
         case Mode::None:

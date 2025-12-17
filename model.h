@@ -76,7 +76,8 @@ enum class MultiPassStage {
     Cutting,
     StepOver,
     NextCut,
-    Finished
+    Finished,
+    Paused
 };
 
 class Model {
@@ -223,10 +224,6 @@ public:
 
     void clearCurrentMemorySlot(Axis axis);
 
-    // This is called when the user presses ENTER when
-    // inputting a mode parameter (e.g. taper angle)
-    void acceptInputValue();
-
     // Checks to see whether any limit switches have been triggered
     bool limitSwitchTriggered() const;
 
@@ -237,6 +234,8 @@ public:
     RotationDirection getChuckRotationDirection() const;
 
     const IConfigReader& config() const;
+
+    void setStepOver(double stepover);
 
 private:
     IGpio& m_gpio;
