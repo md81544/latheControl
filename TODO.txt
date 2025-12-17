@@ -20,13 +20,6 @@ The interleaved "dialog" is becoming unmanageable and
 requires changes all over the place when changed/added to.
 Need to move all input to the new modal dialog system (WIP)
 
-Need a dialog which just gives options like a menu
-Should also function as a simple "Press any key to
-continue" for pausing on multi-pass.
-  - also "check boxes" - maybe the hot keys could
-    work just as selectors rather than act as enter?
-      - would need graphical display of selection(s)
-
 Not sure how realistic this is... consider tool numbers with
 both Z and X offsets to offer repeatable positioning after
 a tool swap. Maybe some form of probing like on the CNC?
