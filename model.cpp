@@ -1153,27 +1153,14 @@ std::string Model::getGeneralStatus() const
     return m_generalStatus;
 }
 
-void Model::selectPreviousThreadPitch()
-{
-    if (m_threadPitchIndex == 0) {
-        m_threadPitchIndex = threadPitches.size() - 1;
-    } else {
-        --m_threadPitchIndex;
-    }
-}
-
-void Model::selectNextThreadPitch()
-{
-    if (m_threadPitchIndex == threadPitches.size() - 1) {
-        m_threadPitchIndex = 0;
-    } else {
-        ++m_threadPitchIndex;
-    }
-}
 
 std::size_t Model::getCurrentThreadPitchIndex() const
 {
     return m_threadPitchIndex;
+}
+
+void Model::setThreadPitch(std::size_t index) {
+    m_threadPitchIndex = index;
 }
 
 void Model::selectPreviousMemorySlot()
@@ -1385,15 +1372,11 @@ void Model::acceptInputValue()
         // The following are now handled by the new dialog:
         case Mode::Taper:
         case Mode::Radius:
+        case Mode::Threading:
             break;
         case Mode::MultiPass:
             {
                 m_stepOver = inputValue;
-                break;
-            }
-        case Mode::Threading:
-            {
-                // m_threadPitchIndex will have been set
                 break;
             }
         default:

@@ -187,9 +187,8 @@ public:
     std::string getAxis2Status() const;
     std::string getGeneralStatus() const;
 
-    void selectPreviousThreadPitch();
-    void selectNextThreadPitch();
     std::size_t getCurrentThreadPitchIndex() const;
+    void setThreadPitch(std::size_t index);
 
     void selectPreviousMemorySlot();
     void selectNextMemorySlot();

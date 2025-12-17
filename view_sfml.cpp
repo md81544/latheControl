@@ -610,11 +610,10 @@ void ViewSfml::updateTextFromModel(const Model& model)
             }
         case Mode::Threading:
             {
-                // TODO move to new dialog (will need new functionality)
                 updateThreadData(model);
                 m_txtMisc4->setString("");
-                m_txtMisc5->setString("Press Up/Down to change.");
-                m_txtWarning->setString("Enter to keep enabled, Esc to disable");
+                m_txtMisc5->setString("");
+                m_txtWarning->setString("");
                 break;
             }
         case Mode::MultiPass:
@@ -663,7 +662,7 @@ void ViewSfml::updateTextFromModel(const Model& model)
 
 void ViewSfml::updateThreadData(const mgo::Model& model)
 {
-    m_txtMode->setString("Thread");
+    m_txtMode->setString("");
     ThreadPitch tp = threadPitches.at(model.getCurrentThreadPitchIndex());
     m_txtMisc1->setString(fmt::format("Thread required: {}", tp.name));
     m_txtMisc2->setString(

@@ -5,6 +5,7 @@
 #include "keycodes.h"
 #include "log.h"
 #include "stepperControl/igpio.h"
+#include "threadpitches.h"
 #include "view_sfml.h"
 
 #include <cassert>
@@ -597,7 +598,15 @@ void Controller::processKeyPress()
                     if (m_model->config().readBool("DisableAxis2", false)) {
                         break;
                     }
-                    m_model->changeMode(Mode::Threading);
+                    std::vector<std::string> threadVec;
+                    for (const auto& tp : threadPitches) {
+                        threadVec.push_back(tp.name);
+                    }
+                    const auto rc = listPicker("Select thread pitch required", threadVec);
+                    if (rc.has_value()) {
+                        m_model->setThreadPitch(rc.value());
+                        m_model->changeMode(Mode::Threading);
+                    }
                     break;
                 }
             case key::f2m: // multi-pass mode
@@ -809,6 +818,7 @@ int Controller::checkKeyAllowedForMode(int key)
             return key;
         case Mode::Taper:
         case Mode::Radius:
+        case Mode::Threading:
             // Now handled by new dialog
             return key;
         case Mode::Help:
@@ -818,11 +828,6 @@ int Controller::checkKeyAllowedForMode(int key)
                 return key;
             }
             if (key == key::SPACE) {
-                return key;
-            }
-            return -1;
-        case Mode::Threading:
-            if (key == key::UP || key == key::DOWN) {
                 return key;
             }
             return -1;
@@ -874,19 +879,11 @@ int Controller::processModeInputKeys(int key) // TODO this can be deleted eventu
         }
     }
     if (m_model->getCurrentDisplayMode() == Mode::Threading) {
-        if (key == key::UP) {
-            m_model->selectNextThreadPitch();
-            return -1;
-        }
-        if (key == key::DOWN) {
-            m_model->selectPreviousThreadPitch();
-            return -1;
-        }
         if (key == key::ESC) {
             // Reset motor speed to something sane
             m_model->setAxis1MotorSpeed(m_model->config().readDouble("Axis1SpeedPreset2", 40.0));
-            // fall through...
         }
+        return key;
     }
     if (m_model->getCurrentDisplayMode() != Mode::None && key == key::ENTER) {
         m_model->acceptInputValue();
