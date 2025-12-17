@@ -1,3 +1,6 @@
+Multipass doesn't work correctly... step-over seems to
+be the entire amount of the rectangle defined. To investigate.
+
 Display Vc (surface speed in m/min) if diameter is set
 Note the SI unit is metres per minute, not mm. So:
 Vc = (M_PI * D * n) / 1000.0;
