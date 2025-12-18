@@ -241,6 +241,8 @@ public:
     const IConfigReader& config() const;
 
     void setStepOver(double stepover);
+    void setMultiPassStage(MultiPassStage stage);
+    void setMultiPassPauseBetweenCuts(bool value);
 
 private:
     IGpio& m_gpio;
@@ -301,6 +303,7 @@ private:
     std::stack<double> m_axis1PreviousPositions;
     std::stack<double> m_axis2PreviousPositions;
     MultiPassStage m_multiPassStage { MultiPassStage::NotStarted };
+    bool m_multiPassPauseBetweenCuts { false };
 
     std::set<unsigned> m_axisLocks;
 };

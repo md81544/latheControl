@@ -45,6 +45,7 @@ void Controller::run()
 
         if (m_model->checkStatus() == StatusResult::PressAKey) {
             pressAnyKey("Press a key to continue", {});
+            m_model->setMultiPassStage(MultiPassStage::StepOver);
         }
 
         m_view->updateDisplay(*m_model);

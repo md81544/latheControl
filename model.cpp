@@ -1402,4 +1402,12 @@ void Model::setStepOver(double stepover)
     m_stepOver = stepover;
 }
 
+void Model::setMultiPassStage(MultiPassStage stage) {
+    m_multiPassStage = stage;
+}
+
+void Model::setMultiPassPauseBetweenCuts(bool value) {
+    m_multiPassPauseBetweenCuts = value;
+}
+
 }
