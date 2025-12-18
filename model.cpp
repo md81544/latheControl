@@ -121,8 +121,10 @@ void Model::initialise()
     axis2SaveBreadcrumbPosition();
 }
 
-void Model::checkStatus()
+StatusResult Model::checkStatus()
 {
+    StatusResult statusResult = StatusResult::Ok;
+
     float chuckRpm = m_rotaryEncoder->getRpm();
 
     if (limitSwitchTriggered()) {
@@ -185,7 +187,7 @@ void Model::checkStatus()
                     axis1FastReturn();
                 }
                 // TODO set stage to MultiPassStage::Pause here if requested when multi-pass
-                // was set up?
+                // was set up. We do this by returning StatusResult::PressAKey.
                 m_multiPassStage = MultiPassStage::StepOver;
                 break;
             case MultiPassStage::StepOver:
@@ -297,6 +299,7 @@ void Model::checkStatus()
     if (m_enabledFunction == Mode::Taper || m_enabledFunction == Mode::Radius) {
         m_axis2Status = "synchronised";
     }
+    return statusResult;
 }
 
 void Model::changeMode(Mode mode)

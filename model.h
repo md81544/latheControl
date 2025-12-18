@@ -80,6 +80,11 @@ enum class MultiPassStage {
     Paused
 };
 
+enum class StatusResult {
+    Ok,
+    PressAKey
+};
+
 class Model {
 public:
     Model(IGpio& gpio, mgo::IConfigReader& config)
@@ -91,7 +96,7 @@ public:
     void initialise();
 
     // This should be repeatedly called from the run loop
-    void checkStatus();
+    StatusResult checkStatus();
     void changeMode(Mode mode);
     void stopAllMotors();
     void takeUpZBacklash(ZDirection direction);

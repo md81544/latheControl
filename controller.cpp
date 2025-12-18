@@ -43,7 +43,9 @@ void Controller::run()
     while (!m_model->isQuitting()) {
         processKeyPress();
 
-        m_model->checkStatus();
+        if (m_model->checkStatus() == StatusResult::PressAKey) {
+            pressAnyKey("Press a key to continue", {});
+        }
 
         m_view->updateDisplay(*m_model);
 
@@ -582,13 +584,13 @@ void Controller::processKeyPress()
             case key::F1: // help mode
             case key::f2h:
                 {
-                    const std::string axis1name = m_model->config().read("Axis1Label", "Z");
-                    const std::string axis2name = m_model->config().read("Axis2Label", "X");
+                    const std::string axis1Name = m_model->config().read("Axis1Label", "Z");
+                    const std::string axis2Name = m_model->config().read("Axis2Label", "X");
                     pressAnyKey(
                         "Help",
                         { "Modes: (F2=Leader) s=Setup t=Thread p=taPer r=Retract, o=radius",
                           "",
-                          axis1name + " axis speed: 1-5, " + axis2name + " axis speed: 6-0",
+                          axis1Name + " axis speed: 1-5, " + axis2Name + " axis speed: 6-0",
                           "[ and ] select memory slot to use. M store, Enter return (F fast).",
                           "WASD = nudge 0.025mm (shift for finer). Space to stop all motors. R "
                           "retract.",
@@ -638,14 +640,14 @@ void Controller::processKeyPress()
                               "" });
                         break;
                     }
-                    const std::string axis1name = m_model->config().read("Axis1Label", "Z");
-                    const std::string axis2name = m_model->config().read("Axis2Label", "X");
+                    const std::string axis1Name = m_model->config().read("Axis1Label", "Z");
+                    const std::string axis2Name = m_model->config().read("Axis2Label", "X");
                     const auto rc = getNumericInput(
                         "Multi-Pass",
-                        { "Enter " + axis1name + " step-over per pass.",
+                        { "Enter " + axis1Name + " step-over per pass.",
                           "",
-                          "This mode will automatically move from m1." + axis1name + ",m1."
-                              + axis2name + " to m2." + axis1name + ",m2." + axis2name,
+                          "This mode will automatically move from m1." + axis1Name + ",m1."
+                              + axis2Name + " to m2." + axis1Name + ",m2." + axis2Name,
                           "with the step-over you specify above.",
                           "",
                           "[Alt-&P]: pause between passes" },
