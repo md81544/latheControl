@@ -1,5 +1,12 @@
 Multipass doesn't work correctly... step-over seems to
 be the entire amount of the rectangle defined. To investigate.
+  - Also if using "press a key" between cuts the display
+    should be updated before "press a key" happens
+  - Need to amend MP to work on a single line rather than
+    a plane, i.e. if mem0.x == mem1.x then it should be
+    interpreted as slot cutting (say) and repeat until the
+    user cancels the operation. Could also work if only
+    one axis is defined in config.
 
 Display Vc (surface speed in m/min) if diameter is set
 Note the SI unit is metres per minute, not mm. So:
