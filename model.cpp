@@ -188,7 +188,11 @@ StatusResult Model::checkStatus()
                 }
                 // TODO set stage to MultiPassStage::Pause here if requested when multi-pass
                 // was set up. We do this by returning StatusResult::PressAKey.
-                m_multiPassStage = MultiPassStage::StepOver;
+                if (m_multiPassPauseBetweenCuts) {
+                    statusResult = StatusResult::PressAKey;
+                } else {
+                    m_multiPassStage = MultiPassStage::StepOver;
+                }
                 break;
             case MultiPassStage::StepOver:
                 {
@@ -1402,12 +1406,13 @@ void Model::setStepOver(double stepover)
     m_stepOver = stepover;
 }
 
-void Model::setMultiPassStage(MultiPassStage stage) {
+void Model::setMultiPassStage(MultiPassStage stage)
+{
     m_multiPassStage = stage;
 }
 
-void Model::setMultiPassPauseBetweenCuts(bool value) {
+void Model::setMultiPassPauseBetweenCuts(bool value)
+{
     m_multiPassPauseBetweenCuts = value;
 }
-
 }

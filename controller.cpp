@@ -656,7 +656,11 @@ void Controller::processKeyPress()
                     if (!rc.cancelled) {
                         m_model->setStepOver(rc.value);
                         m_model->changeMode(Mode::MultiPass);
-                        // TODO use the pause between passes option
+                        if (rc.optionsSelected.contains('p')) {
+                            m_model->setMultiPassPauseBetweenCuts(true);
+                        } else {
+                            m_model->setMultiPassPauseBetweenCuts(false);
+                        }
                     }
                     break;
                 }
