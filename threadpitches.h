@@ -29,7 +29,8 @@ const std::vector<ThreadPitch> threadPitches {
     { "Coarse, M20", 2.5f, 20.f, 1.533f, 17.294f, 1.172f },
     { "Coarse, M22", 2.5f, 22.f, 1.533f, 19.294f, 1.172f },
     // Odd sizes as needed :
-    { "Whitworth coarse 3/8\" (55 degree)", 1.5875f, 9.525f, 1.016f, 7.493f, 1.016f }
+    { "Whitworth coarse 3/8\" (55 degree)", 1.5875f, 9.525f, 1.016f, 7.493f, 1.016f },
+    { "BSP 1/4\" (55 degree)", 1.33684211f, 13.157f, 0.856f, 11.445, .856f },
 };
 
 } // end namespace

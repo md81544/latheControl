@@ -97,6 +97,7 @@ public:
 
     // This should be repeatedly called from the run loop
     StatusResult checkStatus();
+    
     void changeMode(Mode mode);
     void stopAllMotors();
     void takeUpZBacklash(ZDirection direction);
@@ -306,6 +307,12 @@ private:
     bool m_multiPassPauseBetweenCuts { false };
 
     std::set<unsigned> m_axisLocks;
+
+    // Private functions
+    void multiPassFinished();
+    void multiPassNextCut();
+    void multiPassStepOver();
+    void multiPassEndCut(mgo::StatusResult& statusResult);
 };
 
 } // end namespace

@@ -177,58 +177,16 @@ StatusResult Model::checkStatus()
         && !m_axis2Motor->isRunning()) {
         switch (m_multiPassStage) {
             case MultiPassStage::Cutting:
-                // We have come to the end of a cut
-                m_currentMemory = 0;
-                // Fast return unless it's the last pass
-                if (!((m_axis2Memory[0] > m_axis2Memory[1]
-                       && m_axis2Motor->getCurrentStep() <= m_axis2Memory[1])
-                      || (m_axis2Memory[0] < m_axis2Memory[1]
-                          && m_axis2Motor->getCurrentStep() >= m_axis2Memory[1]))) {
-                    axis1FastReturn();
-                }
-                // TODO set stage to MultiPassStage::Pause here if requested when multi-pass
-                // was set up. We do this by returning StatusResult::PressAKey.
-                if (m_multiPassPauseBetweenCuts) {
-                    statusResult = StatusResult::PressAKey;
-                } else {
-                    m_multiPassStage = MultiPassStage::StepOver;
-                }
+                multiPassEndCut(statusResult);
                 break;
             case MultiPassStage::StepOver:
-                {
-                    double stepOver = m_stepOver;
-                    // Note! steps are reversed, higher = nearer axis. Position (in mm) is reported
-                    // the other way around because Axis2ConversionNumerator is negative
-                    if (m_axis2Memory[1] > m_axis2Motor->getCurrentStep()) {
-                        stepOver = -stepOver;
-                    }
-                    // Check we don't go over the target step
-                    if (m_axis2Motor->getCurrentStep()
-                            + stepOver / m_axis2Motor->getConversionFactor()
-                        > m_axis2Memory[1]) {
-                        stepOver = (m_axis2Memory[1] - m_axis2Motor->getCurrentStep())
-                            * m_axis2Motor->getConversionFactor();
-                    }
-                    if ((m_axis2Memory[0] > m_axis2Memory[1]
-                         && m_axis2Motor->getCurrentStep() <= m_axis2Memory[1])
-                        || (m_axis2Memory[0] < m_axis2Memory[1]
-                            && m_axis2Motor->getCurrentStep() >= m_axis2Memory[1])) {
-                        m_multiPassStage = MultiPassStage::Finished;
-                    } else {
-                        m_multiPassStage = MultiPassStage::NextCut;
-                        double targetPos = m_axis2Motor->getPosition() + stepOver;
-                        m_axis2Motor->goToPosition(targetPos);
-                    }
-                }
+                multiPassStepOver();
                 break;
             case MultiPassStage::NextCut:
-                m_axis1Motor->goToStep(m_axis1Memory[1]);
-                m_axis1Status = "next pass";
-                m_multiPassStage = MultiPassStage::Cutting;
+                multiPassNextCut();
                 break;
             case MultiPassStage::Finished:
-                m_multiPassStage = MultiPassStage::NotStarted;
-                m_enabledFunction = Mode::None;
+                multiPassFinished();
                 break;
             case MultiPassStage::NotStarted:
                 // Do nothing until the user initiates the first cut
@@ -304,6 +262,62 @@ StatusResult Model::checkStatus()
         m_axis2Status = "synchronised";
     }
     return statusResult;
+}
+
+void Model::multiPassFinished()
+{
+    m_multiPassStage = MultiPassStage::NotStarted;
+    m_enabledFunction = Mode::None;
+}
+
+void Model::multiPassNextCut()
+{
+    m_axis1Motor->goToStep(m_axis1Memory[1]);
+    m_axis1Status = "next pass";
+    m_multiPassStage = MultiPassStage::Cutting;
+}
+
+void Model::multiPassStepOver()
+{
+    double stepOver = m_stepOver;
+    // Note! steps are reversed, higher = nearer axis. Position (in mm) is reported
+    // the other way around because Axis2ConversionNumerator is negative
+    if (m_axis2Memory[1] > m_axis2Motor->getCurrentStep()) {
+        stepOver = -stepOver;
+    }
+    // Check we don't go over the target step
+    if (m_axis2Motor->getCurrentStep() + stepOver / m_axis2Motor->getConversionFactor()
+        < m_axis2Memory[1]) {
+        stepOver = (m_axis2Memory[1] - m_axis2Motor->getCurrentStep())
+            * m_axis2Motor->getConversionFactor();
+    }
+    if ((m_axis2Memory[0] > m_axis2Memory[1] && m_axis2Motor->getCurrentStep() <= m_axis2Memory[1])
+        || (m_axis2Memory[0] < m_axis2Memory[1]
+            && m_axis2Motor->getCurrentStep() >= m_axis2Memory[1])) {
+        m_multiPassStage = MultiPassStage::Finished;
+    } else {
+        m_multiPassStage = MultiPassStage::NextCut;
+        double targetPos = m_axis2Motor->getPosition() + stepOver;
+        m_axis2Motor->goToPosition(targetPos);
+    }
+}
+
+void Model::multiPassEndCut(mgo::StatusResult& statusResult)
+{
+    // We have come to the end of a cut
+    m_currentMemory = 0;
+    // Fast return unless it's the last pass
+    if (!((m_axis2Memory[0] > m_axis2Memory[1]
+           && m_axis2Motor->getCurrentStep() <= m_axis2Memory[1])
+          || (m_axis2Memory[0] < m_axis2Memory[1]
+              && m_axis2Motor->getCurrentStep() >= m_axis2Memory[1]))) {
+        axis1FastReturn();
+    }
+    if (m_multiPassPauseBetweenCuts) {
+        statusResult = StatusResult::PressAKey;
+    } else {
+        m_multiPassStage = MultiPassStage::StepOver;
+    }
 }
 
 void Model::changeMode(Mode mode)

@@ -43,25 +43,26 @@ void Controller::run()
     while (!m_model->isQuitting()) {
         processKeyPress();
 
-        if (m_model->checkStatus() == StatusResult::PressAKey) {
+        StatusResult rc = m_model->checkStatus();
+
+        m_view->updateDisplay(*m_model);
+
+        if (rc == StatusResult::PressAKey) {
+            while (m_model->isAxis1MotorRunning()) {
+                yieldSleep(std::chrono::microseconds(50'000));
+                m_view->updateDisplay(*m_model);
+            }
             pressAnyKey("Press a key to continue", {});
             m_model->setMultiPassStage(MultiPassStage::StepOver);
         }
-
-        m_view->updateDisplay(*m_model);
 
         if (m_model->isShuttingDown()) {
             MGOLOG("Shutting down");
             // Stop the motor threads
             m_model->resetMotorThreads();
-            // clang-format off
             // Note the command used for shutdown should be made passwordless
             // in the /etc/sudoers files
-            #pragma GCC diagnostic push
-            #pragma GCC diagnostic ignored "-Wunused-result"
-            system("sudo shutdown -h now &");
-            #pragma GCC diagnostic pop
-            // clang-format on
+            [[maybe_unused]] auto rc = system("sudo shutdown -h now &");
         }
 
         // Small delay just to avoid the UI loop spinning
@@ -645,11 +646,13 @@ void Controller::processKeyPress()
                     const std::string axis2Name = m_model->config().read("Axis2Label", "X");
                     const auto rc = getNumericInput(
                         "Multi-Pass",
-                        { "Enter " + axis1Name + " step-over per pass.",
+                        { "Enter " + axis2Name + " step-over per pass.",
                           "",
                           "This mode will automatically move from m1." + axis1Name + ",m1."
                               + axis2Name + " to m2." + axis1Name + ",m2." + axis2Name,
                           "with the step-over you specify above.",
+                          "",
+                          "If zero is entered, the same cut is repeated until cancelled.",
                           "",
                           "[Alt-&P]: pause between passes" },
                         0.0);
