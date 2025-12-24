@@ -279,26 +279,23 @@ void Model::multiPassNextCut()
 
 void Model::multiPassStepOver()
 {
-    double stepOver = m_stepOver;
-    // Note! steps are reversed, higher = nearer axis. Position (in mm) is reported
-    // the other way around because Axis2ConversionNumerator is negative
-    if (m_axis2Memory[1] > m_axis2Motor->getCurrentStep()) {
-        stepOver = -stepOver;
-    }
-    // Check we don't go over the target step
-    if (m_axis2Motor->getCurrentStep() + stepOver / m_axis2Motor->getConversionFactor()
-        < m_axis2Memory[1]) {
-        stepOver = (m_axis2Memory[1] - m_axis2Motor->getCurrentStep())
-            * m_axis2Motor->getConversionFactor();
-    }
-    if ((m_axis2Memory[0] > m_axis2Memory[1] && m_axis2Motor->getCurrentStep() <= m_axis2Memory[1])
-        || (m_axis2Memory[0] < m_axis2Memory[1]
-            && m_axis2Motor->getCurrentStep() >= m_axis2Memory[1])) {
-        m_multiPassStage = MultiPassStage::Finished;
-    } else {
+    if (getAxis2MemoryAsPosition(0).has_value() && getAxis1MemoryAsPosition(1).has_value()) {
+        double stepOver = m_stepOver;
+        double from = getAxis2MemoryAsPosition(0).value();
+        double to = getAxis2MemoryAsPosition(1).value();
+        if (m_axis2Motor->getPosition() >= to) {
+            m_multiPassStage = MultiPassStage::Finished;
+            return;
+        }
+        if (from > to && std::signbit(stepOver)) {
+            stepOver = -stepOver;
+        }
+        double target = m_axis2Motor->getPosition() + stepOver;
+        if (target > to) {
+            target = to;
+        }
         m_multiPassStage = MultiPassStage::NextCut;
-        double targetPos = m_axis2Motor->getPosition() + stepOver;
-        m_axis2Motor->goToPosition(targetPos);
+        m_axis2Motor->goToPosition(target);
     }
 }
 
@@ -1201,9 +1198,27 @@ long Model::getAxis1Memory(std::size_t index) const
     return m_axis1Memory.at(index);
 }
 
+std::optional<double> Model::getAxis1MemoryAsPosition(std::size_t index) const
+{
+    long step = m_axis1Memory.at(index);
+    if (step == AXIS1_UNSET) {
+        return std::nullopt;
+    }
+    return step * m_axis1Motor->getConversionFactor();
+}
+
 long Model::getAxis2Memory(std::size_t index) const
 {
     return m_axis2Memory.at(index);
+}
+
+std::optional<double> Model::getAxis2MemoryAsPosition(std::size_t index) const
+{
+    long step = m_axis2Memory.at(index);
+    if (step == AXIS2_UNSET) {
+        return std::nullopt;
+    }
+    return step * m_axis2Motor->getConversionFactor();
 }
 
 unsigned Model::getMemorySize() const
@@ -1323,7 +1338,7 @@ float Model::getChuckAngle() const
     return m_rotaryEncoder->getPositionDegrees();
 }
 
-std::string Model::convertAxis1StepToPosition(long step) const
+std::string Model::formatAxis1Position(long step) const
 {
     if (!m_axis1Motor) {
         return std::string();
@@ -1335,7 +1350,7 @@ std::string Model::convertAxis1StepToPosition(long step) const
     return fmt::format("{: .2f}", mm);
 }
 
-std::string Model::convertAxis2StepToPosition(long step) const
+std::string Model::formatAxis2Position(long step) const
 {
     if (!m_axis2Motor) {
         return std::string();

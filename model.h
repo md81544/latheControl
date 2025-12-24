@@ -8,6 +8,7 @@
 #include <cmath>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <set>
 #include <stack>
 #include <vector>
@@ -200,7 +201,9 @@ public:
     std::size_t getCurrentMemorySlot() const;
 
     long getAxis1Memory(std::size_t index) const;
+    std::optional<double> getAxis1MemoryAsPosition(std::size_t index) const;
     long getAxis2Memory(std::size_t index) const;
+    std::optional<double> getAxis2MemoryAsPosition(std::size_t index) const;
     unsigned getMemorySize() const;
     void clearAllAxis1Memories();
     void clearAllAxis2Memories();
@@ -222,8 +225,8 @@ public:
 
     float getChuckAngle() const;
 
-    std::string convertAxis1StepToPosition(long step) const;
-    std::string convertAxis2StepToPosition(long step) const;
+    std::string formatAxis1Position(long step) const;
+    std::string formatAxis2Position(long step) const;
 
     float getRotaryEncoderRpm() const;
     float getAxis1LinearScalePosMm() const;

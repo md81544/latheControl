@@ -545,13 +545,13 @@ void ViewSfml::updateTextFromModel(const Model& model)
             m_txtAxis1MemoryValue.at(n)->setString("        -");
         } else {
             m_txtAxis1MemoryValue.at(n)->setString(
-                fmt::format("{: >9}", model.convertAxis1StepToPosition(model.getAxis1Memory(n))));
+                fmt::format("{: >9}", model.formatAxis1Position(model.getAxis1Memory(n))));
         }
         if (model.getAxis2Memory(n) == AXIS2_UNSET) {
             m_txtAxis2MemoryValue.at(n)->setString("        -");
         } else {
             m_txtAxis2MemoryValue.at(n)->setString(
-                fmt::format("{: >9}", model.convertAxis2StepToPosition(model.getAxis2Memory(n))));
+                fmt::format("{: >9}", model.formatAxis2Position(model.getAxis2Memory(n))));
         }
     }
 
