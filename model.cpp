@@ -279,19 +279,19 @@ void Model::multiPassNextCut()
 
 void Model::multiPassStepOver()
 {
-    if (getAxis2MemoryAsPosition(0).has_value() && getAxis1MemoryAsPosition(1).has_value()) {
-        double stepOver = m_stepOver;
+    if (getAxis2MemoryAsPosition(0).has_value() && getAxis2MemoryAsPosition(1).has_value()) {
         double from = getAxis2MemoryAsPosition(0).value();
         double to = getAxis2MemoryAsPosition(1).value();
-        if (m_axis2Motor->getPosition() >= to) {
+        // Have we already finished?
+        if (std::abs(m_axis2Motor->getPosition() - to) < 0.0001) {
             m_multiPassStage = MultiPassStage::Finished;
             return;
         }
-        if (from > to && std::signbit(stepOver)) {
-            stepOver = -stepOver;
-        }
+        double direction = (to < from) ? -1.0 : 1.0;
+        double stepOver = m_stepOver;
+        stepOver *= direction;
         double target = m_axis2Motor->getPosition() + stepOver;
-        if (target > to) {
+        if ((direction > 0.0 && target > to) || (direction < 0.0 && target < to)) {
             target = to;
         }
         m_multiPassStage = MultiPassStage::NextCut;
@@ -303,13 +303,7 @@ void Model::multiPassEndCut(mgo::StatusResult& statusResult)
 {
     // We have come to the end of a cut
     m_currentMemory = 0;
-    // Fast return unless it's the last pass
-    if (!((m_axis2Memory[0] > m_axis2Memory[1]
-           && m_axis2Motor->getCurrentStep() <= m_axis2Memory[1])
-          || (m_axis2Memory[0] < m_axis2Memory[1]
-              && m_axis2Motor->getCurrentStep() >= m_axis2Memory[1]))) {
-        axis1FastReturn();
-    }
+    axis1FastReturn();
     if (m_multiPassPauseBetweenCuts) {
         statusResult = StatusResult::PressAKey;
     } else {

@@ -632,11 +632,13 @@ void Controller::processKeyPress()
                     if (m_model->getAxis1Memory(0) == AXIS1_UNSET
                         || m_model->getAxis1Memory(1) == AXIS1_UNSET
                         || m_model->getAxis2Memory(0) == AXIS2_UNSET
-                        || m_model->getAxis2Memory(1) == AXIS2_UNSET) {
+                        || m_model->getAxis2Memory(1) == AXIS2_UNSET
+                        || m_model->getAxis1MotorCurrentStep() != m_model->getAxis1Memory(0)
+                        || m_model->getAxis2MotorCurrentStep() != m_model->getAxis2Memory(0)) {
                         pressAnyKey(
                             "Invalid Conditions",
-                            { "Memory slots 1 and 2 must be filled before using "
-                              "Multi-pass mode",
+                            { "Memory slots 1 and 2 must be filled, and the current position",
+                              "should be on M1 (for both axes) before using Multi-pass mode",
                               "",
                               "Press a key",
                               "" });
@@ -648,13 +650,14 @@ void Controller::processKeyPress()
                         "Multi-Pass",
                         { "Enter " + axis2Name + " step-over per pass.",
                           "",
-                          "This mode will automatically move from m1." + axis1Name + ",m1."
-                              + axis2Name + " to m2." + axis1Name + ",m2." + axis2Name,
+                          "This mode will automatically move FROM m1." + axis1Name + ",m1."
+                              + axis2Name + " TO m2." + axis1Name + ",m2." + axis2Name,
                           "with the step-over you specify above.",
                           "",
                           "If zero is entered, the same cut is repeated until cancelled.",
                           "",
-                          "[Alt-&P]: pause between passes" },
+                          "[Alt-&P]: pause between passes",
+                          "[Alt-&R] retract between passes" },
                         0.0);
                     if (!rc.cancelled) {
                         m_model->setStepOver(rc.value);
