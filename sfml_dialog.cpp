@@ -277,8 +277,9 @@ Input::Return getInput(
                         --currentScrollPosition;
                     }
                 }
-                if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::LAlt)
-                    || sf::Keyboard::isKeyPressed(sf::Keyboard::Key::RAlt)) {
+                if ((sf::Keyboard::isKeyPressed(sf::Keyboard::Key::LAlt)
+                    || sf::Keyboard::isKeyPressed(sf::Keyboard::Key::RAlt))
+                    || type == Input::Type::Numeric ) {
                     if (char charPressed = convertScanCodeToChar(e->scancode)) {
                         if (std::find(hotkeys.begin(), hotkeys.end(), charPressed)
                             != hotkeys.end()) {
