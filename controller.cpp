@@ -884,6 +884,7 @@ int Controller::checkKeyAllowedForMode(int key)
             if (key == key::SPACE) {
                 return key;
             }
+            return -1;
         default:
             // unhandled mode
             assert(false);
