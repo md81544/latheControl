@@ -83,6 +83,7 @@ enum class MultiPassStage {
 
 enum class StatusResult {
     Ok,
+    WaitForMotors,
     PressAKey
 };
 
@@ -247,6 +248,7 @@ public:
     void setStepOver(double stepover);
     void setMultiPassStage(MultiPassStage stage);
     void setMultiPassPauseBetweenCuts(bool value);
+    void setMultiPassRetractBetweenCuts(bool value);
 
 private:
     IGpio& m_gpio;
@@ -308,12 +310,13 @@ private:
     std::stack<double> m_axis2PreviousPositions;
     MultiPassStage m_multiPassStage { MultiPassStage::NotStarted };
     bool m_multiPassPauseBetweenCuts { false };
+    bool m_multiPassRetractBetweenCuts { false };
 
     std::set<unsigned> m_axisLocks;
 
     // Private functions
     void multiPassFinished();
-    void multiPassNextCut();
+    void multiPassNextCut(mgo::StatusResult& statusResult);
     void multiPassStepOver();
     void multiPassEndCut(mgo::StatusResult& statusResult);
 };

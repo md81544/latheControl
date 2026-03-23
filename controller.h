@@ -26,6 +26,7 @@ public:
     // the application can quit.
     void run();
     void processKeyPress();
+    void waitForAxisToStop(uint8_t axis);
 
 private:
     Model* m_model; // non-owning

@@ -47,12 +47,13 @@ void Controller::run()
 
         m_view->updateDisplay(*m_model);
 
-        if (rc == StatusResult::PressAKey) {
-            while (m_model->isAxis1MotorRunning()) {
-                yieldSleep(std::chrono::microseconds(50'000));
-                m_view->updateDisplay(*m_model);
+        if (rc == StatusResult::PressAKey || rc == StatusResult::WaitForMotors) {
+            waitForAxisToStop(1);
+            waitForAxisToStop(2);
+            m_view->updateDisplay(*m_model);
+            if (rc == StatusResult::PressAKey) {
+                pressAnyKey("Press a key to continue", {});
             }
-            pressAnyKey("Press a key to continue", {});
             m_model->setMultiPassStage(MultiPassStage::StepOver);
         }
 
@@ -656,8 +657,8 @@ void Controller::processKeyPress()
                           "",
                           "If zero is entered, the same cut is repeated until cancelled.",
                           "",
-                          "[Alt-&P]: pause between passes",
-                          "[Alt-&R] retract between passes" },
+                          "[&P]: pause between passes",
+                          "[&R] retract between passes" },
                         0.0);
                     if (!rc.cancelled) {
                         m_model->setStepOver(rc.value);
@@ -666,6 +667,11 @@ void Controller::processKeyPress()
                             m_model->setMultiPassPauseBetweenCuts(true);
                         } else {
                             m_model->setMultiPassPauseBetweenCuts(false);
+                        }
+                        if (rc.optionsSelected.contains('r')) {
+                            m_model->setMultiPassRetractBetweenCuts(true);
+                        } else {
+                            m_model->setMultiPassRetractBetweenCuts(false);
                         }
                     }
                     break;
@@ -738,7 +744,7 @@ void Controller::processKeyPress()
                     const std::string axisName = m_model->config().read("Axis1Label", "Z");
                     const auto result = getNumericInput(
                         axisName + " position set",
-                        { "[Alt-&A] adjust (keeps memory slots)" },
+                        { "[&A] adjust (keeps memory slots)" },
                         0.0);
                     if (!result.cancelled) {
                         m_model->setAxis1Position(result.value);
@@ -756,7 +762,7 @@ void Controller::processKeyPress()
                     const std::string axisName = m_model->config().read("Axis2Label", "X");
                     auto result = getNumericInput(
                         axisName + " position set",
-                        { "[Alt-&D] set as diameter", "[Alt-&A] adjusts (keeps memory slots)" },
+                        { "[&D] set as diameter", "[&A] adjusts (keeps memory slots)" },
                         0.0);
                     if (!result.cancelled) {
                         float position = result.value;
@@ -850,6 +856,20 @@ void Controller::processKeyPress()
                     break;
                 }
         }
+    }
+}
+
+void Controller::waitForAxisToStop(uint8_t axis)
+{
+    for (;;) {
+        if (axis == 1 && !m_model->isAxis1MotorRunning()) {
+            break;
+        }
+        if (axis == 2 && !m_model->isAxis2MotorRunning()) {
+            break;
+        }
+        yieldSleep(std::chrono::microseconds(50'000));
+        m_view->updateDisplay(*m_model);
     }
 }
 

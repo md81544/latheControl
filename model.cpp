@@ -183,7 +183,7 @@ StatusResult Model::checkStatus()
                 multiPassStepOver();
                 break;
             case MultiPassStage::NextCut:
-                multiPassNextCut();
+                multiPassNextCut(statusResult);
                 break;
             case MultiPassStage::Finished:
                 multiPassFinished();
@@ -270,11 +270,17 @@ void Model::multiPassFinished()
     m_enabledFunction = Mode::None;
 }
 
-void Model::multiPassNextCut()
+void Model::multiPassNextCut(mgo::StatusResult& statusResult)
 {
+    if (m_axis2Retracted) {
+        axis2Retract(); // unretracts if already retracted
+        statusResult = StatusResult::WaitForMotors;
+        return;
+    }
     m_axis1Motor->goToStep(m_axis1Memory[1]);
     m_axis1Status = "next pass";
     m_multiPassStage = MultiPassStage::Cutting;
+    statusResult = StatusResult::Ok;
 }
 
 void Model::multiPassStepOver()
@@ -289,7 +295,7 @@ void Model::multiPassStepOver()
         }
         double direction = (to < from) ? -1.0 : 1.0;
         double stepOver = m_stepOver;
-        stepOver *= direction;
+        stepOver = std::abs(stepOver) * direction;
         double target = m_axis2Motor->getPosition() + stepOver;
         if ((direction > 0.0 && target > to) || (direction < 0.0 && target < to)) {
             target = to;
@@ -303,6 +309,11 @@ void Model::multiPassEndCut(mgo::StatusResult& statusResult)
 {
     // We have come to the end of a cut
     m_currentMemory = 0;
+    if (m_multiPassRetractBetweenCuts && !getIsAxis2Retracted()) {
+        axis2Retract();
+        statusResult = StatusResult::WaitForMotors;
+        return;
+    }
     axis1FastReturn();
     if (m_multiPassPauseBetweenCuts) {
         statusResult = StatusResult::PressAKey;
@@ -1438,4 +1449,10 @@ void Model::setMultiPassPauseBetweenCuts(bool value)
 {
     m_multiPassPauseBetweenCuts = value;
 }
+
+void Model::setMultiPassRetractBetweenCuts(bool value)
+{
+    m_multiPassRetractBetweenCuts = value;
+}
+
 }
