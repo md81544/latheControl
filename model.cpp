@@ -71,6 +71,9 @@ void Model::initialise()
         m_config.readDouble("Axis1RampingSpeed", 100.0),
         usingMockLinearScale,
         m_config.readLong("LinearScaleAxis1StepsPerMM", 200));
+    if (!m_axis1Motor->isRunningRealTimeScheduled()){
+        MGOLOG("*** Warning *** axis1 steppermotor thread not running real-time");
+    }
 
     double axis2ConversionFactor = m_config.readDouble("Axis2ConversionNumerator", -1.0)
         / m_config.readDouble("Axis2ConversionDivisor", 1'000.0);
@@ -85,6 +88,9 @@ void Model::initialise()
         axis2ConversionFactor,
         maxAxis2Rpm,
         m_config.readDouble("Axis2RampingSpeed", 100.0));
+    if (!m_axis2Motor->isRunningRealTimeScheduled()){
+        MGOLOG("*** Warning *** axis2 steppermotor thread not running real-time");
+    }
 
     m_rotaryEncoder = std::make_unique<mgo::RotaryEncoder>(
         m_gpio,
