@@ -5,7 +5,7 @@ VERBOSE   ?=
 
 # Derive cmake/make flags
 CMAKE_BUILD_TYPE = $(if $(findstring release,$(MAKECMDGOALS)),Release,Debug)
-CMAKE_FAKE       = $(if $(filter all debug fake,$(or $(MAKECMDGOALS),all)),-DFAKE=1,)
+CMAKE_FAKE       = $(if $(filter all debug fake test,$(or $(MAKECMDGOALS),all)),-DFAKE=1,)
 
 .PHONY: all debug fake release clean test sub latest
 
