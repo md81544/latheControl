@@ -10,7 +10,7 @@ add_library(shared_with_test OBJECT
         log.cpp
         model.cpp
     )
-target_compile_options(shared_with_test PRIVATE -std=c++23 -Wall -Wextra -Werror -Wpedantic)
+target_compile_options(shared_with_test PRIVATE -O3 -std=c++23 -Wall -Wextra -Werror -Wpedantic)
 
 add_executable(lc
         stepperControl/gpio.cpp
@@ -43,7 +43,7 @@ if(CMAKE_SYSTEM_PROCESSOR STREQUAL "armv7l")
     target_link_libraries(shared_with_test PRIVATE atomic)
 endif()
 
-target_compile_options(lc PRIVATE -std=c++23 -Wall -Wextra -Werror -Wpedantic)
+target_compile_options(lc PRIVATE -O3 -std=c++23 -Wall -Wextra -Werror -Wpedantic)
 
 
 # Avoid unused variable warning:
