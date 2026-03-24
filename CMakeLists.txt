@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.13)
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 project (lc)
 enable_testing()
 
@@ -10,7 +12,11 @@ add_library(shared_with_test OBJECT
         log.cpp
         model.cpp
     )
-target_compile_options(shared_with_test PRIVATE -O3 -std=c++23 -Wall -Wextra -Werror -Wpedantic)
+target_compile_options(shared_with_test PRIVATE
+    -std=c++23 -Wall -Wextra -Werror -Wpedantic
+    $<$<CONFIG:Debug>:-g -O0>
+    $<$<CONFIG:Release>:-O3>
+)
 
 add_executable(lc
         stepperControl/gpio.cpp
@@ -43,20 +49,11 @@ if(CMAKE_SYSTEM_PROCESSOR STREQUAL "armv7l")
     target_link_libraries(shared_with_test PRIVATE atomic)
 endif()
 
-target_compile_options(lc PRIVATE -O3 -std=c++23 -Wall -Wextra -Werror -Wpedantic)
-
+target_compile_options(lc PRIVATE
+    -std=c++23 -Wall -Wextra -Werror -Wpedantic
+    $<$<CONFIG:Debug>:-g -O0>
+    $<$<CONFIG:Release>:-O3>
+)
 
 # Avoid unused variable warning:
-set(ignnoreMe "${FAKE}")
-
-ADD_CUSTOM_TARGET(debug
-        COMMAND ${CMAKE_COMMAND} -DFAKE=1 -DCMAKE_BUILD_TYPE=Debug ${CMAKE_SOURCE_DIR}
-        COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target all
-        COMMENT "Switch CMAKE_BUILD_TYPE to Debug"
-    )
-
-ADD_CUSTOM_TARGET(release
-        COMMAND ${CMAKE_COMMAND} -DCMAKE_BUILD_TYPE=Release ${CMAKE_SOURCE_DIR}
-        COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target all
-        COMMENT "Switch CMAKE_BUILD_TYPE to Release"
-    )
+set(ignoreMe "${FAKE}")
