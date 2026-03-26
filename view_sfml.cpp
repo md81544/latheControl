@@ -6,8 +6,6 @@
 #include "threadpitches.h"
 
 #include <cassert>
-#include <iomanip>
-#include <sstream>
 
 #include <fmt/format.h>
 

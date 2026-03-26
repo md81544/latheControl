@@ -4,7 +4,6 @@
 #include "iview.h" // For Input::*;
 #include "keycodes.h"
 #include "log.h"
-#include "stepperControl/igpio.h"
 #include "threadpitches.h"
 #include "view_sfml.h"
 

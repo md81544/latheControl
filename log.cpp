@@ -1,7 +1,6 @@
 #include "log.h"
 
 #include <chrono>
-#include <cstdint>
 #include <iomanip>
 #include <ratio>
 #include <stdexcept>

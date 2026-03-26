@@ -5,7 +5,6 @@
 #include "rotaryencoder.h"
 #include "stepperControl/steppermotor.h"
 
-#include <cmath>
 #include <limits>
 #include <memory>
 #include <optional>

@@ -2,7 +2,6 @@
 
 #include <fstream>
 #include <mutex>
-#include <sstream>
 
 namespace mgo {
 

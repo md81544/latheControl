@@ -3,14 +3,10 @@
 // scale, used to determine the position of the tool on an axis
 // (currently just the Z-axis)
 
-#include "log.h"
 #include "stepperControl/igpio.h"
 
-#include <atomic>
 #include <cassert>
 #include <cstdint>
-#include <functional>
-#include <ostream>
 
 namespace mgo {
 

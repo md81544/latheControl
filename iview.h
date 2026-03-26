@@ -3,7 +3,6 @@
 #include "model.h"
 #include <optional>
 #include <set>
-#include <tuple>
 
 // The "view" object abstracts the the graphical toolkit being used.
 // This allows for easier switching of UI libraries used - for instance,
