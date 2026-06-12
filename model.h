@@ -5,6 +5,7 @@
 #include "rotaryencoder.h"
 #include "stepperControl/steppermotor.h"
 
+#include <cmath> // IWYU pragma: keep (need for M_PI)
 #include <limits>
 #include <memory>
 #include <optional>
