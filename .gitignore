@@ -38,6 +38,5 @@ build/*
 # Other
 tags
 *.log
-.vscode/settings.json
 lldb-mi
 .cache/
