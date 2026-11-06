@@ -1124,3 +1124,16 @@ TEST_CASE("Commands: shut down is shown, but unavailable, in mock builds")
     // (The tests are always built with FAKE)
     REQUIRE(!mgo::isAvailable(*shutdown, model));
 }
+
+TEST_CASE("Model:   diameter, for the surface speed")
+{
+    mgo::MockConfigReader config;
+    mgo::MockGpio gpio(false);
+    mgo::Model model(gpio, config);
+    model.initialise();
+    // Not known until the X position has been set as a diameter
+    REQUIRE(!model.getDiameterMm().has_value());
+    model.setAxis2Position(12.7); // as setting X to a diameter of 25.4 does
+    model.diameterIsSet();
+    REQUIRE(model.getDiameterMm() == Approx(25.4).margin(0.001));
+}

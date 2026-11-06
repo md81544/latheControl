@@ -391,6 +391,7 @@ struct ViewQt::Impl {
     TextItem warning;
     TextItem taperOrRadius;
     TextItem axis1LinearScalePos;
+    TextItem surfaceSpeed; // Vc
 
     // Text items which are displayed sometimes:
     TextItem mode;
@@ -533,7 +534,10 @@ void ViewQt::initialise(const Model& model)
     d.xRetracted.text = "RETRACTED";
     d.xRetractDirection = make(860, 165, 25, RED);
     d.xRetractDirection.text = "-X RTRCT";
-    d.axis1LinearScalePos = make(550, 170, 20, QColor(209, 209, 50));
+    // (Surface speed, on the rpm line, in line with the axes' feed rates; the
+    // linear scale's reading is below it)
+    d.surfaceSpeed = make(550, 160, 30, QColor(209, 209, 50));
+    d.axis1LinearScalePos = make(550, 205, 20, QColor(209, 209, 50));
     d.fault = make(20, STATUS_BAR_Y - 40, 22, RED);
 
     // (Joystick support is only available on Linux)
@@ -824,6 +828,9 @@ void ViewQt::updateDisplay(const Model& model)
                 : QColor(0, 192, 0);
             draw(d.rpm);
             draw(d.rpmUnits);
+            if (!d.surfaceSpeed.text.empty()) {
+                draw(d.surfaceSpeed);
+            }
         }
         draw(d.leaderNotifier);
         draw(d.chuckRpm);
@@ -930,6 +937,14 @@ void ViewQt::Impl::updateTextFromModel(const Model& model)
         rpmValue = static_cast<int>(rpmValue / 10.f) * 10.f;
     }
     rpm.text = fmt::format("{: >7}", static_cast<int>(rpmValue));
+    // Surface speed, once the diameter is known. (Calculated from the rpm
+    // as displayed, so the two agree and Vc doesn't flicker)
+    if (const auto diameter = model.getDiameterMm()) {
+        const double vc = M_PI * *diameter * rpmValue / 1'000.0;
+        surfaceSpeed.text = fmt::format("Vc {:.1f} m/min", vc);
+    } else {
+        surfaceSpeed.text.clear();
+    }
 
     generalStatus.text = model.getGeneralStatus();
     axis1Status.text

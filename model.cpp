@@ -194,9 +194,8 @@ StatusResult Model::checkStatus()
         }
         m_axis1Motor->setSpeed(speed);
     }
-    if (m_xDiameterSet) {
-        m_generalStatus
-            = fmt::format("Diameter: {: .2f} mm", std::abs(m_axis2Motor->getPosition() * 2));
+    if (const auto diameter = getDiameterMm()) {
+        m_generalStatus = fmt::format("Diameter: {: .2f} mm", *diameter);
     }
     if (m_enabledFunction == Mode::MultiPass && m_axis1Motor->isRunning()
         && m_multiPassStage == MultiPassStage::NotStarted) {
@@ -1137,6 +1136,14 @@ void Model::repeatLastRelativeMove(Axis axis)
 void Model::diameterIsSet()
 {
     m_xDiameterSet = true;
+}
+
+std::optional<double> Model::getDiameterMm() const
+{
+    if (!m_xDiameterSet || !m_axis2Motor) {
+        return std::nullopt;
+    }
+    return std::abs(m_axis2Motor->getPosition() * 2.0);
 }
 
 XDirection Model::getRetractionDirection() const

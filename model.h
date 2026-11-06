@@ -153,6 +153,10 @@ public:
 
     void repeatLastRelativeMove(Axis axis);
     void diameterIsSet();
+    // The work's diameter at the tool (twice the X position), once the X
+    // position has been set as a diameter (so X is measured from the centre);
+    // nullopt until then
+    std::optional<double> getDiameterMm() const;
 
     // Getters/setters:
     XDirection getRetractionDirection() const;

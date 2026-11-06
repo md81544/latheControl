@@ -45,8 +45,6 @@
 - [ ] Touchscreen support (not that I have touch screens yet)
 
 ### New displays
-- [ ] Display Vc (surface speed in m/min) if diameter is set. Note the SI
-      unit is metres per minute, not mm, so `Vc = (M_PI * D * n) / 1000.0;`
 - [ ] Support display in thousandths of an inch as an option. Should be
       simple to do in the view, keeping everything metric underneath
 
