@@ -23,14 +23,13 @@ If you're changing stepperControl at the same time, clone it alongside and build
 
 You'll need to do the following (on deb-based systems) to install required packages:
 
-    sudo apt install cmake libfmt-dev libsfml-dev
+    sudo apt install cmake libfmt-dev qt6-base-dev
 
 on a Mac, you can use homebrew (if you've got it installed):
 
-    brew install cmake fmt sfml
+    brew install cmake fmt qt
 
-### Note!
-SFML **3.x** is now required (owing to SFML 2.x failing to compile on Mac owing to the latest clang++ failing to cope with `std::basic_string<int32>` used in SFML 2.x). At the time of writing, SFML 3.0 is not available on the latest Raspberry Pi repos - so you'll need to check out the sources, install SFML's dependencies, build (use `cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=ON` to force dynamic libraries), and install manually if you want to build on Pi hardware. See https://www.sfml-dev.org/tutorials/3.0/getting-started/build-from-source/ for more information.
+The user interface uses Qt 6 (Widgets), which is available from the standard repositories on Raspberry Pi OS Bookworm or later.
 
 ## Building
 

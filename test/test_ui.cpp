@@ -1,0 +1,304 @@
+// Tests of the Qt user interface. These use Qt's "offscreen" platform, so no
+// windows appear on screen and no real keyboard input is involved: key presses
+// are sent directly to the widgets with QTest.
+
+#define CATCH_CONFIG_RUNNER
+#include "catch.hpp"
+
+#include "configreader.h"
+#include "controller.h"
+#include "keycodes.h"
+#include "model.h"
+#include "stepperControl/mockgpio.h"
+#include "view_qt.h"
+
+#include <QApplication>
+#include <QTest>
+#include <QTimer>
+
+#include <chrono>
+#include <cmath>
+#include <functional>
+#include <thread>
+
+namespace {
+
+QWidget* mainWindow()
+{
+    for (QWidget* w : QApplication::topLevelWidgets()) {
+        if (w->windowTitle() == "Lathe Control" && w->isVisible()) {
+            return w;
+        }
+    }
+    return nullptr;
+}
+
+// Arranges for fn to be called with the modal dialog once it is showing.
+// (Dialogs block in their own event loop, so this must be set up beforehand.)
+void whenDialogShows(std::function<void(QWidget*)> fn)
+{
+    auto* timer = new QTimer();
+    timer->setInterval(10);
+    QObject::connect(timer, &QTimer::timeout, [timer, fn]() {
+        if (QWidget* dialog = QApplication::activeModalWidget()) {
+            timer->stop();
+            timer->deleteLater();
+            fn(dialog);
+        }
+    });
+    timer->start();
+}
+
+// The widget within the dialog that keyboard input goes to
+QWidget* inputWidget(QWidget* dialog)
+{
+    return dialog->focusWidget() ? dialog->focusWidget() : dialog;
+}
+
+int nextKey(mgo::ViewQt& view)
+{
+    return view.getEvents();
+}
+
+// All the key codes currently queued
+std::vector<int> allKeys(mgo::ViewQt& view)
+{
+    std::vector<int> keys;
+    for (int k = view.getEvents(); k != mgo::key::None; k = view.getEvents()) {
+        keys.push_back(k);
+    }
+    return keys;
+}
+
+using Keys = std::vector<int>;
+
+// A model with mocked hardware, for the view to display
+struct TestModel {
+    mgo::MockConfigReader config;
+    mgo::MockGpio gpio { false };
+    mgo::Model model { gpio, config };
+};
+
+} // end anonymous namespace
+
+TEST_CASE("UI: keys are converted to key codes")
+{
+    TestModel tm;
+    mgo::ViewQt view;
+    view.initialise(tm.model);
+    QWidget* w = mainWindow();
+    REQUIRE(w);
+
+    // NB the view ignores the same key pressed again within 100ms
+    QTest::keyClick(w, Qt::Key_A);
+    REQUIRE(nextKey(view) == mgo::key::a);
+    QTest::qWait(120);
+    QTest::keyClick(w, Qt::Key_A, Qt::ShiftModifier);
+    REQUIRE(nextKey(view) == mgo::key::A);
+    QTest::keyClick(w, Qt::Key_Q, Qt::ControlModifier);
+    REQUIRE(nextKey(view) == mgo::key::CtrlQ);
+    // (QTest presses and releases the Alt key itself around this, as a real
+    // keyboard would; releasing Alt always sends a stop, as with SFML)
+    QTest::keyClick(w, Qt::Key_W, Qt::AltModifier);
+    REQUIRE(allKeys(view) == Keys { mgo::key::AltW, mgo::key::SPACE });
+    QTest::keyClick(w, Qt::Key_F2);
+    REQUIRE(nextKey(view) == mgo::key::F2);
+    QTest::keyClick(w, Qt::Key_5);
+    REQUIRE(nextKey(view) == mgo::key::FIVE);
+    QTest::keyClick(w, Qt::Key_BracketLeft);
+    REQUIRE(nextKey(view) == mgo::key::LBRACKET);
+    QTest::keyClick(w, Qt::Key_Asterisk, Qt::ShiftModifier);
+    REQUIRE(nextKey(view) == mgo::key::ASTERISK);
+    QTest::keyClick(w, Qt::Key_Return);
+    REQUIRE(nextKey(view) == mgo::key::ENTER);
+    QTest::keyClick(w, Qt::Key_Space);
+    REQUIRE(nextKey(view) == mgo::key::SPACE);
+    // Nothing else should be queued
+    REQUIRE(nextKey(view) == mgo::key::None);
+}
+
+TEST_CASE("UI: releasing Alt or an Alt-arrow stops (dead man)")
+{
+    TestModel tm;
+    mgo::ViewQt view;
+    view.initialise(tm.model);
+    QWidget* w = mainWindow();
+    REQUIRE(w);
+
+    // Pressing Alt+Left starts a rapid (QTest presses Alt first, then Left)
+    QTest::keyPress(w, Qt::Key_Left, Qt::AltModifier);
+    REQUIRE(allKeys(view) == Keys { mgo::key::AltLeft });
+    // Releasing it stops: once for the arrow (released with Alt still held)
+    // and once for the Alt key itself
+    QTest::keyRelease(w, Qt::Key_Left, Qt::AltModifier);
+    REQUIRE(allKeys(view) == Keys { mgo::key::SPACE, mgo::key::SPACE });
+
+    // Alt on its own does nothing until released
+    QTest::keyPress(w, Qt::Key_Alt);
+    REQUIRE(allKeys(view).empty());
+    QTest::keyRelease(w, Qt::Key_Alt);
+    REQUIRE(allKeys(view) == Keys { mgo::key::SPACE });
+
+    // Right Alt is often AltGr on Linux, which Qt doesn't report as an Alt
+    // modifier: AltGr + arrow must still be a rapid, and stop on release
+    QTest::keyPress(w, Qt::Key_AltGr);
+    QTest::keyPress(w, Qt::Key_Up);
+    REQUIRE(allKeys(view) == Keys { mgo::key::AltUp });
+    QTest::keyRelease(w, Qt::Key_Up);
+    REQUIRE(allKeys(view) == Keys { mgo::key::SPACE });
+    QTest::keyRelease(w, Qt::Key_AltGr);
+    REQUIRE(allKeys(view) == Keys { mgo::key::SPACE });
+
+    // A plain arrow, without Alt, doesn't stop on release
+    QTest::keyPress(w, Qt::Key_Right);
+    REQUIRE(allKeys(view) == Keys { mgo::key::RIGHT });
+    QTest::keyRelease(w, Qt::Key_Right);
+    REQUIRE(allKeys(view).empty());
+}
+
+TEST_CASE("UI: auto-repeated keys are ignored")
+{
+    TestModel tm;
+    mgo::ViewQt view;
+    view.initialise(tm.model);
+    QWidget* w = mainWindow();
+    REQUIRE(w);
+
+    QKeyEvent press(QEvent::KeyPress, Qt::Key_Up, Qt::AltModifier, QString(), true);
+    QApplication::sendEvent(w, &press);
+    QKeyEvent release(QEvent::KeyRelease, Qt::Key_Up, Qt::AltModifier, QString(), true);
+    QApplication::sendEvent(w, &release);
+    // In particular, an auto-repeat release must not stop a rapid
+    REQUIRE(nextKey(view) == mgo::key::None);
+}
+
+TEST_CASE("UI: numeric dialog, with an option hotkey")
+{
+    TestModel tm;
+    mgo::ViewQt view;
+    view.initialise(tm.model);
+
+    whenDialogShows([](QWidget* dialog) {
+        QWidget* input = inputWidget(dialog);
+        // Typing replaces the default entry; letters can't be typed in a
+        // numeric entry, so 'd' toggles the [&D] option
+        QTest::keyClicks(input, "5.2");
+        QTest::keyClick(input, Qt::Key_D);
+        QTest::keyClick(input, Qt::Key_X); // not an option, so ignored
+        QTest::keyClick(input, Qt::Key_Return);
+    });
+    const auto rc = view.getInput(
+        mgo::Input::Type::Numeric, "Position", { "[&D] set as diameter" }, "1.5");
+    REQUIRE(!rc.cancelled);
+    REQUIRE(rc.number == Approx(5.2));
+    REQUIRE(rc.optionsSelected == std::set<char> { 'd' });
+}
+
+TEST_CASE("UI: Esc cancels a dialog")
+{
+    TestModel tm;
+    mgo::ViewQt view;
+    view.initialise(tm.model);
+
+    whenDialogShows([](QWidget* dialog) {
+        QTest::keyClicks(inputWidget(dialog), "42");
+        QTest::keyClick(inputWidget(dialog), Qt::Key_Escape);
+    });
+    const auto rc = view.getInput(mgo::Input::Type::Numeric, "Position", {}, "1.5");
+    REQUIRE(rc.cancelled);
+}
+
+TEST_CASE("UI: list picker")
+{
+    TestModel tm;
+    mgo::ViewQt view;
+    view.initialise(tm.model);
+
+    whenDialogShows([](QWidget* dialog) {
+        QWidget* input = inputWidget(dialog);
+        QTest::keyClick(input, Qt::Key_Down);
+        QTest::keyClick(input, Qt::Key_Down);
+        QTest::keyClick(input, Qt::Key_Down);
+        QTest::keyClick(input, Qt::Key_Up);
+        QTest::keyClick(input, Qt::Key_Return);
+    });
+    const auto rc = view.getInput(
+        mgo::Input::Type::ListPicker,
+        "Pick one",
+        {},
+        "",
+        std::vector<std::string> { "zero", "one", "two", "three", "four" });
+    REQUIRE(!rc.cancelled);
+    REQUIRE(rc.pickedItem == 2);
+}
+
+TEST_CASE("UI: text dialog needs Alt for option hotkeys")
+{
+    TestModel tm;
+    mgo::ViewQt view;
+    view.initialise(tm.model);
+
+    whenDialogShows([](QWidget* dialog) {
+        QWidget* input = inputWidget(dialog);
+        QTest::keyClicks(input, "hex");
+        QTest::keyClick(input, Qt::Key_X, Qt::AltModifier);
+        QTest::keyClick(input, Qt::Key_Return);
+    });
+    const auto rc
+        = view.getInput(mgo::Input::Type::Text, "Name", { "[&X] an option" }, "default");
+    REQUIRE(!rc.cancelled);
+    REQUIRE(rc.text == "hex");
+    REQUIRE(rc.optionsSelected == std::set<char> { 'x' });
+}
+
+TEST_CASE("UI: press any key")
+{
+    TestModel tm;
+    mgo::ViewQt view;
+    view.initialise(tm.model);
+
+    whenDialogShows([](QWidget* dialog) { QTest::keyClick(inputWidget(dialog), Qt::Key_Q); });
+    const auto rc = view.getInput(mgo::Input::Type::PressAnyKey, "Help", { "Some text" });
+    REQUIRE(!rc.cancelled);
+}
+
+TEST_CASE("UI: Z go-to through the controller")
+{
+    // End to end: "z" then "g" opens the go-to dialog; entering 5 should move
+    // the Z axis to 5.00
+    TestModel tm;
+    mgo::Controller controller(&tm.model); // creates the view and window
+    tm.model.setAxis1MotorSpeed(1'000.0);
+    QWidget* w = mainWindow();
+    REQUIRE(w);
+
+    QTest::keyClick(w, Qt::Key_Z);
+    controller.processKeyPress();
+    REQUIRE(tm.model.getKeyMode() == mgo::KeyMode::Axis1);
+
+    bool dialogShown = false;
+    whenDialogShows([&dialogShown](QWidget* dialog) {
+        dialogShown = true;
+        QTest::keyClicks(inputWidget(dialog), "5");
+        QTest::keyClick(inputWidget(dialog), Qt::Key_Return);
+    });
+    QTest::keyClick(w, Qt::Key_G);
+    controller.processKeyPress(); // runs the dialog
+    REQUIRE(dialogShown);
+
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    while (std::abs(tm.model.getAxis1MotorPosition() - 5.0) > 0.001
+           && std::chrono::steady_clock::now() < deadline) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    REQUIRE(tm.model.getAxis1MotorPosition() == Approx(5.0).margin(0.001));
+}
+
+int main(int argc, char* argv[])
+{
+    // No windows on screen, and no dependency on a display
+    qputenv("QT_QPA_PLATFORM", "offscreen");
+    QCoreApplication::setAttribute(Qt::AA_MacDontSwapCtrlAndMeta);
+    QApplication app(argc, argv);
+    return Catch::Session().run(argc, argv);
+}

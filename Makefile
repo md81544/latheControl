@@ -88,6 +88,7 @@ release:
 # Builds the app too, so a passing run means the app is up to date as well
 test: debug
 	@$(BUILD_DIR_DEBUG)/test/unit_test -d y
+	@$(BUILD_DIR_DEBUG)/test/ui_test -d y
 
 # ---------------------------------------------------------------------------
 # Update from git, then rebuild for the Pi

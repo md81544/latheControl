@@ -18,7 +18,7 @@ endif()
 option(FAKE "Mock the GPIO hardware and build the unit tests" OFF)
 
 find_package(fmt REQUIRED)
-find_package(SFML 3 REQUIRED COMPONENTS Graphics Window System)
+find_package(Qt6 REQUIRED COMPONENTS Widgets)
 find_package(Threads REQUIRED)
 
 # ---------------------------------------------------------------------------
@@ -72,18 +72,16 @@ target_link_libraries(shared_with_test PUBLIC
 # The app
 # ---------------------------------------------------------------------------
 add_executable(${APP_NAME}
-	view_sfml.cpp
+	view_qt.cpp
+	qt_dialog.cpp
 	controller.cpp
 	main.cpp
 	configreader.cpp
-	sfml_dialog.cpp
 	axis.cpp
 )
 target_link_libraries(${APP_NAME} PRIVATE
 	shared_with_test
-	SFML::Graphics
-	SFML::Window
-	SFML::System
+	Qt6::Widgets
 )
 
 # ---------------------------------------------------------------------------
