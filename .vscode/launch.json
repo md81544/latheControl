@@ -13,7 +13,7 @@
             "type": "lldb",
             "request": "launch",
             "name": "Unit Tests",
-            "program": "${workspaceFolder}/build/test/unit_test",
+            "program": "${workspaceFolder}/build/Debug/test/unit_test",
             "args": [],
             "cwd": "${workspaceFolder}"
         },

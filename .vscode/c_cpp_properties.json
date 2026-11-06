@@ -12,7 +12,7 @@
             "cStandard": "c11",
             "cppStandard": "c++23",
             "intelliSenseMode": "clang-x64",
-            "compileCommands": "${workspaceFolder}/build/compile_commands.json",
+            "compileCommands": "${workspaceFolder}/compile_commands.json",
             "configurationProvider": "ms-vscode.cmake-tools"
         }
     ],

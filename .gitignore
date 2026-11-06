@@ -32,6 +32,7 @@
 *.app
 test/test
 lc
+compile_commands.json
 build/*
 
 # Other
