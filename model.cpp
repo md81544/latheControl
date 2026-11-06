@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <chrono>
 #include <cmath>
 #include <sstream>
 
@@ -74,6 +75,8 @@ constexpr double THREADING_START_SPEED_FRACTION = 0.8;
 
 // Below this, the spindle is regarded as stopped
 constexpr float SPINDLE_STOPPED_RPM = 30.f;
+// ...once it has read below SPINDLE_STOPPED_RPM for this long
+constexpr auto SPINDLE_STOPPED_CONFIRM_TIME = std::chrono::milliseconds(300);
 
 } // anonymous namepace
 
@@ -194,18 +197,7 @@ StatusResult Model::checkStatus()
         stopAllMotors();
     }
 
-#ifndef FAKE
-    if (m_spindleWasRunning && chuckRpm < SPINDLE_STOPPED_RPM) {
-        // If the chuck has stopped, we stop X/Z motors as a safety
-        // feature, just in case the motor has stalled or the operator
-        // has turned it off because of some issue.
-        // This won't stop the motors being started again even
-        // if the chuck isn't moving.
-        MGOLOG(fmt::format("Spindle stopped ({:.0f} rpm): stopping all motors", chuckRpm));
-        stopAllMotors();
-    }
-#endif
-    m_spindleWasRunning = chuckRpm > SPINDLE_STOPPED_RPM;
+    checkSpindleStopped(chuckRpm);
 
     if (m_enabledFunction == Mode::Threading) {
         threadingCheckSpeed();
@@ -315,6 +307,50 @@ StatusResult Model::checkStatus()
         m_axis2Status = "synchronised";
     }
     return statusResult;
+}
+
+void Model::checkSpindleStopped(float chuckRpm)
+{
+    // If the chuck has stopped, we stop X/Z motors as a safety feature, just
+    // in case the motor has stalled or the operator has turned it off because
+    // of some issue. This won't stop the motors being started again even if
+    // the chuck isn't moving.
+    // The encoder can momentarily read zero (e.g. a gap in its callbacks), so
+    // it must read stopped for a while before we act; a real spindle takes
+    // longer than this to stop anyway
+    using namespace std::chrono;
+    const auto now = steady_clock::now();
+    if (chuckRpm >= SPINDLE_STOPPED_RPM) {
+        if (m_spindleLowSince) {
+            MGOLOG(fmt::format(
+                "Spindle reading recovered ({:.0f} rpm) after {} ms",
+                chuckRpm,
+                duration_cast<milliseconds>(now - *m_spindleLowSince).count()));
+            m_spindleLowSince.reset();
+        }
+        m_spindleWasRunning = true;
+        return;
+    }
+    if (!m_spindleWasRunning) {
+        return;
+    }
+    if (!m_spindleLowSince) {
+        m_spindleLowSince = now;
+        MGOLOG(fmt::format(
+            "Spindle reads {:.0f} rpm (last encoder pulse {} us ago)",
+            chuckRpm,
+            m_rotaryEncoder->microsecondsSinceLastPulse()));
+        return;
+    }
+    if (now - *m_spindleLowSince < SPINDLE_STOPPED_CONFIRM_TIME) {
+        return;
+    }
+    m_spindleLowSince.reset();
+    m_spindleWasRunning = false;
+#ifndef FAKE
+    MGOLOG("Spindle stopped: stopping all motors");
+    stopAllMotors();
+#endif
 }
 
 void Model::checkMotorFaults()
@@ -603,6 +639,13 @@ void Model::threadingCheckSpeed()
     // the thread pitch
     const double pitch = threadPitches.at(m_threadPitchIndex).pitchMm;
     const float rpm = m_rotaryEncoder->getRpm();
+    if (rpm < SPINDLE_STOPPED_RPM && m_axis1Motor->isRunning()) {
+        // Probably a momentary misreading (see checkSpindleStopped(), which
+        // stops the motors if the spindle really has stopped). Setting a
+        // speed of zero would stop Z part way through the pass, so we keep
+        // the last speed
+        return;
+    }
     const double speed = pitch * rpm;
     const double maxSpeed = threadingMaxZSpeed();
     const double startLimit = maxSpeed * THREADING_START_SPEED_FRACTION;
@@ -701,7 +744,7 @@ void Model::threadingCheckMoveEnded()
         arrived,
         m_threadingMoveStartedRetracted,
         m_axis2Retracted,
-        m_rotaryEncoder->getRpm() >= SPINDLE_STOPPED_RPM);
+        m_spindleWasRunning);
     if (action == ThreadingStopAction::None) {
         return;
     }

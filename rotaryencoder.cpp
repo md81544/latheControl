@@ -102,13 +102,24 @@ void RotaryEncoder::callback(int pin, int level, uint32_t tick)
     }
 }
 
+uint32_t RotaryEncoder::microsecondsSinceLastPulse()
+{
+    // m_lastTick must be read *before* the current tick. The order of the two
+    // reads in "getTick() - m_lastTick" is unspecified, and if the callback
+    // thread updated m_lastTick in between, the (unsigned) difference would
+    // be huge, i.e. the spindle would appear to have stopped
+    const uint32_t lastTick = m_lastTick;
+    const int32_t elapsed = static_cast<int32_t>(m_gpio.getTick() - lastTick);
+    return elapsed > 0 ? static_cast<uint32_t>(elapsed) : 0;
+}
+
 float RotaryEncoder::getRpm()
 {
     // Ticks are in microseconds
     if (warmingUp()) {
         return 0.f;
     }
-    if (m_gpio.getTick() - m_lastTick > 100'000) {
+    if (microsecondsSinceLastPulse() > 100'000) {
         return 0.f;
     }
     float rpm = 60'000'000.f / (m_averageTickDelta * m_pulsesPerSpindleRev);
@@ -149,7 +160,7 @@ void RotaryEncoder::callbackAtZeroDegrees(std::function<void()> cb)
     // NB if we return without calling cb(), the requested motion doesn't start.
     // All tick comparisons are done as signed differences, as the tick counter
     // wraps every ~71.6 minutes.
-    if (m_warmingUp || m_gpio.getTick() - m_lastTick > 100'000) {
+    if (m_warmingUp || microsecondsSinceLastPulse() > 100'000) {
         MGOLOG("callbackAtZeroDegrees: spindle not running, ignoring");
         return;
     }

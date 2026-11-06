@@ -50,6 +50,8 @@ public:
     void callback(int pin, int level, uint32_t tick);
 
     float getRpm();
+    // Time since the last pulse was seen (0 if none yet)
+    uint32_t microsecondsSinceLastPulse();
     float getPositionDegrees();
     RotationDirection getRotationDirection();
 

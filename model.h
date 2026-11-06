@@ -6,6 +6,7 @@
 #include "stepperControl/steppermotor.h"
 #include "units.h"
 
+#include <chrono>
 #include <cmath> // IWYU pragma: keep (need for M_PI)
 #include <functional>
 #include <limits>
@@ -341,6 +342,8 @@ private:
     bool m_axis1WasRunning { false };
     bool m_axis2WasRunning { false };
     bool m_spindleWasRunning { false };
+    // When the spindle started reading as stopped (see checkSpindleStopped())
+    std::optional<std::chrono::steady_clock::time_point> m_spindleLowSince;
 
     XDirection m_xRetractionDirection { XDirection::Outwards };
     // Once the user has set the x position once then we use
@@ -380,6 +383,7 @@ private:
 
     // Private functions
     void checkMotorFaults();
+    void checkSpindleStopped(float chuckRpm);
     // X is no longer known to be measured from the centre
     void clearDiameter();
     void clearMotorFault(Axis axis);
