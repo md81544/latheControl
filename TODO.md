@@ -74,7 +74,10 @@
 - [ ] Automation of a repeated cut: cut from Mem 1 to Mem 2, fast return,
       wait for a key press, and repeat until cancelled (to make repeated cuts
       down to depth easier). Could just be multi-pass with "press any key"
-      between passes
+      between passes. Potentially this could work with threading too, currently
+      the operator has to (a) move to a location, (b) fast return to a second
+      location, (c) nudge in a little and repeat. This could be automated to
+      simply (a) nudge and press a key, and it repeats the cut and return.
 
 ## Motion and timing (mostly in stepperControl)
 - [ ] Deceleration ramping. At the moment there's only acceleration, so
