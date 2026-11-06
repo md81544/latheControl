@@ -11,7 +11,13 @@ Intended to be an aid for manual machining, rather than full CNC operation.
 
 ## Getting the Code
 
-As this repository contains a submodule now, use `git clone --recurse-submodules <repo URL>` to clone it
+Just `git clone <repo URL>`. The stepper motor code lives in a separate repository, [stepperControl](https://github.com/md81544/stepperControl), which CMake downloads automatically when you first build (so the first build needs network access). The version used is pinned by `GIT_TAG` in `CMakeLists.txt`.
+
+If you're changing stepperControl at the same time, clone it alongside and build against your local copy instead:
+
+    make STEPPERCONTROL_DIR=../stepperControl
+
+(or `export STEPPERCONTROL_DIR=../stepperControl` in your shell profile on a development machine).
 
 ## Dependencies
 

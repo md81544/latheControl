@@ -22,6 +22,28 @@ find_package(SFML 3 REQUIRED COMPONENTS Graphics Window System)
 find_package(Threads REQUIRED)
 
 # ---------------------------------------------------------------------------
+# stepperControl library, fetched at configure time. To build against a local
+# checkout instead (e.g. when working on both), use
+#   make STEPPERCONTROL_DIR=../stepperControl
+# which sets FETCHCONTENT_SOURCE_DIR_STEPPERCONTROL
+# ---------------------------------------------------------------------------
+include(FetchContent)
+set(STEPPERCONTROL_GIT_REPOSITORY "https://github.com/md81544/stepperControl.git"
+	CACHE STRING "Git repository to fetch stepperControl from")
+FetchContent_Declare(stepperControl
+	GIT_REPOSITORY ${STEPPERCONTROL_GIT_REPOSITORY}
+	GIT_TAG        v1.0.0
+	GIT_SHALLOW    TRUE
+)
+# FAKE builds use MockGpio, so don't need pigpio
+if(FAKE)
+	set(STEPPERCONTROL_USE_PIGPIO OFF)
+else()
+	set(STEPPERCONTROL_USE_PIGPIO ON)
+endif()
+FetchContent_MakeAvailable(stepperControl)
+
+# ---------------------------------------------------------------------------
 # Options shared by every target (warnings, FAKE)
 # ---------------------------------------------------------------------------
 add_library(lc_options INTERFACE)
@@ -34,24 +56,22 @@ endif()
 # Code shared between the app and the unit tests
 # ---------------------------------------------------------------------------
 add_library(shared_with_test OBJECT
-	stepperControl/steppermotor.cpp
 	rotaryencoder.cpp
 	linearscale.cpp
 	log.cpp
 	model.cpp
 )
-target_link_libraries(shared_with_test PUBLIC lc_options fmt::fmt Threads::Threads)
-
-# Raspberry Pi 32-bit needs the atomic library
-if(CMAKE_SYSTEM_PROCESSOR STREQUAL "armv7l")
-	target_link_libraries(shared_with_test PUBLIC atomic)
-endif()
+target_link_libraries(shared_with_test PUBLIC
+	lc_options
+	fmt::fmt
+	Threads::Threads
+	stepperControl::stepperControl
+)
 
 # ---------------------------------------------------------------------------
 # The app
 # ---------------------------------------------------------------------------
 add_executable(${APP_NAME}
-	stepperControl/gpio.cpp
 	view_sfml.cpp
 	controller.cpp
 	main.cpp
@@ -65,9 +85,6 @@ target_link_libraries(${APP_NAME} PRIVATE
 	SFML::Window
 	SFML::System
 )
-if(NOT FAKE)
-	target_link_libraries(${APP_NAME} PRIVATE pigpio)
-endif()
 
 # ---------------------------------------------------------------------------
 # Symlinks in the source root to the last-built executable (it loads lc.cfg

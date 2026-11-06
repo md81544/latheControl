@@ -31,7 +31,14 @@ int main(int argc, char* argv[])
 
         // clang-format off
         #ifdef FAKE
-            mgo::MockGpio gpio(false, config);
+            mgo::MockGpioOptions mockOptions;
+            mockOptions.rotaryDirectionNormal
+                = config.readBool("MockRotaryDirectionNormal", false);
+            mockOptions.rotaryEncoderDelayMicroseconds
+                = config.readLong("MockRotaryEncoderDelayMicroseconds", 250);
+            mockOptions.linearScaleAxis1StepsPerMm
+                = config.readLong("LinearScaleAxis1StepsPerMM", 200);
+            mgo::MockGpio gpio(false, mockOptions);
         #else
             mgo::Gpio gpio;
         #endif
