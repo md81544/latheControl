@@ -1,4 +1,6 @@
 #include "configreader.h"
+#include "joystick.h"
+#include "keycodes.h"
 #include "log.h"
 #include "model.h"
 #include "rotaryencoder.h"
@@ -546,4 +548,89 @@ TEST_CASE("Stepper: stop() returns promptly")
     REQUIRE(!motor.isRunning());
     // Previously stop() always took 50ms
     REQUIRE(elapsed < std::chrono::milliseconds(20));
+}
+
+namespace {
+
+mgo::JoystickEvent button(unsigned n, bool pressed, bool initial = false)
+{
+    return { mgo::JoystickEvent::Type::Button, n, pressed ? 1.f : 0.f, initial };
+}
+
+mgo::JoystickEvent axis(mgo::JoystickAxis a, float value, bool initial = false)
+{
+    return { mgo::JoystickEvent::Type::Axis, static_cast<unsigned>(a), value, initial };
+}
+
+using Keys = std::vector<int>;
+
+} // end anonymous namespace
+
+TEST_CASE("Joystick: buttons")
+{
+    mgo::JoystickKeyMapper m;
+    REQUIRE(m.process({ button(0, true) }) == Keys { mgo::key::AltW });
+    REQUIRE(m.process({ button(0, false) }).empty()); // release does nothing
+    REQUIRE(m.process({ button(5, true), button(5, false) }) == Keys { mgo::key::SPACE });
+    REQUIRE(m.process({ button(8, true) }) == Keys { mgo::key::a1_f });
+    // Button 9 is a "shift", so does nothing by itself
+    REQUIRE(m.process({ button(9, true) }).empty());
+}
+
+TEST_CASE("Joystick: D-pad nudges, with shift")
+{
+    mgo::JoystickKeyMapper m;
+    REQUIRE(m.process({ axis(mgo::JoystickAxis::PovX, 100.f) }) == Keys { mgo::key::d });
+    REQUIRE(m.process({ axis(mgo::JoystickAxis::PovX, 0.f) }).empty());
+    REQUIRE(m.process({ axis(mgo::JoystickAxis::PovY, -100.f) }) == Keys { mgo::key::w });
+    REQUIRE(m.process({ axis(mgo::JoystickAxis::PovY, 0.f) }).empty());
+    // With button 9 held, the nudges are the shifted (finer) ones
+    REQUIRE(m.process({ button(9, true), axis(mgo::JoystickAxis::PovX, -100.f) })
+            == Keys { mgo::key::A });
+    // Holding the D-pad doesn't repeat by itself: only another joystick event
+    // causes the state to be looked at again
+    REQUIRE(m.process({}).empty());
+}
+
+TEST_CASE("Joystick: left stick moves once per push")
+{
+    mgo::JoystickKeyMapper m;
+    REQUIRE(m.process({ axis(mgo::JoystickAxis::X, 100.f) }) == Keys { mgo::key::js_right });
+    // Still held fully over: no repeat
+    REQUIRE(m.process({ axis(mgo::JoystickAxis::X, 100.f) }).empty());
+    REQUIRE(m.process({ axis(mgo::JoystickAxis::X, 0.f) }).empty());
+    REQUIRE(m.process({ axis(mgo::JoystickAxis::X, -100.f) }) == Keys { mgo::key::js_left });
+    REQUIRE(m.process({ axis(mgo::JoystickAxis::X, 0.f) }).empty());
+    REQUIRE(m.process({ axis(mgo::JoystickAxis::Y, -100.f) }) == Keys { mgo::key::js_up });
+    REQUIRE(m.process({ axis(mgo::JoystickAxis::Y, 0.f) }).empty());
+    // Shift + down = retract
+    REQUIRE(m.process({ button(9, true), axis(mgo::JoystickAxis::Y, 100.f) })
+            == Keys { mgo::key::r });
+}
+
+TEST_CASE("Joystick: right stick rapids stop when released (dead man)")
+{
+    mgo::JoystickKeyMapper m;
+    REQUIRE(m.process({ axis(mgo::JoystickAxis::Z, 100.f) }) == Keys { mgo::key::js_rapid_right });
+    REQUIRE(m.process({ axis(mgo::JoystickAxis::Z, 100.f) }).empty());
+    // Letting the stick come back from fully over stops the motion
+    REQUIRE(m.process({ axis(mgo::JoystickAxis::Z, 30.f) }) == Keys { mgo::key::SPACE });
+    REQUIRE(m.process({ axis(mgo::JoystickAxis::Z, 0.f) }).empty());
+    REQUIRE(m.process({ axis(mgo::JoystickAxis::R, -100.f) }) == Keys { mgo::key::js_rapid_up });
+    REQUIRE(m.process({ axis(mgo::JoystickAxis::R, 0.f) }) == Keys { mgo::key::SPACE });
+}
+
+TEST_CASE("Joystick: initial state doesn't trigger anything")
+{
+    // When the device is opened, the driver reports each control's state
+    mgo::JoystickKeyMapper m;
+    REQUIRE(m.process({ button(0, true, true), axis(mgo::JoystickAxis::PovX, 100.f, true) })
+                .empty());
+
+    // A button already held at start-up isn't treated as a new press
+    mgo::JoystickKeyMapper m2;
+    REQUIRE(m2.process({ button(0, true, true) }).empty());
+    REQUIRE(m2.process({ button(0, true) }).empty());
+    REQUIRE(m2.process({ button(0, false) }).empty());
+    REQUIRE(m2.process({ button(0, true) }) == Keys { mgo::key::AltW });
 }

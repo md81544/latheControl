@@ -37,7 +37,7 @@ private:
     int processModeInputKeys(int key);
     int processLeaderKeyModeKeyPress(int key);
     int checkForAxisLeaderKeys(int key);
-    // While sfml_dialog getInput() is multi-functional, for
+    // While the view's getInput() is multi-functional, for
     // ease of use we specialise calls to it by these functions.
     NumericInputReturn getNumericInput(
         std::string_view prompt,

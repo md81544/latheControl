@@ -5,7 +5,7 @@
 #include "keycodes.h"
 #include "log.h"
 #include "threadpitches.h"
-#include "view_sfml.h"
+#include "view_qt.h"
 
 #include <cassert>
 #include <chrono>
@@ -27,9 +27,9 @@ void uiSleep(std::chrono::microseconds microsecs)
 Controller::Controller(Model* model)
     : m_model(model)
 {
-    m_view = std::make_unique<ViewSfml>();
+    m_view = std::make_unique<ViewQt>();
     m_view->initialise(*m_model);
-    m_view->updateDisplay(*m_model); // get SFML running before we start the motor threads
+    m_view->updateDisplay(*m_model); // get the UI running before we start the motor threads
     m_model->initialise();
 }
 

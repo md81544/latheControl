@@ -9,12 +9,21 @@
 #include "log.h"
 #include "model.h"
 
+#include <QApplication>
+
 #include <iostream>
 #include <sysexits.h>
 
 int main(int argc, char* argv[])
 {
     try {
+        // Qt on macOS normally swaps Ctrl and Cmd; keep Ctrl as Ctrl so the
+        // key bindings (e.g. Ctrl-Q) are the same on every platform
+        QCoreApplication::setAttribute(Qt::AA_MacDontSwapCtrlAndMeta);
+        // Must exist before any UI is created, and outlive it. (Note this
+        // removes any Qt-specific arguments, such as -platform, from argv)
+        QApplication app(argc, argv);
+
         INIT_MGOLOG("lc.log");
         MGOLOG("Program started");
 
