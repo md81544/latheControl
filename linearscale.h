@@ -5,6 +5,7 @@
 
 #include "stepperControl/igpio.h"
 
+#include <atomic>
 #include <cassert>
 #include <cstdint>
 
@@ -22,6 +23,16 @@ public:
         m_gpio.setLinearScaleAxis1Callback(m_pinA, m_pinB, staticCallback, this);
     }
 
+    ~LinearScale()
+    {
+        // The GPIO library holds a pointer to us, so must stop calling back
+        // before we are destroyed
+        m_gpio.clearLinearScaleAxis1Callback();
+    }
+
+    LinearScale(const LinearScale&) = delete;
+    LinearScale& operator=(const LinearScale&) = delete;
+
     static void staticCallback(int pin, int level, uint32_t tick, void* userData);
 
     void callback(int pin, int level, uint32_t tick);
@@ -35,13 +46,14 @@ private:
     IGpio& m_gpio;
     int m_pinA;
     int m_pinB;
+    int m_stepsPerMm { 200 };
+    // Only accessed from the pigpio callback thread:
     int m_levelA { 0 };
     int m_levelB { 0 };
-    int m_lastPin { 0 };
-    int m_stepsPerMm { 200 };
-    int32_t m_stepCount { 0 };
-    int m_previousPhase { 0 };
-    int32_t m_zeroPosition { 0 }; // the step count which is counted as 0.00 mm
+    int m_previousPhase { 0 }; // 0 = unknown (no edges seen yet)
+    // Written by the callback thread, read by the UI thread:
+    std::atomic<int32_t> m_stepCount { 0 };
+    std::atomic<int32_t> m_zeroPosition { 0 }; // the step count which is counted as 0.00 mm
 };
 
 } // end namespace

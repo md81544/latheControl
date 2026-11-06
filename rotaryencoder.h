@@ -35,6 +35,16 @@ public:
         m_gpio.setRotaryEncoderCallback(m_pinA, m_pinB, staticCallback, this);
     }
 
+    ~RotaryEncoder()
+    {
+        // The GPIO library holds a pointer to us, so must stop calling back
+        // before we are destroyed
+        m_gpio.clearRotaryEncoderCallback();
+    }
+
+    RotaryEncoder(const RotaryEncoder&) = delete;
+    RotaryEncoder& operator=(const RotaryEncoder&) = delete;
+
     static void staticCallback(int pin, int level, uint32_t tick, void* userData);
 
     void callback(int pin, int level, uint32_t tick);
@@ -59,20 +69,24 @@ private:
     IGpio& m_gpio;
     int m_pinA;
     int m_pinB;
-    int m_levelA;
-    int m_levelB;
+    // These are only accessed from the pigpio callback thread:
+    int m_levelA { 0 };
+    int m_levelB { 0 };
     int m_lastPin { 0 };
+    uint32_t m_tickDiffTotal { 0 };
+    uint32_t m_pulsesInTotal { 0 }; // number of pulses in m_tickDiffTotal
+    // Set at construction only:
     int m_pulsesPerRev; // of RE
     float m_pulsesPerSpindleRev;
     float m_gearing;
-    bool m_warmingUp { true };
-    uint32_t m_lastTick;
-    std::atomic<uint32_t> m_lastZeroDegreesTick { 0 }; // TODO other members need to be atomic too
-    uint32_t m_pulseCount { 0 };
-    uint32_t m_tickDiffTotal { 0 };
-    float m_averageTickDelta { 0.f };
-    RotationDirection m_direction { RotationDirection::normal};
-    float m_advanceValueMicroseconds { 0.f };
+    // These are written by the callback thread and read by the UI thread:
+    std::atomic<bool> m_warmingUp { true };
+    std::atomic<uint32_t> m_lastTick { 0 };
+    std::atomic<uint32_t> m_lastZeroDegreesTick { 0 };
+    std::atomic<uint32_t> m_pulseCount { 0 };
+    std::atomic<float> m_averageTickDelta { 0.f };
+    std::atomic<RotationDirection> m_direction { RotationDirection::normal };
+    std::atomic<float> m_advanceValueMicroseconds { 0.f };
 };
 
 } // end namespace

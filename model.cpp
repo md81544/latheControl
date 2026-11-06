@@ -225,8 +225,10 @@ StatusResult Model::checkStatus()
         }
         if ((m_enabledFunction == Mode::Taper || m_enabledFunction == Mode::Radius)
             && m_axis1WasRunning) {
-            m_axis2Motor->setSpeed(m_previousAxis2Speed);
+            // Turn off synchronisation *before* setting the speed, otherwise
+            // the motor thread may overwrite our speed with a synchronised one
             axis2SynchroniseOff();
+            m_axis2Motor->setSpeed(m_previousAxis2Speed);
         }
         if (m_axis1WasRunning
             && m_axis1Motor->getSpeed() > m_config.readDouble("Axis1SpeedResetAbove", 100.0)) {

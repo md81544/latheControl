@@ -26,7 +26,9 @@ public:
     // the application can quit.
     void run();
     void processKeyPress();
-    void waitForAxisToStop(uint8_t axis);
+    // Returns false if the user aborted the wait with a key press, in which
+    // case all motors will have been stopped
+    bool waitForAxisToStop(uint8_t axis);
 
 private:
     Model* m_model; // non-owning

@@ -11,10 +11,22 @@ void RotaryEncoder::staticCallback(int pin, int level, uint32_t tick, void* user
 void RotaryEncoder::callback(int pin, int level, uint32_t tick)
 {
     if (pin == m_lastPin) {
-        // debounce
+        // Ignore repeated edges on the same pin. pigpio only reports genuine
+        // level changes, so this isn't contact bounce; it's the encoder dithering
+        // back and forth across one edge (e.g. a stationary spindle). As we only
+        // count rising edges on pin A (below) and don't decode full quadrature,
+        // letting these through would count every dither as a pulse.
         return;
     }
     m_lastPin = pin;
+
+    // Record levels even while warming up, otherwise the direction check
+    // below works from stale levels and gets the first pulse wrong
+    if (pin == m_pinA) {
+        m_levelA = level;
+    } else {
+        m_levelB = level;
+    }
 
     if (m_warmingUp) {
         // We ignore the first few calls until we can
@@ -27,11 +39,6 @@ void RotaryEncoder::callback(int pin, int level, uint32_t tick)
     }
 
     // Check rotation
-    if (pin == m_pinA) {
-        m_levelA = level;
-    } else {
-        m_levelB = level;
-    }
 
     if (pin == m_pinA && level == 1) {
         if (m_levelB) {
@@ -72,8 +79,15 @@ void RotaryEncoder::callback(int pin, int level, uint32_t tick)
             }
         }
         if (hitZeroPulse) {
-            m_averageTickDelta = m_tickDiffTotal / static_cast<float>(m_pulsesPerSpindleRev);
+            // Only update the average once we have measured a full revolution.
+            // The first zero after start-up can arrive after only a few pulses,
+            // and averaging over a whole revolution's worth would give a
+            // near-zero (i.e. wildly wrong) value
+            if (m_pulsesInTotal >= static_cast<uint32_t>(m_pulsesPerSpindleRev)) {
+                m_averageTickDelta = m_tickDiffTotal / static_cast<float>(m_pulsesInTotal);
+            }
             m_tickDiffTotal = 0;
+            m_pulsesInTotal = 0;
             // We remember what the tick was at the last zero degrees position
             // (we arbitrarily call the start position zero) so we can extrapolate
             // out to the next one for accurate starting when waiting to cut a
@@ -83,6 +97,7 @@ void RotaryEncoder::callback(int pin, int level, uint32_t tick)
             m_lastZeroDegreesTick = tick;
         }
         m_tickDiffTotal += tick - m_lastTick; // don't need to worry about wrap
+        ++m_pulsesInTotal;
         m_lastTick = tick;
     }
 }
@@ -131,19 +146,31 @@ void RotaryEncoder::callbackAtZeroDegrees(std::function<void()> cb)
     // library batches up the callbacks), we interpolate here
     // for better accuracy.
     // Note: ramping should be turned off for threading operations
-    if (m_warmingUp) {
-        return; // spindle not running?
+    // NB if we return without calling cb(), the requested motion doesn't start.
+    // All tick comparisons are done as signed differences, as the tick counter
+    // wraps every ~71.6 minutes.
+    if (m_warmingUp || m_gpio.getTick() - m_lastTick > 100'000) {
+        MGOLOG("callbackAtZeroDegrees: spindle not running, ignoring");
+        return;
     }
-    while (m_lastZeroDegreesTick == 0)
-        ; // spin if the last pos isn't set yet
-    uint32_t timeForOneRevolution = m_averageTickDelta * m_pulsesPerSpindleRev;
-    uint32_t targetTick
-        = m_lastZeroDegreesTick + (timeForOneRevolution - m_advanceValueMicroseconds);
-    while (m_gpio.getTick() > targetTick) {
+    // If the spindle has only just started, we may not yet have seen the zero
+    // position, or measured a full revolution. Wait (with a timeout) for both.
+    constexpr uint32_t waitTimeoutMicroseconds = 5'000'000;
+    const uint32_t waitStart = m_gpio.getTick();
+    while (m_lastZeroDegreesTick == 0 || m_averageTickDelta <= 0.f) {
+        if (m_gpio.getTick() - waitStart > waitTimeoutMicroseconds) {
+            MGOLOG("callbackAtZeroDegrees: timed out waiting for spindle position");
+            return;
+        }
+    }
+    const uint32_t timeForOneRevolution = m_averageTickDelta * m_pulsesPerSpindleRev;
+    uint32_t targetTick = m_lastZeroDegreesTick + timeForOneRevolution
+        - static_cast<int32_t>(m_advanceValueMicroseconds);
+    while (static_cast<int32_t>(m_gpio.getTick() - targetTick) > 0) {
         targetTick += timeForOneRevolution;
     }
     // Now spin until we get to the right time
-    while (m_gpio.getTick() < targetTick)
+    while (static_cast<int32_t>(m_gpio.getTick() - targetTick) < 0)
         ;
     cb();
 }

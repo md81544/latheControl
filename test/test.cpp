@@ -12,6 +12,53 @@
 #define CATCH_CONFIG_MAIN
 #include "catch.hpp"
 
+namespace {
+
+// A minimal IGpio with a controllable clock and no background threads, so
+// tests can drive callbacks directly and deterministically. Each getTick()
+// call advances time by 1µs, so code which spins on getTick() terminates.
+class FakeTickGpio final : public mgo::IGpio {
+public:
+    explicit FakeTickGpio(uint32_t startTick)
+        : m_tick(startTick)
+    {
+    }
+    int addMotor(int, int, int) override { return 0; }
+    void setStepPin(int, mgo::PinState) override { }
+    void setReversePin(int, mgo::PinState) override { }
+    void setEnablePin(int, mgo::PinState) override { }
+    void setRotaryEncoderCallback(int, int, void (*)(int, int, uint32_t, void*), void*) override
+    {
+    }
+    void setLinearScaleAxis1Callback(int, int, void (*)(int, int, uint32_t, void*), void*) override
+    {
+    }
+    void delayMicroSeconds(long usecs) override { m_tick += static_cast<uint32_t>(usecs); }
+    uint32_t getTick() override { return m_tick++; }
+    void scaleGoToPositionMm(double) override { }
+    void scaleSetSpeedStepsPerSec(double) override { }
+    void scaleStop() override { }
+    uint32_t peekTick() const { return m_tick; }
+
+private:
+    std::atomic<uint32_t> m_tick;
+};
+
+constexpr int RE_PIN_A = 23;
+constexpr int RE_PIN_B = 24;
+
+// Feed one full quadrature cycle (in the encoder's "normal" direction) whose
+// pin A rising edge is at the given tick
+void feedEncoderPulse(mgo::RotaryEncoder& re, uint32_t tick)
+{
+    re.callback(RE_PIN_B, 1, tick - 6'000);
+    re.callback(RE_PIN_A, 1, tick);
+    re.callback(RE_PIN_B, 0, tick + 2'000);
+    re.callback(RE_PIN_A, 0, tick + 4'000);
+}
+
+} // end anonymous namespace
+
 TEST_CASE("Stepper: Step once")
 {
     mgo::MockConfigReader config;
@@ -356,7 +403,7 @@ TEST_CASE("Scale:   Sync with motor")
     mgo::MockConfigReader config;
     mgo::MockGpio gpio(false, config);
     // Note motor's conversion factor is 0.01, so 100 steps is 1.0mm
-    mgo::StepperMotor motor(gpio, 0, 0, 0, 1'000, 0.01, 10'000.0, true, 200);
+    mgo::StepperMotor motor(gpio, 0, 0, 0, 1'000, 0.01, 10'000.0, 0.1, true, 200);
     mgo::LinearScale scale(gpio, 1, 2, 200);
     motor.setRpm(500.0);
     REQUIRE(scale.getPositionInMm() == 0.0);
@@ -374,4 +421,110 @@ TEST_CASE("Scale:   Sync with motor")
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
     mm = scale.getPositionInMm();
     REQUIRE(std::abs(mm - 0.5) < 0.1);
+}
+
+TEST_CASE("Scale:   Dithering across an edge doesn't drift")
+{
+    FakeTickGpio gpio(0);
+    mgo::LinearScale scale(gpio, 1, 2, 200);
+    // First edge only establishes the phase, so no movement is counted
+    scale.callback(2, 1, 0);
+    REQUIRE(scale.getPositionInMm() == 0.f);
+    // Pin A dithering back and forth (pin B steady). Consecutive edges are on
+    // the same pin, and each pair should cancel out.
+    for (int i = 0; i < 10; ++i) {
+        scale.callback(1, 1, 0);
+        REQUIRE(scale.getPositionInMm() == -1.f / 200.f);
+        scale.callback(1, 0, 0);
+        REQUIRE(scale.getPositionInMm() == 0.f);
+    }
+    // A callback that doesn't change the level is ignored
+    scale.callback(1, 0, 0);
+    REQUIRE(scale.getPositionInMm() == 0.f);
+}
+
+TEST_CASE("Scale:   Full cycle forwards then backwards")
+{
+    FakeTickGpio gpio(0);
+    mgo::LinearScale scale(gpio, 1, 2, 200);
+    scale.callback(2, 1, 0); // establish phase (A low, B high)
+    // One full quadrature cycle in one direction: four steps
+    scale.callback(1, 1, 0);
+    scale.callback(2, 0, 0);
+    scale.callback(1, 0, 0);
+    scale.callback(2, 1, 0);
+    REQUIRE(scale.getPositionInMm() == -4.f / 200.f);
+    // The same cycle in the opposite direction brings us back to zero
+    scale.callback(2, 0, 0);
+    scale.callback(1, 1, 0);
+    scale.callback(2, 1, 0);
+    scale.callback(1, 0, 0);
+    REQUIRE(scale.getPositionInMm() == 0.f);
+}
+
+TEST_CASE("Encoder: Zero degrees callback with spindle stopped doesn't hang")
+{
+    FakeTickGpio gpio(1'000'000);
+    mgo::RotaryEncoder re(gpio, RE_PIN_A, RE_PIN_B, 4, 1.f);
+    feedEncoderPulse(re, 100); // ends warm-up, but long ago
+    REQUIRE(re.warmingUp() == false);
+    bool called = false;
+    re.callbackAtZeroDegrees([&]() { called = true; });
+    REQUIRE(called == false);
+}
+
+TEST_CASE("Encoder: Zero degrees callback before a full revolution doesn't hang")
+{
+    const uint32_t now = 1'000'000;
+    FakeTickGpio gpio(now);
+    mgo::RotaryEncoder re(gpio, RE_PIN_A, RE_PIN_B, 4, 1.f);
+    // Enough pulses to see zero degrees, but not to measure a revolution
+    for (uint32_t k = 0; k < 3; ++k) {
+        feedEncoderPulse(re, now - 30'000 + k * 10'000);
+    }
+    bool called = false;
+    re.callbackAtZeroDegrees([&]() { called = true; });
+    REQUIRE(called == false);
+}
+
+TEST_CASE("Encoder: Zero degrees callback across tick wraparound")
+{
+    // Start the clock 20ms before the 32-bit tick counter wraps
+    const uint32_t now = std::numeric_limits<uint32_t>::max() - 20'000 + 1;
+    FakeTickGpio gpio(now);
+    // 4 pulses per spindle rev, one pulse every 10ms => one rev = 40ms
+    mgo::RotaryEncoder re(gpio, RE_PIN_A, RE_PIN_B, 4, 1.f);
+    const uint32_t firstPulse = now - 60'000;
+    for (uint32_t k = 0; k < 6; ++k) {
+        feedEncoderPulse(re, firstPulse + k * 10'000);
+    }
+    const uint32_t lastZero = firstPulse + 50'000;
+    REQUIRE(re.getRpm() == Approx(1'500.f));
+    // The next zero degrees is at lastZero + 40ms, which is after the wrap
+    uint32_t firedAt = 0;
+    re.callbackAtZeroDegrees([&]() { firedAt = gpio.peekTick(); });
+    const uint32_t sinceLastZero = firedAt - lastZero; // modular arithmetic
+    REQUIRE(sinceLastZero >= 40'000);
+    REQUIRE(sinceLastZero < 40'010);
+}
+
+TEST_CASE("Encoder: Callbacks stop when encoder is destroyed")
+{
+    mgo::MockConfigReader config;
+    mgo::MockGpio gpio(false, config);
+    {
+        mgo::RotaryEncoder re(gpio, 23, 24, 2000, 35.f / 30.f);
+        while (re.warmingUp()) {
+            gpio.delayMicroSeconds(1'000);
+        }
+    }
+    // The mock's callbacker thread must no longer be calling into the
+    // destroyed encoder. (AddressSanitizer will report it if it is.)
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    // ...and we can register a new encoder with the same GPIO object
+    mgo::RotaryEncoder re2(gpio, 23, 24, 2000, 35.f / 30.f);
+    while (re2.warmingUp()) {
+        gpio.delayMicroSeconds(1'000);
+    }
+    REQUIRE(re2.warmingUp() == false);
 }

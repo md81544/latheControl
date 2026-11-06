@@ -47,8 +47,14 @@ void Controller::run()
         m_view->updateDisplay(*m_model);
 
         if (rc == StatusResult::PressAKey || rc == StatusResult::WaitForMotors) {
-            waitForAxisToStop(1);
-            waitForAxisToStop(2);
+            if (!waitForAxisToStop(1) || !waitForAxisToStop(2)) {
+                // User pressed a key to abort: motors have been stopped, so
+                // abandon the multi-pass operation rather than carrying on
+                MGOLOG("Multi-pass aborted by user");
+                m_model->setMultiPassStage(MultiPassStage::NotStarted);
+                m_model->changeMode(Mode::None);
+                continue;
+            }
             m_view->updateDisplay(*m_model);
             if (rc == StatusResult::PressAKey) {
                 pressAnyKey("Press a key to continue", {});
@@ -58,11 +64,14 @@ void Controller::run()
 
         if (m_model->isShuttingDown()) {
             MGOLOG("Shutting down");
-            // Stop the motor threads
+            // Stop the motor threads. (We must leave the loop afterwards, as
+            // the model can't be used once its motors have been destroyed.)
+            m_model->stopAllMotors();
             m_model->resetMotorThreads();
             // Note the command used for shutdown should be made passwordless
             // in the /etc/sudoers files
             [[maybe_unused]] auto rc = system("sudo shutdown -h now &");
+            break;
         }
 
         // Small delay just to avoid the UI loop spinning
@@ -858,14 +867,20 @@ void Controller::processKeyPress()
     }
 }
 
-void Controller::waitForAxisToStop(uint8_t axis)
+bool Controller::waitForAxisToStop(uint8_t axis)
 {
     for (;;) {
         if (axis == 1 && !m_model->isAxis1MotorRunning()) {
-            break;
+            return true;
         }
         if (axis == 2 && !m_model->isAxis2MotorRunning()) {
-            break;
+            return true;
+        }
+        // Any key press while we wait is treated as "stop": otherwise there
+        // would be no way to halt e.g. a multi-pass fast return from the keyboard
+        if (m_view->getEvents() != key::None) {
+            m_model->stopAllMotors();
+            return false;
         }
         yieldSleep(std::chrono::microseconds(50'000));
         m_view->updateDisplay(*m_model);
