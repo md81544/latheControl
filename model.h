@@ -371,6 +371,8 @@ private:
     bool m_threadingMoveInProgress { false };
     long m_threadingMoveTarget { 0 };
     bool m_threadingMoveStartedRetracted { false };
+    // For logging the end of a retract or unretract
+    bool m_axis2RetractMoveInProgress { false };
     // Threading warnings (e.g. spindle too fast). A "sticky" one stays until
     // the next pass starts; otherwise it reflects the current state
     std::string m_threadingWarning;

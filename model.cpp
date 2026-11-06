@@ -201,6 +201,7 @@ StatusResult Model::checkStatus()
         // has turned it off because of some issue.
         // This won't stop the motors being started again even
         // if the chuck isn't moving.
+        MGOLOG(fmt::format("Spindle stopped ({:.0f} rpm): stopping all motors", chuckRpm));
         stopAllMotors();
     }
 #endif
@@ -283,6 +284,12 @@ StatusResult Model::checkStatus()
         m_axis2Status = "stopped";
         if (m_axis2WasRunning) {
             axis2SaveBreadcrumbPosition();
+        }
+        if (m_axis2RetractMoveInProgress) {
+            // (If this shows the target was reached, but the tool didn't move
+            // that far, the motor stalled. If it stopped short, it was stopped)
+            MGOLOG(fmt::format("X retract/unretract ended at step {}", m_axis2Motor->getCurrentStep()));
+            m_axis2RetractMoveInProgress = false;
         }
         if (m_fastRetracting) {
             m_axis2Motor->setSpeed(m_previousAxis2Speed);
@@ -443,8 +450,14 @@ void Model::changeMode(Mode mode)
         stopAllMotors();
     }
     axis2SynchroniseOff();
-    if (mode == Mode::Threading || mode == Mode::Taper || mode == Mode::Radius) {
-        // We do not want motor speed ramping on tapering or threading
+    if (mode == Mode::Threading) {
+        // Z must not ramp, as its speed is locked to the spindle's. X isn't
+        // synchronised when threading, and does need to ramp: it's an open-loop
+        // stepper, and starting a retract at full speed can stall it
+        m_axis1Motor->enableRamping(false);
+        m_axis2Motor->enableRamping(true);
+    } else if (mode == Mode::Taper || mode == Mode::Radius) {
+        // X is synchronised with Z, so neither can ramp
         m_axis1Motor->enableRamping(false);
         m_axis2Motor->enableRamping(false);
     } else {
@@ -661,6 +674,12 @@ bool Model::axis1StartThreadingMove(const std::function<void()>& move)
     m_threadingMoveInProgress = true;
     m_threadingMoveTarget = m_axis1Motor->getTargetStep();
     m_threadingMoveStartedRetracted = m_axis2Retracted;
+    MGOLOG(fmt::format(
+        "Threading pass: Z from step {} to {} at {:.0f} rpm, X {}",
+        m_axis1Motor->getCurrentStep(),
+        m_threadingMoveTarget,
+        rpm,
+        m_axis2Retracted ? "retracted" : "in"));
     return true;
 }
 
@@ -670,10 +689,14 @@ void Model::threadingCheckMoveEnded()
         return;
     }
     m_threadingMoveInProgress = false;
+    const bool arrived = m_axis1Motor->getCurrentStep() == m_threadingMoveTarget;
+    MGOLOG(fmt::format(
+        "Threading pass {} at Z step {}",
+        arrived ? "finished" : "STOPPED SHORT",
+        m_axis1Motor->getCurrentStep()));
     if (!m_config.readBool("ThreadingAutoRetract", false)) {
         return;
     }
-    const bool arrived = m_axis1Motor->getCurrentStep() == m_threadingMoveTarget;
     const auto action = threadingStopAction(
         arrived,
         m_threadingMoveStartedRetracted,
@@ -1133,16 +1156,29 @@ void Model::axis2Retract()
         || m_enabledFunction == Mode::Taper) {
         return;
     }
+    // The motor only ramps up when its speed is increased, not at the start of
+    // every move, so (e.g. for an unretract straight after a retract, which
+    // leaves the speed unchanged) we drop the speed first to be sure it ramps.
+    // (Each retract starts from rest, as we return above if X is moving)
+    const auto setRetractSpeed = [this]() {
+        m_axis2Motor->setSpeed(1.0);
+        m_axis2Motor->setSpeed(100.0);
+    };
     if (m_axis2Retracted) {
         // Unretract
-        m_axis2Motor->setSpeed(100.0);
+        setRetractSpeed();
         m_axis2Motor->goToStep(m_xOldPosition);
         m_axis2Status = "Unretracting";
         m_fastRetracting = true;
+        MGOLOG(fmt::format(
+            "X unretract: from step {} to {}",
+            m_axis2Motor->getCurrentStep(),
+            m_axis2Motor->getTargetStep()));
+        m_axis2RetractMoveInProgress = true;
     } else {
         m_xOldPosition = m_axis2Motor->getCurrentStep();
         m_previousAxis2Speed = m_axis2Motor->getSpeed();
-        m_axis2Motor->setSpeed(100.0);
+        setRetractSpeed();
         int direction = -1;
         if (m_xRetractionDirection == XDirection::Inwards) {
             direction = 1;
@@ -1154,6 +1190,11 @@ void Model::axis2Retract()
         m_axis2Motor->goToStep(m_axis2Motor->getCurrentStep() + stepsForRetraction * direction);
         m_axis2Retracted = true;
         m_axis2Status = "Retracting";
+        MGOLOG(fmt::format(
+            "X retract: from step {} to {}",
+            m_axis2Motor->getCurrentStep(),
+            m_axis2Motor->getTargetStep()));
+        m_axis2RetractMoveInProgress = true;
     }
 }
 

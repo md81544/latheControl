@@ -912,6 +912,10 @@ void Controller::processKey(int t)
                 }
             default: // e.g. key::SPACE to stop all motors
                 {
+                    if (m_model->isAxis1MotorRunning() || m_model->isAxis2MotorRunning()) {
+                        // (Logged, as stray keys - e.g. from a gamepad - stop motion)
+                        MGOLOG("Stopping all motors: key " << kp);
+                    }
                     m_model->stopAllMotors();
                     break;
                 }
@@ -930,7 +934,8 @@ bool Controller::waitForAxisToStop(uint8_t axis)
         }
         // Any key press while we wait is treated as "stop": otherwise there
         // would be no way to halt e.g. a multi-pass fast return from the keyboard
-        if (m_view->getEvents() != key::None) {
+        if (const int k = m_view->getEvents(); k != key::None) {
+            MGOLOG("Stopping all motors (key " << k << " while waiting for an axis)");
             m_model->stopAllMotors();
             return false;
         }
