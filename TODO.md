@@ -96,7 +96,15 @@
       moment, if a motor stalls and its driver goes into error mode, the
       driver ignores further step pulses but the program carries on counting
       them, so the position (and memories, and threading start points) end
-      up completely out of sync. Ideas:
+      up completely out of sync.
+    - **Done (detection):** `Axis1AlarmPin` / `Axis1AlarmActiveLevel` (and
+      Axis2) in the config file. The motor thread watches the pin (ignoring
+      spikes under 2ms), stops at once, and refuses to move; the model stops
+      all axes, ends any mode (threading, taper etc.), and shows "Z MOTOR
+      FAULT" until the axis is re-zeroed or its position set, which only
+      succeeds once the driver's alarm has gone. Not yet tried on the machine
+    - **Still to do:** wire the alarm and find its active level (below), then
+      recovery without re-zeroing (ENA reset, and re-basing Z from the scale)
     - The Z driver is a Hilitand HSS57 hybrid servo (closed loop) driver.
       At present, once it alarms, the only way to recover is to power it off
       and on again
@@ -111,15 +119,9 @@
       output): ALM− to the Pi's GND, ALM+ to the GPIO with a pull-up to
       **3.3V** (the internal pull-up will do; never 5V, as the Pi's GPIOs
       aren't 5V tolerant). Check the driver's manual, as clones differ
-    - Find whether the pin reads high or low in alarm by logging it in
-      normal running and in alarm, and make the active level a config setting
-    - Read it in the motor thread, which already loops every step period, so
-      it can stop stepping immediately: an optional alarm pin for
-      `StepperMotor`, with a configurable active level, and a "faulted" state
-      the program can query
-    - On a fault: stop all axes (e.g. X in a synchronised taper or radius
-      would otherwise carry on), show a clear warning such as "Z MOTOR FAULT:
-      position lost", and refuse motion on that axis until acknowledged
+    - Find whether the pin reads high or low in alarm (e.g. with a meter, or
+      by logging it in normal running and in alarm), and set
+      `Axis1AlarmActiveLevel` to match
     - Recovery: on Z, with the linear scale, re-base the motor's position
       from the scale once the fault is cleared (option 2 of "Linear scale"
       under Sensors), so there's no need to re-zero. On X, without a scale,

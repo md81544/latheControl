@@ -190,6 +190,9 @@ public:
     void setInputString(const std::string& str);
 
     std::string getWarning() const;
+    // Non-empty if a motor has faulted (its driver went into alarm, e.g. after
+    // a stall), describing the fault and what to do
+    std::string getFaultMessage() const;
     std::string getAxis1Status() const;
     std::string getAxis2Status() const;
     std::string getGeneralStatus() const;
@@ -314,7 +317,16 @@ private:
 
     std::set<unsigned> m_axisLocks;
 
+    // Set when a motor's driver goes into alarm (see StepperMotor::setAlarmPin()).
+    // The position is then lost, so these stay set until the axis is re-zeroed
+    // or its position set (which also clears the motor's fault, if the
+    // driver's alarm has been cleared)
+    bool m_axis1Faulted { false };
+    bool m_axis2Faulted { false };
+
     // Private functions
+    void checkMotorFaults();
+    void clearMotorFault(Axis axis);
     void multiPassFinished();
     void multiPassNextCut(mgo::StatusResult& statusResult);
     void multiPassStepOver();

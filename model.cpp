@@ -2,12 +2,32 @@
 #include "keycodes.h"
 #include "threadpitches.h" // for ThreadPitch, threadPitches
 
+#include <algorithm>
 #include <cassert>
 #include <sstream>
 
 #include <fmt/format.h>
 
 namespace {
+
+// Sets up monitoring of a motor driver's alarm output, if the config file
+// specifies one for this axis ("Axis1AlarmPin" etc). Without it, faults can't
+// be detected, and the motor behaves as before
+void configureAlarm(
+    mgo::StepperMotor& motor,
+    const mgo::IConfigReader& config,
+    const std::string& axisPrefix)
+{
+    const std::string pin = config.read(axisPrefix + "AlarmPin", "");
+    if (pin.empty()) {
+        return;
+    }
+    std::string level = config.read(axisPrefix + "AlarmActiveLevel", "low");
+    std::transform(level.begin(), level.end(), level.begin(), ::tolower);
+    const auto activeLevel = level == "high" ? mgo::PinState::high : mgo::PinState::low;
+    motor.setAlarmPin(std::stoi(pin), activeLevel);
+    MGOLOG(axisPrefix << " monitoring driver alarm on GPIO " << pin << ", active " << level);
+}
 
 std::string convertToString(double number, int decimalPlaces)
 {
@@ -74,6 +94,7 @@ void Model::initialise()
     if (!m_axis1Motor->isRunningRealTimeScheduled()){
         MGOLOG("*** Warning *** axis1 steppermotor thread not running real-time");
     }
+    configureAlarm(*m_axis1Motor, m_config, "Axis1");
 
     double axis2ConversionFactor = m_config.readDouble("Axis2ConversionNumerator", -1.0)
         / m_config.readDouble("Axis2ConversionDivisor", 1'000.0);
@@ -91,6 +112,7 @@ void Model::initialise()
     if (!m_axis2Motor->isRunningRealTimeScheduled()){
         MGOLOG("*** Warning *** axis2 steppermotor thread not running real-time");
     }
+    configureAlarm(*m_axis2Motor, m_config, "Axis2");
 
     m_rotaryEncoder = std::make_unique<mgo::RotaryEncoder>(
         m_gpio,
@@ -130,6 +152,8 @@ void Model::initialise()
 StatusResult Model::checkStatus()
 {
     StatusResult statusResult = StatusResult::Ok;
+
+    checkMotorFaults();
 
     float chuckRpm = m_rotaryEncoder->getRpm();
 
@@ -270,6 +294,75 @@ StatusResult Model::checkStatus()
         m_axis2Status = "synchronised";
     }
     return statusResult;
+}
+
+void Model::checkMotorFaults()
+{
+    // (The motor itself stops as soon as its driver's alarm is detected, and
+    // won't move again until the fault is cleared; here we deal with the rest)
+    bool newFault = false;
+    if (m_axis1Motor->isFaulted() && !m_axis1Faulted) {
+        m_axis1Faulted = true;
+        newFault = true;
+        MGOLOG("*** Axis1 motor fault: driver alarm (e.g. stalled); position lost");
+    }
+    if (m_axis2Motor->isFaulted() && !m_axis2Faulted) {
+        m_axis2Faulted = true;
+        newFault = true;
+        MGOLOG("*** Axis2 motor fault: driver alarm (e.g. stalled); position lost");
+    }
+    if (newFault) {
+        // Stop everything: the other axis might otherwise carry on (e.g.
+        // synchronised in a taper, or as part of a multi-pass sequence), and
+        // end any automated function, as its positions are now meaningless
+        stopAllMotors();
+        if (m_enabledFunction != Mode::None) {
+            m_multiPassStage = MultiPassStage::NotStarted;
+            changeMode(Mode::None);
+        }
+    }
+}
+
+void Model::clearMotorFault(Axis axis)
+{
+    // Called when an axis is re-zeroed or its position set, which re-establishes
+    // the position lost in a fault. The motor will only clear its fault if its
+    // driver is no longer in alarm
+    bool& faulted = axis == Axis::Axis1 ? m_axis1Faulted : m_axis2Faulted;
+    StepperMotor& motor = axis == Axis::Axis1 ? *m_axis1Motor : *m_axis2Motor;
+    if (!faulted) {
+        return;
+    }
+    const std::string label = axis == Axis::Axis1 ? m_config.read("Axis1Label", "Z")
+                                                  : m_config.read("Axis2Label", "X");
+    if (motor.clearFault()) {
+        faulted = false;
+        m_warning = "";
+        MGOLOG(label << " motor fault cleared");
+    } else {
+        m_warning = label + " driver is still in alarm: clear it, then set the position again";
+    }
+}
+
+std::string Model::getFaultMessage() const
+{
+    std::string message;
+    const auto add = [&message](const std::string& label) {
+        if (!message.empty()) {
+            message += "  ";
+        }
+        message += fmt::format(
+            "{} MOTOR FAULT: position lost. Clear the driver alarm, then re-zero {}",
+            label,
+            label);
+    };
+    if (m_axis1Faulted) {
+        add(m_config.read("Axis1Label", "Z"));
+    }
+    if (m_axis2Faulted) {
+        add(m_config.read("Axis2Label", "X"));
+    }
+    return message;
 }
 
 void Model::multiPassFinished()
@@ -604,6 +697,8 @@ void Model::axis1Zero()
     }
     // Also clear any "breadcrumb" positions
     axis1ClearBreadcrumbs();
+    // The position is known again, so a motor fault can be cleared
+    clearMotorFault(Axis::Axis1);
 }
 
 void Model::axis1SpeedDecrease()
@@ -827,6 +922,8 @@ void Model::axis2Zero()
     }
     // Also clear any "breadcrumb" positions
     axis2ClearBreadcrumbs();
+    // The position is known again, so a motor fault can be cleared
+    clearMotorFault(Axis::Axis2);
 }
 
 void Model::axis2SynchroniseOff()
@@ -1266,11 +1363,15 @@ void Model::setAxis2MotorSpeed(double speed)
 void Model::setAxis1Position(double mm)
 {
     m_axis1Motor->setPosition(mm);
+    // The position is known again, so a motor fault can be cleared
+    clearMotorFault(Axis::Axis1);
 }
 
 void Model::setAxis2Position(double mm)
 {
     m_axis2Motor->setPosition(mm);
+    // The position is known again, so a motor fault can be cleared
+    clearMotorFault(Axis::Axis2);
 }
 
 void Model::resetMotorThreads()

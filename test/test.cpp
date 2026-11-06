@@ -8,6 +8,7 @@
 #include "stepperControl/steppermotor.h"
 
 #include <chrono>
+#include <map>
 #include <cmath>
 #include <ctime>
 #include <thread>
@@ -38,6 +39,8 @@ public:
     }
     void delayMicroSeconds(long usecs) override { m_tick += static_cast<uint32_t>(usecs); }
     uint32_t getTick() override { return m_tick++; }
+    void setInputPin(int, bool) override { }
+    mgo::PinState readPin(int) override { return mgo::PinState::high; }
     void scaleGoToPositionMm(double) override { }
     void scaleSetSpeedStepsPerSec(double) override { }
     void scaleStop() override { }
@@ -633,4 +636,161 @@ TEST_CASE("Joystick: initial state doesn't trigger anything")
     REQUIRE(m2.process({ button(0, true) }).empty());
     REQUIRE(m2.process({ button(0, false) }).empty());
     REQUIRE(m2.process({ button(0, true) }) == Keys { mgo::key::AltW });
+}
+
+namespace {
+
+// A config reader which returns the given values, and defaults for anything else
+class TestConfigReader final : public mgo::IConfigReader {
+public:
+    explicit TestConfigReader(std::map<std::string, std::string> values)
+        : m_values(std::move(values))
+    {
+    }
+    std::string read(const std::string& key, const std::string& defaultValue = "") const override
+    {
+        const auto it = m_values.find(key);
+        return it == m_values.end() ? defaultValue : it->second;
+    }
+    unsigned long readLong(const std::string& key, unsigned long defaultValue = 0) const override
+    {
+        const auto it = m_values.find(key);
+        return it == m_values.end() ? defaultValue : std::stoul(it->second);
+    }
+    double readDouble(const std::string& key, double defaultValue = 0.0) const override
+    {
+        const auto it = m_values.find(key);
+        return it == m_values.end() ? defaultValue : std::stod(it->second);
+    }
+    bool readBool(const std::string& key, bool defaultValue) const override
+    {
+        const auto it = m_values.find(key);
+        return it == m_values.end() ? defaultValue : it->second == "true";
+    }
+
+private:
+    std::map<std::string, std::string> m_values;
+};
+
+// Waits (up to a time limit) for a condition to become true
+template <typename F>
+bool waitFor(F condition, std::chrono::milliseconds limit = std::chrono::milliseconds(1'000))
+{
+    const auto deadline = std::chrono::steady_clock::now() + limit;
+    while (!condition()) {
+        if (std::chrono::steady_clock::now() > deadline) {
+            return false;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    return true;
+}
+
+constexpr int ALARM_PIN = 17;
+
+} // end anonymous namespace
+
+TEST_CASE("Stepper: driver alarm stops the motor until cleared")
+{
+    mgo::MockGpio gpio(false);
+    mgo::StepperMotor motor(gpio, 0, 0, 0, 1'000, 0.01, 1'000.0);
+    motor.setAlarmPin(ALARM_PIN, mgo::PinState::low);
+    motor.setRpm(100.0);
+    motor.goToStep(1'000'000);
+    REQUIRE(waitFor([&] { return motor.getCurrentStep() > 10; }));
+    REQUIRE(!motor.isFaulted());
+
+    // The driver goes into alarm (e.g. the motor has stalled)
+    gpio.setInputPinLevel(ALARM_PIN, mgo::PinState::low);
+    REQUIRE(waitFor([&] { return motor.isFaulted(); }));
+    REQUIRE(waitFor([&] { return !motor.isRunning(); }));
+    const long stoppedAt = motor.getCurrentStep();
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    REQUIRE(motor.getCurrentStep() == stoppedAt);
+
+    // While faulted, the motor refuses to move
+    motor.goToStep(0);
+    REQUIRE(!motor.isRunning());
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    REQUIRE(motor.getCurrentStep() == stoppedAt);
+
+    // The fault can't be cleared while the driver is still in alarm
+    REQUIRE(!motor.clearFault());
+    REQUIRE(motor.isFaulted());
+
+    // Once the driver's alarm is cleared, so can the fault be, and it moves again
+    gpio.setInputPinLevel(ALARM_PIN, mgo::PinState::high);
+    REQUIRE(motor.clearFault());
+    REQUIRE(!motor.isFaulted());
+    motor.goToStep(stoppedAt + 10);
+    motor.wait();
+    REQUIRE(motor.getCurrentStep() == stoppedAt + 10);
+}
+
+TEST_CASE("Stepper: driver alarm is detected while idle")
+{
+    mgo::MockGpio gpio(false);
+    mgo::StepperMotor motor(gpio, 0, 0, 0, 1'000, 0.01, 1'000.0);
+    motor.setAlarmPin(ALARM_PIN, mgo::PinState::high); // (active high, this time)
+    gpio.setInputPinLevel(ALARM_PIN, mgo::PinState::low);
+    std::this_thread::sleep_for(std::chrono::milliseconds(30));
+    REQUIRE(!motor.isFaulted());
+    gpio.setInputPinLevel(ALARM_PIN, mgo::PinState::high);
+    REQUIRE(waitFor([&] { return motor.isFaulted(); }));
+}
+
+TEST_CASE("Stepper: no alarm pin means no faults")
+{
+    mgo::MockGpio gpio(false);
+    mgo::StepperMotor motor(gpio, 0, 0, 0, 1'000, 0.01, 1'000.0);
+    // Even if a pin reads as it would in alarm, it isn't being monitored
+    gpio.setInputPinLevel(ALARM_PIN, mgo::PinState::low);
+    motor.setRpm(100.0);
+    motor.goToStep(20);
+    motor.wait();
+    REQUIRE(motor.getCurrentStep() == 20);
+    REQUIRE(!motor.isFaulted());
+}
+
+TEST_CASE("Model:   motor fault stops all axes, and re-zeroing clears it")
+{
+    TestConfigReader config({ { "Axis1AlarmPin", "17" }, { "Axis1AlarmActiveLevel", "low" } });
+    mgo::MockGpio gpio(false);
+    mgo::Model model(gpio, config);
+    model.initialise();
+    model.setAxis1MotorSpeed(100.0);
+    model.setAxis2MotorSpeed(100.0);
+    model.axis1GoToPosition(50.0);
+    model.axis2GoToPosition(50.0);
+    REQUIRE(waitFor([&] { return model.isAxis1MotorRunning() && model.isAxis2MotorRunning(); }));
+    model.checkStatus();
+    REQUIRE(model.getFaultMessage().empty());
+
+    // Axis 1's driver goes into alarm: it stops by itself...
+    gpio.setInputPinLevel(ALARM_PIN, mgo::PinState::low);
+    REQUIRE(waitFor([&] { return !model.isAxis1MotorRunning(); }));
+    // ...and the model then stops the other axis, and reports the fault
+    model.checkStatus();
+    REQUIRE(!model.isAxis2MotorRunning());
+    REQUIRE(model.getFaultMessage().find("Z MOTOR FAULT") != std::string::npos);
+
+    // Axis 1 won't move while faulted
+    const double position = model.getAxis1MotorPosition();
+    model.axis1GoToPosition(0.0);
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    REQUIRE(model.getAxis1MotorPosition() == position);
+
+    // Re-zeroing while the driver is still in alarm doesn't clear the fault
+    model.axis1Zero();
+    REQUIRE(!model.getFaultMessage().empty());
+    REQUIRE(model.getWarning().find("still in alarm") != std::string::npos);
+
+    // Once the driver's alarm is cleared, re-zeroing clears the fault
+    gpio.setInputPinLevel(ALARM_PIN, mgo::PinState::high);
+    model.axis1Zero();
+    REQUIRE(model.getFaultMessage().empty());
+    REQUIRE(model.getWarning().empty());
+    model.axis1GoToPosition(0.5);
+    model.axis1Wait();
+    REQUIRE(model.getAxis1MotorPosition() == Approx(0.5));
 }

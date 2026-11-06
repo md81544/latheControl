@@ -320,6 +320,9 @@ struct ViewQt::Impl {
     TextItem notification;
     TextItem xRetractDirection;
     TextItem xRetracted;
+    // Motor fault (driver alarm) message, shown whatever the mode
+    TextItem fault;
+    std::size_t faultIteration { 0 };
 
     std::vector<TextItem> memoryLabel;
     TextItem axis1MemoryLabel;
@@ -436,6 +439,7 @@ void ViewQt::initialise(const Model& model)
     d.xRetractDirection = make(860, 165, 25, RED);
     d.xRetractDirection.text = "-X RTRCT";
     d.axis1LinearScalePos = make(550, 170, 20, QColor(209, 209, 50));
+    d.fault = make(20, STATUS_BAR_Y - 40, 22, RED);
 
     // (Joystick support is only available on Linux)
     d.joystick = std::make_unique<Joystick>(model.config().read("JoystickDevice", "/dev/input/js0"));
@@ -562,6 +566,11 @@ void ViewQt::updateDisplay(const Model& model)
         draw(d.misc3);
         draw(d.misc4);
         draw(d.misc5);
+        d.fault.text = model.getFaultMessage();
+        if (!d.fault.text.empty()) {
+            d.fault.colour = ++d.faultIteration % 6 < 3 ? RED : YELLOW;
+            draw(d.fault);
+        }
     } else {
         // The SFML version drew nothing while shutting down, but set this text
         draw(d.axis1Pos);
