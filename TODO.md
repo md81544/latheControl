@@ -92,7 +92,50 @@
       be a config item applied automatically). Idea: calculate the angle
       required from two measurements and a distance
 - [ ] Support the enable pin for each motor
-- [ ] Detecting lost steps: see "Linear scale" under Sensors
+- [ ] **Motor stalls: stop when the driver goes into its error mode.** At the
+      moment, if a motor stalls and its driver goes into error mode, the
+      driver ignores further step pulses but the program carries on counting
+      them, so the position (and memories, and threading start points) end
+      up completely out of sync. Ideas:
+    - The Z driver is a Hilitand HSS57 hybrid servo (closed loop) driver.
+      At present, once it alarms, the only way to recover is to power it off
+      and on again
+    - X has an ordinary (open-loop) stepper and no scale, so it can't detect
+      a stall at all: it loses steps silently. For X, the options are to make
+      stalls less likely (acceleration and deceleration ramping, a
+      conservative maximum speed), re-zero or touch off when in doubt, or add
+      feedback (a closed-loop driver like Z's, or a scale on X) so the same
+      detection and recovery can be used
+    - Wire the driver's alarm output to a spare GPIO. HSS57 drivers
+      normally have ALM+ / ALM− terminals (an opto-isolated transistor
+      output): ALM− to the Pi's GND, ALM+ to the GPIO with a pull-up to
+      **3.3V** (the internal pull-up will do; never 5V, as the Pi's GPIOs
+      aren't 5V tolerant). Check the driver's manual, as clones differ
+    - Find whether the pin reads high or low in alarm by logging it in
+      normal running and in alarm, and make the active level a config setting
+    - Read it in the motor thread, which already loops every step period, so
+      it can stop stepping immediately: an optional alarm pin for
+      `StepperMotor`, with a configurable active level, and a "faulted" state
+      the program can query
+    - On a fault: stop all axes (e.g. X in a synchronised taper or radius
+      would otherwise carry on), show a clear warning such as "Z MOTOR FAULT:
+      position lost", and refuse motion on that axis until acknowledged
+    - Recovery: on Z, with the linear scale, re-base the motor's position
+      from the scale once the fault is cleared (option 2 of "Linear scale"
+      under Sensors), so there's no need to re-zero. On X, without a scale,
+      treat the position as unknown until re-zeroed or touched off
+    - Many drivers clear a position-error alarm when ENA is toggled
+      (disable, then enable), though some faults need a power cycle. Test
+      this on the HSS57: wire ENA like PUL and DIR, and see whether
+      disabling and re-enabling clears the alarm LED. If so, the program can
+      offer "reset Z driver" after a fault, then re-base Z from the scale, so
+      a stall needs neither a power cycle nor re-zeroing. Ties in with
+      "Support the enable pin for each motor"
+    - The linear scale check (option 1 under Sensors) is a backstop: it
+      catches stalls even without the alarm wired, and with ordinary
+      open-loop drivers, which lose steps silently
+    - Add a simulated alarm pin to the mock GPIO, to test all this without
+      stalling the lathe
 - [ ] Support limit switches. Could have multiple switches all on one pin,
       and when triggered simply issue a "stop all". Partially implemented
       (see `limitSwitchTriggered()`)
@@ -159,14 +202,14 @@
            moves, but probably not for threading
     - **Decide which frame memories are stored in.** If in scale units, a
       "go to memory" becomes: move by dead reckoning, then correct (option 2)
-    - **Reduce lost steps at source:** most are probably lost on sudden stops
-      and starts, so deceleration ramping (under Motion and timing) may help
-      as much as detecting them
-    - **Another way to detect them:** the Z axis driver on the lathe has
-      pins which signal lost steps directly. If one is triggered, we could
-      stop the Z axis (not sure how accurate the position will be after
-      that). To test once wired up. A scale on X would need a mod to the
-      sender unit
+    - **Causes of lost steps:** mainly the motor stalling under load, when
+      the driver goes into error mode (see "Motor stalls" under Motion and
+      timing, which covers using the driver's alarm output to detect it).
+      Sudden starts and stops may also lose steps, which deceleration
+      ramping would help with
+    - **Option 2 is the preferred approach** (as it also gives a way to
+      recover after a stall without re-zeroing)
+    - A scale on X would need a mod to the sender unit
     - **Scale reliability:** a jump of two phases means an edge was missed,
       and its direction can't be known. Count these and report them, as a
       sign of interference or the scale being read too slowly
