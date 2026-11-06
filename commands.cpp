@@ -400,9 +400,14 @@ std::vector<Command> buildCommands(const IConfigReader& config)
 
     c = "System";
     b.add(c, "Quit", key::CtrlQ, NONE, nullptr, 'q');
-#ifndef FAKE
-    b.add(c, "Shut down the computer", key::ASTERISK, NONE, nullptr, 'd');
+    // In mock builds (FAKE) this is shown, so the menu looks the same as on
+    // the Pi, but greyed out: shutting down isn't done in mock builds
+#ifdef FAKE
+    const auto shutdownAvailable = [](const Model&) { return false; };
+#else
+    const auto shutdownAvailable = [](const Model&) { return true; };
 #endif
+    b.add(c, "Shut down the computer", key::ASTERISK, NONE, shutdownAvailable, 'd');
 
     return b.take();
 }

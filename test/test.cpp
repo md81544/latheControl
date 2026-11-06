@@ -1109,3 +1109,18 @@ TEST_CASE("Commands: hints after a leader key")
     REQUIRE(mgo::followUpKeyName(mgo::key::a1_FULLSTOP) == ".");
     REQUIRE(mgo::followUpKeyName(mgo::key::f2t) == "t");
 }
+
+TEST_CASE("Commands: shut down is shown, but unavailable, in mock builds")
+{
+    mgo::MockConfigReader config;
+    mgo::MockGpio gpio(false);
+    mgo::Model model(gpio, config);
+    const auto commands = mgo::buildCommands(config);
+    const auto shutdown = std::find_if(commands.begin(), commands.end(), [](const mgo::Command& c) {
+        return c.key == mgo::key::ASTERISK;
+    });
+    REQUIRE(shutdown != commands.end());
+    REQUIRE(shutdown->category == "System");
+    // (The tests are always built with FAKE)
+    REQUIRE(!mgo::isAvailable(*shutdown, model));
+}
