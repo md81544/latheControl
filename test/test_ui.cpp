@@ -369,6 +369,12 @@ TEST_CASE("UI: menu through the controller")
     REQUIRE(!controller.isMenuOpen());
     REQUIRE(tm.model.getEnabledFunction() == mgo::Mode::Taper);
     REQUIRE(tm.model.getTaperAngle() == -45.0);
+
+    // F1 (help) opens and closes the menu too
+    press(w, controller, Qt::Key_F1);
+    REQUIRE(controller.isMenuOpen());
+    press(w, controller, Qt::Key_F1);
+    REQUIRE(!controller.isMenuOpen());
 }
 
 int main(int argc, char* argv[])

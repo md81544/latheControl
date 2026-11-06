@@ -1003,7 +1003,7 @@ TEST_CASE("Menu: hotkeys")
     // Upper case works too
     menu.open();
     menu.handleKey(mgo::key::Y, model);
-    REQUIRE(menu.handleKey(mgo::key::H, model).key == mgo::key::F1);
+    REQUIRE(menu.handleKey(mgo::key::Q, model).key == mgo::key::CtrlQ);
 
     // A letter which isn't a hotkey does nothing while the menu is open (it
     // doesn't act as its usual shortcut)

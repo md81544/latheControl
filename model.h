@@ -267,7 +267,7 @@ private:
                                       AXIS2_UNSET, AXIS2_UNSET, AXIS2_UNSET };
     std::size_t m_currentMemory { 0 };
     std::size_t m_threadPitchIndex { 0 };
-    std::string m_generalStatus { "Tab: menu   F1: help" };
+    std::string m_generalStatus { "Tab or F1: menu" };
     std::string m_axis1Status { "stopped" };
     std::string m_axis2Status { "stopped" };
     std::string m_warning;

@@ -339,7 +339,6 @@ std::vector<Command> buildCommands(const IConfigReader& config)
           a2Hotkey != a1Hotkey ? a2Hotkey : 0);
 
     c = "System";
-    b.add(c, "Help", key::F1, NONE, nullptr, 'h');
     b.add(c, "Quit", key::CtrlQ, NONE, nullptr, 'q');
 #ifndef FAKE
     b.add(c, "Shut down the computer", key::ASTERISK, NONE, nullptr, 'd');

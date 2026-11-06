@@ -94,6 +94,10 @@ void Controller::processKeyPress()
     // Only the menu cares whether a key came from the gamepad
     const bool fromJoystick = k & key::JOYSTICK;
     k &= ~key::JOYSTICK;
+    // F1 (help) opens and closes the menu, just as Tab does
+    if (k == key::F1) {
+        k = key::TAB;
+    }
     if (m_menu.isOpen()) {
         // The menu only takes the keys it needs (navigation, and letters for
         // its hotkeys); everything else (e.g. Space to stop all motors)
@@ -631,23 +635,11 @@ void Controller::processKey(int t)
                     // clang-format on
                     break;
                 }
-            case key::F1: // help mode
+            case key::F1: // help: the menu, which shows every command's shortcut
             case key::f2h:
                 {
-                    const std::string axis1Name = m_model->config().read("Axis1Label", "Z");
-                    const std::string axis2Name = m_model->config().read("Axis2Label", "X");
-                    pressAnyKey(
-                        "Help",
-                        { "Tab opens a menu of everything, showing each command's shortcut.",
-                          "",
-                          "Modes: (F2=Leader) s=Setup t=Thread p=taPer r=Retract, o=radius",
-                          axis1Name + " axis speed: 1-5, " + axis2Name + " axis speed: 6-0",
-                          "[ and ] select memory slot. M store, Enter return, " + axis1Name
-                              + " then F fast return.",
-                          "WASD = nudge 0.05mm (Shift 0.01mm, Alt 0.1mm). R retract.",
-                          "Space stops all motors.",
-                          "",
-                          "Press any key" });
+                    m_model->setKeyMode(KeyMode::None);
+                    m_menu.open();
                     break;
                 }
             case key::f2s: // setup mode

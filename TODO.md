@@ -19,8 +19,8 @@
       many paired or small commands, which have quick shortcuts already
     - **Next:** after an axis leader key (e.g. `Z`), show what each key does
       with that axis, using the same command table
-    - Regenerate the F1 help from the command table too (its text is still
-      written by hand)
+    - **Done:** F1 opens the menu (which shows every shortcut) rather than a
+      separate, hand-written help page
     - While the menu is open, memory slots 5 and 6 are hidden behind it
 - [ ] It must be usable entirely from the keyboard or the gamepad, since a
       mouse is awkward at the machine. Every menu and dialog needs to be
