@@ -27,6 +27,7 @@ public:
         std::string_view defaultEntry = "",
         std::optional<std::vector<std::string>> listItems = std::nullopt) override;
     void updateDisplay(const Model&) override;
+    void setMenu(const Menu* menu) override;
 
 private:
     struct Impl;

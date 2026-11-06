@@ -56,13 +56,15 @@ This program is very time-critical. You shouldn't need to use `nice`, as, intern
 ## Usage
 *Note: the axes are referred to as Z and X here, but these names are configurable. Z is the primary axis (axis1) and X is the secondary (axis2).*
 
+**The menu** - press `Tab` to open a menu of everything you can do, with each command's keyboard shortcut alongside. Use the arrow keys (or the gamepad's D-pad) to move around it, `Enter` or `Right` to choose, `Left` or `Esc` to go back, and `Tab` again to close it. The menu doesn't stop anything: motors keep running while it's open, `Space` still stops all motors, and rapids (`Alt` + arrow) still work. Commands which can't be used at the moment (e.g. moving a locked axis) are greyed out.
+
 For general **movement** of the carriages, use the arrow keys. Press the same key again (or spacebar) to stop. Pressing `Alt` with an arrow key sets the carriage moving at its maximum speed (useful for moving tools out of the way, not actual cutting).
 
 Control **speed of motion** with number keys. `1`-`5` controls Z and `6`-`0` controls X. For finer control of speed, use the `-` and `+` (or `=`) keys for the Z axis, and use the leader `X` with the same keys for the X axis (for example, press `X`, then `-`).
 
-"**Nudging**" the axes can be achieved with the `W`, `A`, `S`, and `D` keys. Eacn "nudge" is 0.025mm. To move less (0.002mm), press `shift` plus a nudge key. To move more (0.1mm), press `Alt` plus a nudge key. If you're pressing these keys a lot, look at relative motion (below) instead.
+"**Nudging**" the axes can be achieved with the `W`, `A`, `S`, and `D` keys. Each "nudge" is 0.05mm. To move less (0.01mm), press `shift` plus a nudge key. To move more (0.1mm), press `Alt` plus a nudge key. If you're pressing these keys a lot, look at relative motion (below) instead.
 
-There are four **memory locations**, you can select which one is active by means of the `[` and `]` keys. Press `M` to store the current X and Z position in the current memory slot.
+There are six **memory locations**, you can select which one is active by means of the `[` and `]` keys. Press `M` to store the current X and Z position in the current memory slot.
 
 Axis "**leader keys**" can be used to store just the X or Z value, for example, pressing `XM` (x followed by m) will memorise just the X value.
 
@@ -74,11 +76,11 @@ To move to an **absolute position**, press leader + `G` (for "go to") - for exam
 
 **Zeroing** - press `XZ` or `ZZ` to zero the axis at the current position. The "axis leader" key `\` (backslash) selects both axes, so `\z` will zero out both axes at once.
 
-**Setting a position** - press "axis leader" then `S` - for example `ZS` - then enter a value to change what the current position is. With the X axis, you can enter the value as a **diameter value** by entering a value and then pressing `D` instead of `ENTER`. This sets the X value to half of the diameter and displays the actual diameter in the status line at the bottom of the screen.
+**Setting a position** - press "axis leader" then `S` - for example `ZS` - then enter a value to change what the current position is. With the X axis, you can enter the value as a **diameter value** by also pressing `D` (which ticks the "set as diameter" option) before `ENTER`. This sets the X value to half of the diameter and displays the actual diameter in the status line at the bottom of the screen.
 
 **Retraction** - `R` retracts the X axis a small amount. Press again to unretract. Retraction can be negative for boring operations, see "Special functions" below.
 
-**Fast return** - pressing `F` will rapidly return the Z axis to the current memory slot.
+**Fast return** - pressing `Z` then `F` will rapidly return the Z axis to the current memory slot (`X` then `F` for the X axis; `\` then `F` for both).
 
 **Last Position** This is **EXPERIMENTAL** - press `L` to return the Z axis (only) to its last position. This works with multiple positions, so if you go from 0.0mm to, say, 5.0mm then 7.0mm, pressing `L` once will return to 5.0mm, and pressing it again will return to 0.0mm. If there are no positions in the stack then pressing `L` does nothing.
 

@@ -1,0 +1,309 @@
+#include "commands.h"
+
+#include "configreader.h"
+#include "keycodes.h"
+#include "model.h"
+
+#include <fmt/format.h>
+
+namespace mgo {
+
+namespace {
+
+// Bits added to a key code by the axis leader keys (see
+// Controller::processLeaderKeyModeKeyPress())
+constexpr int AXIS1_LEADER_BIT = 0x1000;
+constexpr int AXIS2_LEADER_BIT = 0x2000;
+constexpr int ALL_AXES_LEADER_BIT = 0x4000;
+
+// The name of a single key (without leader keys)
+std::string keyName(int k)
+{
+    if (k >= key::a && k <= key::z) {
+        return std::string(1, static_cast<char>(k));
+    }
+    if (k >= key::A && k <= key::Z) {
+        return "Shift+" + std::string(1, static_cast<char>(k - key::A + key::a));
+    }
+    if (k >= key::ZERO && k <= key::NINE) {
+        return std::string(1, static_cast<char>(k));
+    }
+    if (k >= key::F1 && k <= key::F12) {
+        return fmt::format("F{}", k - key::F1 + 1);
+    }
+    switch (k) {
+        case key::ENTER:
+            return "Enter";
+        case key::SPACE:
+            return "Space";
+        case key::ESC:
+            return "Esc";
+        case key::DELETE:
+            return "Delete";
+        case key::BACKSPACE:
+            return "Backspace";
+        case key::LEFT:
+            return "Left";
+        case key::RIGHT:
+            return "Right";
+        case key::UP:
+            return "Up";
+        case key::DOWN:
+            return "Down";
+        case key::ASTERISK:
+            return "*";
+        default:
+            // Other keys are their own ASCII character ([ ] , . - = : \ |)
+            if (k > 32 && k < 127) {
+                return std::string(1, static_cast<char>(k));
+            }
+            return "?";
+    }
+}
+
+std::string leaderKeyName(const IConfigReader& config, const std::string& setting, long defaultKey)
+{
+    const long k = static_cast<long>(config.readLong(setting, defaultKey));
+    return keyName(static_cast<int>(k));
+}
+
+// Builds the command list, leaving out commands for disabled axes
+class CommandListBuilder {
+public:
+    explicit CommandListBuilder(const IConfigReader& config)
+        : m_axis1Enabled(!config.readBool("DisableAxis1", false))
+        , m_axis2Enabled(!config.readBool("DisableAxis2", false))
+    {
+    }
+
+    // axes: which axes the command needs (bit 0 = axis 1, bit 1 = axis 2)
+    void add(
+        const std::string& category,
+        const std::string& description,
+        int key,
+        int axes,
+        std::function<bool(const Model&)> available = nullptr)
+    {
+        if (((axes & 1) && !m_axis1Enabled) || ((axes & 2) && !m_axis2Enabled)) {
+            return;
+        }
+        Command c { category, description, key };
+        if (available) {
+            c.available = std::move(available);
+        }
+        m_commands.push_back(std::move(c));
+    }
+
+    std::vector<Command> take()
+    {
+        return std::move(m_commands);
+    }
+
+private:
+    bool m_axis1Enabled;
+    bool m_axis2Enabled;
+    std::vector<Command> m_commands;
+};
+
+constexpr int AXIS1 = 1;
+constexpr int AXIS2 = 2;
+constexpr int BOTH = AXIS1 | AXIS2;
+constexpr int NONE = 0;
+
+} // end anonymous namespace
+
+std::string shortcutText(int k, const IConfigReader& config)
+{
+    // Function leader (F2, or colon) commands
+    switch (k) {
+        case key::f2h:
+            return "F2 h";
+        case key::f2s:
+            return "F2 s";
+        case key::f2t:
+            return "F2 t";
+        case key::f2p:
+            return "F2 p";
+        case key::f2r:
+            return "F2 r";
+        case key::f2o:
+            return "F2 o";
+        case key::f2q:
+            return "F2 q";
+        case key::f2m:
+            return "F2 m";
+        default:
+            break;
+    }
+    if (k & key::ALT) {
+        return "Alt+" + keyName(k & ~key::ALT);
+    }
+    if (k & key::CTRL) {
+        return "Ctrl+" + keyName(k & ~key::CTRL);
+    }
+    if (k & ALL_AXES_LEADER_BIT) {
+        return "\\ " + keyName(k & ~ALL_AXES_LEADER_BIT);
+    }
+    if (k & AXIS2_LEADER_BIT) {
+        return leaderKeyName(config, "Axis2Leader", 120) + " " + keyName(k & ~AXIS2_LEADER_BIT);
+    }
+    if (k & AXIS1_LEADER_BIT) {
+        return leaderKeyName(config, "Axis1Leader", 122) + " " + keyName(k & ~AXIS1_LEADER_BIT);
+    }
+    return keyName(k);
+}
+
+bool keyAllowedInCurrentMode(int k, const Model& model)
+{
+    // The mode means some keys are ignored, for instance in
+    // threading, you cannot change the speed of the z-axis as
+    // that would affect the thread pitch
+    // Always allow certain keys:
+    if (k == key::CtrlQ || k == key::ESC || k == key::ENTER) {
+        return true;
+    }
+    // Don't allow any x movement when retracted
+    if (model.getIsAxis2Retracted()
+        && (k == key::UP || k == key::DOWN || k == key::W || k == key::w || k == key::s
+            || k == key::S)) {
+        return false;
+    }
+    if (model.getCurrentDisplayMode() == Mode::Setup) {
+        return k == key::LEFT || k == key::RIGHT || k == key::UP || k == key::DOWN
+            || k == key::SPACE;
+    }
+    return true;
+}
+
+bool isAvailable(const Command& command, const Model& model)
+{
+    return keyAllowedInCurrentMode(command.key, model) && command.available(model);
+}
+
+std::vector<Command> buildCommands(const IConfigReader& config)
+{
+    const std::string a1 = config.read("Axis1Label", "Z");
+    const std::string a2 = config.read("Axis2Label", "X");
+    const std::string u1 = config.read("Axis1DisplayUnits", "mm");
+    const std::string u2 = config.read("Axis2DisplayUnits", "mm");
+
+    const auto axis1Free = [](const Model& m) { return !m.isAxisLocked(1); };
+    const auto axis2Free = [](const Model& m) { return !m.isAxisLocked(2); };
+    // Axis 1's speed is driven by the spindle when threading
+    const auto axis1SpeedAdjustable
+        = [](const Model& m) { return m.getEnabledFunction() != Mode::Threading; };
+    const auto speedPresetsAllowed
+        = [](const Model& m) { return m.getCurrentDisplayMode() != Mode::Threading; };
+
+    CommandListBuilder b(config);
+
+    std::string c = "Move";
+    b.add(c, fmt::format("Move {} left (again to stop)", a1), key::LEFT, AXIS1, axis1Free);
+    b.add(c, fmt::format("Move {} right (again to stop)", a1), key::RIGHT, AXIS1, axis1Free);
+    b.add(c, fmt::format("Move {} in (again to stop)", a2), key::UP, AXIS2, axis2Free);
+    b.add(c, fmt::format("Move {} out (again to stop)", a2), key::DOWN, AXIS2, axis2Free);
+    b.add(c, "Stop all motors", key::SPACE, NONE);
+
+    c = "Nudge";
+    b.add(c, fmt::format("{} left 0.05{}", a1, u1), key::a, AXIS1, axis1Free);
+    b.add(c, fmt::format("{} left 0.01{}", a1, u1), key::A, AXIS1, axis1Free);
+    b.add(c, fmt::format("{} left 0.1{}", a1, u1), key::AltA, AXIS1, axis1Free);
+    b.add(c, fmt::format("{} right 0.05{}", a1, u1), key::d, AXIS1, axis1Free);
+    b.add(c, fmt::format("{} right 0.01{}", a1, u1), key::D, AXIS1, axis1Free);
+    b.add(c, fmt::format("{} right 0.1{}", a1, u1), key::AltD, AXIS1, axis1Free);
+    b.add(c, fmt::format("{} in 0.05{}", a2, u2), key::w, AXIS2, axis2Free);
+    b.add(c, fmt::format("{} in 0.01{}", a2, u2), key::W, AXIS2, axis2Free);
+    b.add(c, fmt::format("{} in 0.1{}", a2, u2), key::AltW, AXIS2, axis2Free);
+    b.add(c, fmt::format("{} out 0.05{}", a2, u2), key::s, AXIS2, axis2Free);
+    b.add(c, fmt::format("{} out 0.01{}", a2, u2), key::S, AXIS2, axis2Free);
+    b.add(c, fmt::format("{} out 0.1{}", a2, u2), key::AltS, AXIS2, axis2Free);
+
+    c = "Speed";
+    b.add(c, fmt::format("{} faster", a1), key::EQUALS, AXIS1, axis1SpeedAdjustable);
+    b.add(c, fmt::format("{} slower", a1), key::MINUS, AXIS1, axis1SpeedAdjustable);
+    const std::vector<double> axis1Defaults { 20.0, 40.0, 100.0, 250.0, 1'000.0 };
+    for (int n = 0; n < 5; ++n) {
+        const double speed = config.readDouble(fmt::format("Axis1SpeedPreset{}", n + 1), axis1Defaults.at(n));
+        b.add(
+            c,
+            fmt::format("{} speed preset {}: {} {}/min", a1, n + 1, speed, u1),
+            key::ONE + n,
+            AXIS1,
+            speedPresetsAllowed);
+    }
+    b.add(c, fmt::format("{} faster", a2), key::a2_EQUALS, AXIS2);
+    b.add(c, fmt::format("{} slower", a2), key::a2_MINUS, AXIS2);
+    const std::vector<double> axis2Defaults { 5.0, 20.0, 40.0, 80.0, 100.0 };
+    const std::vector<int> axis2PresetKeys { key::SIX, key::SEVEN, key::EIGHT, key::NINE, key::ZERO };
+    for (int n = 0; n < 5; ++n) {
+        const double speed = config.readDouble(fmt::format("Axis2SpeedPreset{}", n + 1), axis2Defaults.at(n));
+        b.add(
+            c,
+            fmt::format("{} speed preset {}: {} {}/min", a2, n + 1, speed, u2),
+            axis2PresetKeys.at(n),
+            AXIS2,
+            speedPresetsAllowed);
+    }
+
+    c = "Memory";
+    b.add(c, "Previous memory slot", key::LBRACKET, NONE);
+    b.add(c, "Next memory slot", key::RBRACKET, NONE);
+    b.add(c, fmt::format("Store {} and {} in slot", a1, a2), key::m, BOTH);
+    b.add(c, fmt::format("Store {} in slot", a1), key::a1_m, AXIS1);
+    b.add(c, fmt::format("Store {} in slot", a2), key::a2_m, AXIS2);
+    b.add(c, fmt::format("Go to slot: {}", a1), key::a1_ENTER, AXIS1);
+    b.add(c, fmt::format("Go to slot: {}", a2), key::a2_ENTER, AXIS2);
+    b.add(c, fmt::format("Go to slot: {} and {}", a1, a2), key::aAll_ENTER, BOTH);
+    b.add(c, fmt::format("Fast return to slot: {}", a1), key::a1_f, AXIS1);
+    b.add(c, fmt::format("Fast return to slot: {}", a2), key::a2_f, AXIS2);
+    b.add(c, fmt::format("Fast return to slot: {} and {}", a1, a2), key::aAll_f, BOTH);
+    b.add(c, fmt::format("Enter a {} value for slot...", a1), key::a1_i, AXIS1);
+    b.add(c, fmt::format("Enter a {} value for slot...", a2), key::a2_i, AXIS2);
+    b.add(c, fmt::format("Clear slot: {}", a1), key::a1_DELETE, AXIS1);
+    b.add(c, fmt::format("Clear slot: {}", a2), key::a2_DELETE, AXIS2);
+    b.add(c, fmt::format("Clear slot: {} and {}", a1, a2), key::DELETE, BOTH);
+
+    c = "Position";
+    b.add(c, fmt::format("Zero {}", a1), key::a1_z, AXIS1);
+    b.add(c, fmt::format("Zero {}", a2), key::a2_z, AXIS2);
+    b.add(c, fmt::format("Zero {} and {}", a1, a2), key::aAll_z, BOTH);
+    b.add(c, fmt::format("Set {} position...", a1), key::a1_s, AXIS1);
+    b.add(c, fmt::format("Set {} position (or diameter)...", a2), key::a2_s, AXIS2);
+    b.add(c, fmt::format("Go to {} position...", a1), key::a1_g, AXIS1);
+    b.add(c, fmt::format("Go to {} position...", a2), key::a2_g, AXIS2);
+    b.add(c, fmt::format("Move {} by an offset...", a1), key::a1_r, AXIS1);
+    b.add(c, fmt::format("Move {} by an offset...", a2), key::a2_r, AXIS2);
+    b.add(c, fmt::format("Repeat last offset move: {}", a1), key::a1_FULLSTOP, AXIS1);
+    b.add(c, fmt::format("Repeat last offset move: {}", a2), key::a2_FULLSTOP, AXIS2);
+    b.add(c, fmt::format("Repeat last offset move: {} and {}", a1, a2), key::aAll_FULLSTOP, BOTH);
+    b.add(c, fmt::format("Previous position: {}", a1), key::a1_l, AXIS1);
+    b.add(c, fmt::format("Previous position: {}", a2), key::a2_l, AXIS2);
+    b.add(c, fmt::format("Previous position: {} and {}", a1, a2), key::aAll_l, BOTH);
+    b.add(c, fmt::format("Retract / unretract {}", a2), key::r, AXIS2);
+
+    // (The controller requires axis 2 for these modes)
+    c = "Modes";
+    b.add(c, "Threading...", key::f2t, BOTH);
+    b.add(c, "Taper...", key::f2p, BOTH);
+    b.add(c, "Quick chamfer (45 deg taper)", key::h, BOTH);
+    b.add(c, "Radius...", key::f2o, BOTH);
+    b.add(c, "Multi-pass (experimental)...", key::f2m, BOTH);
+    b.add(c, fmt::format("{} retraction direction...", a2), key::f2r, BOTH);
+    b.add(c, "Setup (measure backlash)", key::f2s, NONE);
+    b.add(c, "Exit mode", key::ESC, NONE);
+
+    c = "Axis locks";
+    b.add(c, fmt::format("Lock / unlock {}", a1), key::a1_k, AXIS1);
+    b.add(c, fmt::format("Lock / unlock {}", a2), key::a2_k, AXIS2);
+
+    c = "System";
+    b.add(c, "Help", key::F1, NONE);
+    b.add(c, "Quit", key::CtrlQ, NONE);
+#ifndef FAKE
+    b.add(c, "Shut down the computer", key::ASTERISK, NONE);
+#endif
+
+    return b.take();
+}
+
+} // namespace mgo

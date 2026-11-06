@@ -3,9 +3,23 @@
 ## User interface
 
 ### Make the interface less cryptic
-- [ ] A key that brings up all the options available *now*. It should depend on
-      context: after an axis leader key (e.g. `Z`), show what each key does
-      with that axis; in threading/taper/radius mode, show what's allowed there
+- [ ] A key that brings up all the options available *now*
+    - **Done:** `Tab` opens a menu of every command, with its shortcut, built
+      from one table of commands (commands.cpp) so it can't drift out of date.
+      Commands not available at the moment (e.g. in Setup mode, or on a
+      locked axis) are greyed out. It never blocks: motors keep running,
+      Space still stops everything, and rapids and their dead-man stops still
+      work. Choosing a command acts exactly as its shortcut does. Rapids are
+      deliberately not in the menu, as they rely on holding the keys down
+    - **Next:** open the menu from the gamepad with a button chord, set in
+      the config (e.g. `JoystickMenuChord = 4,6`, previous + next memory
+      slot). The chord buttons' own actions will then register ~150ms later,
+      to tell a single press from a chord
+    - **Then:** after an axis leader key (e.g. `Z`), show what each key does
+      with that axis, using the same command table
+    - Regenerate the F1 help from the command table too (its text is still
+      written by hand)
+    - While the menu is open, memory slots 5 and 6 are hidden behind it
 - [ ] It must be usable entirely from the keyboard or the gamepad, since a
       mouse is awkward at the machine. Every menu and dialog needs to be
       navigable with keys and with the gamepad (e.g. D-pad to move, buttons to
@@ -22,8 +36,6 @@
       layout easier to change
 - [ ] Dialogs don't scale with the main display (which is scaled to fit the
       screen), so look small on a large screen
-- [ ] The nudge amounts in the README and the F1 help (0.025mm) don't match
-      the code (0.01, 0.05 and 0.1mm)
 - [ ] Make use of the keys on the right (#, Home, PgUp, PgDn, End)?
 - [ ] Remove Alt-Arrows for rapids once controller set up for mill?
       Now that they behave more safely, maybe not

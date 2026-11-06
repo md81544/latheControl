@@ -26,8 +26,10 @@ void uiSleep(std::chrono::microseconds microsecs)
 
 Controller::Controller(Model* model)
     : m_model(model)
+    , m_menu(buildCommands(model->config()))
 {
     m_view = std::make_unique<ViewQt>();
+    m_view->setMenu(&m_menu);
     m_view->initialise(*m_model);
     m_view->updateDisplay(*m_model); // get the UI running before we start the motor threads
     m_model->initialise();
@@ -78,9 +80,43 @@ void Controller::run()
     }
 }
 
+bool Controller::isMenuOpen() const
+{
+    return m_menu.isOpen();
+}
+
 void Controller::processKeyPress()
 {
-    int t = m_view->getEvents();
+    int k = m_view->getEvents();
+    if (k == key::None) {
+        return;
+    }
+    if (m_menu.isOpen()) {
+        // The menu only takes the keys it needs for navigation; everything
+        // else (e.g. Space to stop all motors) carries on working as normal
+        const Menu::Action action = m_menu.handleKey(k, *m_model);
+        switch (action.type) {
+            case Menu::Action::Type::None:
+                return;
+            case Menu::Action::Type::Command:
+                // Chosen from the menu: discard any half-entered leader key
+                // sequence, then act as if the command's shortcut was pressed
+                m_model->setKeyMode(KeyMode::None);
+                processKey(action.key);
+                return;
+            case Menu::Action::Type::PassThrough:
+                break;
+        }
+    } else if (k == key::TAB) {
+        m_model->setKeyMode(KeyMode::None);
+        m_menu.open();
+        return;
+    }
+    processKey(k);
+}
+
+void Controller::processKey(int t)
+{
     t = checkKeyAllowedForMode(t);
     t = processModeInputKeys(t);
     if (t != key::None) {
@@ -598,12 +634,14 @@ void Controller::processKeyPress()
                     const std::string axis2Name = m_model->config().read("Axis2Label", "X");
                     pressAnyKey(
                         "Help",
-                        { "Modes: (F2=Leader) s=Setup t=Thread p=taPer r=Retract, o=radius",
+                        { "Tab opens a menu of everything, showing each command's shortcut.",
                           "",
+                          "Modes: (F2=Leader) s=Setup t=Thread p=taPer r=Retract, o=radius",
                           axis1Name + " axis speed: 1-5, " + axis2Name + " axis speed: 6-0",
-                          "[ and ] select memory slot to use. M store, Enter return (F fast).",
-                          "WASD = nudge 0.025mm (shift for finer). Space to stop all motors. R "
-                          "retract.",
+                          "[ and ] select memory slot. M store, Enter return, " + axis1Name
+                              + " then F fast return.",
+                          "WASD = nudge 0.05mm (Shift 0.01mm, Alt 0.1mm). R retract.",
+                          "Space stops all motors.",
                           "",
                           "Press any key" });
                     break;
@@ -888,41 +926,8 @@ bool Controller::waitForAxisToStop(uint8_t axis)
 
 int Controller::checkKeyAllowedForMode(int key)
 {
-    // The mode means some keys are ignored, for instance in
-    // threading, you cannot change the speed of the z-axis as
-    // that would affect the thread pitch
-    // Always allow certain keys:
-    if (key == key::CtrlQ || key == key::ESC || key == key::ENTER) {
-        return key;
-    }
-    // Don't allow any x movement when retracted
-    if (m_model->getIsAxis2Retracted()
-        && (key == key::UP || key == key::DOWN || key == key::W || key == key::w || key == key::s
-            || key == key::S)) {
-        return -1;
-    }
-    switch (m_model->getCurrentDisplayMode()) {
-        case Mode::None:
-            return key;
-        case Mode::Taper:
-        case Mode::Radius:
-        case Mode::Threading:
-        case Mode::MultiPass:
-            // Now handled by new dialog
-            return key;
-        case Mode::Setup:
-            if (key == key::LEFT || key == key::RIGHT || key == key::UP || key == key::DOWN) {
-                return key;
-            }
-            if (key == key::SPACE) {
-                return key;
-            }
-            return -1;
-        default:
-            // unhandled mode
-            assert(false);
-            return -1;
-    }
+    // (The rules are shared with the menu, which greys out keys not allowed)
+    return keyAllowedInCurrentMode(key, *m_model) ? key : key::None;
 }
 
 int Controller::processModeInputKeys(int key) // TODO this can be deleted eventually

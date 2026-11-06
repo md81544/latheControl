@@ -24,6 +24,7 @@ constexpr int RBRACKET = 93; // ]
 constexpr int ASTERISK = 42;
 constexpr int ESC = 27;
 constexpr int BACKSPACE = 8;
+constexpr int TAB = 9; // opens / closes the menu
 constexpr int DELETE = 127;
 constexpr int SPACE = 32;
 constexpr int COLON = 58;

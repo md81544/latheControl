@@ -300,6 +300,69 @@ TEST_CASE("UI: Z go-to through the controller")
     REQUIRE(tm.model.getAxis1MotorPosition() == Approx(5.0).margin(0.001));
 }
 
+namespace {
+
+// Presses a key in the main window and lets the controller act on it. (Waits
+// afterwards, as the view ignores the same key pressed again within 100ms)
+void press(QWidget* w, mgo::Controller& controller, Qt::Key k)
+{
+    QTest::keyClick(w, k);
+    controller.processKeyPress();
+    QTest::qWait(110);
+}
+
+bool waitUntil(const std::function<bool()>& condition)
+{
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    while (!condition()) {
+        if (std::chrono::steady_clock::now() > deadline) {
+            return false;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    return true;
+}
+
+} // end anonymous namespace
+
+TEST_CASE("UI: menu through the controller")
+{
+    TestModel tm;
+    mgo::Controller controller(&tm.model);
+    tm.model.setAxis1MotorSpeed(1'000.0);
+    QWidget* w = mainWindow();
+    REQUIRE(w);
+
+    // Move Z away from zero, then zero it from the menu
+    tm.model.axis1GoToPosition(2.0);
+    REQUIRE(waitUntil([&] { return std::abs(tm.model.getAxis1MotorPosition() - 2.0) < 0.001; }));
+    press(w, controller, Qt::Key_Tab);
+    REQUIRE(controller.isMenuOpen());
+    // "Position" is the fifth category; "Zero Z" is its first command
+    for (int n = 0; n < 4; ++n) {
+        press(w, controller, Qt::Key_Down);
+    }
+    press(w, controller, Qt::Key_Return);
+    press(w, controller, Qt::Key_Return);
+    REQUIRE(!controller.isMenuOpen());
+    REQUIRE(tm.model.getAxis1MotorPosition() == 0.0);
+
+    // While the menu is open, Space still stops all motors, and the menu
+    // stays open
+    tm.model.axis1GoToPosition(50.0);
+    REQUIRE(waitUntil([&] { return tm.model.isAxis1MotorRunning(); }));
+    press(w, controller, Qt::Key_Tab);
+    REQUIRE(controller.isMenuOpen());
+    REQUIRE(tm.model.isAxis1MotorRunning()); // opening the menu doesn't stop anything
+    press(w, controller, Qt::Key_Space);
+    REQUIRE(!tm.model.isAxis1MotorRunning());
+    REQUIRE(controller.isMenuOpen());
+
+    // Esc closes it
+    press(w, controller, Qt::Key_Escape);
+    REQUIRE(!controller.isMenuOpen());
+}
+
 int main(int argc, char* argv[])
 {
     // No windows on screen, and no dependency on a display

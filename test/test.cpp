@@ -1,13 +1,17 @@
 #include "configreader.h"
+#include "commands.h"
 #include "joystick.h"
 #include "keycodes.h"
 #include "log.h"
+#include "menu.h"
 #include "model.h"
 #include "rotaryencoder.h"
 #include "stepperControl/mockgpio.h"
 #include "stepperControl/steppermotor.h"
 
+#include <algorithm>
 #include <chrono>
+#include <set>
 #include <map>
 #include <cmath>
 #include <ctime>
@@ -793,4 +797,142 @@ TEST_CASE("Model:   motor fault stops all axes, and re-zeroing clears it")
     model.axis1GoToPosition(0.5);
     model.axis1Wait();
     REQUIRE(model.getAxis1MotorPosition() == Approx(0.5));
+}
+
+TEST_CASE("Commands: shortcut text")
+{
+    mgo::MockConfigReader lathe; // defaults: leader keys z and x
+    REQUIRE(mgo::shortcutText(mgo::key::a1_g, lathe) == "z g");
+    REQUIRE(mgo::shortcutText(mgo::key::a2_s, lathe) == "x s");
+    REQUIRE(mgo::shortcutText(mgo::key::aAll_z, lathe) == "\\ z");
+    REQUIRE(mgo::shortcutText(mgo::key::a1_ENTER, lathe) == "z Enter");
+    REQUIRE(mgo::shortcutText(mgo::key::AltW, lathe) == "Alt+w");
+    REQUIRE(mgo::shortcutText(mgo::key::CtrlQ, lathe) == "Ctrl+q");
+    REQUIRE(mgo::shortcutText(mgo::key::A, lathe) == "Shift+a");
+    REQUIRE(mgo::shortcutText(mgo::key::f2t, lathe) == "F2 t");
+    REQUIRE(mgo::shortcutText(mgo::key::LBRACKET, lathe) == "[");
+    REQUIRE(mgo::shortcutText(mgo::key::SIX, lathe) == "6");
+    REQUIRE(mgo::shortcutText(mgo::key::F1, lathe) == "F1");
+
+    // The mill's config uses x and c as its axis leader keys
+    TestConfigReader mill({ { "Axis1Leader", "120" }, { "Axis2Leader", "99" } });
+    REQUIRE(mgo::shortcutText(mgo::key::a1_g, mill) == "x g");
+    REQUIRE(mgo::shortcutText(mgo::key::a2_g, mill) == "c g");
+}
+
+TEST_CASE("Commands: each command appears once")
+{
+    mgo::MockConfigReader config;
+    const auto commands = mgo::buildCommands(config);
+    REQUIRE(commands.size() > 50);
+    std::set<int> keys;
+    for (const auto& c : commands) {
+        REQUIRE(keys.insert(c.key).second); // no key listed twice
+        REQUIRE(!c.description.empty());
+        REQUIRE(!c.category.empty());
+    }
+}
+
+TEST_CASE("Commands: commands for a disabled axis are left out")
+{
+    // e.g. the rotary table config, which only has axis 1
+    TestConfigReader config({ { "DisableAxis2", "true" }, { "Axis1Label", "C" } });
+    const auto commands = mgo::buildCommands(config);
+    for (const auto& c : commands) {
+        REQUIRE((c.key & 0x2000) == 0); // no axis 2 leader commands
+        REQUIRE(c.key != mgo::key::f2t); // modes need axis 2
+        REQUIRE(c.key != mgo::key::UP);
+    }
+    // But axis 1's commands are there, using its name
+    const auto zero = std::find_if(commands.begin(), commands.end(), [](const mgo::Command& c) {
+        return c.key == mgo::key::a1_z;
+    });
+    REQUIRE(zero != commands.end());
+    REQUIRE(zero->description == "Zero C");
+}
+
+TEST_CASE("Menu: navigation, choosing, and keys passed through")
+{
+    mgo::MockConfigReader config;
+    mgo::MockGpio gpio(false);
+    mgo::Model model(gpio, config);
+    model.initialise();
+    std::vector<mgo::Command> commands {
+        { "First", "one", mgo::key::a1_z },
+        { "First", "two", mgo::key::a2_z },
+        { "Second", "three", mgo::key::LEFT,
+          [](const mgo::Model& m) { return !m.isAxisLocked(1); } },
+    };
+    mgo::Menu menu(commands);
+    using Type = mgo::Menu::Action::Type;
+    REQUIRE(menu.categories() == std::vector<std::string> { "First", "Second" });
+
+    menu.open();
+    REQUIRE(menu.isOpen());
+    REQUIRE(!menu.openCategory());
+    // Into the first category, down to "two", and choose it
+    REQUIRE(menu.handleKey(mgo::key::ENTER, model).type == Type::None);
+    REQUIRE(menu.openCategory() == 0u);
+    REQUIRE(menu.handleKey(mgo::key::DOWN, model).type == Type::None);
+    REQUIRE(menu.selection() == 1);
+    REQUIRE(menu.handleKey(mgo::key::DOWN, model).type == Type::None); // already at the end
+    REQUIRE(menu.selection() == 1);
+    const auto chosen = menu.handleKey(mgo::key::ENTER, model);
+    REQUIRE(chosen.type == Type::Command);
+    REQUIRE(chosen.key == mgo::key::a2_z);
+    REQUIRE(!menu.isOpen()); // choosing closes the menu
+
+    // The gamepad's D-pad keys (w/a/s/d) navigate too; Left goes back
+    menu.open();
+    menu.handleKey(mgo::key::s, model);
+    menu.handleKey(mgo::key::d, model);
+    REQUIRE(menu.openCategory() == 1u);
+    menu.handleKey(mgo::key::a, model);
+    REQUIRE(!menu.openCategory());
+    REQUIRE(menu.selection() == 1); // back on the category we came from
+
+    // Space (stop all motors), and other keys, carry on working as normal,
+    // and the menu stays open
+    auto action = menu.handleKey(mgo::key::SPACE, model);
+    REQUIRE(action.type == Type::PassThrough);
+    REQUIRE(action.key == mgo::key::SPACE);
+    action = menu.handleKey(mgo::key::AltLeft, model);
+    REQUIRE(action.type == Type::PassThrough);
+    REQUIRE(menu.isOpen());
+
+    // A command that isn't available can't be chosen
+    model.lockAxis(1);
+    menu.handleKey(mgo::key::ENTER, model);
+    REQUIRE(menu.handleKey(mgo::key::ENTER, model).type == Type::None);
+    REQUIRE(menu.isOpen());
+    model.unlockAxis(1);
+    REQUIRE(menu.handleKey(mgo::key::ENTER, model).key == mgo::key::LEFT);
+
+    // Esc from the top level, or Tab from anywhere, closes it
+    menu.open();
+    menu.handleKey(mgo::key::ESC, model);
+    REQUIRE(!menu.isOpen());
+    menu.open();
+    menu.handleKey(mgo::key::ENTER, model);
+    menu.handleKey(mgo::key::TAB, model);
+    REQUIRE(!menu.isOpen());
+}
+
+TEST_CASE("Commands: keys allowed in the current mode")
+{
+    mgo::MockConfigReader config;
+    mgo::MockGpio gpio(false);
+    mgo::Model model(gpio, config);
+    model.initialise();
+    REQUIRE(mgo::keyAllowedInCurrentMode(mgo::key::a1_g, model));
+    // In Setup mode, only motion and stop keys (and Esc etc) are allowed
+    model.setCurrentDisplayMode(mgo::Mode::Setup);
+    REQUIRE(!mgo::keyAllowedInCurrentMode(mgo::key::a1_g, model));
+    REQUIRE(mgo::keyAllowedInCurrentMode(mgo::key::LEFT, model));
+    REQUIRE(mgo::keyAllowedInCurrentMode(mgo::key::ESC, model));
+    model.setCurrentDisplayMode(mgo::Mode::None);
+    // No X motion while X is retracted
+    model.setIsAxis2Retracted(true);
+    REQUIRE(!mgo::keyAllowedInCurrentMode(mgo::key::UP, model));
+    REQUIRE(mgo::keyAllowedInCurrentMode(mgo::key::LEFT, model));
 }

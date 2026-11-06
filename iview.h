@@ -10,6 +10,8 @@
 
 namespace mgo {
 
+class Menu;
+
 namespace Input {
 
 enum class Type {
@@ -55,6 +57,9 @@ public:
         std::optional<std::vector<std::string>> listItems = std::nullopt
     ) = 0;
     virtual void updateDisplay(const Model&) = 0;
+    // The menu to draw (when it's open) on each updateDisplay(). Not owned;
+    // must outlive the view, or be reset to nullptr
+    virtual void setMenu(const Menu* menu) = 0;
     virtual ~IView() { };
 };
 

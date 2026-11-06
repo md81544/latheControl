@@ -1,6 +1,7 @@
 #pragma once
 
 #include "iview.h"
+#include "menu.h"
 #include "model.h"
 
 #include <memory>
@@ -29,10 +30,14 @@ public:
     // Returns false if the user aborted the wait with a key press, in which
     // case all motors will have been stopped
     bool waitForAxisToStop(uint8_t axis);
+    bool isMenuOpen() const;
 
 private:
     Model* m_model; // non-owning
+    Menu m_menu; // (declared before m_view, which refers to it, so outlives it)
     std::unique_ptr<IView> m_view;
+    // Acts on a key code (whether from a key press or chosen from the menu)
+    void processKey(int key);
     int checkKeyAllowedForMode(int key);
     int processModeInputKeys(int key);
     int processLeaderKeyModeKeyPress(int key);

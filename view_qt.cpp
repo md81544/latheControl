@@ -1,8 +1,10 @@
 #include "view_qt.h"
 
+#include "commands.h"
 #include "joystick.h"
 #include "keycodes.h"
 #include "log.h"
+#include "menu.h"
 #include "model.h"
 #include "qt_dialog.h"
 #include "threadpitches.h"
@@ -19,6 +21,7 @@
 
 #include <cassert>
 #include <deque>
+#include <variant>
 
 #include <fmt/format.h>
 
@@ -43,7 +46,19 @@ struct TextItem {
     int pixelSize { 20 };
     QColor colour { WHITE };
     std::string text;
+    bool bold { false };
+    // If set, the text is right-aligned within this width from position
+    float rightAlignWidth { 0.f };
 };
+
+// A filled rectangle, with an optional border
+struct RectItem {
+    QRectF rect;
+    QColor fill;
+    QColor border { Qt::transparent };
+};
+
+using DrawItem = std::variant<TextItem, RectItem>;
 
 std::string formatMotorPosition(double mm)
 {
@@ -79,7 +94,7 @@ public:
     }
 
     // What to draw, in order. Set by the view on each updateDisplay()
-    std::vector<TextItem> frame;
+    std::vector<DrawItem> frame;
     // Dims the display (while a dialog is shown on top of it)
     bool dimmed { false };
 
@@ -113,13 +128,25 @@ protected:
             (width() - LOGICAL_WIDTH * scale) / 2.0, (height() - LOGICAL_HEIGHT * scale) / 2.0);
         painter.scale(scale, scale);
         QFont font(m_fontFamily);
-        for (const auto& item : frame) {
+        for (const auto& drawItem : frame) {
+            if (const auto* rect = std::get_if<RectItem>(&drawItem)) {
+                painter.setPen(rect->border == Qt::transparent ? QPen(Qt::NoPen)
+                                                                : QPen(rect->border, 2));
+                painter.setBrush(rect->fill);
+                painter.drawRect(rect->rect);
+                continue;
+            }
+            const auto& item = std::get<TextItem>(drawItem);
             font.setPixelSize(item.pixelSize);
+            font.setBold(item.bold);
             painter.setFont(font);
             painter.setPen(item.colour);
+            const bool rightAlign = item.rightAlignWidth > 0.f;
             painter.drawText(
-                QRectF(item.position, QSizeF(LOGICAL_WIDTH, item.pixelSize * 2.0)),
-                Qt::AlignLeft | Qt::AlignTop | Qt::TextDontClip,
+                QRectF(
+                    item.position,
+                    QSizeF(rightAlign ? item.rightAlignWidth : LOGICAL_WIDTH, item.pixelSize * 2.0)),
+                (rightAlign ? Qt::AlignRight : Qt::AlignLeft) | Qt::AlignTop | Qt::TextDontClip,
                 QString::fromStdString(item.text));
         }
         if (dimmed) {
@@ -171,6 +198,13 @@ protected:
         if (isArrowKey(qtKey) && altPressed(event)) {
             m_keys.push_back(key::SPACE);
         }
+    }
+
+    // Qt normally uses Tab to move between widgets, so would never deliver it
+    // to keyPressEvent(); we want it as a key (to open the menu)
+    bool focusNextPrevChild(bool) override
+    {
+        return false;
     }
 
     void closeEvent(QCloseEvent* event) override
@@ -266,6 +300,8 @@ private:
                 return key::ESC;
             case Qt::Key_Backspace:
                 return key::BACKSPACE;
+            case Qt::Key_Tab:
+                return key::TAB;
             case Qt::Key_Delete:
                 return key::DELETE;
             default:
@@ -323,6 +359,10 @@ struct ViewQt::Impl {
     // Motor fault (driver alarm) message, shown whatever the mode
     TextItem fault;
     std::size_t faultIteration { 0 };
+
+    // The menu (owned by the controller), drawn when open
+    const Menu* menu { nullptr };
+    void drawMenu(std::vector<DrawItem>& frame, const Model& model) const;
 
     std::vector<TextItem> memoryLabel;
     TextItem axis1MemoryLabel;
@@ -450,6 +490,110 @@ void ViewQt::initialise(const Model& model)
     QCoreApplication::processEvents();
 }
 
+void ViewQt::setMenu(const Menu* menu)
+{
+    m_impl->menu = menu;
+}
+
+void ViewQt::Impl::drawMenu(std::vector<DrawItem>& frame, const Model& model) const
+{
+    // A panel down the right-hand side, so the position read-outs stay
+    // visible. It stops short of the motor fault line, so that's never hidden
+    constexpr float panelX = 790.f;
+    constexpr float panelY = 10.f;
+    constexpr float panelWidth = 480.f;
+    constexpr float panelHeight = 590.f;
+    constexpr float margin = 15.f;
+    constexpr float listY = panelY + 55.f;
+    constexpr float lineHeight = 30.f;
+    constexpr int fontSize = 20;
+    constexpr std::size_t visibleRows = 14;
+    const QColor normal(200, 200, 200);
+    const QColor unavailable(90, 90, 90);
+    const QColor shortcutColour(150, 150, 150);
+    const QColor hint(140, 140, 140);
+
+    frame.push_back(RectItem { QRectF(panelX, panelY, panelWidth, panelHeight),
+                               QColor(25, 25, 25),
+                               QColor(128, 128, 128) });
+
+    const auto category = menu->openCategory();
+    frame.push_back(TextItem { QPointF(panelX + margin, panelY + 12.f),
+                               26,
+                               GREEN,
+                               category ? menu->categories().at(*category) : "Menu" });
+
+    // Each row: its text, shortcut, and whether it can be chosen now
+    struct Row {
+        std::string text;
+        std::string shortcut;
+        bool available;
+    };
+    std::vector<Row> rows;
+    if (category) {
+        for (const Command* c : menu->currentCommands()) {
+            rows.push_back(
+                { c->description, shortcutText(c->key, model.config()), isAvailable(*c, model) });
+        }
+    } else {
+        for (const auto& name : menu->categories()) {
+            rows.push_back({ name, ">", true });
+        }
+    }
+
+    // Scroll so the selection is visible
+    const std::size_t selection = menu->selection();
+    std::size_t first = 0;
+    if (selection >= visibleRows) {
+        first = selection - visibleRows + 1;
+    }
+    float y = listY;
+    for (std::size_t n = first; n < rows.size() && n < first + visibleRows; ++n) {
+        const Row& row = rows.at(n);
+        const bool selected = n == selection;
+        if (selected) {
+            frame.push_back(RectItem { QRectF(panelX + 5.f, y - 3.f, panelWidth - 10.f, lineHeight),
+                                       QColor(60, 60, 60) });
+        }
+        const QColor colour = !row.available ? unavailable : selected ? WHITE : normal;
+        frame.push_back(TextItem { QPointF(panelX + margin, y), fontSize, colour, row.text, selected });
+        frame.push_back(TextItem { QPointF(panelX + margin, y),
+                                   fontSize,
+                                   row.available ? shortcutColour : unavailable,
+                                   row.shortcut,
+                                   false,
+                                   panelWidth - 2 * margin });
+        y += lineHeight;
+    }
+    if (first > 0) {
+        frame.push_back(TextItem { QPointF(panelX + margin, listY - 22.f),
+                                   16,
+                                   hint,
+                                   "(more above)",
+                                   false,
+                                   panelWidth - 2 * margin });
+    }
+    if (first + visibleRows < rows.size()) {
+        frame.push_back(TextItem { QPointF(panelX + margin, y), 16, hint, "(more below)", false,
+                                   panelWidth - 2 * margin });
+    }
+
+    // How to use it
+    const float footerY = panelY + panelHeight - 70.f;
+    frame.push_back(TextItem { QPointF(panelX + margin, footerY),
+                               16,
+                               hint,
+                               "Up/Down: select   Enter/Right: choose" });
+    frame.push_back(TextItem { QPointF(panelX + margin, footerY + 20.f),
+                               16,
+                               hint,
+                               "Left/Esc: back   Tab: close menu" });
+    frame.push_back(TextItem { QPointF(panelX + margin, footerY + 40.f),
+                               16,
+                               YELLOW,
+                               "Space stops all motors. Rapids: Alt+arrow" });
+}
+
 void ViewQt::close()
 {
     if (m_impl->widget) {
@@ -491,7 +635,7 @@ void ViewQt::updateDisplay(const Model& model)
     auto& d = *m_impl;
     d.updateTextFromModel(model);
 
-    std::vector<TextItem> frame;
+    std::vector<DrawItem> frame;
     const auto draw = [&frame](const TextItem& item) { frame.push_back(item); };
 
     if (!model.isShuttingDown()) {
@@ -573,6 +717,9 @@ void ViewQt::updateDisplay(const Model& model)
         if (!d.fault.text.empty()) {
             d.fault.colour = ++d.faultIteration % 6 < 3 ? RED : YELLOW;
             draw(d.fault);
+        }
+        if (d.menu && d.menu->isOpen()) {
+            d.drawMenu(frame, model);
         }
     } else {
         // The SFML version drew nothing while shutting down, but set this text
