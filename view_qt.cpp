@@ -1,5 +1,6 @@
 #include "view_qt.h"
 
+#include "joystick.h"
 #include "keycodes.h"
 #include "log.h"
 #include "model.h"
@@ -81,6 +82,12 @@ public:
     std::vector<TextItem> frame;
     // Dims the display (while a dialog is shown on top of it)
     bool dimmed { false };
+
+    // Queue a key code from another source (the joystick)
+    void pushKey(int k)
+    {
+        m_keys.push_back(k);
+    }
 
     int takeKey()
     {
@@ -279,6 +286,7 @@ private:
 struct ViewQt::Impl {
     QString fontFamily;
     std::unique_ptr<DisplayWidget> widget;
+    std::unique_ptr<Joystick> joystick;
 
     // Main text items which are always displayed:
     TextItem axis1Label;
@@ -429,6 +437,9 @@ void ViewQt::initialise(const Model& model)
     d.xRetractDirection.text = "-X RTRCT";
     d.axis1LinearScalePos = make(550, 170, 20, QColor(209, 209, 50));
 
+    // (Joystick support is only available on Linux)
+    d.joystick = std::make_unique<Joystick>(model.config().read("JoystickDevice", "/dev/input/js0"));
+
     QCoreApplication::processEvents();
 }
 
@@ -444,6 +455,9 @@ int ViewQt::getEvents()
     // The controller runs its own loop, so we let Qt handle any pending
     // events (key presses, repaints etc) here
     QCoreApplication::processEvents();
+    for (const int k : m_impl->joystick->poll()) {
+        m_impl->widget->pushKey(k);
+    }
     return m_impl->widget->takeKey();
 }
 

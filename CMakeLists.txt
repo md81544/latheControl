@@ -58,6 +58,7 @@ endif()
 add_library(shared_with_test OBJECT
 	rotaryencoder.cpp
 	linearscale.cpp
+	joystick.cpp
 	log.cpp
 	model.cpp
 )
