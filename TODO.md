@@ -23,26 +23,25 @@
     - **Done:** F1 opens the menu (which shows every shortcut) rather than a
       separate, hand-written help page
     - While the menu is open, memory slots 5 and 6 are hidden behind it
-- [ ] It must be usable entirely from the keyboard or the gamepad, since a
-      mouse is awkward at the machine. Every menu and dialog needs to be
-      navigable with keys and with the gamepad (e.g. D-pad to move, buttons to
-      select and go back). Note the gamepad isn't currently read while a
-      dialog is open
+- [ ] It must be usable without a mouse, which is awkward at the machine.
+      Everything works from the keyboard, and the menu from the gamepad too.
+      The gamepad isn't read while a dialog is open; low priority, as it sits
+      next to the keyboard and is for the basics
 - [ ] Proper menus and dialogs, now that Qt makes them possible. This replaces
       the old "implement a proper menu/dialog (see level_designer)" and
       "move all input to the new modal dialog system" items
-- [ ] Expand use of dialogs. For instance the help screen could be much
-      larger, which needs a resizable (or dynamically expanding) box. May want
-      multiple inputs within one dialog
+- [ ] Richer dialogs, with several inputs, like the taper dialog (presets,
+      angle, direction, and a diagram). The other dialogs are fine for now
 - [ ] Make the display more "modular": display elements in definable boxes,
       perhaps a class which encapsulates a display element. This will make the
       layout easier to change
-- [ ] Dialogs don't scale with the main display (which is scaled to fit the
-      screen), so look small on a large screen
 - [ ] Make use of the keys on the right (#, Home, PgUp, PgDn, End)?
 - [ ] Remove Alt-Arrows for rapids once controller set up for mill?
       Now that they behave more safely, maybe not
-- [ ] Touchscreen support (not that I have touch screens yet)
+- [ ] When there's a larger screen (the current one is small): touchscreen
+      support, and make dialogs scale with the main display (which is scaled
+      to fit the screen, whereas dialogs stay the same size, so would look
+      small)
 
 ### Controller structure
 - [ ] Move the controller onto Qt's event loop (e.g. a timer driving each
