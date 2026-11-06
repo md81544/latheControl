@@ -7,6 +7,7 @@
 #include "units.h"
 
 #include <cmath> // IWYU pragma: keep (need for M_PI)
+#include <functional>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -90,6 +91,21 @@ enum class StatusResult {
     WaitForMotors,
     PressAKey
 };
+
+// Threading: what to do with X when a pass's Z move ends (with ThreadingAutoRetract).
+// "arrived" is whether Z reached its target, rather than being stopped short;
+// "retractedAtStart" and "retractedNow" are whether X was retracted when the
+// move started, and is now
+enum class ThreadingStopAction {
+    None,
+    RetractOut,
+    RetractIn
+};
+ThreadingStopAction threadingStopAction(
+    bool arrived,
+    bool retractedAtStart,
+    bool retractedNow,
+    bool spindleTurning);
 
 class Model {
 public:
@@ -351,6 +367,15 @@ private:
     bool m_axis1Faulted { false };
     bool m_axis2Faulted { false };
 
+    // Threading: the Z move (a cut or a return) currently in progress
+    bool m_threadingMoveInProgress { false };
+    long m_threadingMoveTarget { 0 };
+    bool m_threadingMoveStartedRetracted { false };
+    // Threading warnings (e.g. spindle too fast). A "sticky" one stays until
+    // the next pass starts; otherwise it reflects the current state
+    std::string m_threadingWarning;
+    bool m_threadingWarningSticky { false };
+
     // Private functions
     void checkMotorFaults();
     // X is no longer known to be measured from the centre
@@ -360,6 +385,12 @@ private:
     void multiPassNextCut(mgo::StatusResult& statusResult);
     void multiPassStepOver();
     void multiPassEndCut(mgo::StatusResult& statusResult);
+    // Threading
+    bool axis1StartThreadingMove(const std::function<void()>& move);
+    void threadingCheckSpeed();
+    void threadingCheckMoveEnded();
+    double threadingMaxZSpeed() const;
+    void setThreadingWarning(const std::string& warning, bool sticky);
 };
 
 } // end namespace

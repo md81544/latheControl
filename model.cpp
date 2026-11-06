@@ -67,9 +67,41 @@ std::string translate_mode(mgo::Mode mode)
     }
 }
 
+// A threading pass won't start if the spindle is fast enough to need more
+// than this fraction of Z's maximum speed, which leaves some margin for the
+// spindle speeding up during the pass (e.g. as the cutting load comes off)
+constexpr double THREADING_START_SPEED_FRACTION = 0.8;
+
+// Below this, the spindle is regarded as stopped
+constexpr float SPINDLE_STOPPED_RPM = 30.f;
+
 } // anonymous namepace
 
 namespace mgo {
+
+ThreadingStopAction threadingStopAction(
+    bool arrived,
+    bool retractedAtStart,
+    bool retractedNow,
+    bool spindleTurning)
+{
+    if (retractedNow != retractedAtStart) {
+        // The user retracted (or unretracted) X during the move; leave it be
+        return ThreadingStopAction::None;
+    }
+    if (arrived) {
+        // A cut (made with the tool in) ends by retracting; a return (made
+        // with it out) ends by bringing it back in for the next cut
+        return retractedAtStart ? ThreadingStopAction::RetractIn : ThreadingStopAction::RetractOut;
+    }
+    // Stopped short. Get the tool out of the groove if the spindle is still
+    // turning, but never bring it in, as we don't know where Z is in the cycle
+    if (!retractedNow && spindleTurning) {
+        return ThreadingStopAction::RetractOut;
+    }
+    return ThreadingStopAction::None;
+}
+
 
 void Model::initialise()
 {
@@ -163,7 +195,7 @@ StatusResult Model::checkStatus()
     }
 
 #ifndef FAKE
-    if (m_spindleWasRunning && chuckRpm < 30.f) {
+    if (m_spindleWasRunning && chuckRpm < SPINDLE_STOPPED_RPM) {
         // If the chuck has stopped, we stop X/Z motors as a safety
         // feature, just in case the motor has stalled or the operator
         // has turned it off because of some issue.
@@ -172,28 +204,11 @@ StatusResult Model::checkStatus()
         stopAllMotors();
     }
 #endif
-    m_spindleWasRunning = chuckRpm > 30.f;
+    m_spindleWasRunning = chuckRpm > SPINDLE_STOPPED_RPM;
 
     if (m_enabledFunction == Mode::Threading) {
-        // We are cutting threads, so the stepper motor's speed
-        // is dependent on the spindle's RPM and the thread pitch.
-        float pitch = threadPitches.at(m_threadPitchIndex).pitchMm;
-        // because my stepper motor / leadscrew does one mm per
-        // revolution, there is a direct correlation between spindle
-        // rpm and stepper motor rpm for a 1mm thread pitch.
-        float speed = pitch * m_rotaryEncoder->getRpm();
-#ifndef FAKE
-        double maxZSpeed = m_config.readDouble("Axis1MaxMotorRpm", 700.0);
-        if (speed > maxZSpeed * 0.8) {
-            m_axis1Motor->stop();
-            m_axis1Motor->wait();
-            m_warning = "RPM too high for threading";
-        } else
-#endif
-        {
-            m_warning = "";
-        }
-        m_axis1Motor->setSpeed(speed);
+        threadingCheckSpeed();
+        threadingCheckMoveEnded();
     }
     if (const auto diameter = getDiameterMm()) {
         m_generalStatus = fmt::format(
@@ -240,11 +255,6 @@ StatusResult Model::checkStatus()
             // in case the user wants to return to it without
             // explicitly having saved it.
             axis1SaveBreadcrumbPosition();
-            if (m_enabledFunction == Mode::Threading
-                && m_config.readBool("ThreadingAutoRetract", false)) {
-                axis2Retract();
-                // We may want to automate the return to the start position as well
-            }
         }
         if (m_axis1FastReturning || m_axis1RapidInProgress) {
             m_axis1Motor->setSpeed(m_previousAxis1Speed);
@@ -445,6 +455,8 @@ void Model::changeMode(Mode mode)
         m_axis2Motor->setSpeed(m_taperPreviousXSpeed);
     }
     m_warning = "";
+    m_threadingMoveInProgress = false;
+    setThreadingWarning("", false);
     m_currentDisplayMode = mode;
     m_enabledFunction = mode;
     m_input = "";
@@ -559,13 +571,135 @@ void Model::startSynchronisedXMotorForRadius(ZDirection direction)
     );
 }
 
+double Model::threadingMaxZSpeed() const
+{
+    // In mm/min, as for StepperMotor::setSpeed()
+    return m_axis1Motor->getMaxRpm() * m_config.readLong("Axis1StepsPerRev", 1'000)
+        * std::abs(m_axis1Motor->getConversionFactor());
+}
+
+void Model::setThreadingWarning(const std::string& warning, bool sticky)
+{
+    m_threadingWarning = warning;
+    m_threadingWarningSticky = sticky && !warning.empty();
+}
+
+void Model::threadingCheckSpeed()
+{
+    // We are cutting threads, so Z's speed is set by the spindle's speed and
+    // the thread pitch
+    const double pitch = threadPitches.at(m_threadPitchIndex).pitchMm;
+    const float rpm = m_rotaryEncoder->getRpm();
+    const double speed = pitch * rpm;
+    const double maxSpeed = threadingMaxZSpeed();
+    const double startLimit = maxSpeed * THREADING_START_SPEED_FRACTION;
+    if (m_axis1Motor->isRunning() && speed > maxSpeed) {
+        // Z can't keep up, so the pitch would be wrong: stop the pass. (A pass
+        // can't start this fast, but the spindle may have sped up during it)
+        m_axis1Motor->stop();
+        m_axis1Motor->wait();
+        MGOLOG(fmt::format(
+            "Threading pass stopped: spindle at {:.0f} rpm needs Z at {:.0f} mm/min (max {:.0f})",
+            rpm,
+            speed,
+            maxSpeed));
+        setThreadingWarning(
+            fmt::format(
+                "Spindle too fast ({:.0f} rpm): pass stopped. Thread at {:.0f} rpm or less",
+                rpm,
+                startLimit / pitch),
+            true);
+    }
+    m_axis1Motor->setSpeed(speed);
+    if (!m_threadingWarningSticky) {
+        if (!m_axis1Motor->isRunning() && speed > startLimit) {
+            setThreadingWarning(
+                fmt::format(
+                    "Spindle too fast for this pitch: thread at {:.0f} rpm or less",
+                    startLimit / pitch),
+                false);
+        } else {
+            setThreadingWarning("", false);
+        }
+    }
+}
+
+bool Model::axis1StartThreadingMove(const std::function<void()>& move)
+{
+    // Every pass must start at the same point of the spindle's rotation, so we
+    // wait for zero degrees before starting the move
+    const double pitch = threadPitches.at(m_threadPitchIndex).pitchMm;
+    const float rpm = m_rotaryEncoder->getRpm();
+    if (rpm < SPINDLE_STOPPED_RPM) {
+        setThreadingWarning("Start the spindle before threading", true);
+        return false;
+    }
+    const double startLimit = threadingMaxZSpeed() * THREADING_START_SPEED_FRACTION;
+    if (pitch * rpm > startLimit) {
+        MGOLOG(fmt::format("Threading pass not started: spindle too fast at {:.0f} rpm", rpm));
+        setThreadingWarning(
+            fmt::format(
+                "Spindle too fast for this pitch: thread at {:.0f} rpm or less",
+                startLimit / pitch),
+            false);
+        return false;
+    }
+    setThreadingWarning("", false);
+    bool called = false;
+    m_rotaryEncoder->callbackAtZeroDegrees([&]() {
+        called = true;
+        move();
+    });
+    if (!called) {
+        setThreadingWarning("Couldn't find the spindle's position: try again", true);
+        return false;
+    }
+    if (!m_axis1Motor->isRunning()) {
+        // e.g. it was already at the target
+        return false;
+    }
+    m_threadingMoveInProgress = true;
+    m_threadingMoveTarget = m_axis1Motor->getTargetStep();
+    m_threadingMoveStartedRetracted = m_axis2Retracted;
+    return true;
+}
+
+void Model::threadingCheckMoveEnded()
+{
+    if (!m_threadingMoveInProgress || m_axis1Motor->isRunning()) {
+        return;
+    }
+    m_threadingMoveInProgress = false;
+    if (!m_config.readBool("ThreadingAutoRetract", false)) {
+        return;
+    }
+    const bool arrived = m_axis1Motor->getCurrentStep() == m_threadingMoveTarget;
+    const auto action = threadingStopAction(
+        arrived,
+        m_threadingMoveStartedRetracted,
+        m_axis2Retracted,
+        m_rotaryEncoder->getRpm() >= SPINDLE_STOPPED_RPM);
+    if (action == ThreadingStopAction::None) {
+        return;
+    }
+    if (m_axis2Motor->isRunning()) {
+        MGOLOG("Threading: X was moving at the end of a pass, so wasn't retracted");
+        setThreadingWarning(
+            fmt::format(
+                "{} was moving, so wasn't retracted automatically",
+                m_config.read("Axis2Label", "X")),
+            true);
+        return;
+    }
+    // (axis2Retract() toggles, and the action always matches the current state)
+    axis2Retract();
+}
+
 void Model::axis1GoToStep(long step)
 {
     axis1CheckForSynchronisation(step);
     if (m_enabledFunction == Mode::Threading) {
-        m_rotaryEncoder->callbackAtZeroDegrees([&]() {
-            m_axis1Motor->goToStep(step);
-        });
+        axis1StartThreadingMove([&]() { m_axis1Motor->goToStep(step); });
     } else {
         m_axis1Motor->goToStep(step);
     }
@@ -579,9 +713,7 @@ void Model::axis1GoToPosition(double pos)
     // perhaps by supplying a callback that is called after each step is taken.
     axis1CheckForSynchronisation(pos / m_axis1Motor->getConversionFactor());
     if (m_enabledFunction == Mode::Threading) {
-        m_rotaryEncoder->callbackAtZeroDegrees([&]() {
-            m_axis1Motor->goToPosition(pos);
-        });
+        axis1StartThreadingMove([&]() { m_axis1Motor->goToPosition(pos); });
     } else {
         m_axis1Motor->goToPosition(pos);
     }
@@ -653,16 +785,8 @@ void Model::axis1GoToCurrentMemory()
     }
     axis1Stop();
     m_axis1Status = "returning";
-    axis1CheckForSynchronisation(m_axis1Memory.at(m_currentMemory));
-    // If threading, we need to start at the same point each time - we
-    // wait for zero degrees on the chuck before starting:
-    if (m_enabledFunction == Mode::Threading) {
-        m_rotaryEncoder->callbackAtZeroDegrees([&]() {
-            axis1GoToStep(m_axis1Memory.at(m_currentMemory));
-        });
-    } else {
-        axis1GoToStep(m_axis1Memory.at(m_currentMemory));
-    }
+    // (If threading, this waits for zero degrees on the chuck before starting)
+    axis1GoToStep(m_axis1Memory.at(m_currentMemory));
 }
 
 void Model::axis1Nudge(ZDirection direction, double nudgeAmountMm)
@@ -681,6 +805,8 @@ void Model::axis1Nudge(ZDirection direction, double nudgeAmountMm)
     axis1GoToStep(getAxis1MotorCurrentStep() + steps);
     m_axis1Motor->wait();
     m_axis1Motor->setSpeed(oldSpeed);
+    // A nudge isn't a threading pass, so it shouldn't retract X when it ends
+    m_threadingMoveInProgress = false;
 
     // Save position
     axis1SaveBreadcrumbPosition();
@@ -1270,6 +1396,9 @@ void Model::setInputString(const std::string& str)
 
 std::string Model::getWarning() const
 {
+    if (m_warning.empty() && m_enabledFunction == Mode::Threading) {
+        return m_threadingWarning;
+    }
     return m_warning;
 }
 

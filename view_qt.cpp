@@ -1053,7 +1053,11 @@ void ViewQt::Impl::updateTextFromModel(const Model& model)
                 updateThreadData(model);
                 misc4.text = "";
                 misc5.text = "";
-                warning.text = "";
+                // e.g. the spindle is too fast for the pitch
+                warning.text = model.getWarning();
+                if (!model.getWarning().empty()) {
+                    warning.colour = ++iteration % 6 < 3 ? RED : YELLOW;
+                }
                 break;
             }
         case Mode::None:

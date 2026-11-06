@@ -1216,3 +1216,22 @@ TEST_CASE("Model:   zeroing or setting X clears the diameter")
     model.axis2Wait();
     REQUIRE(model.getDiameterMm() == Approx(20.0).margin(0.01));
 }
+
+TEST_CASE("Threading: auto-retract at the end of a pass")
+{
+    using mgo::ThreadingStopAction;
+    using mgo::threadingStopAction;
+    // A cut (tool in) reaching its end retracts; a return (tool out) reaching
+    // its end brings the tool back in
+    REQUIRE(threadingStopAction(true, false, false, true) == ThreadingStopAction::RetractOut);
+    REQUIRE(threadingStopAction(true, true, true, true) == ThreadingStopAction::RetractIn);
+    // Stopped short (e.g. the spindle sped up too much): retract a tool that's
+    // in, but never bring one in
+    REQUIRE(threadingStopAction(false, false, false, true) == ThreadingStopAction::RetractOut);
+    REQUIRE(threadingStopAction(false, true, true, true) == ThreadingStopAction::None);
+    // ...and don't move X at all if the spindle has stopped
+    REQUIRE(threadingStopAction(false, false, false, false) == ThreadingStopAction::None);
+    // If the user retracted or unretracted X during the move, leave it alone
+    REQUIRE(threadingStopAction(true, false, true, true) == ThreadingStopAction::None);
+    REQUIRE(threadingStopAction(true, true, false, true) == ThreadingStopAction::None);
+}
