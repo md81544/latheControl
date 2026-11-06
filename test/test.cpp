@@ -1185,3 +1185,34 @@ TEST_CASE("Commands: wording follows the display units")
     REQUIRE(find(imperial, mgo::key::ONE)->description == "Z speed preset 1: 0.787 in/min");
     REQUIRE(find(imperial, mgo::key::u)->description == "Show mm");
 }
+
+TEST_CASE("Model:   zeroing or setting X clears the diameter")
+{
+    mgo::MockConfigReader config;
+    mgo::MockGpio gpio(false);
+    mgo::Model model(gpio, config);
+    model.initialise();
+    const auto setDiameter = [&model] {
+        model.setAxis2Position(12.7);
+        model.diameterIsSet();
+        model.checkStatus();
+        REQUIRE(model.getDiameterMm().has_value());
+        REQUIRE(model.getGeneralStatus().find("Diameter") != std::string::npos);
+    };
+
+    setDiameter();
+    model.axis2Zero();
+    REQUIRE(!model.getDiameterMm().has_value());
+    REQUIRE(model.getGeneralStatus() == mgo::DEFAULT_GENERAL_STATUS);
+
+    setDiameter();
+    model.setAxis2Position(3.0); // (not as a diameter)
+    REQUIRE(!model.getDiameterMm().has_value());
+
+    // Moving X doesn't affect it
+    setDiameter();
+    model.setAxis2MotorSpeed(100.0);
+    model.axis2GoToPosition(10.0);
+    model.axis2Wait();
+    REQUIRE(model.getDiameterMm() == Approx(20.0).margin(0.01));
+}

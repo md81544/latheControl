@@ -470,6 +470,29 @@ TEST_CASE("UI: switching to inches, and typing a position in inches")
     REQUIRE(tm.model.getDisplayUnits() == mgo::DisplayUnits::Metric);
 }
 
+TEST_CASE("UI: setting X as a diameter, then zeroing X")
+{
+    TestModel tm;
+    mgo::Controller controller(&tm.model);
+    QWidget* w = mainWindow();
+    REQUIRE(w);
+
+    // X, S: set the position, as a diameter (D)
+    whenDialogShows([](QWidget* dialog) {
+        typeInto(dialog, "25.4");
+        QTest::keyClick(inputWidget(dialog), Qt::Key_D);
+        QTest::keyClick(inputWidget(dialog), Qt::Key_Return);
+    });
+    press(w, controller, Qt::Key_X);
+    press(w, controller, Qt::Key_S);
+    REQUIRE(tm.model.getDiameterMm() == Approx(25.4).margin(0.001));
+
+    // X, Z: zeroing X means it's no longer measured from the centre
+    press(w, controller, Qt::Key_X);
+    press(w, controller, Qt::Key_Z);
+    REQUIRE(!tm.model.getDiameterMm().has_value());
+}
+
 int main(int argc, char* argv[])
 {
     // No windows on screen, and no dependency on a display

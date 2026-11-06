@@ -29,6 +29,9 @@ constexpr int AXIS2_UNSET = INF_OUT;
 
 constexpr double DEG_TO_RAD = M_PI / 180.0;
 
+// What the status line shows when there's nothing else to show
+constexpr const char* DEFAULT_GENERAL_STATUS = "Tab or F1: menu";
+
 constexpr float INFEED = 0.05f; // mm
 // The large number below is tan 29.5°
 // (Cannot use std::tan in constexpr owing to side effects)
@@ -153,6 +156,8 @@ public:
     void axis2ClearBreadcrumbs();
 
     void repeatLastRelativeMove(Axis axis);
+    // The X position has been set as a diameter (so X is now measured from
+    // the centre). This lasts until X is zeroed, or its position is set again
     void diameterIsSet();
     // The work's diameter at the tool (twice the X position), once the X
     // position has been set as a diameter (so X is measured from the centre);
@@ -288,7 +293,7 @@ private:
                                       AXIS2_UNSET, AXIS2_UNSET, AXIS2_UNSET };
     std::size_t m_currentMemory { 0 };
     std::size_t m_threadPitchIndex { 0 };
-    std::string m_generalStatus { "Tab or F1: menu" };
+    std::string m_generalStatus { DEFAULT_GENERAL_STATUS };
     std::string m_axis1Status { "stopped" };
     std::string m_axis2Status { "stopped" };
     std::string m_warning;
@@ -348,6 +353,8 @@ private:
 
     // Private functions
     void checkMotorFaults();
+    // X is no longer known to be measured from the centre
+    void clearDiameter();
     void clearMotorFault(Axis axis);
     void multiPassFinished();
     void multiPassNextCut(mgo::StatusResult& statusResult);

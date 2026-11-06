@@ -928,6 +928,8 @@ void Model::axis2Zero()
     axis2ClearBreadcrumbs();
     // The position is known again, so a motor fault can be cleared
     clearMotorFault(Axis::Axis2);
+    // X is no longer measured from the centre (unless set as a diameter again)
+    clearDiameter();
 }
 
 void Model::axis2SynchroniseOff()
@@ -1384,6 +1386,17 @@ void Model::setAxis2Position(double mm)
     m_axis2Motor->setPosition(mm);
     // The position is known again, so a motor fault can be cleared
     clearMotorFault(Axis::Axis2);
+    // A new position isn't necessarily measured from the centre: if it was
+    // set as a diameter, diameterIsSet() is called after this
+    clearDiameter();
+}
+
+void Model::clearDiameter()
+{
+    if (m_xDiameterSet) {
+        m_xDiameterSet = false;
+        m_generalStatus = DEFAULT_GENERAL_STATUS;
+    }
 }
 
 void Model::resetMotorThreads()

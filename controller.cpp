@@ -812,11 +812,15 @@ void Controller::processKey(int t)
                         0.0);
                     if (!result.cancelled) {
                         double position = m_model->fromDisplayUnits(2, result.value);
-                        if (result.optionsSelected.contains('d')) {
+                        const bool diameter = result.optionsSelected.contains('d');
+                        if (diameter) {
                             position /= 2;
-                            m_model->diameterIsSet();
                         }
                         m_model->setAxis2Position(position);
+                        // (After setting the position, which clears any diameter)
+                        if (diameter) {
+                            m_model->diameterIsSet();
+                        }
                         // This will invalidate any memorised X positions, so we clear them
                         // unless the user specified not to with 'A'
                         if (!result.optionsSelected.contains('a')) {

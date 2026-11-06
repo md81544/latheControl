@@ -78,7 +78,7 @@ To move to an **absolute position**, press leader + `G` (for "go to") - for exam
 
 **Zeroing** - press `XZ` or `ZZ` to zero the axis at the current position. The "axis leader" key `\` (backslash) selects both axes, so `\z` will zero out both axes at once.
 
-**Setting a position** - press "axis leader" then `S` - for example `ZS` - then enter a value to change what the current position is. With the X axis, you can enter the value as a **diameter value** by also pressing `D` (which ticks the "set as diameter" option) before `ENTER`. This sets the X value to half of the diameter and displays the actual diameter in the status line at the bottom of the screen. Once a diameter has been set, the **surface speed** (Vc, in m/min) is also shown, beside the spindle speed.
+**Setting a position** - press "axis leader" then `S` - for example `ZS` - then enter a value to change what the current position is. With the X axis, you can enter the value as a **diameter value** by also pressing `D` (which ticks the "set as diameter" option) before `ENTER`. This sets the X value to half of the diameter and displays the actual diameter in the status line at the bottom of the screen. Once a diameter has been set, the **surface speed** (Vc, in m/min) is also shown, beside the spindle speed. Both last until X is zeroed, or its position is set again (other than as a diameter).
 
 **Retraction** - `R` retracts the X axis a small amount. Press again to unretract. Retraction can be negative for boring operations, see "Special functions" below.
 
