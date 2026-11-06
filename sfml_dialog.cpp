@@ -397,6 +397,8 @@ void pressAnyKey(sf::RenderWindow& window, sf::Font& font, std::string_view prom
     for (;;) {
         event = window.pollEvent();
         if (!event.has_value()) {
+            // Nothing to do until a key is pressed; don't spin
+            sf::sleep(sf::milliseconds(10));
             continue;
         }
         if (event->is<sf::Event::KeyPressed>()) {

@@ -14,13 +14,12 @@ namespace mgo {
 
 namespace {
 
-void yieldSleep(std::chrono::microseconds microsecs)
+// Pause the UI loop. This used to spin calling yield(), which kept a CPU core
+// busy; a real sleep is fine here as UI timing isn't critical (the
+// time-critical work all happens in the motor threads)
+void uiSleep(std::chrono::microseconds microsecs)
 {
-    auto start = std::chrono::high_resolution_clock::now();
-    auto end = start + microsecs;
-    while (std::chrono::high_resolution_clock::now() < end) {
-        std::this_thread::yield();
-    }
+    std::this_thread::sleep_for(microsecs);
 }
 
 } // end anonymous namespace
@@ -75,7 +74,7 @@ void Controller::run()
         }
 
         // Small delay just to avoid the UI loop spinning
-        yieldSleep(std::chrono::microseconds(50'000));
+        uiSleep(std::chrono::microseconds(50'000));
     }
 }
 
@@ -882,7 +881,7 @@ bool Controller::waitForAxisToStop(uint8_t axis)
             m_model->stopAllMotors();
             return false;
         }
-        yieldSleep(std::chrono::microseconds(50'000));
+        uiSleep(std::chrono::microseconds(50'000));
         m_view->updateDisplay(*m_model);
     }
 }

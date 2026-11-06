@@ -7,6 +7,7 @@
 
 #include <chrono>
 #include <cmath>
+#include <ctime>
 #include <thread>
 
 #define CATCH_CONFIG_MAIN
@@ -509,4 +510,40 @@ TEST_CASE("Encoder: Callbacks stop when encoder is destroyed")
         gpio.delayMicroSeconds(1'000);
     }
     REQUIRE(re2.warmingUp() == false);
+}
+
+TEST_CASE("Stepper: Idle motor thread doesn't spin")
+{
+    mgo::MockGpio gpio(false);
+    mgo::StepperMotor motor(gpio, 0, 0, 0, 1'000, 0.01, 1'000.0);
+    motor.setRpm(100.0);
+    motor.goToStep(10);
+    motor.wait();
+    REQUIRE(motor.getCurrentStep() == 10);
+    // While idle, the motor thread should be asleep rather than spinning
+    // (previously this used a whole core: ~300ms of CPU time here)
+    const std::clock_t start = std::clock();
+    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+    const double cpuMs = 1'000.0 * static_cast<double>(std::clock() - start) / CLOCKS_PER_SEC;
+    REQUIRE(cpuMs < 50.0);
+    // ...and must wake up promptly when given something to do
+    motor.goToStep(20);
+    motor.wait();
+    REQUIRE(motor.getCurrentStep() == 20);
+}
+
+TEST_CASE("Stepper: stop() returns promptly")
+{
+    mgo::MockGpio gpio(false);
+    mgo::StepperMotor motor(gpio, 0, 0, 0, 1'000, 0.01, 1'000.0);
+    motor.setRpm(100.0);
+    motor.goToStep(1'000'000);
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    REQUIRE(motor.isRunning());
+    const auto start = std::chrono::steady_clock::now();
+    motor.stop();
+    const auto elapsed = std::chrono::steady_clock::now() - start;
+    REQUIRE(!motor.isRunning());
+    // Previously stop() always took 50ms
+    REQUIRE(elapsed < std::chrono::milliseconds(20));
 }

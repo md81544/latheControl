@@ -148,6 +148,9 @@ void ViewSfml::initialise(const Model& model)
             sf::VideoMode::getDesktopMode().size.x,
             sf::VideoMode::getDesktopMode().size.y));
     m_window->setKeyRepeatEnabled(false);
+    // Without a limit, the dialog loops (which redraw continuously) would run
+    // flat out and keep a CPU core busy
+    m_window->setFramerateLimit(30);
     //m_window->setMouseCursorVisible(false);
     m_font = std::make_unique<sf::Font>();
     if (!m_font->openFromFile("./lc_font.ttf")) {

@@ -52,6 +52,8 @@ This program is very time-critical. You shouldn't need to use `nice`, as, intern
 
 **Update to the above** - the problem described above does not seem to happen in more recent kernels.
 
+**If a once-per-second stutter does appear**, a likely cause is the kernel's real-time throttling: by default, real-time threads may only use 95% of each second (`cat /proc/sys/kernel/sched_rt_runtime_us` shows `950000`), and a motor thread busy-waiting between steps during a long move can hit that limit, at which point it is paused for the remaining ~50ms. Whether this happens depends on the kernel version and configuration, which would fit the behaviour above. To test the theory, disable throttling with `sudo sysctl kernel.sched_rt_runtime_us=-1` (this lasts until reboot; the Pi has enough cores for this to be safe here) and see whether the stutter goes away. Motor threads sleep when their motor is idle, so this can only affect a motor while it is moving.
+
 ## Usage
 *Note: the axes are referred to as Z and X here, but these names are configurable. Z is the primary axis (axis1) and X is the secondary (axis2).*
 
