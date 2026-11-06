@@ -81,17 +81,51 @@
       stops (especially from rapids) are abrupt. Needs tuning on the machine,
       and changes where moves end. Also, the ramp rate is per loop, so depends
       on the step rate
-- [ ] Sleep between steps at slow speeds, rather than busy-waiting (idle
-      motors already sleep). Needs the wake-up latency measuring on the Pi
-      first, as thread pitch depends on step timing
+- [ ] Sleep between steps at slow speeds, rather than busy-waiting. Needs the
+      wake-up latency measuring on the Pi first, as thread pitch depends on
+      step timing. (Idle motors can sleep, but on the lathe they're set to
+      spin, each pinned to its own CPU core: `Axis1CpuCore`, `Axis2CpuCore`,
+      `MotorThreadsSpinWhenIdle`. Without that, a motor thread waking up
+      starved pigpio's callback thread, losing encoder pulses)
 - [ ] Consider a real-time priority below 99, which is shared with critical
       kernel threads. Test on the machine
 - [ ] If a once-per-second stutter reappears, check real-time throttling
       (see the README)
-- [ ] Threading currently matches the carriage's *speed* to the averaged
-      spindle RPM, so any change in spindle speed under load becomes pitch
-      error. A true electronic leadscrew would lock the carriage's *position*
-      to the encoder count
+- [ ] **Electronic leadscrew: lock Z's *position* to the spindle, not its
+      speed.** At the moment, threading sets Z's speed from the spindle's RPM,
+      averaged over the last revolution and applied every UI loop (~50ms).
+      Anything that makes Z's speed differ from the spindle's, even briefly,
+      becomes a permanent error for the rest of the pass:
+    - The spindle slowing under the cutting load gives pitch error until the
+      average catches up
+    - A misread RPM shifts the helix. Seen on 2026-11-06: a revolution
+      averaged across a gap in the encoder pulses read low, Z ran slow and
+      fell about 0.1s behind, and the pass cut a second thread
+    - **Approach:** when the pass starts, note the encoder's pulse count.
+      Z's target is then the start position + (pulses since the start ÷
+      pulses per revolution) × pitch, and the motor thread steps towards it
+      continually. The existing `synchronise()` in stepperControl already
+      follows *another motor's* position in the same way; it could follow an
+      encoder-based position source instead
+    - **Starting:** Z can't jump to spindle speed. Either start locked from
+      standstill and let Z catch up (the lag is the same every pass, so the
+      passes still line up, as long as the spindle speed is similar), or
+      lock on a little before the start of the thread. Z's maximum speed
+      still limits how fast the spindle can turn (keep the existing check)
+    - **Resolution:** 700 pulses per spindle revolution is 2.5µm of Z per
+      pulse at 1.75mm pitch, against Z's 1µm steps. Interpolating between
+      pulses by time (from the current pulse rate) would smooth this out
+    - **Latency:** pigpio delivers encoder callbacks in batches about every
+      millisecond. Z then lags by a near-constant time, which only gives a
+      constant phase offset, harmless while the spindle speed is the same
+      for every pass
+    - This also replaces `callbackAtZeroDegrees()` and its busy-wait: a pass
+      just starts locking on when the count reaches the next multiple of a
+      revolution. Ties in with moving the controller onto Qt's event loop
+    - Lost encoder pulses would still lose the position (they're now
+      detected, logged and warned about)
+    - **Testing:** with the mock encoder, change the spindle speed part way
+      through a pass and check that Z's position still tracks pulses × pitch
 - [ ] I defined some constants for a slight Z infeed when cutting threads
       (see INFEED and SIDEFEED) but never used them. Maybe implement to
       simulate the use of the topslide
