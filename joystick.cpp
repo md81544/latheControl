@@ -27,9 +27,26 @@ constexpr unsigned JOYSTICK_SHIFT = 9;
 // JoystickKeyMapper
 // ---------------------------------------------------------------------------
 
-std::vector<int> JoystickKeyMapper::process(const std::vector<JoystickEvent>& events)
+void JoystickKeyMapper::setMenuChord(unsigned button1, unsigned button2)
+{
+    m_menuChord = std::make_pair(button1, button2);
+}
+
+bool JoystickKeyMapper::isChordButton(unsigned button) const
+{
+    return m_menuChord && (button == m_menuChord->first || button == m_menuChord->second);
+}
+
+std::vector<int> JoystickKeyMapper::process(
+    const std::vector<JoystickEvent>& events,
+    Clock::time_point now)
 {
     std::vector<int> keys;
+    const auto addKey = [&keys](int k) {
+        if (k != key::None) {
+            keys.push_back(k);
+        }
+    };
     bool anyLiveEvents = false;
     for (const auto& e : events) {
         if (e.type == JoystickEvent::Type::Button) {
@@ -37,11 +54,27 @@ std::vector<int> JoystickKeyMapper::process(const std::vector<JoystickEvent>& ev
                 const bool pressed = e.value != 0.f;
                 const bool wasPressed = m_buttons.at(e.number);
                 m_buttons.at(e.number) = pressed;
-                if (pressed && !wasPressed && !e.initial) {
-                    const int k = buttonKey(e.number);
-                    if (k != key::None) {
-                        keys.push_back(k);
+                if (e.initial) {
+                    // (just recording the state when the device is opened)
+                } else if (pressed && !wasPressed && isChordButton(e.number)) {
+                    if (m_pendingChordButton && *m_pendingChordButton != e.number) {
+                        // The other chord button was pressed moments ago:
+                        // it's the chord, so toggle the menu (and neither
+                        // button does its own thing)
+                        m_pendingChordButton.reset();
+                        addKey(key::TAB);
+                    } else {
+                        // Could be the start of the chord: hold its action back
+                        m_pendingChordButton = e.number;
+                        m_pendingSince = now;
                     }
+                } else if (pressed && !wasPressed) {
+                    addKey(buttonKey(e.number));
+                } else if (!pressed && wasPressed && m_pendingChordButton == e.number) {
+                    // Released before the other chord button was pressed, so it
+                    // was just a press of this button: act on it now
+                    m_pendingChordButton.reset();
+                    addKey(buttonKey(e.number));
                 }
             }
         } else if (e.number < m_axes.size()) {
@@ -54,16 +87,19 @@ std::vector<int> JoystickKeyMapper::process(const std::vector<JoystickEvent>& ev
     // As with SFML, the sticks' state is only examined when there's been a
     // joystick event (so holding the D-pad nudges once, not continuously)
     if (anyLiveEvents) {
-        const int k = stateKey();
-        if (k != key::None) {
-            keys.push_back(k);
-        }
+        addKey(stateKey());
+    }
+    // A chord button held down, with no sign of the other: act on it now
+    if (m_pendingChordButton && now - m_pendingSince >= CHORD_WINDOW) {
+        addKey(buttonKey(*m_pendingChordButton));
+        m_pendingChordButton.reset();
     }
     return keys;
 }
 
 void JoystickKeyMapper::reset()
 {
+    m_pendingChordButton.reset();
     m_buttons.fill(false);
     m_axes.fill(0.f);
     m_previousX = 0.f;
@@ -217,9 +253,12 @@ int JoystickKeyMapper::stateKey()
 // Joystick (Linux joystick device)
 // ---------------------------------------------------------------------------
 
-Joystick::Joystick(std::string devicePath)
+Joystick::Joystick(std::string devicePath, std::optional<std::pair<unsigned, unsigned>> menuChord)
     : m_devicePath(std::move(devicePath))
 {
+    if (menuChord) {
+        m_mapper.setMenuChord(menuChord->first, menuChord->second);
+    }
 }
 
 Joystick::~Joystick()
@@ -331,12 +370,12 @@ std::vector<int> Joystick::poll()
         // started, as we'll no longer see the stick being released
         MGOLOG("Joystick disconnected (" << m_devicePath << ")");
         closeDevice();
-        auto keys = m_mapper.process(events);
+        auto keys = m_mapper.process(events, JoystickKeyMapper::Clock::now());
         m_mapper.reset();
         keys.push_back(key::SPACE);
         return keys;
     }
-    return m_mapper.process(events);
+    return m_mapper.process(events, JoystickKeyMapper::Clock::now());
 }
 
 #else // not Linux: no joystick support

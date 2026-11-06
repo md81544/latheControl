@@ -11,11 +11,10 @@
       Space still stops everything, and rapids and their dead-man stops still
       work. Choosing a command acts exactly as its shortcut does. Rapids are
       deliberately not in the menu, as they rely on holding the keys down
-    - **Next:** open the menu from the gamepad with a button chord, set in
-      the config (e.g. `JoystickMenuChord = 4,6`, previous + next memory
-      slot). The chord buttons' own actions will then register ~150ms later,
-      to tell a single press from a chord
-    - **Then:** after an axis leader key (e.g. `Z`), show what each key does
+    - **Done:** open the menu from the gamepad with a button chord
+      (`JoystickMenuChord`, default 4,6: previous + next memory slot). Not
+      yet tried on the machine
+    - **Next:** after an axis leader key (e.g. `Z`), show what each key does
       with that axis, using the same command table
     - Regenerate the F1 help from the command table too (its text is still
       written by hand)

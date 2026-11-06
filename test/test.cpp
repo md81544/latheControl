@@ -936,3 +936,48 @@ TEST_CASE("Commands: keys allowed in the current mode")
     REQUIRE(!mgo::keyAllowedInCurrentMode(mgo::key::UP, model));
     REQUIRE(mgo::keyAllowedInCurrentMode(mgo::key::LEFT, model));
 }
+
+TEST_CASE("Joystick: menu chord")
+{
+    using namespace std::chrono_literals;
+    const auto t0 = mgo::JoystickKeyMapper::Clock::now();
+    mgo::JoystickKeyMapper m;
+    m.setMenuChord(4, 6); // previous + next memory slot
+
+    // Both pressed together toggles the menu, and neither does its own thing
+    REQUIRE(m.process({ button(4, true) }, t0).empty());
+    REQUIRE(m.process({ button(6, true) }, t0 + 50ms) == Keys { mgo::key::TAB });
+    REQUIRE(m.process({ button(4, false), button(6, false) }, t0 + 300ms).empty());
+    REQUIRE(m.process({}, t0 + 600ms).empty());
+
+    // Either order works
+    REQUIRE(m.process({ button(6, true) }, t0 + 1s).empty());
+    REQUIRE(m.process({ button(4, true) }, t0 + 1s + 20ms) == Keys { mgo::key::TAB });
+    m.process({ button(4, false), button(6, false) }, t0 + 1500ms);
+
+    // A quick tap of one acts as soon as it's released
+    REQUIRE(m.process({ button(4, true) }, t0 + 2s).empty());
+    REQUIRE(m.process({ button(4, false) }, t0 + 2s + 80ms) == Keys { mgo::key::LBRACKET });
+    REQUIRE(m.process({}, t0 + 3s).empty()); // and only once
+
+    // Held down without the other, it acts once the chord window has passed
+    REQUIRE(m.process({ button(6, true) }, t0 + 4s).empty());
+    REQUIRE(m.process({}, t0 + 4s + 100ms).empty());
+    REQUIRE(m.process({}, t0 + 4s + 150ms) == Keys { mgo::key::RBRACKET });
+    // ...and the other pressed after that is just itself, not the chord
+    REQUIRE(m.process({ button(4, true) }, t0 + 4s + 400ms).empty());
+    REQUIRE(m.process({ button(4, false) }, t0 + 4s + 450ms) == Keys { mgo::key::LBRACKET });
+    REQUIRE(m.process({ button(6, false) }, t0 + 5s).empty());
+
+    // Other buttons are unaffected, including while a chord button is held back
+    REQUIRE(m.process({ button(4, true), button(5, true) }, t0 + 6s) == Keys { mgo::key::SPACE });
+    REQUIRE(m.process({ button(4, false), button(5, false) }, t0 + 6s + 50ms)
+            == Keys { mgo::key::LBRACKET });
+}
+
+TEST_CASE("Joystick: without a menu chord, buttons act at once")
+{
+    mgo::JoystickKeyMapper m;
+    REQUIRE(m.process({ button(4, true) }) == Keys { mgo::key::LBRACKET });
+    REQUIRE(m.process({ button(6, true) }) == Keys { mgo::key::RBRACKET });
+}

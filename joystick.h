@@ -2,7 +2,9 @@
 
 #include <array>
 #include <chrono>
+#include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace mgo {
@@ -39,15 +41,34 @@ struct JoystickEvent {
 // code, so it can be tested anywhere.
 class JoystickKeyMapper {
 public:
+    using Clock = std::chrono::steady_clock;
+
+    // Pressing these two buttons together opens (or closes) the menu, rather
+    // than doing what either does by itself. To tell a chord from a single
+    // press, these buttons' own actions are held back until the button is
+    // released, or for CHORD_WINDOW if it's held down
+    void setMenuChord(unsigned button1, unsigned button2);
+    static constexpr auto CHORD_WINDOW = std::chrono::milliseconds(150);
+
     // Processes a batch of events (i.e. all those that have arrived since the
-    // last call) and returns any resulting key codes
-    std::vector<int> process(const std::vector<JoystickEvent>& events);
+    // last call; possibly none) and returns any resulting key codes. now is
+    // the current time; this should be called regularly, even if there are
+    // no events, so held-back chord buttons can be acted on
+    std::vector<int> process(
+        const std::vector<JoystickEvent>& events,
+        Clock::time_point now = Clock::now());
     // Forget all state (e.g. when the joystick is disconnected)
     void reset();
 
 private:
     int buttonKey(unsigned button) const;
     int stateKey();
+    bool isChordButton(unsigned button) const;
+
+    std::optional<std::pair<unsigned, unsigned>> m_menuChord;
+    // A chord button whose own action is being held back, and since when
+    std::optional<unsigned> m_pendingChordButton;
+    Clock::time_point m_pendingSince {};
 
     std::array<bool, 32> m_buttons {};
     std::array<float, static_cast<std::size_t>(JoystickAxis::Count)> m_axes {};
@@ -63,7 +84,11 @@ private:
 // Linux, this does nothing.
 class Joystick {
 public:
-    explicit Joystick(std::string devicePath);
+    // menuChord: two buttons which, pressed together, open the menu (none if
+    // not set). See JoystickKeyMapper::setMenuChord()
+    explicit Joystick(
+        std::string devicePath,
+        std::optional<std::pair<unsigned, unsigned>> menuChord = std::nullopt);
     ~Joystick();
     Joystick(const Joystick&) = delete;
     Joystick& operator=(const Joystick&) = delete;

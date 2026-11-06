@@ -68,6 +68,29 @@ std::string formatMotorPosition(double mm)
     return fmt::format("{: >8.2f}", mm);
 }
 
+// Parses a pair of joystick button numbers, e.g. "4,6". "none" (or anything
+// unreadable, which is logged) means no chord
+std::optional<std::pair<unsigned, unsigned>> parseButtonChord(const std::string& setting)
+{
+    if (setting.empty() || setting == "none") {
+        return std::nullopt;
+    }
+    const auto comma = setting.find(',');
+    try {
+        if (comma != std::string::npos) {
+            const unsigned first = std::stoul(setting.substr(0, comma));
+            const unsigned second = std::stoul(setting.substr(comma + 1));
+            if (first != second) {
+                return std::make_pair(first, second);
+            }
+        }
+    } catch (const std::exception&) {
+        // (logged below)
+    }
+    MGOLOG("Ignoring JoystickMenuChord setting '" << setting << "': should be e.g. 4,6");
+    return std::nullopt;
+}
+
 bool isModifierKey(int qtKey)
 {
     return qtKey == Qt::Key_Shift || qtKey == Qt::Key_Control || qtKey == Qt::Key_Alt
@@ -485,7 +508,9 @@ void ViewQt::initialise(const Model& model)
     d.fault = make(20, STATUS_BAR_Y - 40, 22, RED);
 
     // (Joystick support is only available on Linux)
-    d.joystick = std::make_unique<Joystick>(model.config().read("JoystickDevice", "/dev/input/js0"));
+    d.joystick = std::make_unique<Joystick>(
+        model.config().read("JoystickDevice", "/dev/input/js0"),
+        parseButtonChord(model.config().read("JoystickMenuChord", "4,6")));
 
     QCoreApplication::processEvents();
 }

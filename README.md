@@ -56,7 +56,7 @@ This program is very time-critical. You shouldn't need to use `nice`, as, intern
 ## Usage
 *Note: the axes are referred to as Z and X here, but these names are configurable. Z is the primary axis (axis1) and X is the secondary (axis2).*
 
-**The menu** - press `Tab` to open a menu of everything you can do, with each command's keyboard shortcut alongside. Use the arrow keys (or the gamepad's D-pad) to move around it, `Enter` or `Right` to choose, `Left` or `Esc` to go back, and `Tab` again to close it. The menu doesn't stop anything: motors keep running while it's open, `Space` still stops all motors, and rapids (`Alt` + arrow) still work. Commands which can't be used at the moment (e.g. moving a locked axis) are greyed out.
+**The menu** - press `Tab` (or, on the gamepad, the previous and next memory slot buttons together; see `JoystickMenuChord` in lc.cfg) to open a menu of everything you can do, with each command's keyboard shortcut alongside. Use the arrow keys (or the gamepad's D-pad, and its Enter button) to move around it, `Enter` or `Right` to choose, `Left` or `Esc` to go back, and `Tab` again to close it. The menu doesn't stop anything: motors keep running while it's open, `Space` still stops all motors, and rapids (`Alt` + arrow) still work. Commands which can't be used at the moment (e.g. moving a locked axis) are greyed out.
 
 For general **movement** of the carriages, use the arrow keys. Press the same key again (or spacebar) to stop. Pressing `Alt` with an arrow key sets the carriage moving at its maximum speed (useful for moving tools out of the way, not actual cutting).
 
