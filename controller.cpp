@@ -722,15 +722,11 @@ void Controller::processKey(int t)
                     if (m_model->config().readBool("DisableAxis2", false)) {
                         break;
                     }
-                    // Note all motors will be stopped when a dialog is displayed
-                    const auto rc = getNumericInput(
-                        "Enter taper value",
-                        { "MT1 = -1.4287, MT2 = -1.4307",
-                          "MT3 = -1.4377, MT4 = ff-1.4876",
-                          "(negative angle means piece gets wider towards chuck)" },
-                        m_model->getTaperAngle());
-                    if (!rc.cancelled) {
-                        m_model->setTaperAngle(rc.value);
+                    // As with all dialogs, stop all motors first
+                    m_model->stopAllMotors();
+                    const auto angle = m_view->getTaperAngle(m_model->getTaperAngle());
+                    if (angle) {
+                        m_model->setTaperAngle(*angle);
                         m_model->changeMode(Mode::Taper);
                     }
                     break;

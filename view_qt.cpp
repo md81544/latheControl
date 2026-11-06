@@ -536,6 +536,18 @@ void ViewQt::initialise(const Model& model)
     QCoreApplication::processEvents();
 }
 
+std::optional<double> ViewQt::getTaperAngle(double currentAngle)
+{
+    auto& widget = *m_impl->widget;
+    widget.dimmed = true;
+    widget.update();
+    const auto angle = dialog::getTaperAngle(&widget, m_impl->fontFamily, currentAngle);
+    widget.dimmed = false;
+    widget.update();
+    QCoreApplication::processEvents();
+    return angle;
+}
+
 void ViewQt::setMenu(const Menu* menu)
 {
     m_impl->menu = menu;

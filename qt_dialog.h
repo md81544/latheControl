@@ -31,5 +31,13 @@ Input::Return getInput(
     std::string_view defaultEntry,
     std::optional<std::vector<std::string>> listItems = std::nullopt);
 
+// The taper mode dialog: choose a preset taper (e.g. a Morse taper) or enter
+// an angle, and whether the tool moves in or out as it approaches the chuck,
+// with a diagram of the tool's path. currentAngle is the taper angle in use
+// (as Model::getTaperAngle(): negative means the piece gets wider towards
+// the chuck). Returns the angle chosen, with that sign, or nullopt if
+// cancelled.
+std::optional<double> getTaperAngle(QWidget* parent, const QString& fontFamily, double currentAngle);
+
 } // end namespace dialog
 } // end namespace mgo

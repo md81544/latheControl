@@ -56,6 +56,9 @@ public:
         std::string_view defaultEntry = "",
         std::optional<std::vector<std::string>> listItems = std::nullopt
     ) = 0;
+    // The taper mode dialog: returns the taper angle chosen (negative if the
+    // piece gets wider towards the chuck), or nullopt if cancelled
+    virtual std::optional<double> getTaperAngle(double currentAngle) = 0;
     virtual void updateDisplay(const Model&) = 0;
     // The menu to draw (when it's open) on each updateDisplay(). Not owned;
     // must outlive the view, or be reset to nullptr

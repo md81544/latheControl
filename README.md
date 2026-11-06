@@ -92,6 +92,6 @@ To move to an **absolute position**, press leader + `G` (for "go to") - for exam
 Press the leader `F2` and one of the following:
 * `S` - setup
 * `T` - threading
-* `P` - tapering (negative angles mean the piece gets wider nearer the chuck)
+* `P` - tapering: choose a preset (Morse tapers MT0-MT6, 45 and 30 degree chamfers) or type an angle, and press `I` to choose whether the tool moves in or out as it approaches the chuck. A diagram shows the tool's path (exaggerated for small angles). Presets are in `tapers.h`
 * `R` - set retract mode (retract might need to be inwards rather than outwards if you're boring a hole)
 * `O` - radius cutting (this is **EXPERIMENTAL** - use care!)

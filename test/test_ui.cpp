@@ -377,6 +377,74 @@ TEST_CASE("UI: menu through the controller")
     REQUIRE(!controller.isMenuOpen());
 }
 
+namespace {
+
+// Types into whichever widget in the dialog has the keyboard focus (as a real
+// keyboard would), one character at a time
+void typeInto(QWidget* dialog, const std::string& text)
+{
+    for (const char c : text) {
+        QTest::keyClicks(inputWidget(dialog), QString(c));
+    }
+}
+
+} // end anonymous namespace
+
+TEST_CASE("UI: taper dialog through the controller")
+{
+    TestModel tm;
+    mgo::Controller controller(&tm.model);
+    QWidget* w = mainWindow();
+    REQUIRE(w);
+
+    // F2 then P opens it; choose MT2, tool moving in, and OK
+    whenDialogShows([](QWidget* dialog) {
+        QTest::keyClick(inputWidget(dialog), Qt::Key_Down);
+        QTest::keyClick(inputWidget(dialog), Qt::Key_Down);
+        QTest::keyClick(inputWidget(dialog), Qt::Key_I);
+        QTest::keyClick(inputWidget(dialog), Qt::Key_Return);
+    });
+    press(w, controller, Qt::Key_F2);
+    press(w, controller, Qt::Key_P);
+    REQUIRE(tm.model.getEnabledFunction() == mgo::Mode::Taper);
+    REQUIRE(tm.model.getTaperAngle() == Approx(1.4307));
+}
+
+TEST_CASE("UI: taper dialog")
+{
+    TestModel tm;
+    mgo::ViewQt view;
+    view.initialise(tm.model);
+
+    // A custom angle: typing a number switches to it. The tool moves out by
+    // default, which is a negative angle (wider towards the chuck)
+    whenDialogShows([](QWidget* dialog) {
+        typeInto(dialog, "12.5");
+        QTest::keyClick(inputWidget(dialog), Qt::Key_Return);
+    });
+    REQUIRE(view.getTaperAngle(0.0) == Approx(-12.5));
+
+    // Esc cancels
+    whenDialogShows([](QWidget* dialog) { QTest::keyClick(inputWidget(dialog), Qt::Key_Escape); });
+    REQUIRE(!view.getTaperAngle(0.0).has_value());
+
+    // Enter does nothing without a valid angle (here, just a ".")
+    whenDialogShows([](QWidget* dialog) {
+        typeInto(dialog, ".");
+        QTest::keyClick(inputWidget(dialog), Qt::Key_Return);
+        REQUIRE(dialog->isVisible());
+        QTest::keyClick(inputWidget(dialog), Qt::Key_Escape);
+    });
+    REQUIRE(!view.getTaperAngle(0.0).has_value());
+
+    // It starts with the taper in use: a preset (with its direction)...
+    whenDialogShows([](QWidget* dialog) { QTest::keyClick(inputWidget(dialog), Qt::Key_Return); });
+    REQUIRE(view.getTaperAngle(-1.4377) == Approx(-1.4377));
+    // ...or a custom angle
+    whenDialogShows([](QWidget* dialog) { QTest::keyClick(inputWidget(dialog), Qt::Key_Return); });
+    REQUIRE(view.getTaperAngle(7.25) == Approx(7.25));
+}
+
 int main(int argc, char* argv[])
 {
     // No windows on screen, and no dependency on a display
