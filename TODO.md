@@ -2,15 +2,6 @@
 
 ## User interface
 
-### Finish the move to Qt (`qt-ui` branch)
-- [ ] Try it on the Pi (`make release`): fullscreen display and scaling,
-      keyboard (including Alt and Right Alt / AltGr rapids, and that releasing
-      them stops), dialogs on the Pi's desktop
-- [ ] Check the gamepad's axes and buttons map as they did with SFML. If a
-      stick or the D-pad acts on the wrong axis or direction, the mapping is in
-      `Joystick::tryOpen()` (joystick.cpp)
-- [ ] Merge `qt-ui` into `main`
-
 ### Make the interface less cryptic
 - [ ] A key that brings up all the options available *now*. It should depend on
       context: after an axis leader key (e.g. `Z`), show what each key does
@@ -101,11 +92,7 @@
       be a config item applied automatically). Idea: calculate the angle
       required from two measurements and a distance
 - [ ] Support the enable pin for each motor
-- [ ] Need a way to detect loss of steps. Probably not possible without
-      hooking into linear scales (possible mod to sender unit)
-    - on the lathe, the Z axis controller has pins to detect loss of steps
-      directly. If this is triggered, we could stop the Z axis. Not sure how
-      accurate the position will be after this. To test once wired up
+- [ ] Detecting lost steps: see "Linear scale" under Sensors
 - [ ] Support limit switches. Could have multiple switches all on one pin,
       and when triggered simply issue a "stop all". Partially implemented
       (see `limitSwitchTriggered()`)
@@ -125,14 +112,67 @@
       encoder? (Not relevant currently now I've lowered the gearing on the
       lathe's spindle)
 - [ ] Maybe allow zeroing of chuck angle? (use offset in reporting)
-- [ ] Linear scale: decide how best to use it. Should position come solely
-      from it, rather than "dead reckoning"? Or should it just correct the
-      expected position (e.g. periodically calling `setPosition()` on axis1's
-      motor, or giving the motor a callback to determine position)?
-    - **Before enabling `Axis1UseLinearScale`:** `getAxis1MotorCurrentStep()`
-      then returns a step derived from the scale, which is passed to the
-      motor's `goToStep()`. Once scale and motor drift apart, moves (e.g. a
-      nudge) are out by the whole drift
+- [ ] **Linear scale: detecting lost steps, and absolute position.** The
+      scale is read and displayed ("Z Scale"), but positions still come from
+      "dead reckoning" (the motor's step count), which is wrong from the
+      moment a step is lost. Should position come solely from the scale, or
+      should the scale correct the expected position? Thoughts so far:
+    - **Things that shape the answer** (figures from lc.cfg):
+        - The scale (200 counts/mm, so 5µm) is *coarser* than the motor
+          (1µm per step on Z). So the scale can't control the motor step by
+          step; it can check and correct to within a count or so
+        - The scale measures the *carriage*; the step count measures the
+          *screw*. They legitimately differ by up to the backlash (380 steps,
+          about 0.38mm, on Z) whenever the direction changes, until the slack
+          is taken up. So any comparison must allow for backlash (only compare
+          once the slack is taken up, or model it as the backlash compensation
+          already does). Nice side effect: the scale could *measure* the
+          backlash automatically, rather than it being found with a dial gauge
+        - Scale readings arrive with latency (pigpio delivers callbacks in
+          batches, roughly every millisecond), so they lag the motor while
+          moving. Compare at rest, or allow a lag proportional to speed
+        - The scale also captures leadscrew pitch error and thermal growth,
+          which dead reckoning can't
+    - **Keep the two coordinate systems separate.** The motor's steps
+      (commanded) and the scale's counts (measured) should never be mixed.
+      Keep an explicit offset between them, set when zeroing; the
+      "discrepancy" is then (scale position − motor position − offset).
+      Note the current code *does* mix them: with `Axis1UseLinearScale` on,
+      `getAxis1MotorCurrentStep()` returns a step derived from the scale,
+      which is passed to the motor's `goToStep()`. Once scale and motor drift
+      apart, moves (e.g. a nudge) are out by the whole drift. **Fix this
+      before enabling `Axis1UseLinearScale`**
+    - **Options, roughly in order of difficulty:**
+        1. *Detect only:* watch the discrepancy, and if it exceeds a
+           threshold (a few scale counts beyond the backlash allowance), stop
+           the axis and warn "lost steps". Simple, and catches the dangerous
+           case. Could be done in the model's `checkStatus()`
+        2. *Correct at rest:* when a move finishes (slack taken up), compare
+           and either re-base the motor's position (`setPosition()`) so the
+           display and memories reflect reality, or make a small corrective
+           move. The latter is the "go close, then nudge while watching the
+           scale" idea noted in `Model::axis1GoToPosition()`
+        3. *Closed loop:* targets in scale units, with the motor continually
+           steered by the scale. The most accurate, but hard: the scale is
+           coarser and lags, and threading needs a smooth, steady speed rather
+           than constant small corrections. Possibly worth it for positioning
+           moves, but probably not for threading
+    - **Decide which frame memories are stored in.** If in scale units, a
+      "go to memory" becomes: move by dead reckoning, then correct (option 2)
+    - **Reduce lost steps at source:** most are probably lost on sudden stops
+      and starts, so deceleration ramping (under Motion and timing) may help
+      as much as detecting them
+    - **Another way to detect them:** the Z axis driver on the lathe has
+      pins which signal lost steps directly. If one is triggered, we could
+      stop the Z axis (not sure how accurate the position will be after
+      that). To test once wired up. A scale on X would need a mod to the
+      sender unit
+    - **Scale reliability:** a jump of two phases means an edge was missed,
+      and its direction can't be known. Count these and report them, as a
+      sign of interference or the scale being read too slowly
+    - **Testing:** the mock GPIO already simulates the scale moving with the
+      motor, so it could simulate lost steps too (motor steps that the scale
+      doesn't see), to test detection and correction without the machine
 - [ ] Probing, which would also be useful as a way to touch off
     - X probing: would need an insulated known-diameter bar held in the spindle
     - Z probing: would need an insulated known-length bar, which could be
