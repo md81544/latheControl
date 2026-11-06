@@ -139,28 +139,41 @@ char categoryHotkey(const std::string& category)
     return 0;
 }
 
+namespace {
+
+// The letter typed after F2 (the function leader key) for a command, or 0 if
+// it isn't a function leader command
+char functionLeaderLetter(int k)
+{
+    switch (k) {
+        case key::f2h:
+            return 'h';
+        case key::f2s:
+            return 's';
+        case key::f2t:
+            return 't';
+        case key::f2p:
+            return 'p';
+        case key::f2r:
+            return 'r';
+        case key::f2o:
+            return 'o';
+        case key::f2q:
+            return 'q';
+        case key::f2m:
+            return 'm';
+        default:
+            return 0;
+    }
+}
+
+} // end anonymous namespace
+
 std::string shortcutText(int k, const IConfigReader& config)
 {
     // Function leader (F2, or colon) commands
-    switch (k) {
-        case key::f2h:
-            return "F2 h";
-        case key::f2s:
-            return "F2 s";
-        case key::f2t:
-            return "F2 t";
-        case key::f2p:
-            return "F2 p";
-        case key::f2r:
-            return "F2 r";
-        case key::f2o:
-            return "F2 o";
-        case key::f2q:
-            return "F2 q";
-        case key::f2m:
-            return "F2 m";
-        default:
-            break;
+    if (const char letter = functionLeaderLetter(k)) {
+        return std::string("F2 ") + letter;
     }
     if (k & key::ALT) {
         return "Alt+" + keyName(k & ~key::ALT);
@@ -178,6 +191,53 @@ std::string shortcutText(int k, const IConfigReader& config)
         return leaderKeyName(config, "Axis1Leader", 122) + " " + keyName(k & ~AXIS1_LEADER_BIT);
     }
     return keyName(k);
+}
+
+std::string followUpKeyName(int k)
+{
+    if (const char letter = functionLeaderLetter(k)) {
+        return std::string(1, letter);
+    }
+    return keyName(k & ~(AXIS1_LEADER_BIT | AXIS2_LEADER_BIT | ALL_AXES_LEADER_BIT));
+}
+
+std::vector<const Command*> commandsForLeader(const std::vector<Command>& commands, KeyMode mode)
+{
+    std::vector<const Command*> result;
+    for (const auto& c : commands) {
+        const int k = c.key;
+        // (Alt and Ctrl combinations never follow a leader key)
+        if (k & (key::ALT | key::CTRL)) {
+            continue;
+        }
+        // (The function leader's codes can look as if they have an axis
+        // leader's bit set, so are checked for first)
+        if (functionLeaderLetter(k) != 0) {
+            if (mode == KeyMode::Function) {
+                result.push_back(&c);
+            }
+            continue;
+        }
+        bool follows = false;
+        switch (mode) {
+            case KeyMode::Axis1:
+                follows = (k & AXIS1_LEADER_BIT) && !(k & (AXIS2_LEADER_BIT | ALL_AXES_LEADER_BIT));
+                break;
+            case KeyMode::Axis2:
+                follows = (k & AXIS2_LEADER_BIT) && !(k & (AXIS1_LEADER_BIT | ALL_AXES_LEADER_BIT));
+                break;
+            case KeyMode::AxisAll:
+                follows = (k & ALL_AXES_LEADER_BIT) && !(k & (AXIS1_LEADER_BIT | AXIS2_LEADER_BIT));
+                break;
+            case KeyMode::Function:
+            case KeyMode::None:
+                break;
+        }
+        if (follows) {
+            result.push_back(&c);
+        }
+    }
+    return result;
 }
 
 bool keyAllowedInCurrentMode(int k, const Model& model)
@@ -300,9 +360,9 @@ std::vector<Command> buildCommands(const IConfigReader& config)
     b.add(c, fmt::format("Go to {} position...", a2), key::a2_g, AXIS2);
     b.add(c, fmt::format("Move {} by an offset...", a1), key::a1_r, AXIS1);
     b.add(c, fmt::format("Move {} by an offset...", a2), key::a2_r, AXIS2);
-    b.add(c, fmt::format("Repeat last offset move: {}", a1), key::a1_FULLSTOP, AXIS1);
-    b.add(c, fmt::format("Repeat last offset move: {}", a2), key::a2_FULLSTOP, AXIS2);
-    b.add(c, fmt::format("Repeat last offset move: {} and {}", a1, a2), key::aAll_FULLSTOP, BOTH);
+    b.add(c, fmt::format("Repeat offset move: {}", a1), key::a1_FULLSTOP, AXIS1);
+    b.add(c, fmt::format("Repeat offset move: {}", a2), key::a2_FULLSTOP, AXIS2);
+    b.add(c, fmt::format("Repeat offset move: {} and {}", a1, a2), key::aAll_FULLSTOP, BOTH);
     b.add(c, fmt::format("Previous position: {}", a1), key::a1_l, AXIS1);
     b.add(c, fmt::format("Previous position: {}", a2), key::a2_l, AXIS2);
     b.add(c, fmt::format("Previous position: {} and {}", a1, a2), key::aAll_l, BOTH);

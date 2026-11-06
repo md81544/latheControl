@@ -58,6 +58,8 @@ This program is very time-critical. You shouldn't need to use `nice`, as, intern
 
 **The menu** - press `Tab` or `F1` (or, on the gamepad, the previous and next memory slot buttons together; see `JoystickMenuChord` in lc.cfg) to open a menu of everything you can do, with each command's keyboard shortcut alongside. Use the arrow keys (or the gamepad's D-pad, and its Enter button) to move around it, `Enter` or `Right` to choose, `Left` or `Esc` to go back, and `Tab` again to close it. Categories, and the less frequent commands, have a hotkey letter (shown yellow and underlined): for example `Tab`, `M`, `T` for Modes, Threading. The Modes hotkeys are the same letters as with `F2`. While the menu is open, letters typed are only menu hotkeys, not their usual shortcuts. The menu doesn't stop anything: motors keep running while it's open, `Space` still stops all motors, and rapids (`Alt` + arrow) still work. Commands which can't be used at the moment (e.g. moving a locked axis) are greyed out.
 
+**Leader key hints** - if you pause for half a second after pressing a leader key (e.g. `Z`, `X`, `\` or `F2`), a panel lists the keys which can follow it, and what each does. If you type the whole shortcut quickly, it doesn't appear.
+
 For general **movement** of the carriages, use the arrow keys. Press the same key again (or spacebar) to stop. Pressing `Alt` with an arrow key sets the carriage moving at its maximum speed (useful for moving tools out of the way, not actual cutting).
 
 Control **speed of motion** with number keys. `1`-`5` controls Z and `6`-`0` controls X. For finer control of speed, use the `-` and `+` (or `=`) keys for the Z axis, and use the leader `X` with the same keys for the X axis (for example, press `X`, then `-`).

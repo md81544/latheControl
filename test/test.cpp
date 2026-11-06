@@ -1067,3 +1067,45 @@ TEST_CASE("Commands: menu hotkeys are unique within each list")
         REQUIRE(categoryKeys.size() == categories.size());
     }
 }
+
+TEST_CASE("Commands: hints after a leader key")
+{
+    mgo::MockConfigReader config;
+    const auto commands = mgo::buildCommands(config);
+    const auto keysFor = [&commands](mgo::KeyMode mode) {
+        std::set<int> keys;
+        for (const mgo::Command* c : mgo::commandsForLeader(commands, mode)) {
+            keys.insert(c->key);
+        }
+        return keys;
+    };
+
+    const auto axis1 = keysFor(mgo::KeyMode::Axis1);
+    REQUIRE(axis1.contains(mgo::key::a1_g));
+    REQUIRE(axis1.contains(mgo::key::a1_z));
+    REQUIRE(!axis1.contains(mgo::key::a2_g));
+    // The F2 codes look as if they have the axis 1 leader's bit set
+    REQUIRE(!axis1.contains(mgo::key::f2t));
+
+    const auto axis2 = keysFor(mgo::KeyMode::Axis2);
+    REQUIRE(axis2.contains(mgo::key::a2_s));
+    REQUIRE(!axis2.contains(mgo::key::a1_s));
+
+    const auto both = keysFor(mgo::KeyMode::AxisAll);
+    REQUIRE(both.contains(mgo::key::aAll_z));
+    REQUIRE(!both.contains(mgo::key::a1_z));
+
+    const auto function = keysFor(mgo::KeyMode::Function);
+    REQUIRE(function.contains(mgo::key::f2t));
+    REQUIRE(function.contains(mgo::key::f2p));
+    REQUIRE(!function.contains(mgo::key::a1_g));
+
+    REQUIRE(keysFor(mgo::KeyMode::None).empty());
+
+    // The key to press after the leader
+    REQUIRE(mgo::followUpKeyName(mgo::key::a1_g) == "g");
+    REQUIRE(mgo::followUpKeyName(mgo::key::a2_ENTER) == "Enter");
+    REQUIRE(mgo::followUpKeyName(mgo::key::aAll_DELETE) == "Delete");
+    REQUIRE(mgo::followUpKeyName(mgo::key::a1_FULLSTOP) == ".");
+    REQUIRE(mgo::followUpKeyName(mgo::key::f2t) == "t");
+}

@@ -8,6 +8,7 @@ namespace mgo {
 
 class IConfigReader;
 class Model;
+enum class KeyMode; // (see model.h)
 
 // A command the user can give, as shown in the menu. Choosing it from the menu
 // acts exactly as pressing its shortcut, as both produce the same key code.
@@ -42,5 +43,14 @@ bool isAvailable(const Command& command, const Model& model);
 // The keys to press for a key code, e.g. "z g" (axis leader, then g), or "Alt+w".
 // Axis leader keys are as set in the config
 std::string shortcutText(int key, const IConfigReader& config);
+
+// The commands which follow a leader key: e.g. for KeyMode::Axis1, those
+// using the axis 1 leader key (such as "z g"); for KeyMode::Function, those
+// using F2. In the order given
+std::vector<const Command*> commandsForLeader(const std::vector<Command>& commands, KeyMode mode);
+
+// The key to press after a leader key for a command, e.g. "g" for "z g", or
+// "t" for "F2 t"
+std::string followUpKeyName(int key);
 
 } // namespace mgo

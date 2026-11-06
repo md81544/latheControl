@@ -50,6 +50,8 @@ public:
     std::size_t selection() const;
     // The commands in the open category (empty if none is open)
     std::vector<const Command*> currentCommands() const;
+    // All the commands (e.g. for the hints shown after a leader key)
+    const std::vector<Command>& commands() const;
 
 private:
     std::size_t listSize() const;

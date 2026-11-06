@@ -17,8 +17,9 @@
     - **Done:** hotkey letters for the categories, Modes (as F2), System and
       axis locks, highlighted in yellow and underlined. Not given to the
       many paired or small commands, which have quick shortcuts already
-    - **Next:** after an axis leader key (e.g. `Z`), show what each key does
-      with that axis, using the same command table
+    - **Done:** half a second after a leader key (`Z`, `X`, `\`, `F2`) is
+      pressed, a panel shows the keys which can follow and what they do,
+      from the same command table
     - **Done:** F1 opens the menu (which shows every shortcut) rather than a
       separate, hand-written help page
     - While the menu is open, memory slots 5 and 6 are hidden behind it

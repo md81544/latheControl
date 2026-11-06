@@ -36,6 +36,9 @@ namespace {
 constexpr int LOGICAL_WIDTH = 1280;
 constexpr int LOGICAL_HEIGHT = 720;
 
+// How long after a leader key (e.g. Z) is pressed its hints are shown
+constexpr qint64 LEADER_HINT_DELAY_MS = 500;
+
 // The colours SFML provided as constants
 const QColor GREEN(0, 255, 0);
 const QColor RED(255, 0, 0);
@@ -408,6 +411,11 @@ struct ViewQt::Impl {
     const Menu* menu { nullptr };
     void drawMenu(std::vector<DrawItem>& frame, const Model& model) const;
 
+    // Hints shown a moment after a leader key (e.g. Z) is pressed
+    KeyMode hintKeyMode { KeyMode::None };
+    QElapsedTimer hintTimer;
+    void drawLeaderHints(std::vector<DrawItem>& frame, const Model& model) const;
+
     std::vector<TextItem> memoryLabel;
     TextItem axis1MemoryLabel;
     TextItem axis2MemoryLabel;
@@ -681,6 +689,67 @@ void ViewQt::Impl::drawMenu(std::vector<DrawItem>& frame, const Model& model) co
                                "Space stops all motors. Rapids: Alt+arrow" });
 }
 
+void ViewQt::Impl::drawLeaderHints(std::vector<DrawItem>& frame, const Model& model) const
+{
+    // In the same place as the menu
+    constexpr float panelX = 790.f;
+    constexpr float panelY = 10.f;
+    constexpr float panelWidth = 480.f;
+    constexpr float margin = 15.f;
+    constexpr float keyColumnWidth = 90.f;
+    constexpr float lineHeight = 30.f;
+    constexpr int fontSize = 20;
+    const QColor normal(200, 200, 200);
+    const QColor unavailable(90, 90, 90);
+    const QColor hint(140, 140, 140);
+
+    const auto commands = commandsForLeader(menu->commands(), model.getKeyMode());
+    std::string title;
+    switch (model.getKeyMode()) {
+        case KeyMode::Axis1:
+            title = model.config().read("Axis1Label", "Z") + " then...";
+            break;
+        case KeyMode::Axis2:
+            title = model.config().read("Axis2Label", "X") + " then...";
+            break;
+        case KeyMode::AxisAll:
+            title = "\\ (both axes) then...";
+            break;
+        case KeyMode::Function:
+            title = "F2 then...";
+            break;
+        case KeyMode::None:
+            return;
+    }
+
+    const float panelHeight = 55.f + lineHeight * commands.size() + 60.f;
+    frame.push_back(RectItem { QRectF(panelX, panelY, panelWidth, panelHeight),
+                               QColor(25, 25, 25),
+                               QColor(128, 128, 128) });
+    frame.push_back(TextItem { QPointF(panelX + margin, panelY + 12.f), 26, GREEN, title });
+    float y = panelY + 55.f;
+    for (const Command* c : commands) {
+        const bool available = isAvailable(*c, model);
+        frame.push_back(TextItem { QPointF(panelX + margin, y),
+                                   fontSize,
+                                   available ? YELLOW : unavailable,
+                                   followUpKeyName(c->key) });
+        frame.push_back(TextItem { QPointF(panelX + margin + keyColumnWidth, y),
+                                   fontSize,
+                                   available ? normal : unavailable,
+                                   c->description });
+        y += lineHeight;
+    }
+    frame.push_back(TextItem { QPointF(panelX + margin, y + 10.f),
+                               16,
+                               hint,
+                               "Other keys cancel.  Tab: the full menu" });
+    frame.push_back(TextItem { QPointF(panelX + margin, y + 30.f),
+                               16,
+                               YELLOW,
+                               "Space stops all motors" });
+}
+
 void ViewQt::close()
 {
     if (m_impl->widget) {
@@ -807,6 +876,19 @@ void ViewQt::updateDisplay(const Model& model)
         }
         if (d.menu && d.menu->isOpen()) {
             d.drawMenu(frame, model);
+        } else if (d.menu && model.getKeyMode() != KeyMode::None) {
+            // A leader key has been pressed: after a moment (so they don't
+            // flash up when typing a shortcut quickly), show what can follow
+            if (model.getKeyMode() != d.hintKeyMode) {
+                d.hintKeyMode = model.getKeyMode();
+                d.hintTimer.restart();
+            }
+            if (d.hintTimer.elapsed() >= LEADER_HINT_DELAY_MS) {
+                d.drawLeaderHints(frame, model);
+            }
+        }
+        if (model.getKeyMode() == KeyMode::None) {
+            d.hintKeyMode = KeyMode::None;
         }
     } else {
         // The SFML version drew nothing while shutting down, but set this text

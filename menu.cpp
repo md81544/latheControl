@@ -185,6 +185,11 @@ std::vector<const Command*> Menu::currentCommands() const
     return result;
 }
 
+const std::vector<Command>& Menu::commands() const
+{
+    return m_commands;
+}
+
 std::size_t Menu::listSize() const
 {
     return m_openCategory ? currentCommands().size() : m_categories.size();
