@@ -884,10 +884,10 @@ TEST_CASE("Menu: navigation, choosing, and keys passed through")
 
     // The gamepad's D-pad keys (w/a/s/d) navigate too; Left goes back
     menu.open();
-    menu.handleKey(mgo::key::s, model);
-    menu.handleKey(mgo::key::d, model);
+    menu.handleKey(mgo::key::s, model, true);
+    menu.handleKey(mgo::key::d, model, true);
     REQUIRE(menu.openCategory() == 1u);
-    menu.handleKey(mgo::key::a, model);
+    menu.handleKey(mgo::key::a, model, true);
     REQUIRE(!menu.openCategory());
     REQUIRE(menu.selection() == 1); // back on the category we came from
 
@@ -980,4 +980,90 @@ TEST_CASE("Joystick: without a menu chord, buttons act at once")
     mgo::JoystickKeyMapper m;
     REQUIRE(m.process({ button(4, true) }) == Keys { mgo::key::LBRACKET });
     REQUIRE(m.process({ button(6, true) }) == Keys { mgo::key::RBRACKET });
+}
+
+TEST_CASE("Menu: hotkeys")
+{
+    mgo::MockConfigReader config;
+    mgo::MockGpio gpio(false);
+    mgo::Model model(gpio, config);
+    model.initialise();
+    mgo::Menu menu(mgo::buildCommands(config));
+    using Type = mgo::Menu::Action::Type;
+
+    // M (Modes), then T (Threading): as F2 T
+    menu.open();
+    REQUIRE(menu.handleKey(mgo::key::m, model).type == Type::None);
+    REQUIRE(menu.categories().at(*menu.openCategory()) == "Modes");
+    auto action = menu.handleKey(mgo::key::t, model);
+    REQUIRE(action.type == Type::Command);
+    REQUIRE(action.key == mgo::key::f2t);
+    REQUIRE(!menu.isOpen());
+
+    // Upper case works too
+    menu.open();
+    menu.handleKey(mgo::key::Y, model);
+    REQUIRE(menu.handleKey(mgo::key::H, model).key == mgo::key::F1);
+
+    // A letter which isn't a hotkey does nothing while the menu is open (it
+    // doesn't act as its usual shortcut)
+    menu.open();
+    REQUIRE(menu.handleKey(mgo::key::z, model).type == Type::None);
+    REQUIRE(!menu.openCategory());
+    REQUIRE(menu.isOpen());
+
+    // Axis locks' hotkeys are the axes' names
+    menu.handleKey(mgo::key::l, model);
+    REQUIRE(menu.handleKey(mgo::key::x, model).key == mgo::key::a2_k);
+
+    // Letters from the gamepad are never hotkeys: its D-pad (w/a/s/d)
+    // navigates, and its buttons (e.g. m: store memory) work as normal
+    menu.open();
+    action = menu.handleKey(mgo::key::m, model, true);
+    REQUIRE(action.type == Type::PassThrough);
+    REQUIRE(action.key == mgo::key::m);
+    REQUIRE(!menu.openCategory());
+    menu.handleKey(mgo::key::s, model, true);
+    REQUIRE(menu.selection() == 1);
+
+    // Ctrl and Alt + letter aren't hotkeys either (e.g. Ctrl+Q still quits)
+    REQUIRE(menu.handleKey(mgo::key::CtrlQ, model).type == Type::PassThrough);
+    REQUIRE(menu.handleKey(mgo::key::AltW, model).type == Type::PassThrough);
+
+    // A hotkey for a command which isn't available selects it, but doesn't
+    // choose it
+    model.lockAxis(1);
+    menu.handleKey(mgo::key::ESC, model);
+    menu.open();
+    menu.handleKey(mgo::key::m, model);
+    model.setCurrentDisplayMode(mgo::Mode::Setup); // only motion allowed
+    REQUIRE(menu.handleKey(mgo::key::t, model).type == Type::None);
+    REQUIRE(menu.isOpen());
+    REQUIRE(menu.selection() == 0);
+}
+
+TEST_CASE("Commands: menu hotkeys are unique within each list")
+{
+    TestConfigReader mill({ { "Axis1Label", "X" }, { "Axis2Label", "C" } });
+    mgo::MockConfigReader lathe;
+    for (const mgo::IConfigReader* config :
+         std::vector<const mgo::IConfigReader*> { &lathe, &mill }) {
+        const auto commands = mgo::buildCommands(*config);
+        std::map<std::string, std::set<char>> used;
+        std::set<char> categoryKeys;
+        for (const auto& c : commands) {
+            if (c.hotkey) {
+                REQUIRE(used[c.category].insert(c.hotkey).second);
+            }
+            const char ck = mgo::categoryHotkey(c.category);
+            REQUIRE(ck != 0);
+            categoryKeys.insert(ck);
+        }
+        // Each category has its own
+        std::set<std::string> categories;
+        for (const auto& c : commands) {
+            categories.insert(c.category);
+        }
+        REQUIRE(categoryKeys.size() == categories.size());
+    }
 }

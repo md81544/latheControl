@@ -91,10 +91,14 @@ void Controller::processKeyPress()
     if (k == key::None) {
         return;
     }
+    // Only the menu cares whether a key came from the gamepad
+    const bool fromJoystick = k & key::JOYSTICK;
+    k &= ~key::JOYSTICK;
     if (m_menu.isOpen()) {
-        // The menu only takes the keys it needs for navigation; everything
-        // else (e.g. Space to stop all motors) carries on working as normal
-        const Menu::Action action = m_menu.handleKey(k, *m_model);
+        // The menu only takes the keys it needs (navigation, and letters for
+        // its hotkeys); everything else (e.g. Space to stop all motors)
+        // carries on working as normal
+        const Menu::Action action = m_menu.handleKey(k, *m_model, fromJoystick);
         switch (action.type) {
             case Menu::Action::Type::None:
                 return;

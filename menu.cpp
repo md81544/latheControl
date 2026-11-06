@@ -10,26 +10,39 @@ namespace {
 
 // Navigation keys. The gamepad's D-pad produces w/a/s/d (and, with its
 // "shift" button, W/A/S/D), and its Enter button produces Enter, so it can
-// drive the menu too
-bool isUp(int k)
+// drive the menu too. (From the keyboard, those letters are hotkeys instead)
+bool isUp(int k, bool fromJoystick)
 {
-    return k == key::UP || k == key::w || k == key::W;
+    return k == key::UP || (fromJoystick && (k == key::w || k == key::W));
 }
 
-bool isDown(int k)
+bool isDown(int k, bool fromJoystick)
 {
-    return k == key::DOWN || k == key::s || k == key::S;
+    return k == key::DOWN || (fromJoystick && (k == key::s || k == key::S));
 }
 
-bool isChoose(int k)
+bool isChoose(int k, bool fromJoystick)
 {
-    return k == key::ENTER || k == key::RIGHT || k == key::d || k == key::D;
+    return k == key::ENTER || k == key::RIGHT || (fromJoystick && (k == key::d || k == key::D));
 }
 
-bool isBack(int k)
+bool isBack(int k, bool fromJoystick)
 {
-    return k == key::LEFT || k == key::a || k == key::A || k == key::ESC
-        || k == key::BACKSPACE;
+    return k == key::LEFT || k == key::ESC || k == key::BACKSPACE
+        || (fromJoystick && (k == key::a || k == key::A));
+}
+
+// A plain or shifted letter (not Ctrl or Alt + letter), as a lower case char,
+// or 0 if not a letter
+char letter(int k)
+{
+    if (k >= key::a && k <= key::z) {
+        return static_cast<char>(k);
+    }
+    if (k >= key::A && k <= key::Z) {
+        return static_cast<char>(k - key::A + key::a);
+    }
+    return 0;
 }
 
 } // end anonymous namespace
@@ -62,7 +75,7 @@ void Menu::close()
     m_open = false;
 }
 
-Menu::Action Menu::handleKey(int k, const Model& model)
+Menu::Action Menu::handleKey(int k, const Model& model, bool fromJoystick)
 {
     if (k == key::None) {
         return {};
@@ -71,19 +84,22 @@ Menu::Action Menu::handleKey(int k, const Model& model)
         close();
         return {};
     }
-    if (isUp(k)) {
+    if (isUp(k, fromJoystick)) {
         if (m_selection > 0) {
             --m_selection;
         }
         return {};
     }
-    if (isDown(k)) {
+    if (isDown(k, fromJoystick)) {
         if (m_selection + 1 < listSize()) {
             ++m_selection;
         }
         return {};
     }
-    if (isBack(k)) {
+    if (const char c = letter(k); c && !fromJoystick) {
+        return handleHotkey(c, model);
+    }
+    if (isBack(k, fromJoystick)) {
         if (m_openCategory) {
             m_selection = *m_openCategory;
             m_openCategory.reset();
@@ -92,7 +108,7 @@ Menu::Action Menu::handleKey(int k, const Model& model)
         }
         return {};
     }
-    if (isChoose(k)) {
+    if (isChoose(k, fromJoystick)) {
         if (!m_openCategory) {
             if (!m_categories.empty()) {
                 m_openCategory = m_selection;
@@ -110,6 +126,34 @@ Menu::Action Menu::handleKey(int k, const Model& model)
     // Anything else (in particular Space, to stop all motors, and rapids)
     // carries on working as normal
     return { Action::Type::PassThrough, k };
+}
+
+Menu::Action Menu::handleHotkey(char c, const Model& model)
+{
+    // While the menu is open, letters typed are its hotkeys: a letter which
+    // isn't one does nothing (rather than its usual shortcut)
+    if (!m_openCategory) {
+        for (std::size_t n = 0; n < m_categories.size(); ++n) {
+            if (categoryHotkey(m_categories.at(n)) == c) {
+                m_openCategory = n;
+                m_selection = 0;
+                break;
+            }
+        }
+        return {};
+    }
+    const auto commands = currentCommands();
+    for (std::size_t n = 0; n < commands.size(); ++n) {
+        if (commands.at(n)->hotkey == c) {
+            m_selection = n;
+            if (isAvailable(*commands.at(n), model)) {
+                close();
+                return { Action::Type::Command, commands.at(n)->key };
+            }
+            break; // (not available at the moment; left highlighted)
+        }
+    }
+    return {};
 }
 
 const std::vector<std::string>& Menu::categories() const

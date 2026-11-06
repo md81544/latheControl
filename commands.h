@@ -18,7 +18,13 @@ struct Command {
     // Whether the command can be used at the moment (e.g. not while an axis is
     // locked). Unavailable commands are shown greyed out
     std::function<bool(const Model&)> available = [](const Model&) { return true; };
+    // Optional: a letter (lower case) which chooses this command when its
+    // category is open in the menu. 0 if none
+    char hotkey { 0 };
 };
+
+// The letter (lower case) which opens a menu category, or 0 if none
+char categoryHotkey(const std::string& category);
 
 // All the commands available from the menu, in menu order, worded for this
 // config (e.g. axis names, and speed preset values). Commands for an axis

@@ -361,6 +361,14 @@ TEST_CASE("UI: menu through the controller")
     // Esc closes it
     press(w, controller, Qt::Key_Escape);
     REQUIRE(!controller.isMenuOpen());
+
+    // Hotkeys: Tab, M (Modes), H (Quick chamfer)
+    press(w, controller, Qt::Key_Tab);
+    press(w, controller, Qt::Key_M);
+    press(w, controller, Qt::Key_H);
+    REQUIRE(!controller.isMenuOpen());
+    REQUIRE(tm.model.getEnabledFunction() == mgo::Mode::Taper);
+    REQUIRE(tm.model.getTaperAngle() == -45.0);
 }
 
 int main(int argc, char* argv[])

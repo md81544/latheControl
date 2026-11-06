@@ -19,7 +19,9 @@
 #include <QScreen>
 #include <QWidget>
 
+#include <algorithm>
 #include <cassert>
+#include <cctype>
 #include <deque>
 #include <variant>
 
@@ -49,6 +51,9 @@ struct TextItem {
     bool bold { false };
     // If set, the text is right-aligned within this width from position
     float rightAlignWidth { 0.f };
+    // If set, this character (by index) is highlighted (in yellow, and
+    // underlined), e.g. a menu hotkey. Only for left-aligned text
+    int highlightIndex { -1 };
 };
 
 // A filled rectangle, with an optional border
@@ -165,12 +170,28 @@ protected:
             painter.setFont(font);
             painter.setPen(item.colour);
             const bool rightAlign = item.rightAlignWidth > 0.f;
+            const QString text = QString::fromStdString(item.text);
             painter.drawText(
                 QRectF(
                     item.position,
                     QSizeF(rightAlign ? item.rightAlignWidth : LOGICAL_WIDTH, item.pixelSize * 2.0)),
                 (rightAlign ? Qt::AlignRight : Qt::AlignLeft) | Qt::AlignTop | Qt::TextDontClip,
-                QString::fromStdString(item.text));
+                text);
+            if (!rightAlign && item.highlightIndex >= 0 && item.highlightIndex < text.size()) {
+                // Draw the highlighted character again, over itself
+                const qreal offset
+                    = QFontMetricsF(font).horizontalAdvance(text.left(item.highlightIndex));
+                QFont highlightFont = font;
+                highlightFont.setUnderline(true);
+                painter.setFont(highlightFont);
+                painter.setPen(YELLOW);
+                painter.drawText(
+                    QRectF(
+                        item.position + QPointF(offset, 0.0),
+                        QSizeF(LOGICAL_WIDTH, item.pixelSize * 2.0)),
+                    Qt::AlignLeft | Qt::AlignTop | Qt::TextDontClip,
+                    text.mid(item.highlightIndex, 1));
+            }
         }
         if (dimmed) {
             painter.resetTransform();
@@ -553,16 +574,37 @@ void ViewQt::Impl::drawMenu(std::vector<DrawItem>& frame, const Model& model) co
         std::string text;
         std::string shortcut;
         bool available;
+        int hotkeyIndex; // the character to highlight as the hotkey, or -1
+    };
+    // Highlights the hotkey's first appearance in the text; if it isn't in
+    // the text, it's added in brackets at the end
+    const auto makeRow = [](std::string text, std::string shortcut, bool available, char hotkey) {
+        int index = -1;
+        if (hotkey) {
+            const auto it = std::find_if(text.begin(), text.end(), [hotkey](char ch) {
+                return std::tolower(static_cast<unsigned char>(ch)) == hotkey;
+            });
+            if (it != text.end()) {
+                index = static_cast<int>(it - text.begin());
+            } else {
+                text += fmt::format(" ({})", static_cast<char>(std::toupper(hotkey)));
+                index = static_cast<int>(text.size()) - 2;
+            }
+        }
+        return Row { std::move(text), std::move(shortcut), available, index };
     };
     std::vector<Row> rows;
     if (category) {
         for (const Command* c : menu->currentCommands()) {
-            rows.push_back(
-                { c->description, shortcutText(c->key, model.config()), isAvailable(*c, model) });
+            rows.push_back(makeRow(
+                c->description,
+                shortcutText(c->key, model.config()),
+                isAvailable(*c, model),
+                c->hotkey));
         }
     } else {
         for (const auto& name : menu->categories()) {
-            rows.push_back({ name, ">", true });
+            rows.push_back(makeRow(name, ">", true, categoryHotkey(name)));
         }
     }
 
@@ -581,7 +623,11 @@ void ViewQt::Impl::drawMenu(std::vector<DrawItem>& frame, const Model& model) co
                                        QColor(60, 60, 60) });
         }
         const QColor colour = !row.available ? unavailable : selected ? WHITE : normal;
-        frame.push_back(TextItem { QPointF(panelX + margin, y), fontSize, colour, row.text, selected });
+        TextItem text { QPointF(panelX + margin, y), fontSize, colour, row.text, selected };
+        if (row.available) {
+            text.highlightIndex = row.hotkeyIndex;
+        }
+        frame.push_back(text);
         frame.push_back(TextItem { QPointF(panelX + margin, y),
                                    fontSize,
                                    row.available ? shortcutColour : unavailable,
@@ -604,7 +650,7 @@ void ViewQt::Impl::drawMenu(std::vector<DrawItem>& frame, const Model& model) co
     }
 
     // How to use it
-    const float footerY = panelY + panelHeight - 70.f;
+    const float footerY = panelY + panelHeight - 90.f;
     frame.push_back(TextItem { QPointF(panelX + margin, footerY),
                                16,
                                hint,
@@ -612,8 +658,12 @@ void ViewQt::Impl::drawMenu(std::vector<DrawItem>& frame, const Model& model) co
     frame.push_back(TextItem { QPointF(panelX + margin, footerY + 20.f),
                                16,
                                hint,
-                               "Left/Esc: back   Tab: close menu" });
+                               "   (or press the highlighted letter)" });
     frame.push_back(TextItem { QPointF(panelX + margin, footerY + 40.f),
+                               16,
+                               hint,
+                               "Left/Esc: back   Tab: close menu" });
+    frame.push_back(TextItem { QPointF(panelX + margin, footerY + 60.f),
                                16,
                                YELLOW,
                                "Space stops all motors. Rapids: Alt+arrow" });
@@ -632,7 +682,7 @@ int ViewQt::getEvents()
     // events (key presses, repaints etc) here
     QCoreApplication::processEvents();
     for (const int k : m_impl->joystick->poll()) {
-        m_impl->widget->pushKey(k);
+        m_impl->widget->pushKey(k | key::JOYSTICK);
     }
     return m_impl->widget->takeKey();
 }

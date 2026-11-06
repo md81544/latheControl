@@ -4,6 +4,8 @@
 #include "keycodes.h"
 #include "model.h"
 
+#include <cctype>
+
 #include <fmt/format.h>
 
 namespace mgo {
@@ -77,12 +79,14 @@ public:
     }
 
     // axes: which axes the command needs (bit 0 = axis 1, bit 1 = axis 2)
+    // hotkey: optional menu hotkey (lower case), or 0
     void add(
         const std::string& category,
         const std::string& description,
         int key,
         int axes,
-        std::function<bool(const Model&)> available = nullptr)
+        std::function<bool(const Model&)> available = nullptr,
+        char hotkey = 0)
     {
         if (((axes & 1) && !m_axis1Enabled) || ((axes & 2) && !m_axis2Enabled)) {
             return;
@@ -91,6 +95,7 @@ public:
         if (available) {
             c.available = std::move(available);
         }
+        c.hotkey = hotkey;
         m_commands.push_back(std::move(c));
     }
 
@@ -111,6 +116,28 @@ constexpr int BOTH = AXIS1 | AXIS2;
 constexpr int NONE = 0;
 
 } // end anonymous namespace
+
+char categoryHotkey(const std::string& category)
+{
+    // Modes is M (it's likely to be the most used); the others use a letter
+    // from their name not taken by another
+    static const std::vector<std::pair<std::string, char>> hotkeys {
+        { "Move", 'v' },
+        { "Nudge", 'n' },
+        { "Speed", 's' },
+        { "Memory", 'e' },
+        { "Position", 'p' },
+        { "Modes", 'm' },
+        { "Axis locks", 'l' },
+        { "System", 'y' },
+    };
+    for (const auto& [name, hotkey] : hotkeys) {
+        if (name == category) {
+            return hotkey;
+        }
+    }
+    return 0;
+}
 
 std::string shortcutText(int k, const IConfigReader& config)
 {
@@ -282,25 +309,40 @@ std::vector<Command> buildCommands(const IConfigReader& config)
     b.add(c, fmt::format("Retract / unretract {}", a2), key::r, AXIS2);
 
     // (The controller requires axis 2 for these modes)
+    // (Hotkeys here are the same letters as with the F2 leader key)
     c = "Modes";
-    b.add(c, "Threading...", key::f2t, BOTH);
-    b.add(c, "Taper...", key::f2p, BOTH);
-    b.add(c, "Quick chamfer (45 deg taper)", key::h, BOTH);
-    b.add(c, "Radius...", key::f2o, BOTH);
-    b.add(c, "Multi-pass (experimental)...", key::f2m, BOTH);
-    b.add(c, fmt::format("{} retraction direction...", a2), key::f2r, BOTH);
-    b.add(c, "Setup (measure backlash)", key::f2s, NONE);
-    b.add(c, "Exit mode", key::ESC, NONE);
+    b.add(c, "Threading...", key::f2t, BOTH, nullptr, 't');
+    b.add(c, "Taper...", key::f2p, BOTH, nullptr, 'p');
+    b.add(c, "Quick chamfer (45 deg taper)", key::h, BOTH, nullptr, 'h');
+    b.add(c, "Radius...", key::f2o, BOTH, nullptr, 'o');
+    b.add(c, "Multi-pass (experimental)...", key::f2m, BOTH, nullptr, 'm');
+    b.add(c, fmt::format("{} retraction direction...", a2), key::f2r, BOTH, nullptr, 'r');
+    b.add(c, "Setup (measure backlash)", key::f2s, NONE, nullptr, 's');
+    b.add(c, "Exit mode", key::ESC, NONE, nullptr, 'x');
 
+    // The hotkeys are the axes' names (e.g. z and x on the lathe)
+    const auto axisHotkey = [](const std::string& label) -> char {
+        if (!label.empty() && std::isalpha(static_cast<unsigned char>(label.front()))) {
+            return static_cast<char>(std::tolower(static_cast<unsigned char>(label.front())));
+        }
+        return 0;
+    };
+    const char a1Hotkey = axisHotkey(a1);
+    const char a2Hotkey = axisHotkey(a2);
     c = "Axis locks";
-    b.add(c, fmt::format("Lock / unlock {}", a1), key::a1_k, AXIS1);
-    b.add(c, fmt::format("Lock / unlock {}", a2), key::a2_k, AXIS2);
+    b.add(c, fmt::format("Lock / unlock {}", a1), key::a1_k, AXIS1, nullptr, a1Hotkey);
+    b.add(c,
+          fmt::format("Lock / unlock {}", a2),
+          key::a2_k,
+          AXIS2,
+          nullptr,
+          a2Hotkey != a1Hotkey ? a2Hotkey : 0);
 
     c = "System";
-    b.add(c, "Help", key::F1, NONE);
-    b.add(c, "Quit", key::CtrlQ, NONE);
+    b.add(c, "Help", key::F1, NONE, nullptr, 'h');
+    b.add(c, "Quit", key::CtrlQ, NONE, nullptr, 'q');
 #ifndef FAKE
-    b.add(c, "Shut down the computer", key::ASTERISK, NONE);
+    b.add(c, "Shut down the computer", key::ASTERISK, NONE, nullptr, 'd');
 #endif
 
     return b.take();

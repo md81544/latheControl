@@ -181,6 +181,11 @@ constexpr int js_rapid_down = 8007;
 // Random others
 constexpr int CTRL = 0x10000;
 constexpr int ALT = 0x100000;
+// Set (by the view) on key codes which came from the gamepad rather than the
+// keyboard. Only the menu cares (the D-pad's w/a/s/d navigate it, and pad
+// buttons are never menu hotkeys); the controller removes it before acting on
+// a key
+constexpr int JOYSTICK = 0x200000;
 
 constexpr int CtrlQ = key::q | CTRL; // quit
 constexpr int AltW = key::w | ALT; // big nudge

@@ -17,7 +17,8 @@ class Model;
 // as normal (motors keep running, the display updates), and only the keys
 // used for navigating the menu are taken by it. Everything else is passed
 // straight through, in particular Space (stop all motors) and the Alt-arrow
-// rapids (and their "dead man" stops).
+// rapids (and their "dead man" stops). Letters typed on the keyboard are menu
+// hotkeys while it's open (see Command::hotkey and categoryHotkey()).
 class Menu {
 public:
     explicit Menu(std::vector<Command> commands);
@@ -36,8 +37,10 @@ public:
     bool isOpen() const;
     void open();
     void close();
-    // Only call while the menu is open
-    Action handleKey(int key, const Model& model);
+    // Only call while the menu is open. fromJoystick: whether the key came from
+    // the gamepad (whose D-pad keys w/a/s/d navigate the menu, and whose
+    // buttons are never treated as hotkeys)
+    Action handleKey(int key, const Model& model, bool fromJoystick = false);
 
     // For drawing:
     const std::vector<std::string>& categories() const;
@@ -50,6 +53,7 @@ public:
 
 private:
     std::size_t listSize() const;
+    Action handleHotkey(char letter, const Model& model);
 
     std::vector<Command> m_commands;
     std::vector<std::string> m_categories; // in order of first appearance

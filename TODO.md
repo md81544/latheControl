@@ -14,6 +14,9 @@
     - **Done:** open the menu from the gamepad with a button chord
       (`JoystickMenuChord`, default 4,6: previous + next memory slot). Not
       yet tried on the machine
+    - **Done:** hotkey letters for the categories, Modes (as F2), System and
+      axis locks, highlighted in yellow and underlined. Not given to the
+      many paired or small commands, which have quick shortcuts already
     - **Next:** after an axis leader key (e.g. `Z`), show what each key does
       with that axis, using the same command table
     - Regenerate the F1 help from the command table too (its text is still
