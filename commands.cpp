@@ -267,12 +267,27 @@ bool isAvailable(const Command& command, const Model& model)
     return keyAllowedInCurrentMode(command.key, model) && command.available(model);
 }
 
-std::vector<Command> buildCommands(const IConfigReader& config)
+std::vector<Command> buildCommands(const IConfigReader& config, DisplayUnits units)
 {
     const std::string a1 = config.read("Axis1Label", "Z");
     const std::string a2 = config.read("Axis2Label", "X");
     const std::string u1 = config.read("Axis1DisplayUnits", "mm");
     const std::string u2 = config.read("Axis2DisplayUnits", "mm");
+    const bool imperial = units == DisplayUnits::Imperial;
+    // An amount in mm on an axis (whose units are axisUnits), as displayed:
+    // axes measured in mm are shown in the display units
+    const auto amount = [imperial](double mm, const std::string& axisUnits) {
+        if (axisUnits == "mm" && imperial) {
+            return fmt::format("{:.4f}in", mm / MM_PER_INCH);
+        }
+        return fmt::format("{}{}", mm, axisUnits);
+    };
+    const auto speed = [imperial](double mmPerMin, const std::string& axisUnits) {
+        if (axisUnits == "mm" && imperial) {
+            return fmt::format("{:.3g} in/min", mmPerMin / MM_PER_INCH);
+        }
+        return fmt::format("{} {}/min", mmPerMin, axisUnits);
+    };
 
     const auto axis1Free = [](const Model& m) { return !m.isAxisLocked(1); };
     const auto axis2Free = [](const Model& m) { return !m.isAxisLocked(2); };
@@ -292,28 +307,29 @@ std::vector<Command> buildCommands(const IConfigReader& config)
     b.add(c, "Stop all motors", key::SPACE, NONE);
 
     c = "Nudge";
-    b.add(c, fmt::format("{} left 0.05{}", a1, u1), key::a, AXIS1, axis1Free);
-    b.add(c, fmt::format("{} left 0.01{}", a1, u1), key::A, AXIS1, axis1Free);
-    b.add(c, fmt::format("{} left 0.1{}", a1, u1), key::AltA, AXIS1, axis1Free);
-    b.add(c, fmt::format("{} right 0.05{}", a1, u1), key::d, AXIS1, axis1Free);
-    b.add(c, fmt::format("{} right 0.01{}", a1, u1), key::D, AXIS1, axis1Free);
-    b.add(c, fmt::format("{} right 0.1{}", a1, u1), key::AltD, AXIS1, axis1Free);
-    b.add(c, fmt::format("{} in 0.05{}", a2, u2), key::w, AXIS2, axis2Free);
-    b.add(c, fmt::format("{} in 0.01{}", a2, u2), key::W, AXIS2, axis2Free);
-    b.add(c, fmt::format("{} in 0.1{}", a2, u2), key::AltW, AXIS2, axis2Free);
-    b.add(c, fmt::format("{} out 0.05{}", a2, u2), key::s, AXIS2, axis2Free);
-    b.add(c, fmt::format("{} out 0.01{}", a2, u2), key::S, AXIS2, axis2Free);
-    b.add(c, fmt::format("{} out 0.1{}", a2, u2), key::AltS, AXIS2, axis2Free);
+    b.add(c, fmt::format("{} left {}", a1, amount(0.05, u1)), key::a, AXIS1, axis1Free);
+    b.add(c, fmt::format("{} left {}", a1, amount(0.01, u1)), key::A, AXIS1, axis1Free);
+    b.add(c, fmt::format("{} left {}", a1, amount(0.1, u1)), key::AltA, AXIS1, axis1Free);
+    b.add(c, fmt::format("{} right {}", a1, amount(0.05, u1)), key::d, AXIS1, axis1Free);
+    b.add(c, fmt::format("{} right {}", a1, amount(0.01, u1)), key::D, AXIS1, axis1Free);
+    b.add(c, fmt::format("{} right {}", a1, amount(0.1, u1)), key::AltD, AXIS1, axis1Free);
+    b.add(c, fmt::format("{} in {}", a2, amount(0.05, u2)), key::w, AXIS2, axis2Free);
+    b.add(c, fmt::format("{} in {}", a2, amount(0.01, u2)), key::W, AXIS2, axis2Free);
+    b.add(c, fmt::format("{} in {}", a2, amount(0.1, u2)), key::AltW, AXIS2, axis2Free);
+    b.add(c, fmt::format("{} out {}", a2, amount(0.05, u2)), key::s, AXIS2, axis2Free);
+    b.add(c, fmt::format("{} out {}", a2, amount(0.01, u2)), key::S, AXIS2, axis2Free);
+    b.add(c, fmt::format("{} out {}", a2, amount(0.1, u2)), key::AltS, AXIS2, axis2Free);
 
     c = "Speed";
     b.add(c, fmt::format("{} faster", a1), key::EQUALS, AXIS1, axis1SpeedAdjustable);
     b.add(c, fmt::format("{} slower", a1), key::MINUS, AXIS1, axis1SpeedAdjustable);
     const std::vector<double> axis1Defaults { 20.0, 40.0, 100.0, 250.0, 1'000.0 };
     for (int n = 0; n < 5; ++n) {
-        const double speed = config.readDouble(fmt::format("Axis1SpeedPreset{}", n + 1), axis1Defaults.at(n));
+        const double presetSpeed
+            = config.readDouble(fmt::format("Axis1SpeedPreset{}", n + 1), axis1Defaults.at(n));
         b.add(
             c,
-            fmt::format("{} speed preset {}: {} {}/min", a1, n + 1, speed, u1),
+            fmt::format("{} speed preset {}: {}", a1, n + 1, speed(presetSpeed, u1)),
             key::ONE + n,
             AXIS1,
             speedPresetsAllowed);
@@ -323,10 +339,11 @@ std::vector<Command> buildCommands(const IConfigReader& config)
     const std::vector<double> axis2Defaults { 5.0, 20.0, 40.0, 80.0, 100.0 };
     const std::vector<int> axis2PresetKeys { key::SIX, key::SEVEN, key::EIGHT, key::NINE, key::ZERO };
     for (int n = 0; n < 5; ++n) {
-        const double speed = config.readDouble(fmt::format("Axis2SpeedPreset{}", n + 1), axis2Defaults.at(n));
+        const double presetSpeed
+            = config.readDouble(fmt::format("Axis2SpeedPreset{}", n + 1), axis2Defaults.at(n));
         b.add(
             c,
-            fmt::format("{} speed preset {}: {} {}/min", a2, n + 1, speed, u2),
+            fmt::format("{} speed preset {}: {}", a2, n + 1, speed(presetSpeed, u2)),
             axis2PresetKeys.at(n),
             AXIS2,
             speedPresetsAllowed);
@@ -399,6 +416,7 @@ std::vector<Command> buildCommands(const IConfigReader& config)
           a2Hotkey != a1Hotkey ? a2Hotkey : 0);
 
     c = "System";
+    b.add(c, imperial ? "Show mm" : "Show inches", key::u, NONE, nullptr, 'u');
     b.add(c, "Quit", key::CtrlQ, NONE, nullptr, 'q');
     // In mock builds (FAKE) this is shown, so the menu looks the same as on
     // the Pi, but greyed out: shutting down isn't done in mock builds

@@ -68,12 +68,14 @@ struct RectItem {
 
 using DrawItem = std::variant<TextItem, RectItem>;
 
-std::string formatMotorPosition(double mm)
+// A position as displayed (already converted to the display units), avoiding
+// "-0.00"
+std::string formatMotorPosition(double value, int decimals)
 {
-    if (std::abs(mm) < 0.001) {
-        mm = 0.0;
+    if (std::abs(value) < 0.5 * std::pow(10.0, -decimals)) {
+        value = 0.0;
     }
-    return fmt::format("{: >8.2f}", mm);
+    return fmt::format("{: >8.{}f}", value, decimals);
 }
 
 // Parses a pair of joystick button numbers, e.g. "4,6". "none" (or anything
@@ -915,22 +917,34 @@ void ViewQt::Impl::updateTextFromModel(const Model& model)
         return;
     }
 
-    axis1Pos.text = formatMotorPosition(model.getAxis1MotorPosition());
+    // Lengths are shown in the display units (mm or inches); values for an
+    // axis which isn't a length (e.g. degrees) are shown as they are
+    const auto speedDecimals = [&model](int axis) {
+        return model.isLengthAxis(axis) && model.getDisplayUnits() == DisplayUnits::Imperial ? 3 : 2;
+    };
+    axis1Units.text = model.axisUnitName(1);
+    axis2Units.text = model.axisUnitName(2);
+
+    axis1Pos.text = formatMotorPosition(
+        model.toDisplayUnits(1, model.getAxis1MotorPosition()), model.axisDecimals(1));
 
     axis1Speed.text = fmt::format(
-        "{:<.2f} {}/min",
-        model.getAxis1MotorSpeed(),
-        model.config().read("Axis1DisplayUnits", "mm"));
+        "{:<.{}f} {}/min",
+        model.toDisplayUnits(1, model.getAxis1MotorSpeed()),
+        speedDecimals(1),
+        model.axisUnitName(1));
 
     if (!model.getIsAxis2Retracted()) {
-        axis2Pos.text = formatMotorPosition(model.getAxis2MotorPosition());
+        axis2Pos.text = formatMotorPosition(
+            model.toDisplayUnits(2, model.getAxis2MotorPosition()), model.axisDecimals(2));
     } else {
         axis2Pos.text = "     ---";
     }
     axis2Speed.text = fmt::format(
-        "{:<.2f} {}/min",
-        model.getAxis2MotorSpeed(),
-        model.config().read("Axis2DisplayUnits", "mm"));
+        "{:<.{}f} {}/min",
+        model.toDisplayUnits(2, model.getAxis2MotorSpeed()),
+        speedDecimals(2),
+        model.axisUnitName(2));
     float rpmValue = model.getRotaryEncoderRpm();
     if (rpmValue > 0.f) {
         // Round to nearest 10 to keep display more constant
@@ -940,8 +954,13 @@ void ViewQt::Impl::updateTextFromModel(const Model& model)
     // Surface speed, once the diameter is known. (Calculated from the rpm
     // as displayed, so the two agree and Vc doesn't flicker)
     if (const auto diameter = model.getDiameterMm()) {
-        const double vc = M_PI * *diameter * rpmValue / 1'000.0;
-        surfaceSpeed.text = fmt::format("Vc {:.1f} m/min", vc);
+        const double vc = M_PI * *diameter * rpmValue / 1'000.0; // m/min
+        if (model.getDisplayUnits() == DisplayUnits::Imperial) {
+            // Surface feet per minute
+            surfaceSpeed.text = fmt::format("Vc {:.1f} SFM", vc * FEET_PER_METRE);
+        } else {
+            surfaceSpeed.text = fmt::format("Vc {:.1f} m/min", vc);
+        }
     } else {
         surfaceSpeed.text.clear();
     }
@@ -954,7 +973,8 @@ void ViewQt::Impl::updateTextFromModel(const Model& model)
     if (model.getEnabledFunction() == Mode::Taper) {
         taperOrRadius.text = fmt::format("Angle: {}", model.getTaperAngle());
     } else if (model.getEnabledFunction() == Mode::Radius) {
-        taperOrRadius.text = fmt::format("Radius: {}", model.getRadius());
+        taperOrRadius.text = fmt::format(
+            "Radius: {} {}", model.toDisplayUnits(1, model.getRadius()), model.axisUnitName(1));
     }
     if (model.getKeyMode() == KeyMode::Function) {
         leaderNotifier.text = ": (select function)";
@@ -964,9 +984,11 @@ void ViewQt::Impl::updateTextFromModel(const Model& model)
     chuckRpm.text = fmt::format("C: {: >5.1f} deg", model.getChuckAngle());
 
     axis1LinearScalePos.text = fmt::format(
-        "{} Scale: {:<.3f} mm",
+        "{} Scale: {:<.{}f} {}",
         model.config().read("Axis1Label", "Z"),
-        model.getAxis1LinearScalePosMm());
+        toDisplayLength(model.getAxis1LinearScalePosMm(), model.getDisplayUnits()),
+        model.getDisplayUnits() == DisplayUnits::Imperial ? 4 : 3,
+        lengthUnitName(model.getDisplayUnits()));
 
     for (std::size_t n = 0; n < memoryLabel.size(); ++n) {
         const QColor colour = model.getCurrentMemorySlot() == n ? QColor(255, 255, 255)

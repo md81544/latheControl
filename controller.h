@@ -38,6 +38,8 @@ private:
     std::unique_ptr<IView> m_view;
     // Acts on a key code (whether from a key press or chosen from the menu)
     void processKey(int key);
+    // e.g. " (mm)" or " (in)": the units an axis's values are typed in
+    std::string unitsSuffix(int axisNumber) const;
     int checkKeyAllowedForMode(int key);
     int processModeInputKeys(int key);
     int processLeaderKeyModeKeyPress(int key);

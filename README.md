@@ -86,6 +86,8 @@ To move to an **absolute position**, press leader + `G` (for "go to") - for exam
 
 **Last Position** This is **EXPERIMENTAL** - press `L` to return the Z axis (only) to its last position. This works with multiple positions, so if you go from 0.0mm to, say, 5.0mm then 7.0mm, pressing `L` once will return to 5.0mm, and pressing it again will return to 0.0mm. If there are no positions in the stack then pressing `L` does nothing.
 
+**Inches** - press `U` to switch the display between mm and inches (also in the menu, under System). In inches, positions are shown to four decimal places, feeds in in/min and the surface speed in SFM, and values you type into dialogs (e.g. go to, offset, set position) are in inches too: each dialog says which units it expects. Axes measured in degrees (e.g. a rotary table) aren't affected. Everything is still metric internally, and the program always starts in mm.
+
 **Quit** - press `Ctrl`+`Q` to exit the application.
 
 **Shutdown** - press shift and `*` (asterisk) to shutdown the computer (prior to power down)

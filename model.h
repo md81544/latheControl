@@ -4,6 +4,7 @@
 #include "linearscale.h"
 #include "rotaryencoder.h"
 #include "stepperControl/steppermotor.h"
+#include "units.h"
 
 #include <cmath> // IWYU pragma: keep (need for M_PI)
 #include <limits>
@@ -236,6 +237,22 @@ public:
     std::string formatAxis1Position(long step) const;
     std::string formatAxis2Position(long step) const;
 
+    // Display units (mm or inches). Everything is metric internally; these
+    // affect only what's displayed and what's typed into dialogs
+    DisplayUnits getDisplayUnits() const;
+    void toggleDisplayUnits();
+    // Whether an axis (1 or 2) measures a length in mm (as opposed to e.g.
+    // a rotary table in degrees), so is shown in the display units
+    bool isLengthAxis(int axisNumber) const;
+    // Converts an axis value (e.g. a position) between mm and the display
+    // units. Values for axes which aren't lengths are left as they are
+    double toDisplayUnits(int axisNumber, double value) const;
+    double fromDisplayUnits(int axisNumber, double value) const;
+    // The unit name for an axis's values as displayed, e.g. "mm", "in", "deg"
+    std::string axisUnitName(int axisNumber) const;
+    // Decimal places for an axis's positions as displayed
+    int axisDecimals(int axisNumber) const;
+
     float getRotaryEncoderRpm() const;
     float getAxis1LinearScalePosMm() const;
 
@@ -308,6 +325,7 @@ private:
     // Once the user has set the x position once then we use
     // the status bar to display the effective diameter
     bool m_xDiameterSet { false };
+    DisplayUnits m_displayUnits { DisplayUnits::Metric };
     double m_axis1LastRelativeMove { 0.0 };
     double m_axis2LastRelativeMove { 0.0 };
     Axis m_lastRelativeMoveAxis;

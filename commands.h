@@ -1,5 +1,7 @@
 #pragma once
 
+#include "units.h"
+
 #include <functional>
 #include <string>
 #include <vector>
@@ -30,7 +32,10 @@ char categoryHotkey(const std::string& category);
 // All the commands available from the menu, in menu order, worded for this
 // config (e.g. axis names, and speed preset values). Commands for an axis
 // disabled in the config are left out.
-std::vector<Command> buildCommands(const IConfigReader& config);
+// units: the display units, used in commands' descriptions (e.g. nudge amounts)
+std::vector<Command> buildCommands(
+    const IConfigReader& config,
+    DisplayUnits units = DisplayUnits::Metric);
 
 // Whether a key is allowed in the current mode (e.g. only motion keys in
 // Setup mode; no X motion while X is retracted). Used by the controller to

@@ -1137,3 +1137,51 @@ TEST_CASE("Model:   diameter, for the surface speed")
     model.diameterIsSet();
     REQUIRE(model.getDiameterMm() == Approx(25.4).margin(0.001));
 }
+
+TEST_CASE("Model:   display units")
+{
+    // Axis 2 in degrees, as on the rotary table setups
+    TestConfigReader config({ { "Axis2DisplayUnits", "deg" } });
+    mgo::MockGpio gpio(false);
+    mgo::Model model(gpio, config);
+    model.initialise();
+    REQUIRE(model.getDisplayUnits() == mgo::DisplayUnits::Metric);
+    REQUIRE(model.axisUnitName(1) == "mm");
+    REQUIRE(model.toDisplayUnits(1, 25.4) == 25.4);
+
+    model.toggleDisplayUnits();
+    REQUIRE(model.getDisplayUnits() == mgo::DisplayUnits::Imperial);
+    // Lengths are converted...
+    REQUIRE(model.isLengthAxis(1));
+    REQUIRE(model.axisUnitName(1) == "in");
+    REQUIRE(model.toDisplayUnits(1, 25.4) == Approx(1.0));
+    REQUIRE(model.fromDisplayUnits(1, 0.5) == Approx(12.7));
+    REQUIRE(model.axisDecimals(1) == 4);
+    // (Axis 1's conversion factor is -1/1000 by default, so -25400 steps is 25.4mm)
+    REQUIRE(model.formatAxis1Position(-25'400) == " 1.0000");
+    // ...but an axis in degrees isn't
+    REQUIRE(!model.isLengthAxis(2));
+    REQUIRE(model.axisUnitName(2) == "deg");
+    REQUIRE(model.toDisplayUnits(2, 90.0) == 90.0);
+    REQUIRE(model.fromDisplayUnits(2, 90.0) == 90.0);
+
+    model.toggleDisplayUnits();
+    REQUIRE(model.getDisplayUnits() == mgo::DisplayUnits::Metric);
+}
+
+TEST_CASE("Commands: wording follows the display units")
+{
+    mgo::MockConfigReader config;
+    const auto find = [](const std::vector<mgo::Command>& commands, int key) {
+        return std::find_if(commands.begin(), commands.end(), [key](const mgo::Command& c) {
+            return c.key == key;
+        });
+    };
+    const auto metric = mgo::buildCommands(config, mgo::DisplayUnits::Metric);
+    REQUIRE(find(metric, mgo::key::a)->description == "Z left 0.05mm");
+    REQUIRE(find(metric, mgo::key::u)->description == "Show inches");
+    const auto imperial = mgo::buildCommands(config, mgo::DisplayUnits::Imperial);
+    REQUIRE(find(imperial, mgo::key::a)->description == "Z left 0.0020in");
+    REQUIRE(find(imperial, mgo::key::ONE)->description == "Z speed preset 1: 0.787 in/min");
+    REQUIRE(find(imperial, mgo::key::u)->description == "Show mm");
+}

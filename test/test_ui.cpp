@@ -445,6 +445,31 @@ TEST_CASE("UI: taper dialog")
     REQUIRE(view.getTaperAngle(7.25) == Approx(7.25));
 }
 
+TEST_CASE("UI: switching to inches, and typing a position in inches")
+{
+    TestModel tm;
+    mgo::Controller controller(&tm.model);
+    tm.model.setAxis1MotorSpeed(1'000.0);
+    QWidget* w = mainWindow();
+    REQUIRE(w);
+
+    press(w, controller, Qt::Key_U);
+    REQUIRE(tm.model.getDisplayUnits() == mgo::DisplayUnits::Imperial);
+
+    // Z, G: go to 1 (inch), which is 25.4mm
+    whenDialogShows([](QWidget* dialog) {
+        typeInto(dialog, "1");
+        QTest::keyClick(inputWidget(dialog), Qt::Key_Return);
+    });
+    press(w, controller, Qt::Key_Z);
+    press(w, controller, Qt::Key_G);
+    REQUIRE(waitUntil([&] { return std::abs(tm.model.getAxis1MotorPosition() - 25.4) < 0.001; }));
+
+    // And back to mm
+    press(w, controller, Qt::Key_U);
+    REQUIRE(tm.model.getDisplayUnits() == mgo::DisplayUnits::Metric);
+}
+
 int main(int argc, char* argv[])
 {
     // No windows on screen, and no dependency on a display

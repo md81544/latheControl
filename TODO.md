@@ -44,10 +44,6 @@
       Now that they behave more safely, maybe not
 - [ ] Touchscreen support (not that I have touch screens yet)
 
-### New displays
-- [ ] Support display in thousandths of an inch as an option. Should be
-      simple to do in the view, keeping everything metric underneath
-
 ### Controller structure
 - [ ] Move the controller onto Qt's event loop (e.g. a timer driving each
       update) instead of its own polling loop. At the moment the UI thread

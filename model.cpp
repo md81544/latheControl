@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cmath>
 #include <sstream>
 
 #include <fmt/format.h>
@@ -195,7 +196,11 @@ StatusResult Model::checkStatus()
         m_axis1Motor->setSpeed(speed);
     }
     if (const auto diameter = getDiameterMm()) {
-        m_generalStatus = fmt::format("Diameter: {: .2f} mm", *diameter);
+        m_generalStatus = fmt::format(
+            "Diameter: {: .{}f} {}",
+            toDisplayUnits(2, *diameter),
+            axisDecimals(2),
+            axisUnitName(2));
     }
     if (m_enabledFunction == Mode::MultiPass && m_axis1Motor->isRunning()
         && m_multiPassStage == MultiPassStage::NotStarted) {
@@ -1459,16 +1464,25 @@ float Model::getChuckAngle() const
     return m_rotaryEncoder->getPositionDegrees();
 }
 
+namespace {
+
+// Formats a value to a number of decimal places, avoiding "-0.00"
+std::string formatValue(double value, int decimals)
+{
+    if (std::abs(value) < 0.5 * std::pow(10.0, -decimals)) {
+        value = 0.0;
+    }
+    return fmt::format("{: .{}f}", value, decimals);
+}
+
+} // end anonymous namespace
+
 std::string Model::formatAxis1Position(long step) const
 {
     if (!m_axis1Motor) {
         return std::string();
     }
-    double mm = m_axis1Motor->getPosition(step);
-    if (std::abs(mm) < 0.001) {
-        mm = 0.0;
-    }
-    return fmt::format("{: .2f}", mm);
+    return formatValue(toDisplayUnits(1, m_axis1Motor->getPosition(step)), axisDecimals(1));
 }
 
 std::string Model::formatAxis2Position(long step) const
@@ -1476,11 +1490,46 @@ std::string Model::formatAxis2Position(long step) const
     if (!m_axis2Motor) {
         return std::string();
     }
-    double mm = m_axis2Motor->getPosition(step);
-    if (std::abs(mm) < 0.001) {
-        mm = 0.0;
+    return formatValue(toDisplayUnits(2, m_axis2Motor->getPosition(step)), axisDecimals(2));
+}
+
+DisplayUnits Model::getDisplayUnits() const
+{
+    return m_displayUnits;
+}
+
+void Model::toggleDisplayUnits()
+{
+    m_displayUnits = m_displayUnits == DisplayUnits::Metric ? DisplayUnits::Imperial
+                                                            : DisplayUnits::Metric;
+}
+
+bool Model::isLengthAxis(int axisNumber) const
+{
+    return m_config.read(fmt::format("Axis{}DisplayUnits", axisNumber), "mm") == "mm";
+}
+
+double Model::toDisplayUnits(int axisNumber, double value) const
+{
+    return isLengthAxis(axisNumber) ? toDisplayLength(value, m_displayUnits) : value;
+}
+
+double Model::fromDisplayUnits(int axisNumber, double value) const
+{
+    return isLengthAxis(axisNumber) ? fromDisplayLength(value, m_displayUnits) : value;
+}
+
+std::string Model::axisUnitName(int axisNumber) const
+{
+    if (isLengthAxis(axisNumber)) {
+        return lengthUnitName(m_displayUnits);
     }
-    return fmt::format("{: .2f}", mm);
+    return m_config.read(fmt::format("Axis{}DisplayUnits", axisNumber), "mm");
+}
+
+int Model::axisDecimals(int axisNumber) const
+{
+    return isLengthAxis(axisNumber) ? positionDecimals(m_displayUnits) : 2;
 }
 
 float Model::getRotaryEncoderRpm() const
