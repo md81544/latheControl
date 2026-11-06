@@ -376,6 +376,10 @@ private:
     bool m_threadingMoveStartedRetracted { false };
     // For logging the end of a retract or unretract
     bool m_axis2RetractMoveInProgress { false };
+    // Set if encoder pulses are lost while threading (see
+    // RotaryEncoder::getLostPulseEvents()); stays until threading is restarted
+    bool m_threadingPositionLost { false };
+    uint32_t m_encoderLostPulseEventsSeen { 0 };
     // Threading warnings (e.g. spindle too fast). A "sticky" one stays until
     // the next pass starts; otherwise it reflects the current state
     std::string m_threadingWarning;
@@ -384,6 +388,7 @@ private:
     // Private functions
     void checkMotorFaults();
     void checkSpindleStopped(float chuckRpm);
+    void checkEncoderLostPulses();
     // X is no longer known to be measured from the centre
     void clearDiameter();
     void clearMotorFault(Axis axis);

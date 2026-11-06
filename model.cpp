@@ -15,6 +15,24 @@ namespace {
 // Sets up monitoring of a motor driver's alarm output, if the config file
 // specifies one for this axis ("Axis1AlarmPin" etc). Without it, faults can't
 // be detected, and the motor behaves as before
+// Optionally pins a motor's thread to a CPU core, and keeps it spinning when
+// idle (see lc.cfg)
+void configureMotorThread(
+    mgo::StepperMotor& motor,
+    const mgo::IConfigReader& config,
+    const std::string& axisPrefix)
+{
+    if (const std::string core = config.read(axisPrefix + "CpuCore", ""); !core.empty()) {
+        if (motor.setCpuCore(std::stoi(core))) {
+            MGOLOG(axisPrefix << " motor thread running on CPU core " << core);
+        } else {
+            MGOLOG("*** Warning *** couldn't run " << axisPrefix << " motor thread on CPU core "
+                                                     << core);
+        }
+    }
+    motor.setSpinWhenIdle(config.readBool("MotorThreadsSpinWhenIdle", false));
+}
+
 void configureAlarm(
     mgo::StepperMotor& motor,
     const mgo::IConfigReader& config,
@@ -131,6 +149,7 @@ void Model::initialise()
         MGOLOG("*** Warning *** axis1 steppermotor thread not running real-time");
     }
     configureAlarm(*m_axis1Motor, m_config, "Axis1");
+    configureMotorThread(*m_axis1Motor, m_config, "Axis1");
 
     double axis2ConversionFactor = m_config.readDouble("Axis2ConversionNumerator", -1.0)
         / m_config.readDouble("Axis2ConversionDivisor", 1'000.0);
@@ -149,6 +168,7 @@ void Model::initialise()
         MGOLOG("*** Warning *** axis2 steppermotor thread not running real-time");
     }
     configureAlarm(*m_axis2Motor, m_config, "Axis2");
+    configureMotorThread(*m_axis2Motor, m_config, "Axis2");
 
     m_rotaryEncoder = std::make_unique<mgo::RotaryEncoder>(
         m_gpio,
@@ -198,6 +218,7 @@ StatusResult Model::checkStatus()
     }
 
     checkSpindleStopped(chuckRpm);
+    checkEncoderLostPulses();
 
     if (m_enabledFunction == Mode::Threading) {
         threadingCheckSpeed();
@@ -307,6 +328,23 @@ StatusResult Model::checkStatus()
         m_axis2Status = "synchronised";
     }
     return statusResult;
+}
+
+void Model::checkEncoderLostPulses()
+{
+    const uint32_t events = m_rotaryEncoder->getLostPulseEvents();
+    if (events == m_encoderLostPulseEventsSeen) {
+        return;
+    }
+    m_encoderLostPulseEventsSeen = events;
+    MGOLOG(fmt::format(
+        "*** Rotary encoder lost pulses (none for {} us): spindle position is now wrong",
+        m_rotaryEncoder->getLastLostPulseGapMicroseconds()));
+    if (m_enabledFunction == Mode::Threading) {
+        // Every pass from now on would start at a different point of the
+        // spindle's rotation from the passes before, i.e. cut a new thread
+        m_threadingPositionLost = true;
+    }
 }
 
 void Model::checkSpindleStopped(float chuckRpm)
@@ -505,6 +543,7 @@ void Model::changeMode(Mode mode)
     }
     m_warning = "";
     m_threadingMoveInProgress = false;
+    m_threadingPositionLost = false;
     setThreadingWarning("", false);
     m_currentDisplayMode = mode;
     m_enabledFunction = mode;
@@ -1481,6 +1520,9 @@ void Model::setInputString(const std::string& str)
 std::string Model::getWarning() const
 {
     if (m_warning.empty() && m_enabledFunction == Mode::Threading) {
+        if (m_threadingPositionLost) {
+            return "Encoder lost pulses: further passes won't follow this thread";
+        }
         return m_threadingWarning;
     }
     return m_warning;

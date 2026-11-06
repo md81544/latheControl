@@ -6,12 +6,15 @@
 
 #include "configreader.h"
 #include "controller.h"
+#include "cpuaffinity.h"
 #include "log.h"
 #include "model.h"
 
 #include <QApplication>
 
 #include <iostream>
+#include <set>
+#include <string>
 #include <sysexits.h>
 
 int main(int argc, char* argv[])
@@ -52,6 +55,23 @@ int main(int argc, char* argv[])
             mgo::Gpio gpio;
         #endif
         // clang-format on
+
+        // Keep everything that's running so far (including pigpio's threads,
+        // which must not be starved of CPU or encoder pulses are lost) off any
+        // cores reserved for the motor threads, which are pinned to them later
+        std::set<int> motorCores;
+        for (const std::string axis : { "Axis1", "Axis2" }) {
+            if (const std::string core = config.read(axis + "CpuCore", ""); !core.empty()) {
+                motorCores.insert(std::stoi(core));
+            }
+        }
+        if (!motorCores.empty()) {
+            if (mgo::keepThreadsOffCores(motorCores)) {
+                MGOLOG("Other threads kept off the motors' CPU cores");
+            } else {
+                MGOLOG("*** Warning *** couldn't keep other threads off the motors' CPU cores");
+            }
+        }
 
         mgo::Model model(gpio, config);
 

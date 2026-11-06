@@ -52,6 +52,22 @@ public:
     float getRpm();
     // Time since the last pulse was seen (0 if none yet)
     uint32_t microsecondsSinceLastPulse();
+
+    // Pulses can be lost if pigpio's callback thread is held up for longer than
+    // its sample buffer lasts (by default 120ms). We see that as a sudden gap
+    // in the pulses, after which they carry on at the same rate as before (a
+    // real change of spindle speed is far more gradual). The spindle position
+    // (as used for threading) is then wrong.
+    // The number of times this has happened:
+    uint32_t getLostPulseEvents() const
+    {
+        return m_lostPulseEvents;
+    }
+    // ...and the length of the most recent gap
+    uint32_t getLastLostPulseGapMicroseconds() const
+    {
+        return m_lastLostPulseGap;
+    }
     float getPositionDegrees();
     RotationDirection getRotationDirection();
 
@@ -68,6 +84,9 @@ public:
     }
 
 private:
+    // Called from callback()
+    void checkForLostPulses(uint32_t microsecondsSincePreviousPulse);
+
     IGpio& m_gpio;
     int m_pinA;
     int m_pinB;
@@ -77,6 +96,8 @@ private:
     int m_lastPin { 0 };
     uint32_t m_tickDiffTotal { 0 };
     uint32_t m_pulsesInTotal { 0 }; // number of pulses in m_tickDiffTotal
+    // A suspiciously long gap before the latest pulse (see getLostPulseEvents())
+    uint32_t m_pendingGap { 0 }; // 0 = none
     // Set at construction only:
     int m_pulsesPerRev; // of RE
     float m_pulsesPerSpindleRev;
@@ -89,6 +110,8 @@ private:
     std::atomic<float> m_averageTickDelta { 0.f };
     std::atomic<RotationDirection> m_direction { RotationDirection::normal };
     std::atomic<float> m_advanceValueMicroseconds { 0.f };
+    std::atomic<uint32_t> m_lostPulseEvents { 0 };
+    std::atomic<uint32_t> m_lastLostPulseGap { 0 };
 };
 
 } // end namespace

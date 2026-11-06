@@ -1235,3 +1235,64 @@ TEST_CASE("Threading: auto-retract at the end of a pass")
     REQUIRE(threadingStopAction(true, false, true, true) == ThreadingStopAction::None);
     REQUIRE(threadingStopAction(true, true, false, true) == ThreadingStopAction::None);
 }
+
+TEST_CASE("Encoder: Lost pulses are detected")
+{
+    FakeTickGpio gpio(0);
+    mgo::RotaryEncoder re(gpio, RE_PIN_A, RE_PIN_B, 4, 1.f);
+    uint32_t tick = 100'000;
+    const auto feed = [&](uint32_t gap) {
+        tick += gap;
+        feedEncoderPulse(re, tick);
+    };
+    // A few revolutions at a steady speed, so the speed is known
+    for (int n = 0; n < 12; ++n) {
+        feed(20'000);
+    }
+    REQUIRE(re.getLostPulseEvents() == 0);
+
+    // A gap, then pulses at the same rate as before: pulses were lost
+    feed(300'000);
+    REQUIRE(re.getLostPulseEvents() == 0); // (can't tell until the next pulse)
+    feed(20'000);
+    REQUIRE(re.getLostPulseEvents() == 1);
+    REQUIRE(re.getLastLostPulseGapMicroseconds() == 300'000);
+    for (int n = 0; n < 12; ++n) {
+        feed(20'000);
+    }
+
+    // A gap, then slow pulses: the spindle really is slowing (or stopping)
+    feed(300'000);
+    feed(200'000);
+    REQUIRE(re.getLostPulseEvents() == 1);
+    for (int n = 0; n < 12; ++n) {
+        feed(20'000);
+    }
+
+    // A long gap is the spindle being stopped and started again
+    feed(3'000'000);
+    feed(20'000);
+    REQUIRE(re.getLostPulseEvents() == 1);
+}
+
+TEST_CASE("Stepper: Spinning when idle")
+{
+    mgo::MockGpio gpio(false);
+    mgo::StepperMotor motor(gpio, 0, 0, 0, 1'000, 1.0, 10'000.0);
+    motor.setSpinWhenIdle(true);
+    motor.setRpm(500.0);
+    motor.goToStep(50);
+    motor.wait();
+    REQUIRE(motor.getCurrentStep() == 50);
+    motor.goToStep(1'000'000);
+    gpio.delayMicroSeconds(1'000);
+    REQUIRE(motor.isRunning());
+    motor.stop();
+    REQUIRE(!motor.isRunning());
+    // Back to sleeping when idle, it still moves
+    motor.setSpinWhenIdle(false);
+    const long step = motor.getCurrentStep();
+    motor.goToStep(step + 20);
+    motor.wait();
+    REQUIRE(motor.getCurrentStep() == step + 20);
+}

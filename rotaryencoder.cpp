@@ -96,9 +96,33 @@ void RotaryEncoder::callback(int pin, int level, uint32_t tick)
             // this could result in an inaccuracy of up to 6° at 1,000 rpm.
             m_lastZeroDegreesTick = tick;
         }
+        checkForLostPulses(tick - m_lastTick);
         m_tickDiffTotal += tick - m_lastTick; // don't need to worry about wrap
         ++m_pulsesInTotal;
         m_lastTick = tick;
+    }
+}
+
+void RotaryEncoder::checkForLostPulses(uint32_t microsecondsSincePreviousPulse)
+{
+    // Pulses were lost if there was a long gap, but the pulse after it then
+    // came at the usual rate. (A gap of a second or more is more likely to be
+    // the spindle being stopped and started again)
+    constexpr float gapFactor = 10.f;
+    constexpr float resumedFactor = 2.f;
+    constexpr uint32_t longestGap = 1'000'000;
+    const float average = m_averageTickDelta;
+    if (average <= 0.f) {
+        return; // the speed isn't known yet
+    }
+    const float delta = static_cast<float>(microsecondsSincePreviousPulse);
+    if (m_pendingGap != 0 && delta < average * resumedFactor) {
+        m_lastLostPulseGap = m_pendingGap;
+        ++m_lostPulseEvents;
+    }
+    m_pendingGap = 0;
+    if (delta > average * gapFactor && microsecondsSincePreviousPulse < longestGap) {
+        m_pendingGap = microsecondsSincePreviousPulse;
     }
 }
 
