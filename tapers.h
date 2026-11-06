@@ -19,6 +19,7 @@ struct TaperPreset {
 const std::vector<TaperPreset> taperPresets {
     { "Chamfer 45 deg", 45.0 },
     { "Chamfer 30 deg", 30.0 },
+    { "Chamfer 60 deg", 60.0 },
     { "Morse taper MT0", 1.4908 },
     { "Morse taper MT1", 1.4287 },
     { "Morse taper MT2", 1.4307 },
