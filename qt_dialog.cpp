@@ -31,6 +31,9 @@ namespace {
 // Colours and sizes as used by the SFML dialogs
 constexpr int PROMPT_FONT_SIZE = 20;
 constexpr int BODY_FONT_SIZE = 16;
+// Lists to pick from (e.g. thread pitches) are larger, to be easy to read at
+// the machine
+constexpr int LIST_FONT_SIZE = 20;
 constexpr int MIN_WIDTH = 550;
 constexpr int MAX_LIST_ITEMS_IN_VIEW = 8;
 const char* const BOX_STYLE
@@ -155,7 +158,9 @@ public:
 
         if (listItems) {
             m_list = new QListWidget(box);
-            m_list->setFont(bodyFont);
+            QFont listFont(fontFamily);
+            listFont.setPixelSize(LIST_FONT_SIZE);
+            m_list->setFont(listFont);
             m_list->setStyleSheet(LIST_STYLE);
             m_list->setFocusPolicy(Qt::StrongFocus);
             m_list->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
