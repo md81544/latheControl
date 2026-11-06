@@ -13,6 +13,8 @@
 #include "view_qt.h"
 
 #include <QApplication>
+#include <QFile>
+#include <QFontDatabase>
 #include <QTest>
 #include <QTimer>
 
@@ -141,12 +143,16 @@ TEST_CASE("UI: releasing Alt or an Alt-arrow stops (dead man)")
 
     // Right Alt is often AltGr on Linux, which Qt doesn't report as an Alt
     // modifier: AltGr + arrow must still be a rapid, and stop on release
-    QTest::keyPress(w, Qt::Key_AltGr);
+    // (The AltGr events are sent directly, as QTest's helpers complain about
+    // AltGr, having no character for it)
+    QKeyEvent altGrPress(QEvent::KeyPress, Qt::Key_AltGr, Qt::NoModifier);
+    QApplication::sendEvent(w, &altGrPress);
     QTest::keyPress(w, Qt::Key_Up);
     REQUIRE(allKeys(view) == Keys { mgo::key::AltUp });
     QTest::keyRelease(w, Qt::Key_Up);
     REQUIRE(allKeys(view) == Keys { mgo::key::SPACE });
-    QTest::keyRelease(w, Qt::Key_AltGr);
+    QKeyEvent altGrRelease(QEvent::KeyRelease, Qt::Key_AltGr, Qt::NoModifier);
+    QApplication::sendEvent(w, &altGrRelease);
     REQUIRE(allKeys(view) == Keys { mgo::key::SPACE });
 
     // A plain arrow, without Alt, doesn't stop on release
@@ -300,5 +306,15 @@ int main(int argc, char* argv[])
     qputenv("QT_QPA_PLATFORM", "offscreen");
     QCoreApplication::setAttribute(Qt::AA_MacDontSwapCtrlAndMeta);
     QApplication app(argc, argv);
+    // The offscreen platform's default font ("Sans Serif") may not exist, which
+    // makes Qt search for a substitute (and say so), so use the app's own font.
+    // (The tests are run from the source root, where the font is)
+    QFile fontFile("./lc_font.ttf");
+    if (fontFile.open(QIODevice::ReadOnly)) {
+        const int id = QFontDatabase::addApplicationFontFromData(fontFile.readAll());
+        if (id >= 0 && !QFontDatabase::applicationFontFamilies(id).isEmpty()) {
+            QApplication::setFont(QFont(QFontDatabase::applicationFontFamilies(id).at(0)));
+        }
+    }
     return Catch::Session().run(argc, argv);
 }

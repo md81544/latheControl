@@ -367,8 +367,11 @@ void ViewQt::initialise(const Model& model)
 #else
     d.widget->showFullScreen();
 #endif
-    d.widget->raise();
-    d.widget->activateWindow();
+    // (The "offscreen" platform, used by the UI tests, has no windows to raise)
+    if (QGuiApplication::platformName() != "offscreen") {
+        d.widget->raise();
+        d.widget->activateWindow();
+    }
     if (const QScreen* screen = d.widget->screen()) {
         MGOLOG(fmt::format(
             "Screen size is {} x {}", screen->size().width(), screen->size().height()));
