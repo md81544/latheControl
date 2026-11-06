@@ -155,9 +155,3 @@
 - [ ] `axis.cpp` / `axis.h` are compiled but unused, and their `mgo::Axis`
       class clashes in name with `enum class mgo::Axis` in model.h
 - [ ] Set the initial X-axis retraction direction from the config file
-
-## Housekeeping
-- [ ] stepperControl: delete `push.sh` (only needed for pushing from a
-      submodule's detached HEAD)
-- [ ] stepperControl on GitHub: the default branch is a stale `main`; make
-      `master` the default and delete `main`
