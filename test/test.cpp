@@ -2,7 +2,6 @@
 #include "commands.h"
 #include "joystick.h"
 #include "keycodes.h"
-#include "log.h"
 #include "menu.h"
 #include "model.h"
 #include "motionsequence.h"

@@ -2,7 +2,7 @@
 
 #include <fstream>
 #include <mutex>
-#include <sstream> // MGOLOG uses std::ostringstream
+#include <sstream> // IWYU pragma: keep (MGOLOG uses std::ostringstream)
 
 namespace mgo {
 

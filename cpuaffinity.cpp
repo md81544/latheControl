@@ -1,6 +1,6 @@
 #include "cpuaffinity.h"
 
-#include "log.h"
+#include "log.h" // IWYU pragma: keep (MGOLOG, in the Linux-only code)
 
 #ifdef __linux__
 #include <filesystem>

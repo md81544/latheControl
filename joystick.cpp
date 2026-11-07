@@ -1,7 +1,7 @@
 #include "joystick.h"
 
 #include "keycodes.h"
-#include "log.h"
+#include "log.h" // IWYU pragma: keep (MGOLOG, in the Linux-only code)
 
 #include <cmath>
 

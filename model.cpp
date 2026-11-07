@@ -1,5 +1,6 @@
 #include "model.h"
 #include "keycodes.h"
+#include "log.h"
 
 #include <algorithm>
 #include <cassert>
