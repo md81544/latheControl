@@ -4,7 +4,6 @@
 #include "iview.h" // For Input::*;
 #include "keycodes.h"
 #include "log.h"
-#include "threadpitches.h"
 #include "view_qt.h"
 
 #include <cassert>
@@ -711,16 +710,25 @@ void Controller::processKey(int t)
                     if (m_model->config().readBool("DisableAxis2", false)) {
                         break;
                     }
-                    std::vector<std::string> threadVec;
-                    for (const auto& tp : threadPitches) {
-                        threadVec.push_back(tp.name);
+                    if (m_model->getThreads().empty()) {
+                        pressAnyKey(
+                            "Threading",
+                            { "No thread sizes were read at start-up: see "
+                                  + m_model->config().read("ThreadsFile", "threadpitches.cfg"),
+                              "(the log says why)",
+                              "",
+                              "Press a key" },
+                            [] {});
+                        break;
                     }
-                    listPicker(
-                        "Select thread pitch required",
-                        threadVec,
-                        [this](std::optional<std::size_t> rc) {
-                            if (rc.has_value()) {
-                                m_model->setThreadPitch(rc.value());
+                    // (As with all dialogs, stop all motors first)
+                    m_model->stopAllMotors();
+                    m_view->openThreadDialog(
+                        m_model->getThreads(),
+                        m_model->getThreadChoice(),
+                        [this](std::optional<ThreadChoice> choice) {
+                            if (choice) {
+                                m_model->setThread(*choice);
                                 m_model->changeMode(Mode::Threading);
                             }
                         });

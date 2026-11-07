@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <chrono>
 #include <set>
+#include <sstream>
 #include <map>
 #include <optional>
 #include <string>
@@ -1894,8 +1895,11 @@ struct ThreadingTestModel {
         , model(gpio, config)
     {
         model.initialise();
-        model.setThreadPitch(4); // (M6: 1mm)
-        REQUIRE(mgo::threadPitches.at(4).pitchMm == Approx(1.0));
+        std::istringstream threads("[Test | ISO]\nM6, 6, 1\n");
+        std::vector<std::string> errors;
+        model.setThreads(mgo::readThreads(threads, errors));
+        model.setThread({ 0, 0, false });
+        REQUIRE(model.getThread()->pitchMm == Approx(1.0));
         model.changeMode(mgo::Mode::Threading);
         // (The spindle's speed is known once it's done a revolution)
         REQUIRE(waitFor([this] { return model.getRotaryEncoderRpm() > 30.f; },
@@ -2013,4 +2017,137 @@ TEST_CASE("Threading: a pass stops if Z can't keep up with the spindle")
     }
     REQUIRE(t.model.getAxis1MotorCurrentStep() < 20'000);
     REQUIRE(t.model.getWarning().find("keep up") != std::string::npos);
+}
+
+TEST_CASE("Threads: reading the table")
+{
+    std::istringstream in(R"(# A comment
+[Metric | ISO]
+M6, 6, 1
+M10 x 1.25, 10mm, 1.25 mm
+bad line
+, 3, 0.5
+M4, four, 0.7
+M4, 4, 0
+
+  # (indented comment)
+[Whitworth | whitworth]
+3/8" BSW, 3/8", 16 tpi
+No. 10 thing, 0.19in, 32TPI
+[Empty | BA]
+[Bad form | Acme]
+M3, 3, 0.5
+[No bar]
+M3, 3, 0.5
+)");
+    std::vector<std::string> errors;
+    const mgo::ThreadTable table = mgo::readThreads(in, errors);
+    // (The empty category is left out, and the threads in the bad ones)
+    REQUIRE(table.size() == 2);
+    REQUIRE(table.at(0).name == "Metric");
+    REQUIRE(table.at(0).threads.size() == 2);
+    REQUIRE(table.at(0).threads.at(1).name == "M10 x 1.25");
+    REQUIRE(table.at(0).threads.at(1).majorDiameterMm == Approx(10.0));
+    REQUIRE(table.at(0).threads.at(1).pitchMm == Approx(1.25));
+    REQUIRE(!table.at(0).threads.at(1).tpi);
+
+    const auto& whit = table.at(1);
+    REQUIRE(whit.form == mgo::ThreadForm::Whitworth);
+    REQUIRE(whit.threads.size() == 2);
+    const auto& bsw = whit.threads.at(0);
+    REQUIRE(bsw.name == "3/8\" BSW");
+    REQUIRE(bsw.inchDiameter);
+    REQUIRE(bsw.majorDiameterMm == Approx(9.525));
+    REQUIRE(bsw.tpi == Approx(16.0));
+    REQUIRE(bsw.pitchMm == Approx(1.5875));
+    REQUIRE(whit.threads.at(1).majorDiameterMm == Approx(0.19 * 25.4));
+    REQUIRE(whit.threads.at(1).pitchMm == Approx(25.4 / 32.0));
+
+    // Each bad line is reported, by number
+    REQUIRE(errors.size() == 6);
+    REQUIRE(errors.at(0).starts_with("line 5:")); // (bad line)
+    REQUIRE(errors.at(3).starts_with("line 8:")); // (zero pitch)
+    REQUIRE(errors.at(4).starts_with("line 15:")); // (Acme)
+    REQUIRE(errors.at(5).starts_with("line 17:")); // (no bar)
+
+    // A thread before any category
+    std::istringstream early("M6, 6, 1\n");
+    errors.clear();
+    REQUIRE(mgo::readThreads(early, errors).empty());
+    REQUIRE(errors.size() == 1);
+}
+
+TEST_CASE("Threads: figures from the forms")
+{
+    std::istringstream in("[M | ISO]\nM6, 6, 1\n[W | Whitworth]\n3/8\" BSW, 3/8\", 16 tpi\n"
+                          "[B | BA]\n0BA, 6, 1\n");
+    std::vector<std::string> errors;
+    const auto table = mgo::readThreads(in, errors);
+    REQUIRE(errors.empty());
+    const auto& m6 = table.at(0).threads.at(0);
+    REQUIRE(m6.maleOd() == Approx(6.0));
+    REQUIRE(m6.maleDepth() == Approx(0.613).margin(0.0005));
+    REQUIRE(m6.femaleBore() == Approx(4.917).margin(0.0005));
+    REQUIRE(m6.femaleDepth() == Approx(0.541).margin(0.0005));
+    const auto& bsw = table.at(1).threads.at(0);
+    REQUIRE(bsw.maleDepth() == Approx(1.016).margin(0.001));
+    REQUIRE(bsw.femaleBore() == Approx(7.492).margin(0.001));
+    REQUIRE(bsw.femaleDepth() == Approx(bsw.maleDepth()));
+    const auto& ba = table.at(2).threads.at(0);
+    REQUIRE(ba.maleDepth() == Approx(0.6));
+    REQUIRE(ba.femaleBore() == Approx(4.8));
+    REQUIRE(mgo::threadFormInfo(mgo::ThreadForm::Ba).angle == Approx(47.5));
+
+    REQUIRE(mgo::describePitch(m6) == "1 mm");
+    REQUIRE(mgo::describePitch(bsw) == "16 tpi (1.5875 mm)");
+}
+
+TEST_CASE("Threads: the supplied threadpitches.cfg")
+{
+    std::vector<std::string> errors;
+    const auto table = mgo::readThreadsFile(LC_SOURCE_DIR "/threadpitches.cfg", errors);
+    INFO((errors.empty() ? "" : errors.front()));
+    REQUIRE(errors.empty());
+    REQUIRE(table.size() >= 8);
+    for (const auto& category : table) {
+        for (const auto& thread : category.threads) {
+            INFO(thread.name);
+            REQUIRE(thread.pitchMm > 0.0);
+            REQUIRE(thread.pitchMm < 4.0);
+            REQUIRE(thread.majorDiameterMm > thread.femaleBore());
+            REQUIRE(thread.femaleBore() > 0.0);
+        }
+    }
+    // e.g. M12, as the old built-in table had it
+    const auto& coarse = table.at(0);
+    REQUIRE(coarse.name == "Metric coarse");
+    const auto m12 = std::ranges::find(coarse.threads, std::string("M12"), &mgo::Thread::name);
+    REQUIRE(m12 != coarse.threads.end());
+    REQUIRE(m12->pitchMm == Approx(1.75));
+    REQUIRE(m12->femaleBore() == Approx(10.106).margin(0.001));
+}
+
+TEST_CASE("Model:   choosing a thread")
+{
+    mgo::MockConfigReader config;
+    mgo::MockGpio gpio(false);
+    mgo::Model model(gpio, config);
+    model.initialise();
+    std::istringstream in("[M | ISO]\nM6, 6, 1\nM8, 8, 1.25\n");
+    std::vector<std::string> errors;
+    model.setThreads(mgo::readThreads(in, errors));
+    REQUIRE(model.getThread()->name == "M6");
+    // A female thread retracts X inwards (boring), a male one outwards
+    model.setThread({ 0, 1, true });
+    REQUIRE(model.getThread()->name == "M8");
+    REQUIRE(model.getThreadChoice().female);
+    REQUIRE(model.getRetractionDirection() == mgo::XDirection::Inwards);
+    model.setThread({ 0, 0, false });
+    REQUIRE(model.getRetractionDirection() == mgo::XDirection::Outwards);
+    // (Out of range is ignored)
+    model.setThread({ 3, 0, true });
+    REQUIRE(model.getThread()->name == "M6");
+    // No threads: none chosen
+    model.setThreads({});
+    REQUIRE(model.getThread() == nullptr);
 }

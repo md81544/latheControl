@@ -1,6 +1,5 @@
 #include "model.h"
 #include "keycodes.h"
-#include "threadpitches.h" // for ThreadPitch, threadPitches
 
 #include <algorithm>
 #include <cassert>
@@ -188,6 +187,20 @@ void Model::initialise()
                 "number, so threading passes won't all start at the same angle",
                 pulsesPerRev));
         }
+    }
+
+    {
+        const std::string threadsFile = m_config.read("ThreadsFile", "threadpitches.cfg");
+        std::vector<std::string> errors;
+        m_threads = readThreadsFile(threadsFile, errors);
+        for (const auto& e : errors) {
+            MGOLOG("*** Warning *** " << threadsFile << ": " << e);
+        }
+        std::size_t count = 0;
+        for (const auto& c : m_threads) {
+            count += c.threads.size();
+        }
+        MGOLOG(fmt::format("{} thread sizes read from {}", count, threadsFile));
     }
 
     m_linearScaleAxis1 = std::make_unique<mgo::LinearScale>(
@@ -653,7 +666,10 @@ void Model::threadingCheckSpeed()
     // Z follows the spindle's position (see axis1StartThreadingPass()), so the
     // spindle's speed doesn't set Z's: it's only used here for warnings, and
     // to show the speed Z moves at
-    const double pitch = threadPitches.at(m_threadPitchIndex).pitchMm;
+    if (!getThread()) {
+        return;
+    }
+    const double pitch = getThread()->pitchMm;
     const float rpm = m_rotaryEncoder->getRpm();
     const double speed = pitch * rpm;
     const double startLimit = threadingMaxZSpeed() * THREADING_START_SPEED_FRACTION;
@@ -695,7 +711,11 @@ void Model::threadingCheckSpeed()
 
 bool Model::axis1StartThreadingPass(long endStep)
 {
-    const double pitch = threadPitches.at(m_threadPitchIndex).pitchMm;
+    if (!getThread()) {
+        setThreadingWarning("Choose a thread first", true);
+        return false;
+    }
+    const double pitch = getThread()->pitchMm;
     const float rpm = m_rotaryEncoder->getRpm();
     if (rpm < SPINDLE_STOPPED_RPM) {
         setThreadingWarning("Start the spindle before threading", true);
@@ -1539,14 +1559,45 @@ std::string Model::getGeneralStatus() const
     return m_generalStatus;
 }
 
-std::size_t Model::getCurrentThreadPitchIndex() const
+const ThreadTable& Model::getThreads() const
 {
-    return m_threadPitchIndex;
+    return m_threads;
 }
 
-void Model::setThreadPitch(std::size_t index)
+void Model::setThreads(ThreadTable threads)
 {
-    m_threadPitchIndex = index;
+    m_threads = std::move(threads);
+    m_threadChoice = {};
+}
+
+void Model::setThread(const ThreadChoice& choice)
+{
+    if (choice.category >= m_threads.size()
+        || choice.thread >= m_threads.at(choice.category).threads.size()) {
+        return;
+    }
+    m_threadChoice = choice;
+    setRetractionDirection(choice.female ? XDirection::Inwards : XDirection::Outwards);
+    const Thread& thread = *getThread();
+    MGOLOG(fmt::format(
+        "Thread chosen: {} ({}), pitch {}",
+        thread.name,
+        choice.female ? "female" : "male",
+        describePitch(thread)));
+}
+
+const ThreadChoice& Model::getThreadChoice() const
+{
+    return m_threadChoice;
+}
+
+const Thread* Model::getThread() const
+{
+    if (m_threadChoice.category >= m_threads.size()) {
+        return nullptr;
+    }
+    const auto& threads = m_threads.at(m_threadChoice.category).threads;
+    return m_threadChoice.thread < threads.size() ? &threads.at(m_threadChoice.thread) : nullptr;
 }
 
 void Model::selectPreviousMemorySlot()

@@ -6,6 +6,7 @@
 #include "multipass.h"
 #include "rotaryencoder.h"
 #include "stepperControl/steppermotor.h"
+#include "threadpitches.h"
 #include "units.h"
 
 #include <chrono>
@@ -220,8 +221,16 @@ public:
     std::string getAxis2Status() const;
     std::string getGeneralStatus() const;
 
-    std::size_t getCurrentThreadPitchIndex() const;
-    void setThreadPitch(std::size_t index);
+    // The thread sizes, read from the ThreadsFile at initialise() (empty if
+    // it couldn't be read; the log says why)
+    const ThreadTable& getThreads() const;
+    void setThreads(ThreadTable threads); // (e.g. for testing)
+    // The thread to cut. Choosing a female (internal) thread also sets X to
+    // retract inwards, and a male one outwards
+    void setThread(const ThreadChoice& choice);
+    const ThreadChoice& getThreadChoice() const;
+    // The chosen thread, or nullptr if there are none
+    const Thread* getThread() const;
 
     void selectPreviousMemorySlot();
     void selectNextMemorySlot();
@@ -322,7 +331,8 @@ private:
     std::vector<long> m_axis2Memory { AXIS2_UNSET, AXIS2_UNSET, AXIS2_UNSET,
                                       AXIS2_UNSET, AXIS2_UNSET, AXIS2_UNSET };
     std::size_t m_currentMemory { 0 };
-    std::size_t m_threadPitchIndex { 0 };
+    ThreadTable m_threads;
+    ThreadChoice m_threadChoice;
     std::string m_generalStatus { DEFAULT_GENERAL_STATUS };
     std::string m_axis1Status { "stopped" };
     std::string m_axis2Status { "stopped" };

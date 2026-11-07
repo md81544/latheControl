@@ -31,6 +31,10 @@ public:
         std::optional<std::vector<std::string>> listItems = std::nullopt) override;
     void openTaperDialog(
         double currentAngle, std::function<void(std::optional<double>)> onDone) override;
+    void openThreadDialog(
+        const ThreadTable& threads,
+        ThreadChoice current,
+        std::function<void(std::optional<ThreadChoice>)> onDone) override;
     bool isDialogOpen() const override;
     void cancelDialog() override;
     void updateDisplay(const Model&) override;

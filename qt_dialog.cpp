@@ -2,6 +2,9 @@
 
 #include "log.h"
 #include "tapers.h"
+#include "threadpitches.h"
+
+#include <fmt/format.h>
 
 #include <QDialog>
 #include <QPainter>
@@ -674,6 +677,408 @@ private:
     bool m_toolMovesIn;
 };
 
+// ---------------------------------------------------------------------------
+// Thread dialog
+// ---------------------------------------------------------------------------
+
+// A cross-section of a thread's profile: a few teeth, with the pitch, depth
+// and angle marked. The work's centre line is at the bottom: an external
+// (male) thread is on a shaft, with the work below the teeth; an internal
+// (female) one is in a bore, with the work above them
+class ThreadDiagram final : public QWidget {
+public:
+    ThreadDiagram(const QString& fontFamily, QWidget* parent)
+        : QWidget(parent)
+        , m_fontFamily(fontFamily)
+    {
+        setFixedSize(360, 230);
+    }
+
+    void setThread(const Thread* thread, bool female)
+    {
+        m_thread = thread;
+        m_female = female;
+        update();
+    }
+
+protected:
+    void paintEvent(QPaintEvent*) override
+    {
+        QPainter p(this);
+        p.setRenderHint(QPainter::Antialiasing);
+        p.fillRect(rect(), QColor(20, 20, 20));
+        QFont font(m_fontFamily);
+        font.setPixelSize(14);
+        p.setFont(font);
+        const QColor green(0, 192, 0);
+        const QColor partColour(0, 70, 0);
+        const QColor dimension(255, 255, 0);
+        const QColor text(220, 220, 220);
+
+        const double centreY = height() - 14.0;
+        p.setPen(QPen(QColor(128, 128, 128), 1, Qt::DashDotLine));
+        p.drawLine(QPointF(4.0, centreY), QPointF(width() - 4.0, centreY));
+        if (!m_thread) {
+            p.setPen(text);
+            p.drawText(rect().adjusted(0, 0, 0, -30), Qt::AlignCenter, "Choose a thread");
+            return;
+        }
+        const ThreadFormInfo& form = threadFormInfo(m_thread->form);
+        const double depthFraction = m_female ? form.femaleDepth : form.maleDepth;
+
+        // Three teeth, the pitch drawn 70 pixels wide, so the depth is in
+        // proportion. Teeth are trapezia: flanks at the form's angle, with
+        // flat crests and roots sharing what's left of the pitch
+        const double pitch = 70.0;
+        const double depth = pitch * depthFraction;
+        const double run = depth * std::tan(form.angle / 2.0 * M_PI / 180.0);
+        const double flat = std::max(0.0, (pitch - 2.0 * run) / 2.0);
+        const double left = 20.0;
+        const double teeth = 3;
+        const double right = left + pitch * teeth;
+        // y of the thread's crests and roots. For a male thread the crests
+        // are the outside (OD), further from the centre line, i.e. higher;
+        // for a female one, they're the inside (the bore), nearer to it
+        const double outerY = 70.0; // (furthest from the centre line)
+        const double innerY = outerY + depth;
+        const double crestY = m_female ? innerY : outerY;
+        const double rootY = m_female ? outerY : innerY;
+        QPolygonF profile;
+        double x = left;
+        profile << QPointF(x, rootY);
+        for (int n = 0; n < teeth; ++n) {
+            profile << QPointF(x + flat / 2.0, rootY) << QPointF(x + flat / 2.0 + run, crestY)
+                    << QPointF(x + flat * 1.5 + run, crestY)
+                    << QPointF(x + flat * 1.5 + 2 * run, rootY) << QPointF(x + pitch, rootY);
+            x += pitch;
+        }
+        // The work: below the teeth (a shaft) or above them (around a bore)
+        QPolygonF part = profile;
+        const double partEdgeY = m_female ? 22.0 : centreY - 30.0;
+        part << QPointF(right, partEdgeY) << QPointF(left, partEdgeY);
+        p.setPen(QPen(green, 2));
+        p.setBrush(partColour);
+        p.drawPolygon(part);
+
+        // Pitch: from one crest's start to the next, on the open side of the
+        // teeth (above a male thread; below a female one, in the bore), with
+        // the diameter at the crests (OD, or bore) beyond it
+        p.setPen(QPen(dimension, 1));
+        p.setBrush(dimension);
+        const double crestStart = left + flat / 2.0 + run;
+        const double pitchY = m_female ? innerY + 20.0 : outerY - 20.0;
+        drawDimension(p, QPointF(crestStart, pitchY), QPointF(crestStart + pitch, pitchY));
+        p.setPen(text);
+        const double labelWidth = 200.0;
+        const double pitchLabelY = m_female ? pitchY + 3.0 : pitchY - 21.0;
+        // (Centred on the arrow, but kept within the diagram)
+        const double labelX = std::clamp(
+            crestStart + pitch / 2.0 - labelWidth / 2.0, 4.0, width() - labelWidth - 4.0);
+        p.drawText(
+            QRectF(labelX, pitchLabelY, labelWidth, 18),
+            Qt::AlignCenter,
+            QString::fromStdString("pitch " + describePitch(*m_thread)));
+        const double diameter = m_female ? m_thread->femaleBore() : m_thread->maleOd();
+        QString diameterText = QString("%1 %2 mm")
+                                   .arg(m_female ? "bore" : "OD")
+                                   .arg(diameter, 0, 'f', 3);
+        if (m_thread->inchDiameter) {
+            diameterText += QString(" (%1\")").arg(diameter / 25.4, 0, 'f', 4);
+        }
+        p.drawText(
+            QRectF(left, m_female ? pitchLabelY + 22.0 : pitchLabelY - 22.0, width() - left, 18),
+            Qt::AlignLeft,
+            diameterText);
+
+        // Depth, beside the teeth on the right
+        p.setPen(QPen(dimension, 1));
+        const double depthX = right + 12.0;
+        drawDimension(p, QPointF(depthX, outerY), QPointF(depthX, innerY));
+        p.setPen(text);
+        const double depthMm = m_female ? m_thread->femaleDepth() : m_thread->maleDepth();
+        p.drawText(
+            QRectF(depthX + 6.0, (outerY + innerY) / 2.0 - 9.0, width() - depthX - 6.0, 18),
+            Qt::AlignLeft | Qt::AlignVCenter,
+            QString("depth %1").arg(depthMm, 0, 'f', 3));
+    }
+
+private:
+    // A dimension line between two points, with arrowheads (using the
+    // painter's pen and brush)
+    static void drawDimension(QPainter& p, QPointF a, QPointF b)
+    {
+        p.drawLine(a, b);
+        const QPointF along = (b - a) / std::hypot(b.x() - a.x(), b.y() - a.y());
+        const QPointF across(-along.y(), along.x());
+        for (const auto& [tip, dir] : { std::pair { a, along }, std::pair { b, -along } }) {
+            QPolygonF head;
+            head << tip << tip + dir * 8.0 + across * 3.5 << tip + dir * 8.0 - across * 3.5;
+            p.drawPolygon(head);
+        }
+    }
+
+    QString m_fontFamily;
+    const Thread* m_thread { nullptr };
+    bool m_female { false };
+};
+
+class ThreadDialog final : public QDialog {
+public:
+    ThreadDialog(
+        QWidget* parent, const QString& fontFamily, const ThreadTable& threads, ThreadChoice current)
+        : QDialog(parent, Qt::Dialog | Qt::FramelessWindowHint)
+        , m_threads(threads)
+        , m_choice(current)
+    {
+        assert(!m_threads.empty());
+        if (m_choice.category >= m_threads.size()
+            || m_choice.thread >= m_threads.at(m_choice.category).threads.size()) {
+            m_choice = {};
+        }
+        setModal(true);
+        QFont promptFont(fontFamily);
+        promptFont.setPixelSize(PROMPT_FONT_SIZE);
+        QFont bodyFont(fontFamily);
+        bodyFont.setPixelSize(BODY_FONT_SIZE);
+        QFont listFont(fontFamily);
+        listFont.setPixelSize(LIST_FONT_SIZE);
+
+        auto* outer = new QVBoxLayout(this);
+        outer->setContentsMargins(0, 0, 0, 0);
+        auto* box = new QFrame(this);
+        box->setObjectName("box");
+        box->setStyleSheet(BOX_STYLE);
+        outer->addWidget(box);
+        auto* layout = new QVBoxLayout(box);
+        layout->setContentsMargins(25, 20, 25, 20);
+        layout->setSpacing(12);
+
+        auto* prompt = new QLabel("Thread", box);
+        prompt->setFont(promptFont);
+        prompt->setStyleSheet(PROMPT_STYLE);
+        layout->addWidget(prompt);
+
+        auto* columns = new QHBoxLayout();
+        columns->setSpacing(20);
+        layout->addLayout(columns);
+
+        // Left: the categories, or the threads in one
+        auto* left = new QVBoxLayout();
+        left->setSpacing(4);
+        columns->addLayout(left);
+        m_heading = new QLabel(box);
+        m_heading->setFont(bodyFont);
+        m_heading->setStyleSheet("color: rgb(255, 255, 0);");
+        left->addWidget(m_heading);
+        m_list = new QListWidget(box);
+        m_list->setFont(listFont);
+        m_list->setStyleSheet(LIST_STYLE);
+        m_list->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        m_list->setFixedWidth(290);
+        m_list->installEventFilter(this);
+        left->addWidget(m_list);
+        left->addStretch();
+
+        // Right: the diagram, the figures, and male / female
+        auto* right = new QVBoxLayout();
+        right->setSpacing(10);
+        columns->addLayout(right);
+        m_diagram = new ThreadDiagram(fontFamily, box);
+        right->addWidget(m_diagram);
+        m_figures = new QLabel(box);
+        m_figures->setFont(bodyFont);
+        m_figures->setStyleSheet(BODY_STYLE);
+        right->addWidget(m_figures);
+        m_gender = new QLabel(box);
+        m_gender->setTextFormat(Qt::RichText);
+        m_gender->setFont(bodyFont);
+        m_gender->setStyleSheet(BODY_STYLE);
+        right->addWidget(m_gender);
+        right->addStretch();
+
+        m_hint = new QLabel(box);
+        m_hint->setFont(bodyFont);
+        m_hint->setStyleSheet("color: rgb(140, 140, 140);");
+        layout->addWidget(m_hint);
+
+        QObject::connect(m_list, &QListWidget::currentRowChanged, m_list, [this](int row) {
+            boldRow(row);
+            refresh();
+        });
+
+        // Start in the category of the thread in use, on that thread
+        showThreads(m_choice.category, static_cast<int>(m_choice.thread));
+        // (A fixed height, so the dialog doesn't change size between levels)
+        m_list->setFixedHeight(
+            m_list->sizeHintForRow(0) * MAX_LIST_ITEMS_IN_VIEW + 2 * m_list->frameWidth());
+
+        adjustSize();
+        if (parent) {
+            const QPoint centre = parent->mapToGlobal(parent->rect().center());
+            move(centre - rect().center());
+        }
+        m_list->setFocus();
+    }
+
+    // The thread chosen, or nullopt if cancelled
+    std::optional<ThreadChoice> chosenThread() const
+    {
+        if (result() != QDialog::Accepted) {
+            return std::nullopt;
+        }
+        return m_choice;
+    }
+
+protected:
+    bool eventFilter(QObject* watched, QEvent* event) override
+    {
+        if (event->type() == QEvent::KeyPress && handleKey(static_cast<QKeyEvent*>(event))) {
+            return true;
+        }
+        return QDialog::eventFilter(watched, event);
+    }
+
+    void keyPressEvent(QKeyEvent* event) override
+    {
+        if (!handleKey(event)) {
+            QDialog::keyPressEvent(event);
+        }
+    }
+
+private:
+    void showCategories(std::size_t category)
+    {
+        m_inCategory = false;
+        const QSignalBlocker blocker(m_list);
+        m_list->clear();
+        for (const auto& c : m_threads) {
+            m_list->addItem(QString::fromStdString(c.name));
+        }
+        m_list->setCurrentRow(static_cast<int>(category));
+        boldRow(static_cast<int>(category));
+        m_heading->setText("Type of thread");
+        m_hint->setText("Up/Down: choose a type   Right/Enter: its sizes   M: male / female\n"
+                        "Esc: cancel");
+        refresh();
+    }
+
+    void showThreads(std::size_t category, int row)
+    {
+        m_inCategory = true;
+        m_category = category;
+        const QSignalBlocker blocker(m_list);
+        m_list->clear();
+        for (const auto& t : m_threads.at(category).threads) {
+            m_list->addItem(QString::fromStdString(t.name));
+        }
+        m_list->setCurrentRow(row);
+        boldRow(row);
+        m_heading->setText(QString::fromStdString(m_threads.at(category).name));
+        m_hint->setText("Up/Down: choose a size   Left: other types   M: male / female\n"
+                        "Enter: OK   Esc: cancel");
+        refresh();
+    }
+
+    void boldRow(int row)
+    {
+        for (int i = 0; i < m_list->count(); ++i) {
+            QFont f = m_list->item(i)->font();
+            f.setBold(i == row);
+            m_list->item(i)->setFont(f);
+        }
+    }
+
+    // The thread highlighted (only when choosing a size)
+    const Thread* highlighted() const
+    {
+        const int row = m_list->currentRow();
+        if (!m_inCategory || row < 0) {
+            return nullptr;
+        }
+        return &m_threads.at(m_category).threads.at(static_cast<std::size_t>(row));
+    }
+
+    void refresh()
+    {
+        const Thread* thread = highlighted();
+        m_diagram->setThread(thread, m_choice.female);
+        if (thread) {
+            const ThreadFormInfo& form = threadFormInfo(thread->form);
+            m_figures->setText(
+                QString::fromStdString(fmt::format(
+                    "{}: {} form ({} deg), pitch {}\n"
+                    "Male: turn to {:.3f} mm, cut {:.3f} deep\n"
+                    "Female: bore to {:.3f} mm, cut {:.3f} deep",
+                    thread->name,
+                    form.name,
+                    form.angle,
+                    describePitch(*thread),
+                    thread->maleOd(),
+                    thread->maleDepth(),
+                    thread->femaleBore(),
+                    thread->femaleDepth())));
+        } else {
+            m_figures->setText("");
+        }
+        const QString on = "<span style='color: rgb(255, 255, 0);'>%1</span>";
+        m_gender->setText(
+            QString("[M] %1 thread. %2 will retract %3")
+                .arg(on.arg(m_choice.female ? "Female (internal)" : "Male (external)"))
+                .arg("X")
+                .arg(on.arg(m_choice.female ? "inwards" : "outwards")));
+    }
+
+    // Returns true if the key press has been dealt with
+    bool handleKey(QKeyEvent* event)
+    {
+        const int qtKey = event->key();
+        if (qtKey == Qt::Key_Escape) {
+            reject();
+            return true;
+        }
+        if (qtKey == Qt::Key_M) {
+            m_choice.female = !m_choice.female;
+            refresh();
+            return true;
+        }
+        const int row = m_list->currentRow();
+        if (!m_inCategory) {
+            if ((qtKey == Qt::Key_Right || qtKey == Qt::Key_Return || qtKey == Qt::Key_Enter)
+                && row >= 0) {
+                const auto category = static_cast<std::size_t>(row);
+                // (On the thread in use, if it's in this category)
+                showThreads(
+                    category,
+                    category == m_choice.category ? static_cast<int>(m_choice.thread) : 0);
+                return true;
+            }
+            return false; // (e.g. Up/Down, for the list)
+        }
+        if (qtKey == Qt::Key_Left || qtKey == Qt::Key_Backspace) {
+            showCategories(m_category);
+            return true;
+        }
+        if ((qtKey == Qt::Key_Return || qtKey == Qt::Key_Enter) && row >= 0) {
+            m_choice.category = m_category;
+            m_choice.thread = static_cast<std::size_t>(row);
+            accept();
+            return true;
+        }
+        return false;
+    }
+
+    const ThreadTable& m_threads;
+    ThreadChoice m_choice;
+    bool m_inCategory { false };
+    std::size_t m_category { 0 };
+    QLabel* m_heading { nullptr };
+    QListWidget* m_list { nullptr };
+    ThreadDiagram* m_diagram { nullptr };
+    QLabel* m_figures { nullptr };
+    QLabel* m_gender { nullptr };
+    QLabel* m_hint { nullptr };
+};
+
 } // end anonymous namespace
 
 QDialog* openInput(
@@ -695,6 +1100,22 @@ QDialog* openInput(
     dlg->setAttribute(Qt::WA_DeleteOnClose);
     QObject::connect(dlg, &QDialog::finished, dlg, [dlg, onDone = std::move(onDone)](int) {
         onDone(dlg->inputResult());
+    });
+    dlg->open();
+    return dlg;
+}
+
+QDialog* openThreadDialog(
+    QWidget* parent,
+    const QString& fontFamily,
+    const ThreadTable& threads,
+    ThreadChoice current,
+    std::function<void(std::optional<ThreadChoice>)> onDone)
+{
+    auto* dlg = new ThreadDialog(parent, fontFamily, threads, current);
+    dlg->setAttribute(Qt::WA_DeleteOnClose);
+    QObject::connect(dlg, &QDialog::finished, dlg, [dlg, onDone = std::move(onDone)](int) {
+        onDone(dlg->chosenThread());
     });
     dlg->open();
     return dlg;

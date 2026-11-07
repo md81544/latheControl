@@ -23,3 +23,6 @@ target_link_libraries(ui_test PRIVATE shared_with_test Qt6::Widgets Qt6::Test)
 
 # Run from the source root, where the font and images are
 add_test(NAME ui COMMAND ui_test WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# (For tests of files in the source tree, e.g. threadpitches.cfg)
+target_compile_definitions(unit_test PRIVATE LC_SOURCE_DIR="${CMAKE_SOURCE_DIR}")

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "iview.h" // for Input::*
+#include "threadpitches.h"
 
 #include <functional>
 #include <optional>
@@ -51,6 +52,17 @@ QDialog* openTaperDialog(
     const QString& fontFamily,
     double currentAngle,
     std::function<void(std::optional<double>)> onDone);
+
+// The thread dialog: choose a type of thread (e.g. metric coarse), then a
+// size, and whether it's male (external) or female (internal), with a diagram
+// of its profile and its figures. Starts on current. Gives onDone the choice,
+// or nullopt if cancelled. threads must outlive the dialog, and not be empty
+QDialog* openThreadDialog(
+    QWidget* parent,
+    const QString& fontFamily,
+    const ThreadTable& threads,
+    ThreadChoice current,
+    std::function<void(std::optional<ThreadChoice>)> onDone);
 
 } // end namespace dialog
 } // end namespace mgo

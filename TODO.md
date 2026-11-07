@@ -373,6 +373,16 @@
       - The dialog should allow the user to select male or female (the diagram should
         change to reflect this)
       - Expand the new config file with all common thread pitch data up to, say, 25mm/1"
+      - **Done:** threadpitches.cfg, read at start-up (`ThreadsFile` in lc.cfg),
+        with metric coarse and fine, BSW, BSF, BSP, UNC, UNF and BA up to 25mm / 1".
+        Each line is name, major diameter, pitch (mm or inches; mm or tpi); the
+        thread form (ISO, UN, Whitworth, BA) gives the depths and the bore. The
+        dialog has two levels (type, then size), M for male / female, the figures,
+        and a diagram of the profile. Choosing female sets X to retract inwards.
+        Not yet tried on the machine
+      - NB internal metric/UN threads now use the ISO depth of 0.541 x pitch; the old
+        table had 0.469 x pitch (and M18 had 1.072 where M20 had 1.172). Change
+        femaleDepth in threadpitches.cpp's FORMS if 0.469 was deliberate
 - [ ] Add some form of generic multi-pass functionality (defining a start position,
       a required end position, and how axes should change per pass -- e.g. for a lathe
       operation, we'd define a z start, a z end, and an x infeed per pass).

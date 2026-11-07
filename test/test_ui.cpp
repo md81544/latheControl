@@ -23,6 +23,7 @@
 #include <chrono>
 #include <cmath>
 #include <functional>
+#include <sstream>
 #include <map>
 #include <optional>
 #include <string_view>
@@ -98,6 +99,19 @@ std::optional<double> getTaperAngle(mgo::ViewQt& view, double currentAngle)
 bool waitForDialogToClose()
 {
     return QTest::qWaitFor([] { return QApplication::activeModalWidget() == nullptr; }, 5'000);
+}
+
+std::optional<mgo::ThreadChoice>
+chooseThread(mgo::ViewQt& view, const mgo::ThreadTable& threads, mgo::ThreadChoice current)
+{
+    bool done = false;
+    std::optional<mgo::ThreadChoice> choice;
+    view.openThreadDialog(threads, current, [&](std::optional<mgo::ThreadChoice> c) {
+        choice = c;
+        done = true;
+    });
+    REQUIRE(QTest::qWaitFor([&done] { return done; }, 5'000));
+    return choice;
 }
 
 // The widget within the dialog that keyboard input goes to
@@ -548,6 +562,82 @@ TEST_CASE("UI: taper dialog")
     // ...or a custom angle
     whenDialogShows([](QWidget* dialog) { QTest::keyClick(inputWidget(dialog), Qt::Key_Return); });
     REQUIRE(getTaperAngle(view, 7.25) == Approx(7.25));
+}
+
+TEST_CASE("UI: thread dialog")
+{
+    TestModel tm;
+    mgo::ViewQt view;
+    view.initialise(tm.model);
+    std::istringstream in("[Metric | ISO]\nM6, 6, 1\nM8, 8, 1.25\n"
+                          "[Whitworth | Whitworth]\n3/8\" BSW, 3/8\", 16 tpi\n");
+    std::vector<std::string> errors;
+    const auto threads = mgo::readThreads(in, errors);
+    REQUIRE(errors.empty());
+    const auto key = [](QWidget* dialog, Qt::Key k) { QTest::keyClick(inputWidget(dialog), k); };
+
+    // It opens on the thread in use: Down to M8, M for female, and OK
+    whenDialogShows([&](QWidget* dialog) {
+        key(dialog, Qt::Key_Down);
+        key(dialog, Qt::Key_M);
+        key(dialog, Qt::Key_Return);
+    });
+    auto choice = chooseThread(view, threads, { 0, 0, false });
+    REQUIRE(choice);
+    REQUIRE(choice->category == 0);
+    REQUIRE(choice->thread == 1);
+    REQUIRE(choice->female);
+
+    // Left goes back to the types; Down, Right (or Enter) opens one
+    whenDialogShows([&](QWidget* dialog) {
+        key(dialog, Qt::Key_Left);
+        key(dialog, Qt::Key_Down);
+        key(dialog, Qt::Key_Right);
+        key(dialog, Qt::Key_Return);
+    });
+    choice = chooseThread(view, threads, { 0, 1, true });
+    REQUIRE(choice);
+    REQUIRE(choice->category == 1);
+    REQUIRE(choice->thread == 0);
+    REQUIRE(choice->female); // (kept from before)
+
+    // Enter on a type opens it, rather than choosing
+    whenDialogShows([&](QWidget* dialog) {
+        key(dialog, Qt::Key_Left);
+        key(dialog, Qt::Key_Return);
+        REQUIRE(dialog->isVisible());
+        key(dialog, Qt::Key_Return);
+    });
+    choice = chooseThread(view, threads, { 1, 0, false });
+    REQUIRE(choice);
+    REQUIRE(choice->category == 1);
+
+    // Esc cancels
+    whenDialogShows([&](QWidget* dialog) { key(dialog, Qt::Key_Escape); });
+    REQUIRE(!chooseThread(view, threads, { 0, 0, false }));
+}
+
+TEST_CASE("UI: choosing a thread through the controller")
+{
+    // (The UI tests run from the source root, so the model reads the supplied
+    // threadpitches.cfg)
+    TestModel tm;
+    mgo::Controller controller(&tm.model);
+    QWidget* w = mainWindow();
+    REQUIRE(w);
+    REQUIRE(!tm.model.getThreads().empty());
+
+    // F2, T: the first size of the first type, female
+    whenDialogShows([](QWidget* dialog) {
+        QTest::keyClick(inputWidget(dialog), Qt::Key_M);
+        QTest::keyClick(inputWidget(dialog), Qt::Key_Return);
+    });
+    press(w, controller, Qt::Key_F2);
+    press(w, controller, Qt::Key_T);
+    REQUIRE(tm.model.getEnabledFunction() == mgo::Mode::Threading);
+    REQUIRE(tm.model.getThread()->name == tm.model.getThreads().at(0).threads.at(0).name);
+    REQUIRE(tm.model.getThreadChoice().female);
+    REQUIRE(tm.model.getRetractionDirection() == mgo::XDirection::Inwards);
 }
 
 TEST_CASE("UI: switching to inches, and typing a position in inches")

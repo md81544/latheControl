@@ -70,6 +70,12 @@ public:
     // nullopt if cancelled
     virtual void openTaperDialog(
         double currentAngle, std::function<void(std::optional<double>)> onDone) = 0;
+    // The thread dialog: onDone gets the thread chosen (see ThreadChoice), or
+    // nullopt if cancelled. threads must outlive the dialog, and not be empty
+    virtual void openThreadDialog(
+        const ThreadTable& threads,
+        ThreadChoice current,
+        std::function<void(std::optional<ThreadChoice>)> onDone) = 0;
     virtual bool isDialogOpen() const = 0;
     // Closes the open dialog (if any) as if cancelled, calling its onDone
     virtual void cancelDialog() = 0;

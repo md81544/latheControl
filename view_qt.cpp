@@ -576,6 +576,24 @@ void ViewQt::openTaperDialog(double currentAngle, std::function<void(std::option
         });
 }
 
+void ViewQt::openThreadDialog(
+    const ThreadTable& threads,
+    ThreadChoice current,
+    std::function<void(std::optional<ThreadChoice>)> onDone)
+{
+    assert(!isDialogOpen()); // (one at a time)
+    m_impl->setDimmed(true);
+    m_impl->dialog = dialog::openThreadDialog(
+        m_impl->widget.get(),
+        m_impl->fontFamily,
+        threads,
+        current,
+        [this, onDone = std::move(onDone)](std::optional<ThreadChoice> choice) {
+            m_impl->dialogClosed();
+            onDone(choice);
+        });
+}
+
 bool ViewQt::isDialogOpen() const
 {
     return !m_impl->dialog.isNull();
@@ -1235,12 +1253,30 @@ void ViewQt::Impl::updateMultiPassData(const Model& model)
 void ViewQt::Impl::updateThreadData(const Model& model)
 {
     mode.text = "";
-    const ThreadPitch tp = threadPitches.at(model.getCurrentThreadPitchIndex());
-    misc1.text = fmt::format("Thread required: {}", tp.name);
-    misc2.text = fmt::format(
-        "Male   OD: {} mm, cut: {} mm, pitch: {} mm", tp.maleOd, tp.cutDepthMale, tp.pitchMm);
+    const Thread* thread = model.getThread();
+    if (!thread) {
+        misc1.text = "No thread chosen";
+        misc2.text = "";
+        misc3.text = "";
+        return;
+    }
+    const bool female = model.getThreadChoice().female;
+    misc1.text = fmt::format(
+        "Thread: {} {}, pitch {}",
+        thread->name,
+        female ? "female (internal)" : "male (external)",
+        describePitch(*thread));
+    if (female) {
+        misc2.text = fmt::format(
+            "Bore: {:.3f} mm, depth: {:.3f} mm", thread->femaleBore(), thread->femaleDepth());
+    } else {
+        misc2.text = fmt::format(
+            "OD: {:.3f} mm, depth: {:.3f} mm", thread->maleOd(), thread->maleDepth());
+    }
     misc3.text = fmt::format(
-        "Female ID: {} mm, cut: {} mm, pitch {} mm", tp.femaleId, tp.cutDepthFemale, tp.pitchMm);
+        "{} retracts {}",
+        model.config().read("Axis2Label", "X"),
+        model.getRetractionDirection() == XDirection::Inwards ? "inwards" : "outwards");
 }
 
 } // namespace mgo
