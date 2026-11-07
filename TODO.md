@@ -48,6 +48,18 @@
       update) instead of its own polling loop. At the moment the UI thread
       blocks in places: `wait()` on motors, `waitForAxisToStop()`, and
       `callbackAtZeroDegrees()`, which can spin for up to a spindle revolution
+    - **Done:** `Controller::run()` runs Qt's event loop (via the view's
+      `runEventLoop()`), with a 50ms timer calling `Controller::tick()`.
+      Behaviour is unchanged: a tick that blocks (a dialog, or a wait for
+      the motors) still blocks, and the timer's calls meanwhile are skipped
+    - **Next:** turn the model's blocking `wait()`s (about 15, in retracts,
+      backlash take-up etc.) into sequences the model steps through on each
+      tick, then multi-pass on top of that. Leave `callbackAtZeroDegrees()`,
+      as the electronic leadscrew work will replace it
+    - Then make dialogs non-modal (with a callback when done) so ticks carry
+      on while one is open; that's the "Mode" item below. Once nothing
+      blocks inside a tick, `getEvents()` and `updateDisplay()` no longer
+      need to call `processEvents()`
 - [ ] Address the "Mode" concept, which provides pseudo-modal "dialogs"
       interleaved into program flow and is difficult to maintain. If all
       motors are stopped during a dialog, they can all go on a separate flow

@@ -12,11 +12,13 @@
 #include <QApplication>
 #include <QCloseEvent>
 #include <QElapsedTimer>
+#include <QEventLoop>
 #include <QFile>
 #include <QFontDatabase>
 #include <QKeyEvent>
 #include <QPainter>
 #include <QScreen>
+#include <QTimer>
 #include <QWidget>
 
 #include <algorithm>
@@ -372,6 +374,8 @@ struct ViewQt::Impl {
     QString fontFamily;
     std::unique_ptr<DisplayWidget> widget;
     std::unique_ptr<Joystick> joystick;
+    // The loop runEventLoop() is in, if any
+    QEventLoop* eventLoop { nullptr };
 
     // Main text items which are always displayed:
     TextItem axis1Label;
@@ -763,10 +767,33 @@ void ViewQt::close()
     }
 }
 
+void ViewQt::runEventLoop(std::chrono::milliseconds interval, std::function<void()> tick)
+{
+    assert(!m_impl->eventLoop); // (not re-entrant)
+    QEventLoop loop;
+    QTimer timer;
+    // (Precise, as the threading speed is updated on each tick)
+    timer.setTimerType(Qt::PreciseTimer);
+    QObject::connect(&timer, &QTimer::timeout, std::move(tick));
+    m_impl->eventLoop = &loop;
+    timer.start(interval);
+    loop.exec();
+    timer.stop();
+    m_impl->eventLoop = nullptr;
+}
+
+void ViewQt::quitEventLoop()
+{
+    if (m_impl->eventLoop) {
+        m_impl->eventLoop->quit();
+    }
+}
+
 int ViewQt::getEvents()
 {
-    // The controller runs its own loop, so we let Qt handle any pending
-    // events (key presses, repaints etc) here
+    // The controller sometimes blocks inside a tick (e.g. waiting for a motor
+    // to stop), so we let Qt handle any pending events (key presses, repaints
+    // etc) here too
     QCoreApplication::processEvents();
     for (const int k : m_impl->joystick->poll()) {
         m_impl->widget->pushKey(k | key::JOYSTICK);

@@ -4,6 +4,8 @@
 #include "menu.h"
 #include "model.h"
 
+#include <chrono>
+#include <exception>
 #include <memory>
 
 namespace mgo {
@@ -23,16 +25,26 @@ struct TextInputReturn {
 class Controller {
 public:
     explicit Controller(Model* model);
-    // run() is the main loop. When this returns,
-    // the application can quit.
+    // run() runs the view's event loop, calling tick() every TICK_INTERVAL.
+    // When this returns, the application can quit.
     void run();
+    // One update: acts on any key pressed, checks the model's status and
+    // redraws the display. Quits the event loop once the model is quitting
+    void tick();
     void processKeyPress();
     // Returns false if the user aborted the wait with a key press, in which
     // case all motors will have been stopped
     bool waitForAxisToStop(uint8_t axis);
     bool isMenuOpen() const;
 
+    // How often tick() is called. (The threading speed is updated each tick)
+    static constexpr std::chrono::milliseconds TICK_INTERVAL { 50 };
+
 private:
+    void tickBody();
+    bool m_inTick { false };
+    // Thrown by a tick, to be rethrown from run()
+    std::exception_ptr m_tickException;
     Model* m_model; // non-owning
     Menu m_menu; // (declared before m_view, which refers to it, so outlives it)
     std::unique_ptr<IView> m_view;

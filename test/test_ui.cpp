@@ -10,6 +10,7 @@
 #include "keycodes.h"
 #include "model.h"
 #include "stepperControl/mockgpio.h"
+#include "tapers.h"
 #include "view_qt.h"
 
 #include <QApplication>
@@ -18,6 +19,7 @@
 #include <QTest>
 #include <QTimer>
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <functional>
@@ -397,10 +399,16 @@ TEST_CASE("UI: taper dialog through the controller")
     QWidget* w = mainWindow();
     REQUIRE(w);
 
-    // F2 then P opens it; choose MT2, tool moving in, and OK
-    whenDialogShows([](QWidget* dialog) {
-        QTest::keyClick(inputWidget(dialog), Qt::Key_Down);
-        QTest::keyClick(inputWidget(dialog), Qt::Key_Down);
+    // F2 then P opens it; choose MT2, tool moving in, and OK. (Found by name,
+    // so the test doesn't break when the presets are reordered)
+    const auto mt2 = std::ranges::find(
+        mgo::taperPresets, std::string("Morse taper MT2"), &mgo::TaperPreset::name);
+    REQUIRE(mt2 != mgo::taperPresets.end());
+    const auto mt2Row = std::distance(mgo::taperPresets.begin(), mt2);
+    whenDialogShows([mt2Row](QWidget* dialog) {
+        for (auto i = 0; i < mt2Row; ++i) {
+            QTest::keyClick(inputWidget(dialog), Qt::Key_Down);
+        }
         QTest::keyClick(inputWidget(dialog), Qt::Key_I);
         QTest::keyClick(inputWidget(dialog), Qt::Key_Return);
     });
@@ -491,6 +499,53 @@ TEST_CASE("UI: setting X as a diameter, then zeroing X")
     press(w, controller, Qt::Key_X);
     press(w, controller, Qt::Key_Z);
     REQUIRE(!tm.model.getDiameterMm().has_value());
+}
+
+TEST_CASE("UI: the controller's event loop")
+{
+    // run() on Qt's event loop: keys typed while it runs are acted on, a
+    // dialog opened from within a tick works (the timer carries on firing
+    // while it's open), and closing the window quits the loop
+    TestModel tm;
+    mgo::Controller controller(&tm.model);
+    QWidget* w = mainWindow();
+    REQUIRE(w);
+
+    bool dialogShown = false;
+    whenDialogShows([&dialogShown](QWidget* dialog) {
+        dialogShown = true;
+        // (Let the main timer fire a few times while the dialog is open)
+        QTest::qWait(200);
+        typeInto(dialog, "0.5");
+        QTest::keyClick(inputWidget(dialog), Qt::Key_Return);
+    });
+
+    // (Each key is a little apart, as the view ignores the same key pressed
+    // again within 100ms, and each must be taken by a tick before the next)
+    QTimer::singleShot(150, [w] { QTest::keyClick(w, Qt::Key_U); });
+    QTimer::singleShot(300, [w] { QTest::keyClick(w, Qt::Key_U); });
+    QTimer::singleShot(450, [w] { QTest::keyClick(w, Qt::Key_Z); });
+    QTimer::singleShot(600, [w] { QTest::keyClick(w, Qt::Key_G); });
+    // run() sets the speed from the config (40mm/min), so allow time for the move
+    QTimer::singleShot(4'000, [w] { w->close(); });
+
+    const auto start = std::chrono::steady_clock::now();
+    controller.run();
+    REQUIRE(std::chrono::steady_clock::now() - start < std::chrono::seconds(10));
+
+    REQUIRE(tm.model.isQuitting());
+    REQUIRE(dialogShown);
+    REQUIRE(tm.model.getDisplayUnits() == mgo::DisplayUnits::Metric); // (toggled twice)
+    REQUIRE(tm.model.getAxis1MotorPosition() == Approx(0.5).margin(0.001));
+}
+
+TEST_CASE("UI: run() returns at once if already quitting")
+{
+    TestModel tm;
+    mgo::Controller controller(&tm.model);
+    tm.model.quit();
+    controller.run();
+    REQUIRE(tm.model.isQuitting());
 }
 
 int main(int argc, char* argv[])

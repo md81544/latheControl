@@ -9,6 +9,7 @@
 
 #include <cassert>
 #include <chrono>
+#include <utility>
 
 namespace mgo {
 
@@ -40,43 +41,76 @@ void Controller::run()
     m_model->setAxis1MotorSpeed(m_model->config().readDouble("Axis1SpeedPreset2", 40.0));
     m_model->setAxis2MotorSpeed(m_model->config().readDouble("Axis2SpeedPreset2", 20.0));
 
-    while (!m_model->isQuitting()) {
-        processKeyPress();
+    if (m_model->isQuitting()) {
+        return;
+    }
+    m_view->runEventLoop(TICK_INTERVAL, [this]() { tick(); });
+    // (Rethrown here, as exceptions mustn't pass through Qt's event loop)
+    if (m_tickException) {
+        std::rethrow_exception(std::exchange(m_tickException, nullptr));
+    }
+}
 
-        StatusResult rc = m_model->checkStatus();
+void Controller::tick()
+{
+    // A tick can still block (e.g. in a dialog, or waiting for a motor to
+    // stop), and Qt's events are processed meanwhile, so the timer could call
+    // us again before we've finished. Ignore it if so: the motors carry on
+    // under their own threads, as they did with the old polling loop
+    if (m_inTick) {
+        return;
+    }
+    m_inTick = true;
+    try {
+        tickBody();
+    } catch (...) {
+        m_inTick = false;
+        m_tickException = std::current_exception();
+        m_model->stopAllMotors();
+        m_view->quitEventLoop();
+        return;
+    }
+    m_inTick = false;
 
+    if (m_model->isShuttingDown()) {
+        MGOLOG("Shutting down");
+        // Stop the motor threads. (We must leave the loop afterwards, as
+        // the model can't be used once its motors have been destroyed.)
+        m_model->stopAllMotors();
+        m_model->resetMotorThreads();
+        // Note the command used for shutdown should be made passwordless
+        // in the /etc/sudoers files
+        [[maybe_unused]] auto rc = system("sudo shutdown -h now &");
+        m_view->quitEventLoop();
+        return;
+    }
+    if (m_model->isQuitting()) {
+        m_view->quitEventLoop();
+    }
+}
+
+void Controller::tickBody()
+{
+    processKeyPress();
+
+    StatusResult rc = m_model->checkStatus();
+
+    m_view->updateDisplay(*m_model);
+
+    if (rc == StatusResult::PressAKey || rc == StatusResult::WaitForMotors) {
+        if (!waitForAxisToStop(1) || !waitForAxisToStop(2)) {
+            // User pressed a key to abort: motors have been stopped, so
+            // abandon the multi-pass operation rather than carrying on
+            MGOLOG("Multi-pass aborted by user");
+            m_model->setMultiPassStage(MultiPassStage::NotStarted);
+            m_model->changeMode(Mode::None);
+            return;
+        }
         m_view->updateDisplay(*m_model);
-
-        if (rc == StatusResult::PressAKey || rc == StatusResult::WaitForMotors) {
-            if (!waitForAxisToStop(1) || !waitForAxisToStop(2)) {
-                // User pressed a key to abort: motors have been stopped, so
-                // abandon the multi-pass operation rather than carrying on
-                MGOLOG("Multi-pass aborted by user");
-                m_model->setMultiPassStage(MultiPassStage::NotStarted);
-                m_model->changeMode(Mode::None);
-                continue;
-            }
-            m_view->updateDisplay(*m_model);
-            if (rc == StatusResult::PressAKey) {
-                pressAnyKey("Press a key to continue", {});
-            }
-            m_model->setMultiPassStage(MultiPassStage::StepOver);
+        if (rc == StatusResult::PressAKey) {
+            pressAnyKey("Press a key to continue", {});
         }
-
-        if (m_model->isShuttingDown()) {
-            MGOLOG("Shutting down");
-            // Stop the motor threads. (We must leave the loop afterwards, as
-            // the model can't be used once its motors have been destroyed.)
-            m_model->stopAllMotors();
-            m_model->resetMotorThreads();
-            // Note the command used for shutdown should be made passwordless
-            // in the /etc/sudoers files
-            [[maybe_unused]] auto rc = system("sudo shutdown -h now &");
-            break;
-        }
-
-        // Small delay just to avoid the UI loop spinning
-        uiSleep(std::chrono::microseconds(50'000));
+        m_model->setMultiPassStage(MultiPassStage::StepOver);
     }
 }
 

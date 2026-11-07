@@ -11,14 +11,18 @@ namespace mgo {
 // depend on Qt.
 //
 // Note a QApplication must exist before this is initialised. The controller
-// still drives its own loop (calling getEvents() and updateDisplay()), so rather
-// than running QApplication::exec(), getEvents() processes Qt's pending events.
+// runs on Qt's event loop (runEventLoop()), with a timer calling it to update.
+// Some of the controller's work still blocks inside an update (e.g. waiting
+// for a motor to stop), so getEvents() and updateDisplay() also process Qt's
+// pending events, to keep the window responsive meanwhile.
 class ViewQt final : public IView {
 public:
     ViewQt();
     ~ViewQt() override;
     void initialise(const Model&) override;
     void close() override;
+    void runEventLoop(std::chrono::milliseconds interval, std::function<void()> tick) override;
+    void quitEventLoop() override;
     int getEvents() override;
     Input::Return getInput(
         Input::Type type,

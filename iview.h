@@ -1,6 +1,8 @@
 #pragma once
 
 #include "model.h"
+#include <chrono>
+#include <functional>
 #include <optional>
 #include <set>
 
@@ -37,6 +39,10 @@ class IView {
 public:
     virtual void initialise(const Model&) = 0;
     virtual void close() = 0;
+    // Runs the UI toolkit's event loop, calling tick() every interval, until
+    // quitEventLoop() is called (normally from within tick())
+    virtual void runEventLoop(std::chrono::milliseconds interval, std::function<void()> tick) = 0;
+    virtual void quitEventLoop() = 0;
     // keypresses should be returned as ASCII codes. Should not block.
     virtual int getEvents() = 0;
     // getInput should be able to handle text entry, number entry,
