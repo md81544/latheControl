@@ -1304,6 +1304,46 @@ TEST_CASE("Model:   zeroing or setting X clears the diameter")
     REQUIRE(model.getDiameterMm() == Approx(20.0).margin(0.01));
 }
 
+TEST_CASE("Model:   the diameter doesn't change as X retracts and unretracts")
+{
+    mgo::MockConfigReader config;
+    mgo::MockGpio gpio(false);
+    mgo::Model model(gpio, config);
+    model.initialise();
+    model.setAxis2Position(10.0);
+    model.diameterIsSet();
+    model.checkStatus();
+    const std::string status = model.getGeneralStatus();
+    REQUIRE(model.getDiameterMm() == Approx(20.0).margin(0.01));
+
+    // Throughout the retract and the unretract
+    bool unchanged = true;
+    const auto check = [&] {
+        unchanged = unchanged && std::abs(*model.getDiameterMm() - 20.0) < 0.01
+            && model.getGeneralStatus() == status;
+    };
+    const auto runAndCheck = [&] {
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+        do {
+            REQUIRE(std::chrono::steady_clock::now() < deadline);
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+            model.checkStatus();
+            check();
+        } while (model.isAxis2MotorRunning());
+        model.checkStatus();
+        check();
+    };
+    model.axis2Retract();
+    REQUIRE(model.getIsAxis2Retracted());
+    runAndCheck();
+    REQUIRE(std::abs(model.getAxis2MotorPosition() - 10.0) > 1.0); // (it did retract)
+    model.axis2Retract(); // (unretract)
+    runAndCheck();
+    REQUIRE(!model.getIsAxis2Retracted());
+    REQUIRE(model.getAxis2MotorPosition() == Approx(10.0).margin(0.01));
+    REQUIRE(unchanged);
+}
+
 TEST_CASE("Threading: auto-retract at the end of a pass")
 {
     using mgo::ThreadingStopAction;

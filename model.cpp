@@ -1441,7 +1441,11 @@ std::optional<double> Model::getDiameterMm() const
     if (!m_xDiameterSet || !m_axis2Motor) {
         return std::nullopt;
     }
-    return std::abs(m_axis2Motor->getPosition() * 2.0);
+    // While retracted (from the start of a retract to the end of the
+    // unretract), where X will return to: the diameter being cut
+    const double x = m_axis2Retracted ? m_axis2Motor->getPosition(m_xOldPosition)
+                                      : m_axis2Motor->getPosition();
+    return std::abs(x * 2.0);
 }
 
 XDirection Model::getRetractionDirection() const
