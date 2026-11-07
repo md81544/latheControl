@@ -33,7 +33,7 @@
 test/test
 lc
 compile_commands.json
-build/*
+build/
 
 # Other
 tags

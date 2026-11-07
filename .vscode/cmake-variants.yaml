@@ -1,0 +1,17 @@
+# Build variants for the CMake Tools extension, mirroring the Makefile:
+# Debug mocks the GPIO hardware (FAKE=ON), Release uses pigpio (Pi only)
+buildType:
+  default: debug
+  choices:
+    debug:
+      short: Debug
+      long: Debug build with mocked GPIO (FAKE) and unit tests
+      buildType: Debug
+      settings:
+        FAKE: ON
+    release:
+      short: Release
+      long: Release build against pigpio (Raspberry Pi only)
+      buildType: Release
+      settings:
+        FAKE: OFF
