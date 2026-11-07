@@ -44,7 +44,7 @@
       small)
 
 ### Controller structure
-- [ ] Move the controller onto Qt's event loop (e.g. a timer driving each
+- [x] Move the controller onto Qt's event loop (e.g. a timer driving each
       update) instead of its own polling loop. At the moment the UI thread
       blocks in places: `wait()` on motors, `waitForAxisToStop()`, and
       `callbackAtZeroDegrees()`, which can spin for up to a spindle revolution
@@ -76,6 +76,10 @@
       any more. Not yet tried on the machine
     - The one remaining block in a tick was `callbackAtZeroDegrees()`, now
       gone with the electronic leadscrew work, so nothing in a tick blocks
+    - **Used on the machine (2026-11-07):** turning, dialogs, threading, and
+      a 45 degree chamfer (so a taper's backlash take-up as a sequence) all
+      worked. Not specifically tried yet: holding keys back during a nudge
+      (and Space stopping one), and closing the window with a dialog open
 - [ ] Address the "Mode" concept, which provides pseudo-modal "dialogs"
       interleaved into program flow and is difficult to maintain. If all
       motors are stopped during a dialog, they can all go on a separate flow
@@ -141,7 +145,7 @@
       kernel threads. Test on the machine
 - [ ] If a once-per-second stutter reappears, check real-time throttling
       (see the README)
-- [ ] **Electronic leadscrew: lock Z's *position* to the spindle, not its
+- [x] **Electronic leadscrew: lock Z's *position* to the spindle, not its
       speed.** At the moment, threading sets Z's speed from the spindle's RPM,
       averaged over the last revolution and applied every UI loop (~50ms).
       Anything that makes Z's speed differ from the spindle's, even briefly,
@@ -188,12 +192,16 @@
       start of the pass (up to Z's maximum). If Z falls more than a quarter
       of the pitch behind, the pass stops with a warning. Unit tests cover
       the spindle slowing to half speed mid-pass, every pass (both ways)
-      starting at a whole revolution, and Z not keeping up. **Not yet tried
-      on the machine**
-    - On the machine, check: the thread's pitch (e.g. over 20 turns), that
-      repeated passes stay in one groove, and how Z starts (it now goes
-      straight to the spindle's speed at the start revolution, as before;
-      ramping is still off for Z when threading)
+      starting at a whole revolution, and Z not keeping up
+    - **Tested on the machine (2026-11-07):** an M14 coarse thread on 14mm
+      bar, with an ISO form tool. Repeated passes all stayed in one groove,
+      including after moving the carriage away (to try a commercial M14 nut)
+      and back to the start. The finished thread fits the nut
+    - Z sounds "stuttery" while following: it steps in short bursts at its
+      speed limit (twice what's needed), then waits for the spindle to move
+      the target on, rather than stepping evenly. Expected, and harmless
+      (the thread is right); a lower limit, or setting the step rate from
+      the target's speed, would smooth it if it's ever wanted
 - [ ] I defined some constants for a slight Z infeed when cutting threads
       (see INFEED and SIDEFEED) but never used them. Maybe implement to
       simulate the use of the topslide
@@ -363,7 +371,7 @@
 - [ ] Set the initial X-axis retraction direction from the config file
 
 ## Miscellaneous
-- [ ] Add ability to add new thread pitches without recompilation. Move the
+- [x] Add ability to add new thread pitches without recompilation. Move the
       definitions in threadpitches.h into separate config file (threadpitches.cfg)
       which is loaded at program start.
       - The thread pitches dialog should be multi-tier: the user
@@ -379,7 +387,12 @@
         thread form (ISO, UN, Whitworth, BA) gives the depths and the bore. The
         dialog has two levels (type, then size), M for male / female, the figures,
         and a diagram of the profile. Choosing female sets X to retract inwards.
-        Not yet tried on the machine
+        Used on the machine (2026-11-07) for an external M14 thread; a female
+        thread hasn't been tried yet
+      - To fit a commercial M14 nut, a few passes beyond the 0.613 x pitch depth
+        were needed: commercial bolts are made a little under nominal (about
+        13.8 - 13.97mm for M14), and the bar was turned to 14.00. Treat the depth
+        as where to start trying the nut
       - NB internal metric/UN threads now use the ISO depth of 0.541 x pitch; the old
         table had 0.469 x pitch (and M18 had 1.072 where M20 had 1.172). Change
         femaleDepth in threadpitches.cpp's FORMS if 0.469 was deliberate
