@@ -659,13 +659,27 @@ std::vector<MotionSequence::Step> Model::axis1MoveSteps(long step)
             m_axis1Motor->goToStep(step);
         }
     };
+    const ZDirection direction
+        = step < getAxis1MotorCurrentStep() ? ZDirection::Right : ZDirection::Left;
+    if (m_mode == Mode::Threading && step != getAxis1MotorCurrentStep()) {
+        // A threading pass follows the spindle from the moment it starts, so
+        // Z's backlash must be taken up first. Otherwise, when Z reverses, the
+        // spindle moves on while Z takes it up: Z starts late, and (if the
+        // backlash is more than half the pitch) falls so far behind that the
+        // pass is stopped
+        // (At a set speed: Z's speed is whatever the last pass needed)
+        auto takeUp = takeUpZBacklashStep(direction);
+        takeUp.action = [this, action = std::move(takeUp.action)]() {
+            m_axis1Motor->setSpeed(m_axis1Motor->getMaxRpm() / 10.0);
+            action();
+        };
+        return { std::move(takeUp), { move, {} } };
+    }
     if (m_mode != Mode::Taper && m_mode != Mode::Radius) {
         return { { move, {} } };
     }
     // Tapers and radii synchronise X to Z, after first taking up the backlash
     // on both, so that X moves as soon as Z does
-    const ZDirection direction
-        = step < getAxis1MotorCurrentStep() ? ZDirection::Right : ZDirection::Left;
     int xStepAdd;
     if (m_mode == Mode::Taper) {
         xStepAdd = -1;

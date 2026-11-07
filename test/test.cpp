@@ -2265,6 +2265,19 @@ struct ThreadingTestModel {
         const int64_t r = ((pulses % PULSES_PER_REV) + PULSES_PER_REV) % PULSES_PER_REV;
         return std::min(r, PULSES_PER_REV - r);
     }
+    // Starts a pass to the given step, running the model's updates until the
+    // backlash has been taken up and the pass itself has started
+    void startPass(long endStep)
+    {
+        model.axis1GoToStep(endStep);
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
+        while (model.isMotionSequenceRunning()) {
+            REQUIRE(std::chrono::steady_clock::now() < deadline);
+            model.checkStatus();
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        REQUIRE(model.isAxis1MotorRunning());
+    }
     // Waits for Z to leave its current step, returning the pulse count then
     int64_t pulsesWhenZStarts()
     {
@@ -2298,8 +2311,7 @@ struct ThreadingTestModel {
 TEST_CASE("Threading: Z follows the spindle's position, even as its speed changes")
 {
     ThreadingTestModel t(400);
-    t.model.axis1GoToStep(5'000); // (5mm, i.e. five revolutions)
-    REQUIRE(t.model.isAxis1MotorRunning());
+    t.startPass(5'000); // (5mm, i.e. five revolutions)
     // The pass starts at a whole revolution of the encoder's count
     const int64_t started = t.pulsesWhenZStarts();
     REQUIRE(ThreadingTestModel::pulsesFromWholeRev(started) <= 5);
@@ -2342,8 +2354,7 @@ TEST_CASE("Threading: every pass starts at the same spindle angle")
     ThreadingTestModel t(300);
     // Out, back and out again: each starts at a whole revolution
     for (const long end : { 1'000L, 0L, 1'000L }) {
-        t.model.axis1GoToStep(end);
-        REQUIRE(t.model.isAxis1MotorRunning());
+        t.startPass(end);
         const int64_t started = t.pulsesWhenZStarts();
         INFO("Pass to " << end << " started at pulse " << started);
         REQUIRE(ThreadingTestModel::pulsesFromWholeRev(started) <= 5);
@@ -2353,10 +2364,32 @@ TEST_CASE("Threading: every pass starts at the same spindle angle")
     }
 }
 
+TEST_CASE("Threading: Z's backlash is taken up before a pass reverses")
+{
+    // More backlash than half the pitch (500 steps): taken up while following
+    // the spindle, Z would fall far enough behind for the pass to be stopped
+    ThreadingTestModel t(300, { { "Axis1BacklashCompensationSteps", "600" } });
+    REQUIRE(waitFor([&t] { return !t.model.isAxis1MotorRunning(); }, std::chrono::seconds(5)));
+    const long home = t.model.getAxis1MotorCurrentStep();
+    for (const long end : { home + 1'000, home, home + 1'000 }) {
+        t.startPass(end);
+        const int64_t started = t.pulsesWhenZStarts();
+        INFO("Pass to " << end << " started at pulse " << started);
+        REQUIRE(ThreadingTestModel::pulsesFromWholeRev(started) <= 5);
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        while (t.model.isAxis1MotorRunning()) {
+            REQUIRE(std::chrono::steady_clock::now() < deadline);
+            t.runFor(std::chrono::milliseconds(20));
+        }
+        REQUIRE(t.model.getAxis1MotorCurrentStep() == end);
+        REQUIRE(t.model.getWarning().empty());
+    }
+}
+
 TEST_CASE("Threading: a pass stops if Z can't keep up with the spindle")
 {
     ThreadingTestModel t(1'000);
-    t.model.axis1GoToStep(20'000);
+    t.startPass(20'000);
     t.pulsesWhenZStarts();
     t.runFor(std::chrono::milliseconds(100));
     REQUIRE(t.model.isAxis1MotorRunning());
