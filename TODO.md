@@ -273,6 +273,17 @@
       probing like on the CNC?
 
 ## Structure and refactoring
+- [ ] Incorporate electronicRotaryTable repo
+    - Pull functionality of ERT into this repo. ERT is designed specifically
+      for cutting gears, so we could have a mode for gear cutting.
+    - This would require a set-up screen to ensure the user has connected a
+      rotary table, replacing one axis.
+    - This would mean we could also incorporate the repo stepperControl as it
+      is only shared by latheControl and ERT (which would then be redundant)
+    - Gear cutting mode should be disabled by default, and only enabled by a
+      setting in lc_mill.cfg (the milling machine currently only has a stepper
+      on its X axis)
+    - lc_rt.cfg is redundant and should be removed.
 - [ ] Lots of refactoring still needed, as this grew a bit organically
 - [ ] Replace all "Axis1..." and "Axis2..." references with an array, to
       allow for future expansion. Might be difficult owing to the axes'
@@ -285,3 +296,58 @@
 - [ ] `axis.cpp` / `axis.h` are compiled but unused, and their `mgo::Axis`
       class clashes in name with `enum class mgo::Axis` in model.h
 - [ ] Set the initial X-axis retraction direction from the config file
+
+## Miscellaneous
+- [ ] Add ability to add new thread pitches without recompilation. Move the
+      definitions in threadpitches.h into separate config file (threadpitches.cfg)
+      which is loaded at program start.
+      - The thread pitches dialog should be multi-tier: the user
+        initially selects, e.g. "metric coarse", "metric fine", "BSW", "BSF", "UNC"
+        etc, then is presented with the relevant pitches for that category.
+      - The dialog could present a diagram showing the salient thread data
+      - The dialog should allow the user to select male or female (the diagram should
+        change to reflect this)
+      - Expand the new config file with all common thread pitch data up to, say, 25mm/1"
+- [ ] Add some form of generic multi-pass functionality (defining a start position,
+      a required end position, and how axes should change per pass -- e.g. for a lathe
+      operation, we'd define a z start, a z end, and an x infeed per pass).
+      To allow the user to "visually" set parameters, it could offer the ability to read
+      stored memory slots, for example for threading a user might define z start and z end
+      by lining the tool up to where they want the thread to end and storing the z value
+      in a memory slot, then moving z out to just past the end of the workpiece and storing
+      that z value in a separate memory slot.
+- [ ] It should not require the user to reset an axis value
+      to keep track of (for example) the current thread depth being cut - instead maybe it
+      displays a box showing how much the X axis has changed since the first "scratch pass"
+      was taken in the current mode. The axis being displayed should be configurable.
+- [ ] Once this "generic multi-pass" functionality is available, it could be used for:
+        - threading on the lathe
+        - turning down to a workpiece to a set diameter (lathe)
+        - radiusing (lathe)
+        - chamfering (lathe)
+        - facing an entire workpiece (mill) i.e. the X axis does a pass, and each pass
+          the user is prompted to feed the Y (manual) axis a set amount. When the process reaches
+          the target Y value, the cutter could return to the beginning, and the user might be
+          prompted to feed down on the Z (again, currently manual on the mill) and repeat.
+        - using the rotary table (mill) to turn a set amount, then take a cut along the x axis, 
+          and repeat. The user could be prompted to feed the Y axis a set amount per full
+          revolution of the C axis. This would allow, for example, a hexagonal shape to be cut.
+        - etc
+       It should also have functionality to allow calling functions to:
+        - Pause between each pass (with a message, e.g. "move y n units" - the mill, for
+          example, doesn't have a stepper on Y or Z currently so would require manual moves)
+        - Or perform each pass automatically (e.g. on the lathe where both Z and X have
+          steppers)
+        It should also have an attribute to determine whether a retract is required
+        between each pass. For example on the lathe in threading mode the sequence would be:
+            - cut from z start to z end
+            - retract (could be retract out, for male threads, or in for female)
+            - return to z start
+            - unretract
+            - feed in/out x by the specified change per pass
+            - optional pause message
+            - repeat until x delta equals thread pitch cut depth
+- [ ] Investigate how to interface with the mill's linear scales
+    - The milling machine has three linear scales (X,Y,Z), all of which interface with TouchDRO
+      (an Android app which displays DRO data on a separate tablet) via a bluetooth connection.
+      We need to determine how to get this data into latheControl too for linear scale functionality mentioned elsewhere in this document.
