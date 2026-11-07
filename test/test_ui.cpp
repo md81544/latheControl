@@ -23,6 +23,10 @@
 #include <chrono>
 #include <cmath>
 #include <functional>
+#include <map>
+#include <optional>
+#include <string_view>
+#include <vector>
 #include <thread>
 
 namespace {
@@ -51,6 +55,49 @@ void whenDialogShows(std::function<void(QWidget*)> fn)
         }
     });
     timer->start();
+}
+
+// Opens a dialog and waits (running Qt's event loop) until it's closed,
+// returning its result
+mgo::Input::Return getInput(
+    mgo::ViewQt& view,
+    mgo::Input::Type type,
+    std::string_view prompt,
+    std::vector<std::string> additionalText,
+    std::string_view defaultEntry = "",
+    std::optional<std::vector<std::string>> listItems = std::nullopt)
+{
+    std::optional<mgo::Input::Return> result;
+    view.openInput(
+        type,
+        prompt,
+        std::move(additionalText),
+        [&result](const mgo::Input::Return& rc) { result = rc; },
+        defaultEntry,
+        std::move(listItems));
+    REQUIRE(view.isDialogOpen());
+    REQUIRE(QTest::qWaitFor([&result] { return result.has_value(); }, 5'000));
+    REQUIRE(!view.isDialogOpen());
+    return *result;
+}
+
+std::optional<double> getTaperAngle(mgo::ViewQt& view, double currentAngle)
+{
+    bool done = false;
+    std::optional<double> angle;
+    view.openTaperDialog(currentAngle, [&](std::optional<double> a) {
+        angle = a;
+        done = true;
+    });
+    REQUIRE(QTest::qWaitFor([&done] { return done; }, 5'000));
+    return angle;
+}
+
+// Dialogs don't block, so after a key which opens one, this waits (running
+// Qt's event loop, so a whenDialogShows() callback can act) until it's closed
+bool waitForDialogToClose()
+{
+    return QTest::qWaitFor([] { return QApplication::activeModalWidget() == nullptr; }, 5'000);
 }
 
 // The widget within the dialog that keyboard input goes to
@@ -83,30 +130,50 @@ struct TestModel {
     mgo::Model model { gpio, config };
 };
 
-// The mock config, but with a slower Z, so that its nudges (at a tenth of the
-// maximum speed) take long enough to press keys during them: 0.05mm in 0.3s
-class SlowZConfigReader final : public mgo::IConfigReader {
+// A config with the given values, and the defaults for everything else
+class MapConfigReader final : public mgo::IConfigReader {
 public:
-    std::string read(const std::string&, const std::string& defaultValue = "") const override
+    explicit MapConfigReader(std::map<std::string, std::string> values)
+        : m_values(std::move(values))
     {
-        return defaultValue;
     }
-    unsigned long readLong(const std::string&, unsigned long defaultValue = 0) const override
+    std::string read(const std::string& key, const std::string& defaultValue = "") const override
     {
-        return defaultValue;
+        const auto it = m_values.find(key);
+        return it == m_values.end() ? defaultValue : it->second;
+    }
+    unsigned long readLong(const std::string& key, unsigned long defaultValue = 0) const override
+    {
+        const auto it = m_values.find(key);
+        return it == m_values.end() ? defaultValue : std::stoul(it->second);
     }
     double readDouble(const std::string& key, double defaultValue = 0.0) const override
     {
-        return key == "Axis1MaxMotorRpm" ? 100.0 : defaultValue;
+        const auto it = m_values.find(key);
+        return it == m_values.end() ? defaultValue : std::stod(it->second);
     }
-    bool readBool(const std::string&, bool defaultValue) const override
+    bool readBool(const std::string& key, bool defaultValue) const override
     {
-        return defaultValue;
+        const auto it = m_values.find(key);
+        return it == m_values.end() ? defaultValue : it->second == "true";
     }
+
+private:
+    std::map<std::string, std::string> m_values;
 };
 
+// A slower Z, so that its nudges (at a tenth of the maximum speed) take long
+// enough to press keys during them: 0.05mm in 0.3s
 struct SlowZTestModel {
-    SlowZConfigReader config;
+    MapConfigReader config { { { "Axis1MaxMotorRpm", "100" } } };
+    mgo::MockGpio gpio { false };
+    mgo::Model model { gpio, config };
+};
+
+// With Z's driver alarm wired (to a pin the mock GPIO can set)
+constexpr int ALARM_PIN = 17;
+struct AlarmTestModel {
+    MapConfigReader config { { { "Axis1AlarmPin", "17" }, { "Axis1AlarmActiveLevel", "low" } } };
     mgo::MockGpio gpio { false };
     mgo::Model model { gpio, config };
 };
@@ -223,7 +290,7 @@ TEST_CASE("UI: numeric dialog, with an option hotkey")
         QTest::keyClick(input, Qt::Key_X); // not an option, so ignored
         QTest::keyClick(input, Qt::Key_Return);
     });
-    const auto rc = view.getInput(
+    const auto rc = getInput(view, 
         mgo::Input::Type::Numeric, "Position", { "[&D] set as diameter" }, "1.5");
     REQUIRE(!rc.cancelled);
     REQUIRE(rc.number == Approx(5.2));
@@ -240,7 +307,7 @@ TEST_CASE("UI: Esc cancels a dialog")
         QTest::keyClicks(inputWidget(dialog), "42");
         QTest::keyClick(inputWidget(dialog), Qt::Key_Escape);
     });
-    const auto rc = view.getInput(mgo::Input::Type::Numeric, "Position", {}, "1.5");
+    const auto rc = getInput(view, mgo::Input::Type::Numeric, "Position", {}, "1.5");
     REQUIRE(rc.cancelled);
 }
 
@@ -258,7 +325,7 @@ TEST_CASE("UI: list picker")
         QTest::keyClick(input, Qt::Key_Up);
         QTest::keyClick(input, Qt::Key_Return);
     });
-    const auto rc = view.getInput(
+    const auto rc = getInput(view, 
         mgo::Input::Type::ListPicker,
         "Pick one",
         {},
@@ -281,7 +348,7 @@ TEST_CASE("UI: text dialog needs Alt for option hotkeys")
         QTest::keyClick(input, Qt::Key_Return);
     });
     const auto rc
-        = view.getInput(mgo::Input::Type::Text, "Name", { "[&X] an option" }, "default");
+        = getInput(view, mgo::Input::Type::Text, "Name", { "[&X] an option" }, "default");
     REQUIRE(!rc.cancelled);
     REQUIRE(rc.text == "hex");
     REQUIRE(rc.optionsSelected == std::set<char> { 'x' });
@@ -294,7 +361,7 @@ TEST_CASE("UI: press any key")
     view.initialise(tm.model);
 
     whenDialogShows([](QWidget* dialog) { QTest::keyClick(inputWidget(dialog), Qt::Key_Q); });
-    const auto rc = view.getInput(mgo::Input::Type::PressAnyKey, "Help", { "Some text" });
+    const auto rc = getInput(view, mgo::Input::Type::PressAnyKey, "Help", { "Some text" });
     REQUIRE(!rc.cancelled);
 }
 
@@ -319,7 +386,8 @@ TEST_CASE("UI: Z go-to through the controller")
         QTest::keyClick(inputWidget(dialog), Qt::Key_Return);
     });
     QTest::keyClick(w, Qt::Key_G);
-    controller.processKeyPress(); // runs the dialog
+    controller.processKeyPress(); // opens the dialog
+    REQUIRE(waitForDialogToClose());
     REQUIRE(dialogShown);
 
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
@@ -338,6 +406,7 @@ void press(QWidget* w, mgo::Controller& controller, Qt::Key k)
 {
     QTest::keyClick(w, k);
     controller.processKeyPress();
+    REQUIRE(waitForDialogToClose());
     QTest::qWait(110);
 }
 
@@ -458,11 +527,11 @@ TEST_CASE("UI: taper dialog")
         typeInto(dialog, "12.5");
         QTest::keyClick(inputWidget(dialog), Qt::Key_Return);
     });
-    REQUIRE(view.getTaperAngle(0.0) == Approx(-12.5));
+    REQUIRE(getTaperAngle(view, 0.0) == Approx(-12.5));
 
     // Esc cancels
     whenDialogShows([](QWidget* dialog) { QTest::keyClick(inputWidget(dialog), Qt::Key_Escape); });
-    REQUIRE(!view.getTaperAngle(0.0).has_value());
+    REQUIRE(!getTaperAngle(view, 0.0).has_value());
 
     // Enter does nothing without a valid angle (here, just a ".")
     whenDialogShows([](QWidget* dialog) {
@@ -471,14 +540,14 @@ TEST_CASE("UI: taper dialog")
         REQUIRE(dialog->isVisible());
         QTest::keyClick(inputWidget(dialog), Qt::Key_Escape);
     });
-    REQUIRE(!view.getTaperAngle(0.0).has_value());
+    REQUIRE(!getTaperAngle(view, 0.0).has_value());
 
     // It starts with the taper in use: a preset (with its direction)...
     whenDialogShows([](QWidget* dialog) { QTest::keyClick(inputWidget(dialog), Qt::Key_Return); });
-    REQUIRE(view.getTaperAngle(-1.4377) == Approx(-1.4377));
+    REQUIRE(getTaperAngle(view, -1.4377) == Approx(-1.4377));
     // ...or a custom angle
     whenDialogShows([](QWidget* dialog) { QTest::keyClick(inputWidget(dialog), Qt::Key_Return); });
-    REQUIRE(view.getTaperAngle(7.25) == Approx(7.25));
+    REQUIRE(getTaperAngle(view, 7.25) == Approx(7.25));
 }
 
 TEST_CASE("UI: switching to inches, and typing a position in inches")
@@ -650,6 +719,55 @@ TEST_CASE("UI: multi-pass through the controller")
     REQUIRE(tm.model.multiPass().state() == mgo::MultiPass::State::Finished);
     REQUIRE(tm.model.getAxis1MotorPosition() == Approx(0.0).margin(0.0001));
     REQUIRE(tm.model.getAxis2MotorPosition() == Approx(0.02).margin(0.0001));
+}
+
+TEST_CASE("UI: the controller carries on while a dialog is open")
+{
+    // e.g. a driver alarm is caught at once, rather than when the dialog closes
+    AlarmTestModel tm;
+    mgo::Controller controller(&tm.model);
+    QWidget* w = mainWindow();
+    REQUIRE(w);
+
+    std::string faultWhileOpen;
+    whenDialogShows([&](QWidget* dialog) {
+        tm.gpio.setInputPinLevel(ALARM_PIN, mgo::PinState::low);
+        QTest::qWait(300);
+        faultWhileOpen = tm.model.getFaultMessage();
+        QTest::keyClick(inputWidget(dialog), Qt::Key_Escape);
+    });
+    QTimer::singleShot(150, [w] { QTest::keyClick(w, Qt::Key_Z); });
+    QTimer::singleShot(300, [w] { QTest::keyClick(w, Qt::Key_G); });
+    QTimer::singleShot(2'000, [w] { w->close(); });
+    controller.run();
+    REQUIRE(faultWhileOpen.find("Z MOTOR FAULT") != std::string::npos);
+}
+
+TEST_CASE("UI: closing the window while a dialog is open cancels it, and quits")
+{
+    TestModel tm;
+    mgo::Controller controller(&tm.model);
+    QWidget* w = mainWindow();
+    REQUIRE(w);
+
+    bool dialogShown = false;
+    whenDialogShows([&](QWidget*) {
+        dialogShown = true;
+        w->close();
+    });
+    QTimer::singleShot(150, [w] { QTest::keyClick(w, Qt::Key_Z); });
+    QTimer::singleShot(300, [w] { QTest::keyClick(w, Qt::Key_G); });
+    // (In case it doesn't quit)
+    bool timedOut = false;
+    QTimer::singleShot(5'000, [&] {
+        timedOut = true;
+        tm.model.quit();
+    });
+    controller.run();
+    REQUIRE(dialogShown);
+    REQUIRE(!timedOut);
+    REQUIRE(tm.model.isQuitting());
+    REQUIRE(QApplication::activeModalWidget() == nullptr);
 }
 
 TEST_CASE("UI: run() returns at once if already quitting")

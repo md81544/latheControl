@@ -676,29 +676,43 @@ private:
 
 } // end anonymous namespace
 
-Input::Return getInput(
+QDialog* openInput(
     QWidget* parent,
     const QString& fontFamily,
     Input::Type type,
     std::string_view prompt,
     std::vector<std::string> additionalText,
     std::string_view defaultEntry,
-    std::optional<std::vector<std::string>> listItems)
+    std::optional<std::vector<std::string>> listItems,
+    std::function<void(const Input::Return&)> onDone)
 {
     // As before, these are designed to be called from more specialised
     // wrappers in the controller, which never supply both
     assert(additionalText.empty() || !listItems.has_value());
-    InputDialog dlg(
+    auto* dlg = new InputDialog(
         parent, fontFamily, type, prompt, std::move(additionalText), defaultEntry, listItems);
-    dlg.exec();
-    return dlg.inputResult();
+    // (Deleted once closed, after finished() has been emitted)
+    dlg->setAttribute(Qt::WA_DeleteOnClose);
+    QObject::connect(dlg, &QDialog::finished, dlg, [dlg, onDone = std::move(onDone)](int) {
+        onDone(dlg->inputResult());
+    });
+    dlg->open();
+    return dlg;
 }
 
-std::optional<double> getTaperAngle(QWidget* parent, const QString& fontFamily, double currentAngle)
+QDialog* openTaperDialog(
+    QWidget* parent,
+    const QString& fontFamily,
+    double currentAngle,
+    std::function<void(std::optional<double>)> onDone)
 {
-    TaperDialog dlg(parent, fontFamily, currentAngle);
-    dlg.exec();
-    return dlg.chosenAngle();
+    auto* dlg = new TaperDialog(parent, fontFamily, currentAngle);
+    dlg->setAttribute(Qt::WA_DeleteOnClose);
+    QObject::connect(dlg, &QDialog::finished, dlg, [dlg, onDone = std::move(onDone)](int) {
+        onDone(dlg->chosenAngle());
+    });
+    dlg->open();
+    return dlg;
 }
 
 } // end namespace dialog

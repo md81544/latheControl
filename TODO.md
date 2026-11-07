@@ -67,13 +67,24 @@
       `waitForAxisToStop()` and modal "press a key" between passes are gone.
       `callbackAtZeroDegrees()` is left, as the electronic leadscrew work
       will replace it
-    - Then make dialogs non-modal (with a callback when done) so ticks carry
-      on while one is open; that's the "Mode" item below. Once nothing
-      blocks inside a tick, `getEvents()` and `updateDisplay()` no longer
-      need to call `processEvents()`
+    - **Done:** dialogs don't block. They're window modal (`QDialog::open()`),
+      and call back with the result when closed, so the controller's ticks
+      (the model's checks, e.g. for a driver alarm, and the display) carry
+      on while one is open. Motors are still stopped when a dialog opens.
+      Gamepad keys are ignored meanwhile, as before; closing the window
+      cancels the dialog and quits. Nothing in a tick processes Qt's events
+      any more. Not yet tried on the machine
+    - The one remaining block in a tick is `callbackAtZeroDegrees()` (up to a
+      spindle revolution), which the electronic leadscrew work will replace
 - [ ] Address the "Mode" concept, which provides pseudo-modal "dialogs"
       interleaved into program flow and is difficult to maintain. If all
       motors are stopped during a dialog, they can all go on a separate flow
+    - **Partly done:** the dialogs are now on a separate flow (above). What's
+      left is the mode state itself: the model has both
+      `m_currentDisplayMode` and `m_enabledFunction` (set separately in
+      places, e.g. quick chamfer), and the controller's
+      `processModeInputKeys()` is marked for deletion. Worth tidying when a
+      mode next needs work
 
 ## Multi-pass (experimental)
 - [ ] Try the rewritten multi-pass on the machine.

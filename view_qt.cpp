@@ -11,12 +11,14 @@
 
 #include <QApplication>
 #include <QCloseEvent>
+#include <QDialog>
 #include <QElapsedTimer>
 #include <QEventLoop>
 #include <QFile>
 #include <QFontDatabase>
 #include <QKeyEvent>
 #include <QPainter>
+#include <QPointer>
 #include <QScreen>
 #include <QTimer>
 #include <QWidget>
@@ -376,6 +378,11 @@ struct ViewQt::Impl {
     std::unique_ptr<Joystick> joystick;
     // The loop runEventLoop() is in, if any
     QEventLoop* eventLoop { nullptr };
+    // The dialog open, if any. (It deletes itself once closed)
+    QPointer<QDialog> dialog;
+    // The main display is dimmed while a dialog is open
+    void setDimmed(bool dimmed);
+    void dialogClosed();
 
     // Main text items which are always displayed:
     TextItem axis1Label;
@@ -555,16 +562,42 @@ void ViewQt::initialise(const Model& model)
     QCoreApplication::processEvents();
 }
 
-std::optional<double> ViewQt::getTaperAngle(double currentAngle)
+void ViewQt::openTaperDialog(double currentAngle, std::function<void(std::optional<double>)> onDone)
 {
-    auto& widget = *m_impl->widget;
-    widget.dimmed = true;
-    widget.update();
-    const auto angle = dialog::getTaperAngle(&widget, m_impl->fontFamily, currentAngle);
-    widget.dimmed = false;
-    widget.update();
-    QCoreApplication::processEvents();
-    return angle;
+    assert(!isDialogOpen()); // (one at a time)
+    m_impl->setDimmed(true);
+    m_impl->dialog = dialog::openTaperDialog(
+        m_impl->widget.get(),
+        m_impl->fontFamily,
+        currentAngle,
+        [this, onDone = std::move(onDone)](std::optional<double> angle) {
+            m_impl->dialogClosed();
+            onDone(angle);
+        });
+}
+
+bool ViewQt::isDialogOpen() const
+{
+    return !m_impl->dialog.isNull();
+}
+
+void ViewQt::cancelDialog()
+{
+    if (m_impl->dialog) {
+        m_impl->dialog->reject();
+    }
+}
+
+void ViewQt::Impl::setDimmed(bool dimmed)
+{
+    widget->dimmed = dimmed;
+    widget->update();
+}
+
+void ViewQt::Impl::dialogClosed()
+{
+    dialog = nullptr;
+    setDimmed(false);
 }
 
 void ViewQt::setMenu(const Menu* menu)
@@ -792,32 +825,36 @@ void ViewQt::quitEventLoop()
 
 int ViewQt::getEvents()
 {
-    // The controller sometimes blocks inside a tick (e.g. waiting for a motor
-    // to stop), so we let Qt handle any pending events (key presses, repaints
-    // etc) here too
-    QCoreApplication::processEvents();
+    // (Key presses arrive through Qt's event loop, which the controller runs
+    // on; the gamepad is polled)
     for (const int k : m_impl->joystick->poll()) {
         m_impl->widget->pushKey(k | key::JOYSTICK);
     }
     return m_impl->widget->takeKey();
 }
 
-Input::Return ViewQt::getInput(
+void ViewQt::openInput(
     Input::Type type,
     std::string_view prompt,
     std::vector<std::string> additionalText,
+    std::function<void(const Input::Return&)> onDone,
     std::string_view defaultEntry,
     std::optional<std::vector<std::string>> listItems)
 {
-    auto& widget = *m_impl->widget;
-    widget.dimmed = true;
-    widget.update();
-    const Input::Return rc = dialog::getInput(
-        &widget, m_impl->fontFamily, type, prompt, additionalText, defaultEntry, listItems);
-    widget.dimmed = false;
-    widget.update();
-    QCoreApplication::processEvents();
-    return rc;
+    assert(!isDialogOpen()); // (one at a time)
+    m_impl->setDimmed(true);
+    m_impl->dialog = dialog::openInput(
+        m_impl->widget.get(),
+        m_impl->fontFamily,
+        type,
+        prompt,
+        std::move(additionalText),
+        defaultEntry,
+        std::move(listItems),
+        [this, onDone = std::move(onDone)](const Input::Return& rc) {
+            m_impl->dialogClosed();
+            onDone(rc);
+        });
 }
 
 void ViewQt::updateDisplay(const Model& model)
@@ -933,8 +970,7 @@ void ViewQt::updateDisplay(const Model& model)
     }
 
     d.widget->frame = std::move(frame);
-    d.widget->update();
-    QCoreApplication::processEvents();
+    d.widget->update(); // (repainted by Qt's event loop)
 }
 
 void ViewQt::Impl::updateTextFromModel(const Model& model)

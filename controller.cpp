@@ -41,10 +41,10 @@ void Controller::run()
 
 void Controller::tick()
 {
-    // A tick can still block (e.g. in a dialog, or waiting for a motor to
-    // stop), and Qt's events are processed meanwhile, so the timer could call
-    // us again before we've finished. Ignore it if so: the motors carry on
-    // under their own threads, as they did with the old polling loop
+    // Nothing in a tick processes Qt's events (dialogs don't block; a
+    // threading pass's wait for zero degrees blocks, but without processing
+    // events), so the timer can't call us again before we've finished. This
+    // guard is a safety net, should something ever do so
     if (m_inTick) {
         return;
     }
@@ -97,6 +97,16 @@ bool Controller::isMenuOpen() const
 void Controller::processKeyPress()
 {
     int k = m_view->getEvents();
+    if (m_view->isDialogOpen()) {
+        // The dialog has the keyboard, so any key here is from the gamepad,
+        // which isn't used for dialogs: ignore it. Except Ctrl-Q (e.g. from
+        // closing the window), which cancels the dialog and quits
+        if (k == key::CtrlQ) {
+            m_view->cancelDialog();
+            processKey(k);
+        }
+        return;
+    }
     if (m_model->isMotionSequenceRunning()) {
         // Keys wait until the sequence (e.g. a nudge) has finished, as they
         // did when it blocked, so e.g. a quick series of nudges each moves
@@ -613,26 +623,30 @@ void Controller::processKey(int t)
                 {
                     // Note all motors will be stopped when a dialog is displayed
                     const std::string axisName = m_model->config().read("Axis1Label", "Z");
-                    const auto rc = getNumericInput(
+                    getNumericInput(
                         "Go to " + axisName + " absolute position" + unitsSuffix(1),
                         { "Specify a value" },
-                        0.0);
-                    if (!rc.cancelled) {
-                        m_model->axis1GoToPosition(m_model->fromDisplayUnits(1, rc.value));
-                    }
+                        0.0,
+                        [this](const NumericInputReturn& rc) {
+                            if (!rc.cancelled) {
+                                m_model->axis1GoToPosition(m_model->fromDisplayUnits(1, rc.value));
+                            }
+                        });
                     break;
                 }
             case key::a2_g:
                 {
                     // Note all motors will be stopped when a dialog is displayed
                     const std::string axisName = m_model->config().read("Axis2Label", "X");
-                    const auto rc = getNumericInput(
+                    getNumericInput(
                         "Go to " + axisName + " absolute position" + unitsSuffix(2),
                         { "Specify a value" },
-                        0.0);
-                    if (!rc.cancelled) {
-                        m_model->axis2GoToPosition(m_model->fromDisplayUnits(2, rc.value));
-                    }
+                        0.0,
+                        [this](const NumericInputReturn& rc) {
+                            if (!rc.cancelled) {
+                                m_model->axis2GoToPosition(m_model->fromDisplayUnits(2, rc.value));
+                            }
+                        });
                     break;
                 }
             case key::a1_r:
@@ -640,13 +654,15 @@ void Controller::processKey(int t)
                     // Relative motion
                     // Note all motors will be stopped when a dialog is displayed
                     const std::string axisName = m_model->config().read("Axis1Label", "Z");
-                    const auto rc = getNumericInput(
+                    getNumericInput(
                         "Go to " + axisName + " relative position" + unitsSuffix(1),
                         { "Specify a RELATIVE offset value" },
-                        0.0);
-                    if (!rc.cancelled) {
-                        m_model->axis1GoToOffset(m_model->fromDisplayUnits(1, rc.value));
-                    }
+                        0.0,
+                        [this](const NumericInputReturn& rc) {
+                            if (!rc.cancelled) {
+                                m_model->axis1GoToOffset(m_model->fromDisplayUnits(1, rc.value));
+                            }
+                        });
                     break;
                 }
             case key::a2_r:
@@ -654,13 +670,15 @@ void Controller::processKey(int t)
                     // Relative motion
                     // Note all motors will be stopped when a dialog is displayed
                     const std::string axisName = m_model->config().read("Axis2Label", "X");
-                    const auto rc = getNumericInput(
+                    getNumericInput(
                         "Go to " + axisName + " relative position" + unitsSuffix(2),
                         { "Specify a RELATIVE offset value" },
-                        0.0);
-                    if (!rc.cancelled) {
-                        m_model->axis2GoToOffset(m_model->fromDisplayUnits(2, rc.value));
-                    }
+                        0.0,
+                        [this](const NumericInputReturn& rc) {
+                            if (!rc.cancelled) {
+                                m_model->axis2GoToOffset(m_model->fromDisplayUnits(2, rc.value));
+                            }
+                        });
                     break;
                 }
             case key::ASTERISK: // shutdown
@@ -698,11 +716,15 @@ void Controller::processKey(int t)
                     for (const auto& tp : threadPitches) {
                         threadVec.push_back(tp.name);
                     }
-                    const auto rc = listPicker("Select thread pitch required", threadVec);
-                    if (rc.has_value()) {
-                        m_model->setThreadPitch(rc.value());
-                        m_model->changeMode(Mode::Threading);
-                    }
+                    listPicker(
+                        "Select thread pitch required",
+                        threadVec,
+                        [this](std::optional<std::size_t> rc) {
+                            if (rc.has_value()) {
+                                m_model->setThreadPitch(rc.value());
+                                m_model->changeMode(Mode::Threading);
+                            }
+                        });
                     break;
                 }
             case key::f2m: // multi-pass mode
@@ -720,12 +742,13 @@ void Controller::processKey(int t)
                               "in Mem 2, before using Multi-pass mode",
                               "",
                               "Press a key",
-                              "" });
+                              "" },
+                            [] {});
                         break;
                     }
                     const std::string axis1Name = m_model->config().read("Axis1Label", "Z");
                     const std::string axis2Name = m_model->config().read("Axis2Label", "X");
-                    const auto rc = getNumericInput(
+                    getNumericInput(
                         "Multi-pass",
                         { "Enter the " + axis2Name + " step-over per pass" + unitsSuffix(2) + ".",
                           "",
@@ -738,14 +761,17 @@ void Controller::processKey(int t)
                           "",
                           "[&P]: pause between passes (Enter continues)",
                           "[&R] retract between passes" },
-                        0.0);
-                    if (!rc.cancelled) {
-                        m_model->changeMode(Mode::MultiPass);
-                        m_model->setMultiPassOptions(
-                            { .feedPerPass = std::abs(m_model->fromDisplayUnits(2, rc.value)),
-                              .pause = rc.optionsSelected.contains('p'),
-                              .retract = rc.optionsSelected.contains('r') });
-                    }
+                        0.0,
+                        [this](const NumericInputReturn& rc) {
+                            if (!rc.cancelled) {
+                                m_model->changeMode(Mode::MultiPass);
+                                m_model->setMultiPassOptions(
+                                    { .feedPerPass
+                                      = std::abs(m_model->fromDisplayUnits(2, rc.value)),
+                                      .pause = rc.optionsSelected.contains('p'),
+                                      .retract = rc.optionsSelected.contains('r') });
+                            }
+                        });
                     break;
                 }
             case key::f2p: // taper mode
@@ -755,11 +781,13 @@ void Controller::processKey(int t)
                     }
                     // As with all dialogs, stop all motors first
                     m_model->stopAllMotors();
-                    const auto angle = m_view->getTaperAngle(m_model->getTaperAngle());
-                    if (angle) {
-                        m_model->setTaperAngle(*angle);
-                        m_model->changeMode(Mode::Taper);
-                    }
+                    m_view->openTaperDialog(
+                        m_model->getTaperAngle(), [this](std::optional<double> angle) {
+                            if (angle) {
+                                m_model->setTaperAngle(*angle);
+                                m_model->changeMode(Mode::Taper);
+                            }
+                        });
                     break;
                 }
             case key::f2r: // X retraction setup
@@ -767,15 +795,15 @@ void Controller::processKey(int t)
                     if (m_model->config().readBool("DisableAxis2", false)) {
                         break;
                     }
-                    const auto rc = listPicker(
-                        "Choose retraction direction", { "Normal (outwards)", "Boring (inwards)" });
-                    if (rc.has_value()) {
-                        if (rc.value() == 0) {
-                            m_model->setRetractionDirection(XDirection::Outwards);
-                        } else {
-                            m_model->setRetractionDirection(XDirection::Inwards);
-                        }
-                    }
+                    listPicker(
+                        "Choose retraction direction",
+                        { "Normal (outwards)", "Boring (inwards)" },
+                        [this](std::optional<std::size_t> rc) {
+                            if (rc.has_value()) {
+                                m_model->setRetractionDirection(
+                                    rc.value() == 0 ? XDirection::Outwards : XDirection::Inwards);
+                            }
+                        });
                     break;
                 }
             case key::f2o: // Radius mode
@@ -785,7 +813,7 @@ void Controller::processKey(int t)
                     }
                     const std::string axis1Name = m_model->config().read("Axis1Label", "Z");
                     const std::string axis2Name = m_model->config().read("Axis2Label", "X");
-                    const auto rc = getNumericInput(
+                    getNumericInput(
                         "Enter radius value required" + unitsSuffix(1) + ":",
                         { "Important! Ensure the tool is at the radius of the workpiece,",
                           "near the end, and set axes to ZERO (this drives the operation).",
@@ -800,55 +828,63 @@ void Controller::processKey(int t)
                               axis1Name),
                           "Memorising the new zero position each time will make returning "
                           "easier." },
-                        m_model->toDisplayUnits(1, m_model->getRadius()));
-                    if (!rc.cancelled) {
-                        m_model->setRadius(m_model->fromDisplayUnits(1, rc.value));
-                        m_model->changeMode(Mode::Radius);
-                    }
+                        m_model->toDisplayUnits(1, m_model->getRadius()),
+                        [this](const NumericInputReturn& rc) {
+                            if (!rc.cancelled) {
+                                m_model->setRadius(m_model->fromDisplayUnits(1, rc.value));
+                                m_model->changeMode(Mode::Radius);
+                            }
+                        });
                     break;
                 }
             case key::a1_s: // Axis1 position set
                 {
                     const std::string axisName = m_model->config().read("Axis1Label", "Z");
-                    const auto result = getNumericInput(
+                    getNumericInput(
                         axisName + " position set" + unitsSuffix(1),
                         { "[&A] adjust (keeps memory slots)" },
-                        0.0);
-                    if (!result.cancelled) {
-                        m_model->setAxis1Position(m_model->fromDisplayUnits(1, result.value));
-                        // This will invalidate any memorised Z positions, so we clear them
-                        // unless the user specified not to with 'A'
-                        if (!result.optionsSelected.contains('a')) {
-                            m_model->clearAllAxis1Memories();
-                        }
-                    }
+                        0.0,
+                        [this](const NumericInputReturn& result) {
+                            if (result.cancelled) {
+                                return;
+                            }
+                            m_model->setAxis1Position(m_model->fromDisplayUnits(1, result.value));
+                            // This will invalidate any memorised Z positions, so we clear them
+                            // unless the user specified not to with 'A'
+                            if (!result.optionsSelected.contains('a')) {
+                                m_model->clearAllAxis1Memories();
+                            }
+                        });
                     break;
                 }
             case key::a2_s: // Axis2 position set
                 {
                     // Note all motors will be stopped when a dialog is displayed
                     const std::string axisName = m_model->config().read("Axis2Label", "X");
-                    auto result = getNumericInput(
+                    getNumericInput(
                         axisName + " position set" + unitsSuffix(2),
                         { "[&D] set as diameter", "[&A] adjusts (keeps memory slots)" },
-                        0.0);
-                    if (!result.cancelled) {
-                        double position = m_model->fromDisplayUnits(2, result.value);
-                        const bool diameter = result.optionsSelected.contains('d');
-                        if (diameter) {
-                            position /= 2;
-                        }
-                        m_model->setAxis2Position(position);
-                        // (After setting the position, which clears any diameter)
-                        if (diameter) {
-                            m_model->diameterIsSet();
-                        }
-                        // This will invalidate any memorised X positions, so we clear them
-                        // unless the user specified not to with 'A'
-                        if (!result.optionsSelected.contains('a')) {
-                            m_model->clearAllAxis2Memories();
-                        }
-                    }
+                        0.0,
+                        [this](const NumericInputReturn& result) {
+                            if (result.cancelled) {
+                                return;
+                            }
+                            double position = m_model->fromDisplayUnits(2, result.value);
+                            const bool diameter = result.optionsSelected.contains('d');
+                            if (diameter) {
+                                position /= 2;
+                            }
+                            m_model->setAxis2Position(position);
+                            // (After setting the position, which clears any diameter)
+                            if (diameter) {
+                                m_model->diameterIsSet();
+                            }
+                            // This will invalidate any memorised X positions, so we clear them
+                            // unless the user specified not to with 'A'
+                            if (!result.optionsSelected.contains('a')) {
+                                m_model->clearAllAxis2Memories();
+                            }
+                        });
                     break;
                 }
             case key::i: // Input axis 1 memory value directly
@@ -857,22 +893,30 @@ void Controller::processKey(int t)
                 {
                     // Note all motors will be stopped when a dialog is displayed
                     const std::string axisName = m_model->config().read("Axis1Label", "Z");
-                    const auto rc = getNumericInput(
-                        "Enter " + axisName + " memory value" + unitsSuffix(1), {}, 0.0);
-                    if (!rc.cancelled) {
-                        m_model->axis1StorePosition(m_model->fromDisplayUnits(1, rc.value));
-                    }
+                    getNumericInput(
+                        "Enter " + axisName + " memory value" + unitsSuffix(1),
+                        {},
+                        0.0,
+                        [this](const NumericInputReturn& rc) {
+                            if (!rc.cancelled) {
+                                m_model->axis1StorePosition(m_model->fromDisplayUnits(1, rc.value));
+                            }
+                        });
                     break;
                 }
             case key::a2_i: // Input axis 2 memory value directly
                 {
                     // Note all motors will be stopped when a dialog is displayed
                     const std::string axisName = m_model->config().read("Axis2Label", "X");
-                    const auto rc = getNumericInput(
-                        "Enter " + axisName + " memory value" + unitsSuffix(2), {}, 0.0);
-                    if (!rc.cancelled) {
-                        m_model->axis2StorePosition(m_model->fromDisplayUnits(2, rc.value));
-                    }
+                    getNumericInput(
+                        "Enter " + axisName + " memory value" + unitsSuffix(2),
+                        {},
+                        0.0,
+                        [this](const NumericInputReturn& rc) {
+                            if (!rc.cancelled) {
+                                m_model->axis2StorePosition(m_model->fromDisplayUnits(2, rc.value));
+                            }
+                        });
                     break;
                 }
             case key::u: // toggle display units: mm / inches
@@ -1042,11 +1086,13 @@ int Controller::checkForAxisLeaderKeys(int key)
     return key;
 }
 
-NumericInputReturn Controller::getNumericInput(
+void Controller::getNumericInput(
     std::string_view prompt,
     std::vector<std::string> additionalText,
-    double defaultEntry)
+    double defaultEntry,
+    std::function<void(const NumericInputReturn&)> onDone)
 {
+    // (As with all dialogs, stop all motors first)
     m_model->stopAllMotors();
     std::string defaultEntryAsString = std::to_string(defaultEntry);
     // Remove excess trailing zeros after decimal point (if it exists)
@@ -1056,31 +1102,42 @@ NumericInputReturn Controller::getNumericInput(
             defaultEntryAsString += "00";
         }
     }
-    auto rc = m_view->getInput(Input::Type::Numeric, prompt, additionalText, defaultEntryAsString);
-    return { rc.cancelled, rc.number, rc.optionsSelected };
+    m_view->openInput(
+        Input::Type::Numeric,
+        prompt,
+        std::move(additionalText),
+        [onDone = std::move(onDone)](const Input::Return& rc) {
+            onDone({ rc.cancelled, rc.number, rc.optionsSelected });
+        },
+        defaultEntryAsString);
 }
 
-TextInputReturn Controller::getTextInput(
+void Controller::listPicker(
+    std::string_view prompt,
+    std::vector<std::string> listItems,
+    std::function<void(std::optional<std::size_t>)> onDone)
+{
+    m_model->stopAllMotors();
+    m_view->openInput(
+        Input::Type::ListPicker,
+        prompt,
+        {},
+        [onDone = std::move(onDone)](const Input::Return& rc) { onDone(rc.pickedItem); },
+        "",
+        std::move(listItems));
+}
+
+void Controller::pressAnyKey(
     std::string_view prompt,
     std::vector<std::string> additionalText,
-    std::string_view defaultEntry)
+    std::function<void()> onDone)
 {
     m_model->stopAllMotors();
-    const auto rc = m_view->getInput(Input::Type::Text, prompt, additionalText, defaultEntry);
-    return { rc.cancelled, rc.text, rc.optionsSelected };
-}
-
-std::optional<std::size_t>
-Controller::listPicker(std::string_view prompt, std::vector<std::string> listItems)
-{
-    m_model->stopAllMotors();
-    return m_view->getInput(Input::Type::ListPicker, prompt, {}, "", listItems).pickedItem;
-}
-
-void Controller::pressAnyKey(std::string_view prompt, std::vector<std::string> additionalText)
-{
-    m_model->stopAllMotors();
-    m_view->getInput(Input::Type::PressAnyKey, prompt, additionalText, {});
+    m_view->openInput(
+        Input::Type::PressAnyKey,
+        prompt,
+        std::move(additionalText),
+        [onDone = std::move(onDone)](const Input::Return&) { onDone(); });
 }
 
 } // end namespace

@@ -12,9 +12,7 @@ namespace mgo {
 //
 // Note a QApplication must exist before this is initialised. The controller
 // runs on Qt's event loop (runEventLoop()), with a timer calling it to update.
-// Some of the controller's work still blocks inside an update (e.g. waiting
-// for a motor to stop), so getEvents() and updateDisplay() also process Qt's
-// pending events, to keep the window responsive meanwhile.
+// Dialogs don't block: they're window modal, and call back when closed.
 class ViewQt final : public IView {
 public:
     ViewQt();
@@ -24,13 +22,17 @@ public:
     void runEventLoop(std::chrono::milliseconds interval, std::function<void()> tick) override;
     void quitEventLoop() override;
     int getEvents() override;
-    Input::Return getInput(
+    void openInput(
         Input::Type type,
         std::string_view prompt,
         std::vector<std::string> additionalText,
+        std::function<void(const Input::Return&)> onDone,
         std::string_view defaultEntry = "",
         std::optional<std::vector<std::string>> listItems = std::nullopt) override;
-    std::optional<double> getTaperAngle(double currentAngle) override;
+    void openTaperDialog(
+        double currentAngle, std::function<void(std::optional<double>)> onDone) override;
+    bool isDialogOpen() const override;
+    void cancelDialog() override;
     void updateDisplay(const Model&) override;
     void setMenu(const Menu* menu) override;
 

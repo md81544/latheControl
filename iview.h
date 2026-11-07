@@ -45,7 +45,9 @@ public:
     virtual void quitEventLoop() = 0;
     // keypresses should be returned as ASCII codes. Should not block.
     virtual int getEvents() = 0;
-    // getInput should be able to handle text entry, number entry,
+    // Opens a dialog, without waiting for it: onDone is called with the
+    // result when the user closes it. Only one dialog can be open at a time.
+    // It should be able to handle text entry, number entry,
     // selecting one option from a list, and a simple "Press a key
     // to continue". The user should be able to select options when
     // entering text or numbers.
@@ -55,16 +57,22 @@ public:
     // then "Hello" is displayed and an option (say) can be checked
     // or acted upon by the user pressing a modifier (e.g. Alt) and H
     // (in this example).
-    virtual Input::Return getInput(
+    virtual void openInput(
         Input::Type type,
         std::string_view prompt,
         std::vector<std::string> additionalText,
+        std::function<void(const Input::Return&)> onDone,
         std::string_view defaultEntry = "",
         std::optional<std::vector<std::string>> listItems = std::nullopt
     ) = 0;
-    // The taper mode dialog: returns the taper angle chosen (negative if the
-    // piece gets wider towards the chuck), or nullopt if cancelled
-    virtual std::optional<double> getTaperAngle(double currentAngle) = 0;
+    // The taper mode dialog (also without waiting): onDone gets the taper
+    // angle chosen (negative if the piece gets wider towards the chuck), or
+    // nullopt if cancelled
+    virtual void openTaperDialog(
+        double currentAngle, std::function<void(std::optional<double>)> onDone) = 0;
+    virtual bool isDialogOpen() const = 0;
+    // Closes the open dialog (if any) as if cancelled, calling its onDone
+    virtual void cancelDialog() = 0;
     virtual void updateDisplay(const Model&) = 0;
     // The menu to draw (when it's open) on each updateDisplay(). Not owned;
     // must outlive the view, or be reset to nullptr

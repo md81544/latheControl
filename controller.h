@@ -17,12 +17,6 @@ struct NumericInputReturn {
     std::set<char> optionsSelected;
 };
 
-struct TextInputReturn {
-    bool cancelled;
-    std::string value;
-    std::set<char> optionsSelected;
-};
-
 class Controller {
 public:
     explicit Controller(Model* model);
@@ -56,19 +50,22 @@ private:
     int processModeInputKeys(int key);
     int processLeaderKeyModeKeyPress(int key);
     int checkForAxisLeaderKeys(int key);
-    // While the view's getInput() is multi-functional, for
-    // ease of use we specialise calls to it by these functions.
-    NumericInputReturn getNumericInput(
+    // Wrappers for the view's dialogs, which don't wait: onDone is called
+    // with the result when the user closes the dialog. (Until then, the
+    // controller's ticks carry on.) All motors are stopped first
+    void getNumericInput(
         std::string_view prompt,
         std::vector<std::string> additionalText,
-        double defaultEntry);
-    TextInputReturn getTextInput(
+        double defaultEntry,
+        std::function<void(const NumericInputReturn&)> onDone);
+    void listPicker(
+        std::string_view prompt,
+        std::vector<std::string> listItems,
+        std::function<void(std::optional<std::size_t>)> onDone);
+    void pressAnyKey(
         std::string_view prompt,
         std::vector<std::string> additionalText,
-        std::string_view defaultEntry = "");
-    std::optional<std::size_t>
-    listPicker(std::string_view prompt, std::vector<std::string> listItems);
-    void pressAnyKey(std::string_view prompt, std::vector<std::string> additionalText);
+        std::function<void()> onDone);
 };
 
 } // end namespace
