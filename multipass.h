@@ -53,8 +53,10 @@ struct MultiPassPlan {
     bool pause { false };
 };
 
-// A series of cuts: cut, (retract,) return, (pause,) (unretract,) feed on,
+// A series of cuts: cut, (retract,) return, (unretract,) (pause,) feed on,
 // and repeat until a cut has been made at the feed axis's end position.
+// While paused, a motorised feed axis may be moved (e.g. nudged): the next
+// pass then feeds on from where it is.
 // Non-blocking: call update() regularly (e.g. on each tick), and it starts
 // the next move when the last has finished.
 //
@@ -97,7 +99,8 @@ public:
     bool inProgress() const;
     // The pass being made (from 1), or 0 if not started
     int pass() const;
-    // The number of passes in all, or 0 if repeating until stopped
+    // The number of passes in all, or 0 if repeating until stopped. (May
+    // change if the feed axis is moved while paused)
     int totalPasses() const;
     // How far the feed axis has been fed on since the first pass (for the
     // pass being made, or about to be)
@@ -111,10 +114,14 @@ public:
 
 private:
     bool isLastPass() const;
-    double nextFeedTarget() const;
+    // Where the next step on starts from: the feed axis's position (or, for
+    // a manual feed, where it should be)
+    double feedBase() const;
+    double nextFeedTarget(double from) const;
     void startCut();
     void startReturn();
     void afterReturn();
+    void readyForNextPass();
     void startNextPass();
     void startFeed();
     void finish();

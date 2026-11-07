@@ -480,7 +480,7 @@ TEST_CASE("UI: menu through the controller")
     press(w, controller, Qt::Key_M);
     press(w, controller, Qt::Key_H);
     REQUIRE(!controller.isMenuOpen());
-    REQUIRE(tm.model.getEnabledFunction() == mgo::Mode::Taper);
+    REQUIRE(tm.model.getMode() == mgo::Mode::Taper);
     REQUIRE(tm.model.getTaperAngle() == -45.0);
 
     // F1 (help) opens and closes the menu too
@@ -525,7 +525,7 @@ TEST_CASE("UI: taper dialog through the controller")
     });
     press(w, controller, Qt::Key_F2);
     press(w, controller, Qt::Key_P);
-    REQUIRE(tm.model.getEnabledFunction() == mgo::Mode::Taper);
+    REQUIRE(tm.model.getMode() == mgo::Mode::Taper);
     REQUIRE(tm.model.getTaperAngle() == Approx(1.4307));
 }
 
@@ -562,6 +562,24 @@ TEST_CASE("UI: taper dialog")
     // ...or a custom angle
     whenDialogShows([](QWidget* dialog) { QTest::keyClick(inputWidget(dialog), Qt::Key_Return); });
     REQUIRE(getTaperAngle(view, 7.25) == Approx(7.25));
+}
+
+TEST_CASE("UI: quick chamfer")
+{
+    // H: a 45 degree taper, in taper mode as from the taper dialog (so, e.g.,
+    // leaving it restores X's speed)
+    TestModel tm;
+    mgo::Controller controller(&tm.model);
+    QWidget* w = mainWindow();
+    REQUIRE(w);
+    tm.model.setAxis2MotorSpeed(37.0);
+    press(w, controller, Qt::Key_H);
+    REQUIRE(tm.model.getMode() == mgo::Mode::Taper);
+    REQUIRE(tm.model.getTaperAngle() == Approx(-45.0));
+    tm.model.setAxis2MotorSpeed(100.0);
+    press(w, controller, Qt::Key_Escape);
+    REQUIRE(tm.model.getMode() == mgo::Mode::None);
+    REQUIRE(tm.model.getAxis2MotorSpeed() == Approx(37.0));
 }
 
 TEST_CASE("UI: thread dialog")
@@ -634,7 +652,7 @@ TEST_CASE("UI: choosing a thread through the controller")
     });
     press(w, controller, Qt::Key_F2);
     press(w, controller, Qt::Key_T);
-    REQUIRE(tm.model.getEnabledFunction() == mgo::Mode::Threading);
+    REQUIRE(tm.model.getMode() == mgo::Mode::Threading);
     REQUIRE(tm.model.getThread()->name == tm.model.getThreads().at(0).threads.at(0).name);
     REQUIRE(tm.model.getThreadChoice().female);
     REQUIRE(tm.model.getRetractionDirection() == mgo::XDirection::Inwards);
@@ -791,7 +809,7 @@ TEST_CASE("UI: multi-pass through the controller")
     });
     press(w, controller, Qt::Key_F2);
     press(w, controller, Qt::Key_M);
-    REQUIRE(tm.model.getEnabledFunction() == mgo::Mode::MultiPass);
+    REQUIRE(tm.model.getMode() == mgo::Mode::MultiPass);
     REQUIRE(tm.model.getMultiPassOptions().feedPerPass == Approx(0.01));
     REQUIRE(!tm.model.multiPass().inProgress());
 

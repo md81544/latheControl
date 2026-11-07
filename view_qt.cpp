@@ -922,8 +922,8 @@ void ViewQt::updateDisplay(const Model& model)
         draw(d.generalStatus);
         draw(d.warning);
         draw(d.notification);
-        if (model.getEnabledFunction() == Mode::Taper
-            || model.getEnabledFunction() == Mode::Radius) {
+        if (model.getMode() == Mode::Taper
+            || model.getMode() == Mode::Radius) {
             draw(d.taperOrRadius);
         }
         if (model.getRetractionDirection() == XDirection::Inwards) {
@@ -953,7 +953,7 @@ void ViewQt::updateDisplay(const Model& model)
         } else {
             d.axis2MemoryLabel.colour = QColor(128, 128, 128);
         }
-        if (model.getCurrentDisplayMode() != Mode::None) {
+        if (model.getMode() != Mode::None) {
             draw(d.mode);
         }
         draw(d.misc1);
@@ -1011,7 +1011,7 @@ void ViewQt::Impl::updateTextFromModel(const Model& model)
         model.toDisplayUnits(1, model.getAxis1MotorPosition()), model.axisDecimals(1));
 
     // (When threading, Z's speed is set by the spindle's)
-    const double axis1Speed = model.getEnabledFunction() == Mode::Threading
+    const double axis1Speed = model.getMode() == Mode::Threading
         ? model.getThreadingZSpeed()
         : model.getAxis1MotorSpeed();
     this->axis1Speed.text = fmt::format(
@@ -1056,9 +1056,9 @@ void ViewQt::Impl::updateTextFromModel(const Model& model)
         = fmt::format("{}: {}", model.config().read("Axis1Label", "Z"), model.getAxis1Status());
     axis2Status.text
         = fmt::format("{}: {}", model.config().read("Axis2Label", "X"), model.getAxis2Status());
-    if (model.getEnabledFunction() == Mode::Taper) {
+    if (model.getMode() == Mode::Taper) {
         taperOrRadius.text = fmt::format("Angle: {}", model.getTaperAngle());
-    } else if (model.getEnabledFunction() == Mode::Radius) {
+    } else if (model.getMode() == Mode::Radius) {
         taperOrRadius.text = fmt::format(
             "Radius: {} {}", model.toDisplayUnits(1, model.getRadius()), model.axisUnitName(1));
     }
@@ -1096,7 +1096,7 @@ void ViewQt::Impl::updateTextFromModel(const Model& model)
         }
     }
 
-    switch (model.getEnabledFunction()) {
+    switch (model.getMode()) {
         case Mode::Threading:
             notification.text = "THREADING";
             break;
@@ -1113,11 +1113,7 @@ void ViewQt::Impl::updateTextFromModel(const Model& model)
             notification.text = "";
     }
 
-    switch (model.getCurrentDisplayMode()) {
-        // The following are all handled now by the new dialog:
-        case Mode::Taper:
-        case Mode::Radius:
-            break;
+    switch (model.getMode()) {
         case Mode::MultiPass:
             {
                 updateMultiPassData(model);
@@ -1154,6 +1150,9 @@ void ViewQt::Impl::updateTextFromModel(const Model& model)
                 }
                 break;
             }
+        // (The taper angle or radius is shown by taperOrRadius)
+        case Mode::Taper:
+        case Mode::Radius:
         case Mode::None:
             {
                 mode.text = "";
@@ -1172,10 +1171,6 @@ void ViewQt::Impl::updateTextFromModel(const Model& model)
             {
                 assert(false);
             }
-    }
-    // Finally keep threading data on screen if in threading mode
-    if (model.getEnabledFunction() == Mode::Threading) {
-        updateThreadData(model);
     }
 }
 
@@ -1222,7 +1217,7 @@ void ViewQt::Impl::updateMultiPassData(const Model& model)
         case MultiPass::State::Paused:
             misc2.text = mp.plan().feedManual
                 ? fmt::format("{} done: feed {} by {}, then press Enter", pass, x, xLength(mp.nextFeed()))
-                : pass + " done: press Enter for the next";
+                : pass + " done: press Enter for the next (" + x + " can be nudged)";
             break;
         case MultiPass::State::Unretracting:
             misc2.text = pass + ": unretracting";

@@ -80,15 +80,17 @@
       a 45 degree chamfer (so a taper's backlash take-up as a sequence) all
       worked. Not specifically tried yet: holding keys back during a nudge
       (and Space stopping one), and closing the window with a dialog open
-- [ ] Address the "Mode" concept, which provides pseudo-modal "dialogs"
+- [x] Address the "Mode" concept, which provides pseudo-modal "dialogs"
       interleaved into program flow and is difficult to maintain. If all
       motors are stopped during a dialog, they can all go on a separate flow
-    - **Partly done:** the dialogs are now on a separate flow (above). What's
-      left is the mode state itself: the model has both
-      `m_currentDisplayMode` and `m_enabledFunction` (set separately in
-      places, e.g. quick chamfer), and the controller's
-      `processModeInputKeys()` is marked for deletion. Worth tidying when a
-      mode next needs work
+    - **Done:** the dialogs are on a separate flow (above), and the mode is
+      now one value in the model (`getMode()`), only set by `changeMode()`.
+      That fixed quick chamfer (H), which set the mode without
+      `changeMode()`, so didn't turn ramping off (X is synchronised to Z in
+      a taper) or save X's speed to restore afterwards; and taper and radius
+      modes left the previous mode's text on screen. Leaving threading
+      resets Z's speed in `changeMode()`, however it's left (was
+      `processModeInputKeys()`, now removed)
 
 ## Multi-pass (experimental)
 - [ ] Try the rewritten multi-pass on the machine.
@@ -97,7 +99,7 @@
       model's `checkStatus()`, and works through an `IMultiPassMachine`
       (the model; the unit tests use a fake). A plan is: cut from a start to
       an end on the cut axis (axis 1), then optionally retract, return at
-      full speed, optionally pause (Enter continues), unretract, and feed
+      full speed, unretract, optionally pause (Enter continues), and feed
       on (axis 2) by a step towards its end position, until a cut has been
       made there. The last step may be smaller, to end exactly there. A
       feed of zero repeats the same cut until stopped. The feed can also be
@@ -117,24 +119,51 @@
       Could also work if only one axis is defined in config (the engine's
       manual feed, or a feed of zero, would do the sequencing). At the
       moment Mem 1 and Mem 2 with the same X give a single pass
-- [ ] Automation of a repeated cut: cut from Mem 1 to Mem 2, fast return,
+- [x] Automation of a repeated cut: cut from Mem 1 to Mem 2, fast return,
       wait for a key press, and repeat until cancelled (to make repeated cuts
-      down to depth easier). Multi-pass with a step-over of zero and "pause"
-      now does this, but the operator can't nudge in while it's paused (axis
-      moves are blocked). Allowing a nudge of X while paused, taken as the
-      new depth, would complete it. Potentially this could work with
-      threading too, currently the operator has to (a) move to a location,
-      (b) fast return to a second location, (c) nudge in a little and
-      repeat. This could be automated to simply (a) nudge and press a key,
-      and it repeats the cut and return. Best after the electronic
-      leadscrew work, as each threading pass must start at the same spindle
-      angle
+      down to depth easier)
+    - **Done:** multi-pass with a step-over of zero and "pause". While it's
+      paused, X can be nudged (W/S, not the Alt nudges, as releasing Alt
+      stops everything), and the next pass cuts from there; with a
+      step-over, the next pass steps over from there. X is now unretracted
+      before the pause (at the start of the cut, clear of the work), so it
+      shows the position cut at, and can be nudged
+- [ ] The same for threading: at the moment the operator has to (a) move to
+      a location, (b) fast return to a second location, (c) nudge in a
+      little and repeat. This could be automated to simply (a) nudge and
+      press a key, and it repeats the cut and return. Each pass starts at
+      the same spindle angle now (the electronic leadscrew), so a threading
+      multi-pass could use the multi-pass engine, with the threading pass as
+      its cut
 
 ## Motion and timing (mostly in stepperControl)
 - [ ] Deceleration ramping. At the moment there's only acceleration, so
       stops (especially from rapids) are abrupt. Needs tuning on the machine,
       and changes where moves end. Also, the ramp rate is per loop, so depends
       on the step rate
+    - **Only for moves to a known target** (go to, memory returns, fast
+      returns, multi-pass returns), planned to end exactly on the target.
+      Stops the operator makes (releasing a rapid, Space, pressing a move's
+      key again) must stay instant: a ramped stop there runs on after the key
+      is released (speed² ÷ (2 × deceleration), e.g. about 0.5mm for X at
+      1000 mm/min), which would overshoot when rapiding up to the work.
+      Configurable per axis, off by default
+    - **First, a physical test (to do), to see whether it's needed at all:**
+      a dial indicator on the cross slide, reading X's movement. Compare it
+      with the display after each of: nudges in and out; retract and
+      unretract; a rapid away then a return to a memory slot; a fast return
+      (X F); and a long move at full speed. Repeat each a few times, and
+      approach the same point from both directions
+        - The indicator always agrees with the display: X's positioning is
+          fine, and the differences when sizing work come from cutting
+          (deflection / spring). Ramping isn't worth doing
+        - Out by a consistent amount after a change of direction: X's
+          backlash compensation (`Axis2BacklashCompensationSteps`) is off;
+          re-measure it in Setup mode (F2 S)
+        - Wanders after fast or long moves: steps are being lost, so ramping
+          (or a lower maximum X speed) is worth doing
+    - Related idea, for sizing: after setting the measured diameter, type the
+      target diameter and X moves straight to it
 - [ ] Sleep between steps at slow speeds, rather than busy-waiting. Needs the
       wake-up latency measuring on the Pi first, as thread pitch depends on
       step timing. (Idle motors can sleep, but on the lathe they're set to
@@ -366,9 +395,12 @@
     - axes should just be a collection of axis types
     - specific axes which require specialised behaviour can have attributes,
       perhaps (e.g. retraction). Determine which behaviour needs extracting
-- [ ] `axis.cpp` / `axis.h` are compiled but unused, and their `mgo::Axis`
+- [x] `axis.cpp` / `axis.h` are compiled but unused, and their `mgo::Axis`
       class clashes in name with `enum class mgo::Axis` in model.h
-- [ ] Set the initial X-axis retraction direction from the config file
+    - **Done:** removed (they're in git's history, if the "array of axes"
+      idea below wants them)
+- [x] Set the initial X-axis retraction direction from the config file
+    - **Done:** `Axis2RetractionDirection` (outwards or inwards) in lc.cfg
 
 ## Miscellaneous
 - [x] Add ability to add new thread pitches without recompilation. Move the

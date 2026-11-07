@@ -110,7 +110,7 @@ void MultiPass::update()
             return;
         case State::Unretracting:
             if (!feedMoving) {
-                startFeed();
+                readyForNextPass();
             }
             return;
         case State::Feeding:
@@ -151,9 +151,12 @@ int MultiPass::totalPasses() const
     if (m_plan.feedPerPass < TOLERANCE) {
         return 0;
     }
-    const double distance = std::abs(m_plan.feedEnd - m_plan.feedStart);
+    // The passes so far, and those still to go from this pass's position (so
+    // a nudge while paused can change the number)
+    const double remaining = std::abs(m_plan.feedEnd - m_feedTarget);
     // (Less the tolerance, so that rounding doesn't add a pass of nothing)
-    return 1 + static_cast<int>(std::ceil(std::max(0.0, distance - TOLERANCE) / m_plan.feedPerPass));
+    return std::max(1, m_pass)
+        + static_cast<int>(std::ceil(std::max(0.0, remaining - TOLERANCE) / m_plan.feedPerPass));
 }
 
 double MultiPass::fed() const
@@ -163,7 +166,8 @@ double MultiPass::fed() const
 
 double MultiPass::nextFeed() const
 {
-    return std::abs(nextFeedTarget() - m_feedTarget);
+    const double from = feedBase();
+    return std::abs(nextFeedTarget(from) - from);
 }
 
 const std::string& MultiPass::message() const
@@ -178,14 +182,19 @@ const MultiPassPlan& MultiPass::plan() const
 
 bool MultiPass::isLastPass() const
 {
-    const int total = totalPasses();
-    return total != 0 && m_pass >= total;
+    return m_plan.feedPerPass >= TOLERANCE && near(m_feedTarget, m_plan.feedEnd);
 }
 
-double MultiPass::nextFeedTarget() const
+double MultiPass::feedBase() const
+{
+    // (A motorised feed axis may have been nudged while paused)
+    return m_plan.feedManual ? m_feedTarget : m_machine.feedPosition();
+}
+
+double MultiPass::nextFeedTarget(double from) const
 {
     const double direction = m_plan.feedEnd < m_plan.feedStart ? -1.0 : 1.0;
-    const double target = m_feedTarget + direction * m_plan.feedPerPass;
+    const double target = from + direction * m_plan.feedPerPass;
     // (Not past the end)
     if ((direction > 0.0 && target > m_plan.feedEnd) || (direction < 0.0 && target < m_plan.feedEnd)) {
         return m_plan.feedEnd;
@@ -215,6 +224,19 @@ void MultiPass::afterReturn()
         finish();
         return;
     }
+    // Unretract now, at the start of the cut (which is clear of the work),
+    // so that while paused, the feed axis shows where this pass cut, and can
+    // be nudged
+    if (m_machine.isRetracted()) {
+        m_machine.retract(); // (i.e. unretract)
+        m_state = State::Unretracting;
+        return;
+    }
+    readyForNextPass();
+}
+
+void MultiPass::readyForNextPass()
+{
     if (m_plan.pause || m_plan.feedManual) {
         m_state = State::Paused;
         return;
@@ -224,13 +246,10 @@ void MultiPass::afterReturn()
 
 void MultiPass::startNextPass()
 {
-    m_feedTarget = nextFeedTarget();
+    // On by a step from where the feed axis is now (so if it was nudged while
+    // paused, that's added to the step)
+    m_feedTarget = nextFeedTarget(feedBase());
     ++m_pass;
-    if (m_machine.isRetracted()) {
-        m_machine.retract(); // (i.e. unretract)
-        m_state = State::Unretracting;
-        return;
-    }
     startFeed();
 }
 

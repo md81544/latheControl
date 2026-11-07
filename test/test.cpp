@@ -91,16 +91,21 @@ bool waitFor(F condition, std::chrono::milliseconds limit = std::chrono::millise
 
 // Runs the model's updates (as the controller's tick does) until any motion
 // sequence (e.g. a taper's backlash take-up) has finished and both motors
-// have stopped. Returns false if that took too long
+// have stopped, as seen on two updates in a row. (An axis synchronised to
+// another, as X is in a taper, can be stopped for a moment between its moves
+// while still catching up.) Returns false if that took too long
 bool runUntilStopped(mgo::Model& model)
 {
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+    bool stoppedBefore = false;
     for (;;) {
         model.checkStatus();
-        if (!model.isMotionSequenceRunning() && !model.isAxis1MotorRunning()
-            && !model.isAxis2MotorRunning()) {
+        const bool stopped = !model.isMotionSequenceRunning() && !model.isAxis1MotorRunning()
+            && !model.isAxis2MotorRunning();
+        if (stopped && stoppedBefore) {
             return true;
         }
+        stoppedBefore = stopped;
         if (std::chrono::steady_clock::now() > deadline) {
             return false;
         }
@@ -1008,11 +1013,11 @@ TEST_CASE("Commands: keys allowed in the current mode")
     model.initialise();
     REQUIRE(mgo::keyAllowedInCurrentMode(mgo::key::a1_g, model));
     // In Setup mode, only motion and stop keys (and Esc etc) are allowed
-    model.setCurrentDisplayMode(mgo::Mode::Setup);
+    model.changeMode(mgo::Mode::Setup);
     REQUIRE(!mgo::keyAllowedInCurrentMode(mgo::key::a1_g, model));
     REQUIRE(mgo::keyAllowedInCurrentMode(mgo::key::LEFT, model));
     REQUIRE(mgo::keyAllowedInCurrentMode(mgo::key::ESC, model));
-    model.setCurrentDisplayMode(mgo::Mode::None);
+    model.changeMode(mgo::Mode::None);
     // No X motion while X is retracted
     model.setIsAxis2Retracted(true);
     REQUIRE(!mgo::keyAllowedInCurrentMode(mgo::key::UP, model));
@@ -1118,7 +1123,7 @@ TEST_CASE("Menu: hotkeys")
     menu.handleKey(mgo::key::ESC, model);
     menu.open();
     menu.handleKey(mgo::key::m, model);
-    model.setCurrentDisplayMode(mgo::Mode::Setup); // only motion allowed
+    model.changeMode(mgo::Mode::Setup); // only motion allowed
     REQUIRE(menu.handleKey(mgo::key::t, model).type == Type::None);
     REQUIRE(menu.isOpen());
     REQUIRE(menu.selection() == 0);
@@ -1688,8 +1693,9 @@ TEST_CASE("MultiPass: pausing between passes")
     REQUIRE(mp.state() == mgo::MultiPass::State::Paused);
     mp.continueAfterPause();
     machine.run(mp);
+    REQUIRE(mp.state() == mgo::MultiPass::State::Paused);
+    REQUIRE(mp.nextFeed() == Approx(0.05)); // (the last step: smaller, to end at 4.75)
     mp.continueAfterPause();
-    REQUIRE(mp.nextFeed() == Approx(0.0)); // (the last pass: no more to feed)
     machine.run(mp);
     // (No pause after the last pass)
     REQUIRE(mp.state() == mgo::MultiPass::State::Finished);
@@ -2149,4 +2155,141 @@ TEST_CASE("Model:   choosing a thread")
     // No threads: none chosen
     model.setThreads({});
     REQUIRE(model.getThread() == nullptr);
+}
+
+TEST_CASE("MultiPass: unretracts before pausing")
+{
+    FakeMultiPassMachine machine;
+    mgo::MultiPass mp(machine);
+    auto plan = basicPlan();
+    plan.retract = true;
+    plan.pause = true;
+    REQUIRE(mp.start(plan).empty());
+    machine.run(mp);
+    REQUIRE(mp.state() == mgo::MultiPass::State::Paused);
+    // (So the feed axis shows where the pass cut, and can be nudged)
+    REQUIRE(machine.log == Log { "cut -10 at 40", "retract", "cut 0 at 1000", "unretract" });
+    REQUIRE(!machine.isRetracted());
+    REQUIRE(machine.feedPosition() == Approx(5.0));
+}
+
+TEST_CASE("MultiPass: moving the feed axis while paused")
+{
+    FakeMultiPassMachine machine;
+    mgo::MultiPass mp(machine);
+    auto plan = basicPlan();
+    plan.pause = true;
+
+    // With a step-over: the next pass steps on from where it was moved to
+    REQUIRE(mp.start(plan).empty());
+    machine.run(mp);
+    REQUIRE(mp.totalPasses() == 4);
+    machine.m_feed = 4.95; // (nudged in 0.05)
+    REQUIRE(mp.nextFeed() == Approx(0.1));
+    mp.continueAfterPause();
+    REQUIRE(machine.log.back() == "feed 4.85");
+    REQUIRE(mp.fed() == Approx(0.15));
+    // (One fewer pass to go now)
+    REQUIRE(mp.totalPasses() == 3);
+    machine.run(mp);
+    mp.continueAfterPause();
+    machine.run(mp);
+    REQUIRE(mp.state() == mgo::MultiPass::State::Finished);
+    REQUIRE(machine.feedPosition() == Approx(4.75));
+
+    // With no step-over (repeating a cut): each pass is where it was moved to,
+    // e.g. nudging in a little each time
+    machine.log.clear();
+    machine.m_feed = 5.0;
+    plan.feedPerPass = 0.0;
+    REQUIRE(mp.start(plan).empty());
+    for (const double depth : { 4.98, 4.96 }) {
+        machine.run(mp);
+        REQUIRE(mp.state() == mgo::MultiPass::State::Paused);
+        machine.m_feed = depth;
+        mp.continueAfterPause();
+        REQUIRE(mp.state() == mgo::MultiPass::State::Cutting);
+        REQUIRE(mp.fed() == Approx(5.0 - depth));
+    }
+    for (const auto& entry : machine.log) {
+        REQUIRE(entry.starts_with("cut")); // (no feed moves of its own)
+    }
+    mp.stop("stopped");
+}
+
+TEST_CASE("Model:   nudging X while a multi-pass is paused")
+{
+    mgo::MockConfigReader config;
+    mgo::MockGpio gpio(false);
+    mgo::Model model(gpio, config);
+    model.initialise();
+    model.axis1SetSpeed(200.0);
+    model.axis2SetSpeed(100.0);
+    model.axis1StorePosition(0.0);
+    model.axis2StorePosition(0.0);
+    model.selectNextMemorySlot();
+    model.axis1StorePosition(0.2);
+    model.axis2StorePosition(0.05);
+    model.selectPreviousMemorySlot();
+    model.changeMode(mgo::Mode::MultiPass);
+    model.setMultiPassOptions({ .feedPerPass = 0.01, .pause = true, .retract = true });
+    model.multiPassGo();
+    REQUIRE(model.multiPass().inProgress());
+    // Not while cutting...
+    REQUIRE(!mgo::keyAllowedInCurrentMode(mgo::key::w, model));
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+    while (model.multiPass().state() != mgo::MultiPass::State::Paused) {
+        REQUIRE(std::chrono::steady_clock::now() < deadline);
+        model.checkStatus();
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    // ...but while paused (unretracted), X's nudges are allowed, except the
+    // Alt ones (as releasing Alt stops everything)
+    REQUIRE(!model.getIsAxis2Retracted());
+    for (const int k : { mgo::key::w, mgo::key::W, mgo::key::s, mgo::key::S }) {
+        REQUIRE(mgo::keyAllowedInCurrentMode(k, model));
+    }
+    REQUIRE(!mgo::keyAllowedInCurrentMode(mgo::key::AltW, model));
+    REQUIRE(!mgo::keyAllowedInCurrentMode(mgo::key::a, model)); // (nor Z's)
+    model.stopAllMotors();
+}
+
+TEST_CASE("Model:   leaving threading mode resets Z's speed")
+{
+    mgo::MockConfigReader config;
+    mgo::MockGpio gpio(false);
+    mgo::Model model(gpio, config);
+    model.initialise();
+    model.changeMode(mgo::Mode::Threading);
+    model.axis1SetSpeed(500.0);
+    model.changeMode(mgo::Mode::None);
+    REQUIRE(model.getAxis1MotorSpeed() == Approx(40.0)); // (Axis1SpeedPreset2)
+    // (Other modes leave it alone)
+    model.changeMode(mgo::Mode::MultiPass);
+    model.axis1SetSpeed(70.0);
+    model.changeMode(mgo::Mode::None);
+    REQUIRE(model.getAxis1MotorSpeed() == Approx(70.0));
+}
+
+TEST_CASE("Model:   X's retraction direction from the config")
+{
+    mgo::MockGpio gpio(false);
+    {
+        TestConfigReader config({ { "Axis2RetractionDirection", "inwards" } });
+        mgo::Model model(gpio, config);
+        model.initialise();
+        REQUIRE(model.getRetractionDirection() == mgo::XDirection::Inwards);
+    }
+    {
+        TestConfigReader config({ { "Axis2RetractionDirection", "sideways" } });
+        mgo::Model model(gpio, config);
+        model.initialise();
+        REQUIRE(model.getRetractionDirection() == mgo::XDirection::Outwards);
+    }
+    {
+        mgo::MockConfigReader config;
+        mgo::Model model(gpio, config);
+        model.initialise();
+        REQUIRE(model.getRetractionDirection() == mgo::XDirection::Outwards);
+    }
 }

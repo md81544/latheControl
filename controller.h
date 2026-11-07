@@ -47,7 +47,6 @@ private:
     // e.g. " (mm)" or " (in)": the units an axis's values are typed in
     std::string unitsSuffix(int axisNumber) const;
     int checkKeyAllowedForMode(int key);
-    int processModeInputKeys(int key);
     int processLeaderKeyModeKeyPress(int key);
     int checkForAxisLeaderKeys(int key);
     // Wrappers for the view's dialogs, which don't wait: onDone is called

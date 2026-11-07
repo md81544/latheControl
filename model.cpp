@@ -191,6 +191,19 @@ void Model::initialise()
     }
 
     {
+        // Which way X retracts to start with (F2 R changes it, as does
+        // choosing a male or female thread)
+        const std::string direction = m_config.read("Axis2RetractionDirection", "outwards");
+        if (direction == "inwards") {
+            m_xRetractionDirection = XDirection::Inwards;
+        } else if (direction != "outwards") {
+            MGOLOG(fmt::format(
+                "*** Warning *** Axis2RetractionDirection should be outwards or inwards, not "
+                "\"{}\": using outwards",
+                direction));
+        }
+    }
+    {
         const std::string threadsFile = m_config.read("ThreadsFile", "threadpitches.cfg");
         std::vector<std::string> errors;
         m_threads = readThreadsFile(threadsFile, errors);
@@ -260,7 +273,7 @@ void Model::checkStatus()
         return;
     }
 
-    if (m_enabledFunction == Mode::Threading) {
+    if (m_mode == Mode::Threading) {
         threadingCheckSpeed();
         threadingCheckMoveEnded();
     }
@@ -280,12 +293,27 @@ void Model::checkStatus()
             m_axis1FastReturning = false;
             m_axis1RapidInProgress = false;
         }
-        if ((m_enabledFunction == Mode::Taper || m_enabledFunction == Mode::Radius)
-            && m_axis1WasRunning) {
+        // X has caught up with where Z stopped (see below) once it's been
+        // seen stopped on two updates in a row: it can be stopped for a
+        // moment between its synchronised moves while still behind
+        if (m_synchronisedCutEnding && m_axis2Motor->isRunning()) {
+            m_synchronisedCutXStoppedOnce = false;
+        } else if (m_synchronisedCutEnding && !m_synchronisedCutXStoppedOnce) {
+            m_synchronisedCutXStoppedOnce = true;
+        } else if (m_synchronisedCutEnding) {
             // Turn off synchronisation *before* setting the speed, otherwise
             // the motor thread may overwrite our speed with a synchronised one
+            m_synchronisedCutEnding = false;
             axis2SynchroniseOff();
             m_axis2Motor->setSpeed(m_previousAxis2Speed);
+        }
+        if ((m_mode == Mode::Taper || m_mode == Mode::Radius) && m_axis1WasRunning) {
+            // The end of a taper or radius cut. X follows Z in small updates,
+            // so may still be a few steps behind: leave it synchronised until
+            // it's stopped too (on a later update, by when it's had Z's final
+            // position), so it ends exactly on the taper or radius
+            m_synchronisedCutEnding = true;
+            m_synchronisedCutXStoppedOnce = false;
         }
         // (Not during a multi-pass, which sets the speeds itself: the cut
         // speed must be kept from one pass to the next)
@@ -321,7 +349,7 @@ void Model::checkStatus()
             m_axis2FastReturning = false;
             m_axis2RapidInProgress = false;
         }
-        if (!(m_enabledFunction == Mode::Taper) && m_axis2WasRunning && !m_multiPass.inProgress()
+        if (!(m_mode == Mode::Taper) && m_axis2WasRunning && !m_multiPass.inProgress()
             && m_axis2Motor->getSpeed() >= m_config.readDouble("Axis2SpeedResetAbove", 80.0)) {
             // We don't allow faster speeds to "stick" to avoid accidental
             // fast motion after a long fast movement
@@ -331,7 +359,7 @@ void Model::checkStatus()
     } else {
         m_axis2WasRunning = true;
     }
-    if (m_enabledFunction == Mode::Taper || m_enabledFunction == Mode::Radius) {
+    if (m_mode == Mode::Taper || m_mode == Mode::Radius) {
         m_axis2Status = "synchronised";
     }
 
@@ -359,7 +387,7 @@ void Model::checkEncoderLostPulses()
     MGOLOG(fmt::format(
         "*** Rotary encoder lost pulses (none for {} us): spindle position is now wrong",
         m_rotaryEncoder->getLastLostPulseGapMicroseconds()));
-    if (m_enabledFunction == Mode::Threading) {
+    if (m_mode == Mode::Threading) {
         // Every pass from now on would start at a different point of the
         // spindle's rotation from the passes before, i.e. cut a new thread
         m_threadingPositionLost = true;
@@ -430,7 +458,7 @@ void Model::checkMotorFaults()
         // synchronised in a taper, or as part of a multi-pass sequence), and
         // end any automated function, as its positions are now meaningless
         stopAllMotors();
-        if (m_enabledFunction != Mode::None) {
+        if (m_mode != Mode::None) {
             changeMode(Mode::None);
         }
     }
@@ -485,6 +513,9 @@ void Model::changeMode(Mode mode)
         stopAllMotors();
     }
     axis2SynchroniseOff();
+    // (X's speed on leaving a taper is restored below, rather than as at the
+    // end of a cut)
+    m_synchronisedCutEnding = false;
     if (mode == Mode::Threading) {
         // Z must not ramp, as its speed is locked to the spindle's. X isn't
         // synchronised when threading, and does need to ramp: it's an open-loop
@@ -499,15 +530,18 @@ void Model::changeMode(Mode mode)
         m_axis1Motor->enableRamping(true);
         m_axis2Motor->enableRamping(true);
     }
-    if (m_enabledFunction == Mode::Taper && mode != Mode::Taper) {
+    if (m_mode == Mode::Taper && mode != Mode::Taper) {
         m_axis2Motor->setSpeed(m_taperPreviousXSpeed);
+    }
+    if (m_mode == Mode::Threading && mode != Mode::Threading) {
+        // Z's speed was set for threading passes: back to something sane
+        m_axis1Motor->setSpeed(m_config.readDouble("Axis1SpeedPreset2", 40.0));
     }
     m_warning = "";
     m_threadingMoveInProgress = false;
     m_threadingPositionLost = false;
     setThreadingWarning("", false);
-    m_currentDisplayMode = mode;
-    m_enabledFunction = mode;
+    m_mode = mode;
     m_input = "";
 
     if (mode == Mode::Taper) {
@@ -534,6 +568,9 @@ void Model::stopAllMotors()
     // (After stopping, so a sequence's end, e.g. restoring a nudge's speed,
     // doesn't race with a move it started)
     m_motionSequence.cancel();
+    // Otherwise X, synchronised to Z (in a taper or radius), would carry on
+    // following it. (Its speed is still restored when the cut's end is seen)
+    axis2SynchroniseOff();
     m_multiPass.stop("stopped");
     m_axis1Status = "stopped";
     m_axis2Status = "stopped";
@@ -570,6 +607,7 @@ MotionSequence::Step Model::takeUpXBacklashStep(int stepAdd)
 
 void Model::synchroniseXForTaper()
 {
+    m_synchronisedCutEnding = false; // (a new cut)
     double angleConversion = std::tan(m_taperAngle * DEG_TO_RAD);
     m_axis2Motor->synchroniseOn(
         m_axis1Motor.get(), [angleConversion](double zPosDelta, double) -> double {
@@ -579,6 +617,7 @@ void Model::synchroniseXForTaper()
 
 void Model::synchroniseXForRadius()
 {
+    m_synchronisedCutEnding = false; // (a new cut)
     // To cut a radius, we need a defined start point for both
     // axes. We do this by assuming zero is the start point for
     // both (the change mode screen tells the user to zero out,
@@ -613,13 +652,13 @@ void Model::synchroniseXForRadius()
 std::vector<MotionSequence::Step> Model::axis1MoveSteps(long step)
 {
     const auto move = [this, step]() {
-        if (m_enabledFunction == Mode::Threading) {
+        if (m_mode == Mode::Threading) {
             axis1StartThreadingPass(step);
         } else {
             m_axis1Motor->goToStep(step);
         }
     };
-    if (m_enabledFunction != Mode::Taper && m_enabledFunction != Mode::Radius) {
+    if (m_mode != Mode::Taper && m_mode != Mode::Radius) {
         return { { move, {} } };
     }
     // Tapers and radii synchronise X to Z, after first taking up the backlash
@@ -627,7 +666,7 @@ std::vector<MotionSequence::Step> Model::axis1MoveSteps(long step)
     const ZDirection direction
         = step < getAxis1MotorCurrentStep() ? ZDirection::Right : ZDirection::Left;
     int xStepAdd;
-    if (m_enabledFunction == Mode::Taper) {
+    if (m_mode == Mode::Taper) {
         xStepAdd = -1;
         if ((direction == ZDirection::Left && m_taperAngle < 0.0)
             || (direction == ZDirection::Right && m_taperAngle > 0.0)) {
@@ -639,7 +678,7 @@ std::vector<MotionSequence::Step> Model::axis1MoveSteps(long step)
     return { takeUpZBacklashStep(direction),
              takeUpXBacklashStep(xStepAdd),
              { [this, move]() {
-                  if (m_enabledFunction == Mode::Taper) {
+                  if (m_mode == Mode::Taper) {
                       synchroniseXForTaper();
                   } else {
                       synchroniseXForRadius();
@@ -919,7 +958,7 @@ void Model::axis1Nudge(ZDirection direction, double nudgeAmountMm)
 
 void Model::axis1Zero()
 {
-    if (m_enabledFunction == Mode::Taper) {
+    if (m_mode == Mode::Taper) {
         changeMode(Mode::None);
     }
     if (m_config.readBool("Axis1UseLinearScale", false)) {
@@ -938,7 +977,7 @@ void Model::axis1Zero()
 
 void Model::axis1SpeedDecrease()
 {
-    if (m_enabledFunction == Mode::Threading) {
+    if (m_mode == Mode::Threading) {
         return;
     }
     if (m_axis1Motor->getSpeed() > 20) {
@@ -952,7 +991,7 @@ void Model::axis1SpeedDecrease()
 
 void Model::axis1SpeedIncrease()
 {
-    if (m_enabledFunction == Mode::Threading) {
+    if (m_mode == Mode::Threading) {
         return;
     }
     if (m_axis1Motor->getSpeed() < 20.0) {
@@ -972,7 +1011,7 @@ void Model::axis1FastReturn()
     m_previousAxis1Speed = m_axis1Motor->getSpeed();
     m_axis1FastReturning = true;
     axis1Stop();
-    if (m_enabledFunction == Mode::Taper) {
+    if (m_mode == Mode::Taper) {
         // If we are tapering, we need to set a speed the x-axis motor can keep up with
         m_axis1Motor->setSpeed(100.0);
         m_previousAxis2Speed = m_axis2Motor->getSpeed();
@@ -1043,7 +1082,7 @@ void Model::axis1Move(ZDirection direction)
 void Model::axis1Rapid(ZDirection direction)
 {
     // Don't allow rapids if in a mode;
-    if (m_enabledFunction != Mode::None) {
+    if (m_mode != Mode::None) {
         return;
     }
     // Issuing the same command (i.e. pressing the same key)
@@ -1060,7 +1099,7 @@ void Model::axis1Rapid(ZDirection direction)
 
 void Model::axis1SpeedPreset()
 {
-    if (m_currentDisplayMode == Mode::Threading) {
+    if (m_mode == Mode::Threading) {
         return;
     }
     switch (m_keyPressed) {
@@ -1142,7 +1181,7 @@ void Model::axis2Stop()
 
 void Model::axis2Zero()
 {
-    if (m_enabledFunction == Mode::Taper) {
+    if (m_mode == Mode::Taper) {
         changeMode(Mode::None);
     }
     m_axis2Motor->zeroPosition();
@@ -1237,7 +1276,7 @@ void Model::axis2FastReturn()
 void Model::axis2Retract()
 {
     if (m_config.readBool("DisableAxis2", false) || m_axis2Motor->isRunning()
-        || m_enabledFunction == Mode::Taper) {
+        || m_mode == Mode::Taper) {
         return;
     }
     // The motor only ramps up when its speed is increased, not at the start of
@@ -1319,7 +1358,7 @@ void Model::axis2Move(XDirection direction)
 void Model::axis2Rapid(XDirection direction)
 {
     // Don't allow rapids if in a mode;
-    if (m_enabledFunction != Mode::None) {
+    if (m_mode != Mode::None) {
         return;
     }
     if (m_axis2Motor->isRunning()) {
@@ -1334,7 +1373,7 @@ void Model::axis2Rapid(XDirection direction)
 
 void Model::axis2SpeedPreset()
 {
-    if (m_currentDisplayMode == Mode::Threading) {
+    if (m_mode == Mode::Threading) {
         return;
     }
     switch (m_keyPressed) {
@@ -1434,24 +1473,9 @@ void Model::setKeyMode(KeyMode mode)
     m_keyMode = mode;
 }
 
-Mode Model::getEnabledFunction() const
+Mode Model::getMode() const
 {
-    return m_enabledFunction;
-}
-
-void Model::setEnabledFunction(Mode mode)
-{
-    m_enabledFunction = mode;
-}
-
-Mode Model::getCurrentDisplayMode() const
-{
-    return m_currentDisplayMode;
-}
-
-void Model::setCurrentDisplayMode(Mode mode)
-{
-    m_currentDisplayMode = mode;
+    return m_mode;
 }
 
 double Model::getRadius() const
@@ -1536,7 +1560,7 @@ void Model::setInputString(const std::string& str)
 
 std::string Model::getWarning() const
 {
-    if (m_warning.empty() && m_enabledFunction == Mode::Threading) {
+    if (m_warning.empty() && m_mode == Mode::Threading) {
         if (m_threadingPositionLost) {
             return "Encoder lost pulses: further passes won't follow this thread";
         }
@@ -1928,7 +1952,7 @@ const MultiPassOptions& Model::getMultiPassOptions() const
 
 void Model::multiPassGo()
 {
-    if (m_enabledFunction != Mode::MultiPass) {
+    if (m_mode != Mode::MultiPass) {
         return;
     }
     if (m_multiPass.state() == MultiPass::State::Paused) {

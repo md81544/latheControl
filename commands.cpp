@@ -251,8 +251,14 @@ bool keyAllowedInCurrentMode(int k, const Model& model)
     }
     // While a multi-pass is running (or paused between passes), anything else
     // moving an axis would upset it. Space stops it; the speeds can be changed
-    // (Z's is used for the next cut); and the units shown
-    if (model.getEnabledFunction() == Mode::MultiPass && model.multiPass().inProgress()) {
+    // (Z's is used for the next cut); and the units shown. While it's paused,
+    // X can be nudged: the next pass steps over from there. (Not the Alt
+    // nudges: releasing Alt stops everything, which would end the multi-pass)
+    if (model.getMode() == Mode::MultiPass && model.multiPass().inProgress()) {
+        if (model.multiPass().state() == MultiPass::State::Paused
+            && (k == key::w || k == key::W || k == key::s || k == key::S)) {
+            return true;
+        }
         switch (k) {
             case key::SPACE:
             case key::EQUALS:
@@ -280,7 +286,7 @@ bool keyAllowedInCurrentMode(int k, const Model& model)
             || k == key::S)) {
         return false;
     }
-    if (model.getCurrentDisplayMode() == Mode::Setup) {
+    if (model.getMode() == Mode::Setup) {
         return k == key::LEFT || k == key::RIGHT || k == key::UP || k == key::DOWN
             || k == key::SPACE;
     }
@@ -318,9 +324,9 @@ std::vector<Command> buildCommands(const IConfigReader& config, DisplayUnits uni
     const auto axis2Free = [](const Model& m) { return !m.isAxisLocked(2); };
     // Axis 1's speed is driven by the spindle when threading
     const auto axis1SpeedAdjustable
-        = [](const Model& m) { return m.getEnabledFunction() != Mode::Threading; };
+        = [](const Model& m) { return m.getMode() != Mode::Threading; };
     const auto speedPresetsAllowed
-        = [](const Model& m) { return m.getCurrentDisplayMode() != Mode::Threading; };
+        = [](const Model& m) { return m.getMode() != Mode::Threading; };
 
     CommandListBuilder b(config);
 
@@ -424,7 +430,7 @@ std::vector<Command> buildCommands(const IConfigReader& config, DisplayUnits uni
         key::ENTER,
         BOTH,
         [](const Model& m) {
-            return m.getEnabledFunction() == Mode::MultiPass
+            return m.getMode() == Mode::MultiPass
                 && (!m.multiPass().inProgress() || m.multiPass().state() == MultiPass::State::Paused);
         },
         'g');

@@ -163,7 +163,6 @@ void Controller::processKeyPress()
 void Controller::processKey(int t)
 {
     t = checkKeyAllowedForMode(t);
-    t = processModeInputKeys(t);
     if (t != key::None) {
         if (m_model->getKeyMode() != KeyMode::None) {
             // If we are in a "leader key mode" (i.e. the first "prefix" key has
@@ -333,7 +332,7 @@ void Controller::processKey(int t)
                     break;
                 }
             case key::ENTER:
-                if (m_model->getEnabledFunction() == Mode::MultiPass) {
+                if (m_model->getMode() == Mode::MultiPass) {
                     // Starts the multi-pass, or continues it after a pause
                     m_model->multiPassGo();
                     break;
@@ -699,7 +698,6 @@ void Controller::processKey(int t)
                 }
             case key::f2s: // setup mode
                 {
-                    m_model->setEnabledFunction(Mode::None);
                     m_model->setAxis1MotorSpeed(0.8f);
                     m_model->setAxis2MotorSpeed(1.f);
                     m_model->changeMode(Mode::Setup);
@@ -944,8 +942,10 @@ void Controller::processKey(int t)
             case key::h:
             case key::H: // quick chamfer
                 {
+                    // (A taper like any other, so through changeMode(), which
+                    // e.g. turns ramping off, as X is synchronised to Z)
                     m_model->setTaperAngle(-45.0);
-                    m_model->setEnabledFunction(Mode::Taper);
+                    m_model->changeMode(Mode::Taper);
                     break;
                 }
             case key::a1_k: // lock axis 1
@@ -1000,19 +1000,6 @@ int Controller::checkKeyAllowedForMode(int key)
 {
     // (The rules are shared with the menu, which greys out keys not allowed)
     return keyAllowedInCurrentMode(key, *m_model) ? key : key::None;
-}
-
-int Controller::processModeInputKeys(int key) // TODO this can be deleted eventually
-{
-    // Any special processing required when in a mode:
-    if (m_model->getCurrentDisplayMode() == Mode::Threading) {
-        if (key == key::ESC) {
-            // Reset motor speed to something sane
-            m_model->setAxis1MotorSpeed(m_model->config().readDouble("Axis1SpeedPreset2", 40.0));
-        }
-        return key;
-    }
-    return key;
 }
 
 int Controller::processLeaderKeyModeKeyPress(int keyPress)

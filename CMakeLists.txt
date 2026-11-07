@@ -84,7 +84,6 @@ add_executable(${APP_NAME}
 	controller.cpp
 	main.cpp
 	configreader.cpp
-	axis.cpp
 )
 target_link_libraries(${APP_NAME} PRIVATE
 	shared_with_test

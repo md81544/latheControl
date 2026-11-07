@@ -188,11 +188,9 @@ public:
     KeyMode getKeyMode() const;
     void setKeyMode(KeyMode mode);
 
-    Mode getEnabledFunction() const;
-    void setEnabledFunction(Mode mode);
+    // The mode (e.g. threading), as set by changeMode()
+    Mode getMode() const;
 
-    Mode getCurrentDisplayMode() const;
-    void setCurrentDisplayMode(Mode mode);
 
     double getRadius() const;
     void setRadius(double radius);
@@ -349,11 +347,12 @@ private:
     double m_taperAngle { 0.0 };
     double m_radius { 0.0 };
     float m_taperPreviousXSpeed { 40.f };
-    // Stores the current function displayed on the screen:
-    Mode m_currentDisplayMode { Mode::None };
-    // Stores current function, i.e. whether tapering or threading is on
-    // we use the same enum class as "mode"
-    Mode m_enabledFunction { Mode::None };
+    // The current mode (e.g. threading, taper). Only set by changeMode()
+    Mode m_mode { Mode::None };
+    // Z has stopped at the end of a taper or radius cut: X's synchronisation
+    // is turned off once it has stopped too
+    bool m_synchronisedCutEnding { false };
+    bool m_synchronisedCutXStoppedOnce { false };
     KeyMode m_keyMode { KeyMode::None };
     // Used to store position to return to after retract:
     long m_xOldPosition;
