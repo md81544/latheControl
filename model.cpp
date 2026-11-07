@@ -220,16 +220,25 @@ StatusResult Model::checkStatus()
     checkSpindleStopped(chuckRpm);
     checkEncoderLostPulses();
 
-    if (m_enabledFunction == Mode::Threading) {
-        threadingCheckSpeed();
-        threadingCheckMoveEnded();
-    }
     if (const auto diameter = getDiameterMm()) {
         m_generalStatus = fmt::format(
             "Diameter: {: .{}f} {}",
             toDisplayUnits(2, *diameter),
             axisDecimals(2),
             axisUnitName(2));
+    }
+
+    // While a motion sequence (e.g. a nudge) is running, only the checks
+    // above (faults, limit switch, spindle) apply. Everything below reacts to
+    // motors starting and stopping, which would misread the sequence's moves:
+    // e.g. the end of a taper's backlash take-up as the end of a fast return
+    if (m_motionSequence.advance()) {
+        return statusResult;
+    }
+
+    if (m_enabledFunction == Mode::Threading) {
+        threadingCheckSpeed();
+        threadingCheckMoveEnded();
     }
     if (m_enabledFunction == Mode::MultiPass && m_axis1Motor->isRunning()
         && m_multiPassStage == MultiPassStage::NotStarted) {
@@ -570,6 +579,9 @@ void Model::stopAllMotors()
     m_axis2Motor->stop();
     m_axis1Motor->wait();
     m_axis2Motor->wait();
+    // (After stopping, so a sequence's end, e.g. restoring a nudge's speed,
+    // doesn't race with a move it started)
+    m_motionSequence.cancel();
     m_axis1Status = "stopped";
     m_axis2Status = "stopped";
 #ifdef FAKE
@@ -577,34 +589,34 @@ void Model::stopAllMotors()
 #endif
 }
 
-void Model::takeUpZBacklash(ZDirection direction)
+MotionSequence::Step Model::takeUpZBacklashStep(ZDirection direction)
 {
-    axis1Stop();
-    if (direction == ZDirection::Right) {
-        m_axis1Motor->goToStep(getAxis1MotorCurrentStep() - 1);
-    } else if (direction == ZDirection::Left) {
-        m_axis1Motor->goToStep(getAxis1MotorCurrentStep() + 1);
-    }
-    m_axis1Motor->wait();
+    return { [this, direction]() {
+                axis1Stop();
+                if (direction == ZDirection::Right) {
+                    m_axis1Motor->goToStep(getAxis1MotorCurrentStep() - 1);
+                } else if (direction == ZDirection::Left) {
+                    m_axis1Motor->goToStep(getAxis1MotorCurrentStep() + 1);
+                }
+            },
+             [this]() { return !m_axis1Motor->isRunning(); } };
 }
 
-void Model::startSynchronisedXMotorForTaper(ZDirection direction)
+MotionSequence::Step Model::takeUpXBacklashStep(int stepAdd)
 {
-    // Make sure X isn't already running first
-    axis2SynchroniseOff();
-    m_axis2Motor->stop();
-    m_axis2Motor->wait();
+    // As this is done just before the Z motor starts moving, we take up any
+    // backlash in X first (making sure X isn't already running)
+    return { [this, stepAdd]() {
+                axis2SynchroniseOff();
+                m_axis2Motor->stop();
+                m_axis2Motor->setSpeed(100.0);
+                m_axis2Motor->goToStep(m_axis2Motor->getCurrentStep() + stepAdd);
+            },
+             [this]() { return !m_axis2Motor->isRunning(); } };
+}
 
-    int stepAdd = -1;
-    if ((direction == ZDirection::Left && m_taperAngle < 0.0)
-        || (direction == ZDirection::Right && m_taperAngle > 0.0)) {
-        stepAdd = 1;
-    }
-    // As this is called just before the Z motor starts moving, we take
-    // up any backlash first.
-    m_axis2Motor->setSpeed(100.0);
-    m_axis2Motor->goToStep(m_axis2Motor->getCurrentStep() + stepAdd);
-    m_axis2Motor->wait();
+void Model::synchroniseXForTaper()
+{
     double angleConversion = std::tan(m_taperAngle * DEG_TO_RAD);
     m_axis2Motor->synchroniseOn(
         m_axis1Motor.get(), [angleConversion](double zPosDelta, double) -> double {
@@ -612,7 +624,7 @@ void Model::startSynchronisedXMotorForTaper(ZDirection direction)
         });
 }
 
-void Model::startSynchronisedXMotorForRadius(ZDirection direction)
+void Model::synchroniseXForRadius()
 {
     // To cut a radius, we need a defined start point for both
     // axes. We do this by assuming zero is the start point for
@@ -620,20 +632,6 @@ void Model::startSynchronisedXMotorForRadius(ZDirection direction)
     // such that the tool is on the outermost apex of the radius).
     // We can then determine at any time whene axis2 should be
     // in relation to axis1.
-
-    axis2SynchroniseOff();
-    m_axis2Motor->stop();
-    m_axis2Motor->wait();
-
-    int stepAdd = 1;
-    if (direction == ZDirection::Left) {
-        stepAdd = -1;
-    }
-    // As this is called just before the Z motor starts moving, we take
-    // up any backlash first.
-    m_axis2Motor->setSpeed(100.0);
-    m_axis2Motor->goToStep(m_axis2Motor->getCurrentStep() + stepAdd);
-    m_axis2Motor->wait();
     double radius = m_radius;
     m_axis2Motor->synchroniseOn(
         m_axis1Motor.get(),
@@ -657,6 +655,45 @@ void Model::startSynchronisedXMotorForRadius(ZDirection direction)
         },
         true // always use zero as sync start pos
     );
+}
+
+std::vector<MotionSequence::Step> Model::axis1MoveSteps(long step)
+{
+    const auto move = [this, step]() {
+        if (m_enabledFunction == Mode::Threading) {
+            axis1StartThreadingMove([this, step]() { m_axis1Motor->goToStep(step); });
+        } else {
+            m_axis1Motor->goToStep(step);
+        }
+    };
+    if (m_enabledFunction != Mode::Taper && m_enabledFunction != Mode::Radius) {
+        return { { move, {} } };
+    }
+    // Tapers and radii synchronise X to Z, after first taking up the backlash
+    // on both, so that X moves as soon as Z does
+    const ZDirection direction
+        = step < getAxis1MotorCurrentStep() ? ZDirection::Right : ZDirection::Left;
+    int xStepAdd;
+    if (m_enabledFunction == Mode::Taper) {
+        xStepAdd = -1;
+        if ((direction == ZDirection::Left && m_taperAngle < 0.0)
+            || (direction == ZDirection::Right && m_taperAngle > 0.0)) {
+            xStepAdd = 1;
+        }
+    } else {
+        xStepAdd = direction == ZDirection::Left ? -1 : 1;
+    }
+    return { takeUpZBacklashStep(direction),
+             takeUpXBacklashStep(xStepAdd),
+             { [this, move]() {
+                  if (m_enabledFunction == Mode::Taper) {
+                      synchroniseXForTaper();
+                  } else {
+                      synchroniseXForRadius();
+                  }
+                  move();
+              },
+               {} } };
 }
 
 double Model::threadingMaxZSpeed() const
@@ -802,12 +839,9 @@ void Model::threadingCheckMoveEnded()
 
 void Model::axis1GoToStep(long step)
 {
-    axis1CheckForSynchronisation(step);
-    if (m_enabledFunction == Mode::Threading) {
-        axis1StartThreadingMove([&]() { m_axis1Motor->goToStep(step); });
-    } else {
-        m_axis1Motor->goToStep(step);
-    }
+    // (Usually just the move itself, which starts at once. For a taper or
+    // radius, the backlash is taken up first, on later updates)
+    m_motionSequence.start(axis1MoveSteps(step));
 }
 
 void Model::axis1GoToPosition(double pos)
@@ -816,12 +850,7 @@ void Model::axis1GoToPosition(double pos)
     // the desired position, then start nudging while monitoring the linear scale
     // until we get to the desired position. This could be implemented in the motor
     // perhaps by supplying a callback that is called after each step is taken.
-    axis1CheckForSynchronisation(pos / m_axis1Motor->getConversionFactor());
-    if (m_enabledFunction == Mode::Threading) {
-        axis1StartThreadingMove([&]() { m_axis1Motor->goToPosition(pos); });
-    } else {
-        m_axis1Motor->goToPosition(pos);
-    }
+    axis1GoToStep(std::lround(pos / m_axis1Motor->getConversionFactor()));
     if (std::abs(pos) < 0.00001) {
         // Round to zero for display purposes, just to
         // avoid having "-0.000" displayed
@@ -855,31 +884,6 @@ void Model::axis1GoToPreviousPosition()
     m_axis1PreviousPositions.pop();
 }
 
-void Model::axis1CheckForSynchronisation(ZDirection direction)
-{
-    if (m_enabledFunction == Mode::Taper) {
-        takeUpZBacklash(direction);
-        startSynchronisedXMotorForTaper(direction);
-    } else if (m_enabledFunction == Mode::Radius) {
-        takeUpZBacklash(direction);
-        startSynchronisedXMotorForRadius(direction);
-    }
-}
-
-void Model::axis1CheckForSynchronisation(long step)
-{
-    if (m_enabledFunction != Mode::Taper && m_enabledFunction != Mode::Radius) {
-        return;
-    }
-    ZDirection direction;
-    if (step < getAxis1MotorCurrentStep()) {
-        direction = ZDirection::Right;
-    } else {
-        direction = ZDirection::Left;
-    }
-    axis1CheckForSynchronisation(direction);
-}
-
 void Model::axis1GoToCurrentMemory()
 {
     if (m_axis1Memory.at(m_currentMemory) == AXIS1_UNSET) {
@@ -896,6 +900,8 @@ void Model::axis1GoToCurrentMemory()
 
 void Model::axis1Nudge(ZDirection direction, double nudgeAmountMm)
 {
+    // (First, so that its end can't restore a speed over ours)
+    m_motionSequence.cancel();
     if (m_axis1Motor->isRunning()) {
         axis1Stop();
     }
@@ -906,15 +912,18 @@ void Model::axis1Nudge(ZDirection direction, double nudgeAmountMm)
         steps = -steps;
     }
     m_axis1Motor->stop();
-    m_axis1Motor->wait();
-    axis1GoToStep(getAxis1MotorCurrentStep() + steps);
-    m_axis1Motor->wait();
-    m_axis1Motor->setSpeed(oldSpeed);
-    // A nudge isn't a threading pass, so it shouldn't retract X when it ends
-    m_threadingMoveInProgress = false;
-
-    // Save position
-    axis1SaveBreadcrumbPosition();
+    // The nudge is a sequence which ends when the move does, so that (as
+    // with any sequence) keys pressed meanwhile wait until it's finished,
+    // and a quick series of nudges each moves the full amount
+    auto moveSteps = axis1MoveSteps(getAxis1MotorCurrentStep() + steps);
+    moveSteps.back().done = [this]() { return !m_axis1Motor->isRunning(); };
+    m_motionSequence.start(std::move(moveSteps), [this, oldSpeed]() {
+        m_axis1Motor->setSpeed(oldSpeed);
+        // A nudge isn't a threading pass, so it shouldn't retract X when it ends
+        m_threadingMoveInProgress = false;
+        // Save position
+        axis1SaveBreadcrumbPosition();
+    });
 }
 
 void Model::axis1Zero()
@@ -976,12 +985,7 @@ void Model::axis1FastReturn()
         // If we are tapering, we need to set a speed the x-axis motor can keep up with
         m_axis1Motor->setSpeed(100.0);
         m_previousAxis2Speed = m_axis2Motor->getSpeed();
-        ZDirection direction = ZDirection::Left;
-        if (m_axis1Memory.at(m_currentMemory) < getAxis1MotorCurrentStep()) {
-            direction = ZDirection::Right;
-        }
-        takeUpZBacklash(direction);
-        startSynchronisedXMotorForTaper(direction);
+        // (axis1GoToStep() takes up the backlash and synchronises X)
     } else {
         m_axis1Motor->setSpeed(m_axis1Motor->getMaxRpm());
     }
@@ -1199,6 +1203,8 @@ void Model::axis2SpeedIncrease()
 
 void Model::axis2Nudge(XDirection direction, double nudgeAmountMm)
 {
+    // (First, so that its end can't restore a speed over ours)
+    m_motionSequence.cancel();
     if (m_axis2Motor->isRunning()) {
         axis2Stop();
     }
@@ -1211,12 +1217,17 @@ void Model::axis2Nudge(XDirection direction, double nudgeAmountMm)
     if (m_config.readBool("Axis2MotorFlipDirection", false)) {
         steps = -steps;
     }
-    m_axis2Motor->goToStep(m_axis2Motor->getCurrentStep() + steps);
-    m_axis2Motor->wait();
-    m_axis2Motor->setSpeed(oldSpeed);
-
-    // Save position
-    axis2SaveBreadcrumbPosition();
+    // (A sequence, for the same reasons as a Z nudge)
+    m_motionSequence.start(
+        { { [this, steps]() {
+               m_axis2Motor->goToStep(m_axis2Motor->getCurrentStep() + steps);
+           },
+            [this]() { return !m_axis2Motor->isRunning(); } } },
+        [this, oldSpeed]() {
+            m_axis2Motor->setSpeed(oldSpeed);
+            // Save position
+            axis2SaveBreadcrumbPosition();
+        });
 }
 
 void Model::axis2FastReturn()
@@ -1490,6 +1501,11 @@ bool Model::isShuttingDown() const
 void Model::shutDown()
 {
     m_shutdown = true;
+}
+
+bool Model::isMotionSequenceRunning() const
+{
+    return m_motionSequence.isRunning();
 }
 
 bool Model::isQuitting() const

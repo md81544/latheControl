@@ -127,6 +127,26 @@ bool Controller::isMenuOpen() const
 void Controller::processKeyPress()
 {
     int k = m_view->getEvents();
+    if (m_model->isMotionSequenceRunning()) {
+        // Keys wait until the sequence (e.g. a nudge) has finished, as they
+        // did when it blocked, so e.g. a quick series of nudges each moves
+        // the full amount. Except Space, which stops everything at once
+        if ((k & ~key::JOYSTICK) == key::SPACE) {
+            MGOLOG("Stopping all motors: Space during a motion sequence");
+            m_model->stopAllMotors();
+            m_heldKeys.clear();
+        } else if (k != key::None) {
+            m_heldKeys.push_back(k);
+        }
+        return;
+    }
+    if (!m_heldKeys.empty()) {
+        if (k != key::None) {
+            m_heldKeys.push_back(k);
+        }
+        k = m_heldKeys.front();
+        m_heldKeys.pop_front();
+    }
     if (k == key::None) {
         return;
     }

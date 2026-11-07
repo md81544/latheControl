@@ -63,6 +63,7 @@ add_library(shared_with_test OBJECT
 	menu.cpp
 	log.cpp
 	model.cpp
+	motionsequence.cpp
 	cpuaffinity.cpp
 )
 target_link_libraries(shared_with_test PUBLIC

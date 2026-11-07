@@ -5,6 +5,7 @@
 #include "log.h"
 #include "menu.h"
 #include "model.h"
+#include "motionsequence.h"
 #include "rotaryencoder.h"
 #include "stepperControl/mockgpio.h"
 #include "stepperControl/steppermotor.h"
@@ -65,6 +66,25 @@ void feedEncoderPulse(mgo::RotaryEncoder& re, uint32_t tick)
     re.callback(RE_PIN_A, 1, tick);
     re.callback(RE_PIN_B, 0, tick + 2'000);
     re.callback(RE_PIN_A, 0, tick + 4'000);
+}
+
+// Runs the model's updates (as the controller's tick does) until any motion
+// sequence (e.g. a taper's backlash take-up) has finished and both motors
+// have stopped. Returns false if that took too long
+bool runUntilStopped(mgo::Model& model)
+{
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+    for (;;) {
+        model.checkStatus();
+        if (!model.isMotionSequenceRunning() && !model.isAxis1MotorRunning()
+            && !model.isAxis2MotorRunning()) {
+            return true;
+        }
+        if (std::chrono::steady_clock::now() > deadline) {
+            return false;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
 }
 
 } // end anonymous namespace
@@ -296,7 +316,7 @@ TEST_CASE("Model:   check tapering")
     model.setTaperAngle(45.0);
     model.axis1SetSpeed(200.0);
     model.axis1GoToPosition(-0.5);
-    model.axis1Wait();
+    REQUIRE(runUntilStopped(model));
     double pos = model.getAxis2MotorPosition();
     REQUIRE(pos < -0.495);
     REQUIRE(pos > -0.505);
@@ -314,7 +334,7 @@ TEST_CASE("Model:   check tapering (small angle)")
     model.setTaperAngle(-1.42);
     model.axis1SetSpeed(200.0);
     model.axis1GoToPosition(-0.5);
-    model.axis1Wait();
+    REQUIRE(runUntilStopped(model));
     double pos = model.getAxis2MotorPosition();
     REQUIRE(pos != 0.0);
 }
@@ -331,15 +351,14 @@ TEST_CASE("Model:   check radius")
     model.setRadius(1.0);
     model.axis1SetSpeed(60.0);
     model.axis1GoToPosition(1.0);
-    model.axis1Wait();
-    model.axis2Wait();
+    REQUIRE(runUntilStopped(model));
 
     double pos = model.getAxis2MotorPosition();
     REQUIRE(pos < 1.05);
     REQUIRE(pos > 0.95);
 
     model.axis1GoToPosition(0.0);
-    model.axis1Wait();
+    REQUIRE(runUntilStopped(model));
 
     // X position should be zero
     pos = model.getAxis2MotorPosition();
@@ -1295,4 +1314,124 @@ TEST_CASE("Stepper: Spinning when idle")
     motor.goToStep(step + 20);
     motor.wait();
     REQUIRE(motor.getCurrentStep() == step + 20);
+}
+
+TEST_CASE("Sequence: runs each step once the one before is done")
+{
+    std::vector<std::string> log;
+    bool firstDone = false;
+    mgo::MotionSequence seq;
+    seq.start(
+        { { [&] { log.push_back("first"); }, [&] { return firstDone; } },
+          { [&] { log.push_back("second"); }, {} } },
+        [&] { log.push_back("end"); });
+    // The first step's action runs at once, then we wait for it
+    REQUIRE(log == std::vector<std::string> { "first" });
+    REQUIRE(seq.isRunning());
+    REQUIRE(seq.advance());
+    REQUIRE(log == std::vector<std::string> { "first" });
+    // Once it's done, the second (which is done at once) runs, and that's the end
+    firstDone = true;
+    REQUIRE(!seq.advance());
+    REQUIRE(!seq.isRunning());
+    REQUIRE(log == std::vector<std::string> { "first", "second", "end" });
+    // (Nothing more happens)
+    REQUIRE(!seq.advance());
+    REQUIRE(log.size() == 3);
+}
+
+TEST_CASE("Sequence: steps which are done at once all run in start()")
+{
+    int actions = 0;
+    int ends = 0;
+    mgo::MotionSequence seq;
+    seq.start({ { [&] { ++actions; }, [] { return true; } }, { [&] { ++actions; }, {} } },
+              [&] { ++ends; });
+    REQUIRE(actions == 2);
+    REQUIRE(ends == 1);
+    REQUIRE(!seq.isRunning());
+
+    // An empty sequence just ends
+    seq.start({}, [&] { ++ends; });
+    REQUIRE(ends == 2);
+    REQUIRE(!seq.isRunning());
+}
+
+TEST_CASE("Sequence: cancelling")
+{
+    int secondRan = 0;
+    int ends = 0;
+    mgo::MotionSequence seq;
+    seq.start({ { [] {}, [] { return false; } }, { [&] { ++secondRan; }, {} } }, [&] { ++ends; });
+    seq.cancel();
+    REQUIRE(!seq.isRunning());
+    REQUIRE(ends == 1); // (onEnd is called when cancelled, too)
+    REQUIRE(!seq.advance());
+    REQUIRE(secondRan == 0);
+    seq.cancel(); // (does nothing now)
+    REQUIRE(ends == 1);
+
+    // Starting another sequence cancels the one running
+    int firstEnds = 0;
+    seq.start({ { [] {}, [] { return false; } } }, [&] { ++firstEnds; });
+    seq.start({ { [] {}, [] { return false; } } }, [&] { ++ends; });
+    REQUIRE(firstEnds == 1);
+    REQUIRE(seq.isRunning());
+
+    // A step's action can cancel its own sequence (e.g. by stopping all motors)
+    bool stepDone = false;
+    seq.start({ { [] {}, [&] { return stepDone; } }, { [&] { seq.cancel(); }, {} },
+                { [&] { ++secondRan; }, {} } });
+    stepDone = true;
+    REQUIRE(!seq.advance());
+    REQUIRE(secondRan == 0);
+}
+
+TEST_CASE("Model:   a nudge doesn't block, and restores the speed when done")
+{
+    mgo::MockConfigReader config;
+    mgo::MockGpio gpio(false);
+    mgo::Model model(gpio, config);
+    model.initialise();
+    model.axis1SetSpeed(40.0);
+    // (At the nudge speed, 1mm takes over half a second)
+    model.axis1Nudge(mgo::ZDirection::Left, 1.0);
+    REQUIRE(model.isMotionSequenceRunning());
+    REQUIRE(model.isAxis1MotorRunning());
+    REQUIRE(runUntilStopped(model));
+    REQUIRE(std::abs(model.getAxis1MotorPosition()) == Approx(1.0));
+    REQUIRE(model.getAxis1MotorSpeed() == Approx(40.0));
+
+    // Stopping all motors part way cancels it, and still restores the speed
+    model.axis2SetSpeed(20.0);
+    model.axis2Nudge(mgo::XDirection::Inwards, 1.0);
+    REQUIRE(model.isMotionSequenceRunning());
+    REQUIRE(waitFor([&] { return std::abs(model.getAxis2MotorPosition()) > 0.01; }));
+    model.stopAllMotors();
+    REQUIRE(!model.isMotionSequenceRunning());
+    REQUIRE(!model.isAxis2MotorRunning());
+    REQUIRE(std::abs(model.getAxis2MotorPosition()) < 1.0);
+    REQUIRE(model.getAxis2MotorSpeed() == Approx(20.0));
+}
+
+TEST_CASE("Model:   a taper's backlash take-up doesn't block")
+{
+    // With backlash compensation, reversing Z first takes up the slack (here
+    // 200 steps, at 10mm/min: over a second)
+    TestConfigReader config({ { "Axis1BacklashCompensationSteps", "200" },
+                              { "Axis2BacklashCompensationSteps", "200" } });
+    mgo::MockGpio gpio(false);
+    mgo::Model model(gpio, config);
+    model.initialise();
+    model.changeMode(mgo::Mode::Taper);
+    model.setTaperAngle(45.0);
+    model.axis1SetSpeed(10.0);
+    const auto start = std::chrono::steady_clock::now();
+    model.axis1GoToPosition(0.05);
+    REQUIRE(std::chrono::steady_clock::now() - start < std::chrono::milliseconds(100));
+    REQUIRE(model.isMotionSequenceRunning());
+    // Updates meanwhile don't take the take-up's end for the end of the cut
+    REQUIRE(runUntilStopped(model));
+    REQUIRE(model.getAxis1MotorPosition() == Approx(0.05));
+    REQUIRE(std::abs(model.getAxis2MotorPosition()) == Approx(0.05).margin(0.002));
 }

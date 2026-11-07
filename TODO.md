@@ -52,10 +52,20 @@
       `runEventLoop()`), with a 50ms timer calling `Controller::tick()`.
       Behaviour is unchanged: a tick that blocks (a dialog, or a wait for
       the motors) still blocks, and the timer's calls meanwhile are skipped
-    - **Next:** turn the model's blocking `wait()`s (about 15, in retracts,
-      backlash take-up etc.) into sequences the model steps through on each
-      tick, then multi-pass on top of that. Leave `callbackAtZeroDegrees()`,
-      as the electronic leadscrew work will replace it
+    - **Done:** moves which waited for a motor to finish (Z and X nudges,
+      and the backlash take-up on both axes before a taper or radius move)
+      are now `MotionSequence`s, which the model's `checkStatus()` steps
+      through on each tick. While one runs, only the safety checks (faults,
+      limit switch, spindle) apply, and the controller holds keys back until
+      it's done (as they waited before), except Space, which stops it. The
+      other `wait()`s follow a `stop()`, which the motor thread acknowledges
+      at once, so don't block. Not yet tried on the machine
+    - **Note:** deceleration ramping would make `stop()` take time, so the
+      `stop()` + `wait()` pairs would then need to be sequence steps too
+    - **Next:** multi-pass, as a sequence (see "Multi-pass" below), which
+      removes the controller's `waitForAxisToStop()`. Leave
+      `callbackAtZeroDegrees()`, as the electronic leadscrew work will
+      replace it
     - Then make dialogs non-modal (with a callback when done) so ticks carry
       on while one is open; that's the "Mode" item below. Once nothing
       blocks inside a tick, `getEvents()` and `updateDisplay()` no longer

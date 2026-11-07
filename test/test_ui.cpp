@@ -83,6 +83,34 @@ struct TestModel {
     mgo::Model model { gpio, config };
 };
 
+// The mock config, but with a slower Z, so that its nudges (at a tenth of the
+// maximum speed) take long enough to press keys during them: 0.05mm in 0.3s
+class SlowZConfigReader final : public mgo::IConfigReader {
+public:
+    std::string read(const std::string&, const std::string& defaultValue = "") const override
+    {
+        return defaultValue;
+    }
+    unsigned long readLong(const std::string&, unsigned long defaultValue = 0) const override
+    {
+        return defaultValue;
+    }
+    double readDouble(const std::string& key, double defaultValue = 0.0) const override
+    {
+        return key == "Axis1MaxMotorRpm" ? 100.0 : defaultValue;
+    }
+    bool readBool(const std::string&, bool defaultValue) const override
+    {
+        return defaultValue;
+    }
+};
+
+struct SlowZTestModel {
+    SlowZConfigReader config;
+    mgo::MockGpio gpio { false };
+    mgo::Model model { gpio, config };
+};
+
 } // end anonymous namespace
 
 TEST_CASE("UI: keys are converted to key codes")
@@ -537,6 +565,47 @@ TEST_CASE("UI: the controller's event loop")
     REQUIRE(dialogShown);
     REQUIRE(tm.model.getDisplayUnits() == mgo::DisplayUnits::Metric); // (toggled twice)
     REQUIRE(tm.model.getAxis1MotorPosition() == Approx(0.5).margin(0.001));
+}
+
+TEST_CASE("UI: keys wait while a nudge is moving, except Space")
+{
+    SlowZTestModel tm;
+    mgo::Controller controller(&tm.model);
+    QWidget* w = mainWindow();
+    REQUIRE(w);
+    const double speed = tm.model.getAxis1MotorSpeed();
+
+    // A (nudge left 0.05mm), then Shift-D (right 0.01mm) while the first is
+    // still moving: the second waits, so each moves its full amount
+    QTest::keyClick(w, Qt::Key_A);
+    controller.tick();
+    REQUIRE(tm.model.isMotionSequenceRunning());
+    QTest::keyClick(w, Qt::Key_D, Qt::ShiftModifier);
+    controller.tick();
+    REQUIRE(tm.model.isMotionSequenceRunning()); // (still the first nudge)
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    while (std::abs(std::abs(tm.model.getAxis1MotorPosition()) - 0.04) > 0.0001
+           || tm.model.isMotionSequenceRunning()) {
+        REQUIRE(std::chrono::steady_clock::now() < deadline);
+        controller.tick();
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    REQUIRE(tm.model.getAxis1MotorSpeed() == Approx(speed));
+
+    // Space, though, stops a nudge part way (and the speed is restored)
+    const double position = tm.model.getAxis1MotorPosition();
+    QTest::keyClick(w, Qt::Key_A);
+    controller.tick();
+    REQUIRE(tm.model.isMotionSequenceRunning());
+    QTest::qWait(50);
+    QTest::keyClick(w, Qt::Key_Space);
+    controller.tick();
+    REQUIRE(!tm.model.isMotionSequenceRunning());
+    REQUIRE(!tm.model.isAxis1MotorRunning());
+    const double moved = std::abs(tm.model.getAxis1MotorPosition() - position);
+    REQUIRE(moved > 0.0);
+    REQUIRE(moved < 0.05);
+    REQUIRE(tm.model.getAxis1MotorSpeed() == Approx(speed));
 }
 
 TEST_CASE("UI: run() returns at once if already quitting")

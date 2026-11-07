@@ -5,6 +5,7 @@
 #include "model.h"
 
 #include <chrono>
+#include <deque>
 #include <exception>
 #include <memory>
 
@@ -43,6 +44,8 @@ public:
 private:
     void tickBody();
     bool m_inTick { false };
+    // Keys pressed while a motion sequence was running, to act on afterwards
+    std::deque<int> m_heldKeys;
     // Thrown by a tick, to be rethrown from run()
     std::exception_ptr m_tickException;
     Model* m_model; // non-owning

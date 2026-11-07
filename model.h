@@ -2,6 +2,7 @@
 
 #include "configreader.h"
 #include "linearscale.h"
+#include "motionsequence.h"
 #include "rotaryencoder.h"
 #include "stepperControl/steppermotor.h"
 #include "units.h"
@@ -122,17 +123,16 @@ public:
     StatusResult checkStatus();
     
     void changeMode(Mode mode);
+    // (Also cancels any motion sequence)
     void stopAllMotors();
-    void takeUpZBacklash(ZDirection direction);
-    void startSynchronisedXMotorForTaper(ZDirection direction);
-    void startSynchronisedXMotorForRadius(ZDirection direction);
+    // True while a series of moves (e.g. a nudge, or the backlash take-up
+    // before a taper) is in progress. The controller holds back keys meanwhile
+    bool isMotionSequenceRunning() const;
 
     void axis1GoToStep(long step);
     void axis1GoToPosition(double pos);
     void axis1GoToOffset(double pos);
     void axis1GoToPreviousPosition();
-    void axis1CheckForSynchronisation(ZDirection direction);
-    void axis1CheckForSynchronisation(long step);
     void axis1GoToCurrentMemory();
     void axis1Nudge(ZDirection direction, double nudgeAmountMm);
     void axis1Zero();
@@ -297,6 +297,16 @@ public:
     void setMultiPassRetractBetweenCuts(bool value);
 
 private:
+    // The steps to move Z to a step: just the move, or, for a taper or
+    // radius, taking up both axes' backlash, then synchronising X and moving.
+    // (The last step's done is left empty, so the sequence ends once Z starts)
+    std::vector<MotionSequence::Step> axis1MoveSteps(long step);
+    MotionSequence::Step takeUpZBacklashStep(ZDirection direction);
+    MotionSequence::Step takeUpXBacklashStep(int stepAdd);
+    void synchroniseXForTaper();
+    void synchroniseXForRadius();
+    MotionSequence m_motionSequence;
+
     IGpio& m_gpio;
     IConfigReader& m_config;
     std::unique_ptr<mgo::RotaryEncoder> m_rotaryEncoder;
