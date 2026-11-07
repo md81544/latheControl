@@ -1809,7 +1809,15 @@ TEST_CASE("Model:   a multi-pass from Mem 1 to Mem 2")
     model.selectPreviousMemorySlot();
 
     model.changeMode(mgo::Mode::MultiPass);
-    model.setMultiPassOptions({ .feedPerPass = 0.01, .pause = false, .retract = true });
+    // (From Mem 1 to Mem 2)
+    REQUIRE(model
+                .setMultiPassSetup({ .startMemory = 0,
+                                     .cutEndMemory = 1,
+                                     .feedEndMemory = 1,
+                                     .feedPerPass = 0.01,
+                                     .pause = false,
+                                     .retract = true })
+                .empty());
     // Keys which would move an axis aren't allowed while it runs
     REQUIRE(mgo::keyAllowedInCurrentMode(mgo::key::a, model));
     model.multiPassGo();
@@ -1850,14 +1858,10 @@ TEST_CASE("Model:   stopping a multi-pass")
     model.axis2StorePosition(0.1);
     model.selectPreviousMemorySlot();
     model.changeMode(mgo::Mode::MultiPass);
-    model.setMultiPassOptions({ .feedPerPass = 0.01 });
-
-    // Not at Mem 1: it won't start
-    model.setAxis1Position(0.5);
-    model.multiPassGo();
-    REQUIRE(!model.multiPass().inProgress());
-    REQUIRE(!model.getWarning().empty());
-    model.setAxis1Position(0.0);
+    REQUIRE(model
+                .setMultiPassSetup(
+                    { .startMemory = 0, .cutEndMemory = 1, .feedEndMemory = 1, .feedPerPass = 0.01 })
+                .empty());
 
     model.multiPassGo();
     REQUIRE(model.multiPass().inProgress());
@@ -1878,6 +1882,310 @@ TEST_CASE("Model:   stopping a multi-pass")
     model.changeMode(mgo::Mode::None);
     REQUIRE(!model.multiPass().inProgress());
     REQUIRE(!model.isAxis1MotorRunning());
+}
+
+namespace {
+
+// Here: Z 10, X 5 (into the work is -X). Mem 1: Z 2, X 4.5. Mem 2: Z 10, X 5.
+// Mem 3: Z only, at 4 (e.g. a shoulder)
+mgo::MultiPassPositions testPositions()
+{
+    mgo::MultiPassPositions p;
+    p.cutHere = 10.0;
+    p.feedHere = 5.0;
+    p.cutMemory = { 2.0, 10.0, 4.0, std::nullopt, std::nullopt, std::nullopt };
+    p.feedMemory = { 4.5, 5.0, std::nullopt, std::nullopt, std::nullopt, std::nullopt };
+    p.feedIntoWork = -1.0;
+    return p;
+}
+
+// Runs the model's updates until it's no longer moving to a multi-pass's start
+bool runUntilAtStart(mgo::Model& model, std::function<void()> eachUpdate = {})
+{
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(20);
+    while (model.multiPassMovingToStart()) {
+        if (std::chrono::steady_clock::now() > deadline) {
+            return false;
+        }
+        model.checkStatus();
+        if (eachUpdate) {
+            eachUpdate();
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+    model.checkStatus();
+    return true;
+}
+
+} // end anonymous namespace
+
+TEST_CASE("MultiPass: positions from here, by distances")
+{
+    mgo::MultiPassSetup setup;
+    setup.cutDistance = -7.0;
+    setup.feedInfeed = 0.5;
+    auto r = mgo::resolveMultiPass(setup, testPositions());
+    REQUIRE(r.error.empty());
+    REQUIRE(r.range.cutStart == Approx(10.0));
+    REQUIRE(r.range.cutEnd == Approx(3.0));
+    REQUIRE(r.range.feedStart == Approx(5.0));
+    REQUIRE(r.range.feedEnd == Approx(4.5));
+
+    // Boring: X goes into the work the other way
+    auto positions = testPositions();
+    positions.feedIntoWork = 1.0;
+    r = mgo::resolveMultiPass(setup, positions);
+    REQUIRE(r.range.feedEnd == Approx(5.5));
+}
+
+TEST_CASE("MultiPass: positions from memory slots, either way round")
+{
+    // Mem 1 to Mem 2
+    mgo::MultiPassSetup setup { .startMemory = 0, .cutEndMemory = 1, .feedEndMemory = 1 };
+    auto r = mgo::resolveMultiPass(setup, testPositions());
+    REQUIRE(r.error.empty());
+    REQUIRE(r.range.cutStart == Approx(2.0));
+    REQUIRE(r.range.cutEnd == Approx(10.0));
+    REQUIRE(r.range.feedStart == Approx(4.5));
+    REQUIRE(r.range.feedEnd == Approx(5.0));
+    // Mem 2 to Mem 1
+    setup = { .startMemory = 1, .cutEndMemory = 0, .feedEndMemory = 0 };
+    r = mgo::resolveMultiPass(setup, testPositions());
+    REQUIRE(r.error.empty());
+    REQUIRE(r.range.cutStart == Approx(10.0));
+    REQUIRE(r.range.cutEnd == Approx(2.0));
+    REQUIRE(r.range.feedStart == Approx(5.0));
+    REQUIRE(r.range.feedEnd == Approx(4.5));
+}
+
+TEST_CASE("MultiPass: Z to a shoulder in a memory slot, X by an infeed")
+{
+    mgo::MultiPassSetup setup { .cutEndMemory = 2, .feedInfeed = 0.25 };
+    const auto r = mgo::resolveMultiPass(setup, testPositions());
+    REQUIRE(r.error.empty());
+    REQUIRE(r.range.cutStart == Approx(10.0));
+    REQUIRE(r.range.cutEnd == Approx(4.0));
+    REQUIRE(r.range.feedEnd == Approx(4.75));
+}
+
+TEST_CASE("MultiPass: positions which can't be used")
+{
+    const auto error = [](const mgo::MultiPassSetup& setup) {
+        return mgo::resolveMultiPass(setup, testPositions()).error;
+    };
+    // Mem 3 has no X, so can't be a start
+    REQUIRE(error({ .startMemory = 2, .cutDistance = 1.0 }) == "Mem 3 isn't set on both Z and X");
+    REQUIRE(error({ .cutEndMemory = 3 }) == "Mem 4 has no Z position");
+    REQUIRE(error({ .feedEndMemory = 2, .cutDistance = 1.0 }) == "Mem 3 has no X position");
+    // Here is Mem 2's Z
+    REQUIRE(error({ .cutEndMemory = 1 }) == "The Z start and end are the same");
+    REQUIRE(error({}) == "The Z start and end are the same");
+    REQUIRE(!error({ .cutDistance = 1.0, .feedInfeed = -0.1 }).empty());
+    REQUIRE(!error({ .cutDistance = 1.0, .feedPerPass = -0.1 }).empty());
+    REQUIRE(error({ .cutDistance = 1.0 }).empty()); // (an infeed of zero is fine)
+}
+
+TEST_CASE("MultiPass: the dialog's defaults")
+{
+    auto positions = testPositions();
+    mgo::MultiPassSetup previous { .cutDistance = -7.0,
+                                   .feedInfeed = 0.5,
+                                   .feedPerPass = 0.1,
+                                   .pause = true,
+                                   .retractBeforeMoveToStart = false };
+
+    // At Mem 2 (Z 10, X 5): start there, ending at the other slots set
+    auto s = mgo::defaultMultiPassSetup(previous, positions);
+    REQUIRE(s.startMemory == 1u);
+    REQUIRE(s.cutEndMemory == 0u);
+    REQUIRE(s.feedEndMemory == 0u);
+    REQUIRE(s.cutDistance == Approx(-7.0));
+    REQUIRE(s.feedInfeed == Approx(0.5));
+    REQUIRE(s.feedPerPass == Approx(0.1));
+    REQUIRE(s.pause);
+    REQUIRE(s.retractBeforeMoveToStart); // (always)
+
+    // Not at a memory slot: from here, by the distances used last time
+    positions.cutHere = 11.0;
+    s = mgo::defaultMultiPassSetup(previous, positions);
+    REQUIRE(!s.startMemory);
+    REQUIRE(!s.cutEndMemory);
+    REQUIRE(!s.feedEndMemory);
+
+    // ...but a memory slot used for an end last time is kept (e.g. a shoulder)
+    previous.cutEndMemory = 2;
+    s = mgo::defaultMultiPassSetup(previous, positions);
+    REQUIRE(!s.startMemory);
+    REQUIRE(s.cutEndMemory == 2u);
+    REQUIRE(!s.feedEndMemory);
+
+    // ...unless it's now the start (the cut can't end there)
+    positions.cutHere = 2.0;
+    positions.feedHere = 4.5; // (Mem 1)
+    previous.cutEndMemory = 0;
+    s = mgo::defaultMultiPassSetup(previous, positions);
+    REQUIRE(s.startMemory == 0u);
+    REQUIRE(s.cutEndMemory == 1u);
+}
+
+TEST_CASE("MultiPass: the number of passes")
+{
+    mgo::MultiPassRange range { .cutStart = 0.0, .cutEnd = 5.0, .feedStart = 5.0, .feedEnd = 4.5 };
+    // The first pass is at the start; then five steps of 0.1
+    REQUIRE(mgo::multiPassCount(range, 0.1) == 6);
+    REQUIRE(mgo::multiPassCount(range, 0.3) == 3); // (the last step smaller)
+    REQUIRE(mgo::multiPassCount(range, 0.0) == 0); // (repeats until stopped)
+    range.feedEnd = 5.0;
+    REQUIRE(mgo::multiPassCount(range, 0.1) == 1);
+}
+
+TEST_CASE("Model:   X's infeed is the opposite way to its retract")
+{
+    for (const auto direction : { mgo::XDirection::Outwards, mgo::XDirection::Inwards }) {
+        mgo::MockConfigReader config;
+        mgo::MockGpio gpio(false);
+        mgo::Model model(gpio, config);
+        model.initialise();
+        model.setRetractionDirection(direction);
+        const double intoWork = model.multiPassPositions().feedIntoWork;
+        const double before = model.getAxis2MotorPosition();
+        model.axis2Retract();
+        REQUIRE(runUntilStopped(model));
+        const double retracted = model.getAxis2MotorPosition() - before;
+        REQUIRE(retracted != Approx(0.0));
+        REQUIRE(retracted * intoWork < 0.0);
+    }
+}
+
+TEST_CASE("Model:   Enter moves to a multi-pass's start, retracting first; Enter again cuts")
+{
+    mgo::MockConfigReader config;
+    mgo::MockGpio gpio(false);
+    mgo::Model model(gpio, config);
+    model.initialise();
+    model.axis1SetSpeed(200.0);
+    model.axis2SetSpeed(50.0);
+    // From here (Z 0, X 0): Z by 0.2, X in by 0.02
+    model.changeMode(mgo::Mode::MultiPass);
+    REQUIRE(model
+                .setMultiPassSetup(
+                    { .cutDistance = 0.2, .feedInfeed = 0.02, .feedPerPass = 0.01 })
+                .empty());
+    const mgo::MultiPassRange range = model.getMultiPassRange();
+    REQUIRE(model.multiPassAtStart());
+
+    // Moved away (as after a multi-pass, or setting up)
+    model.axis1GoToPosition(0.5);
+    model.axis2GoToPosition(0.1);
+    REQUIRE(runUntilStopped(model));
+    REQUIRE(!model.multiPassAtStart());
+
+    // The first Enter moves to the start: X retracts first, so is further
+    // out than both where it was and the start while Z moves
+    const double intoWork = model.multiPassPositions().feedIntoWork;
+    // (The moves above may have reset the speeds, as usual after a fast move)
+    const double zSpeed = model.getAxis1MotorSpeed();
+    const double xSpeed = model.getAxis2MotorSpeed();
+    model.multiPassGo();
+    REQUIRE(model.multiPassMovingToStart());
+    REQUIRE(!model.multiPass().inProgress());
+    bool zMovedWithXOut = true;
+    REQUIRE(runUntilAtStart(model, [&] {
+        if (model.isAxis1MotorRunning()) {
+            const double x = model.getAxis2MotorPosition();
+            zMovedWithXOut = zMovedWithXOut && (x - 0.1) * intoWork < -1.0;
+        }
+    }));
+    REQUIRE(zMovedWithXOut);
+    REQUIRE(model.multiPassAtStart());
+    REQUIRE(model.getAxis1MotorPosition() == Approx(range.cutStart).margin(0.0001));
+    REQUIRE(model.getAxis2MotorPosition() == Approx(range.feedStart).margin(0.0001));
+    REQUIRE(!model.getIsAxis2Retracted());
+    REQUIRE(!model.multiPass().inProgress()); // (waiting for the next Enter)
+    // (The speeds are as they were, not the full speed Z moved at)
+    REQUIRE(model.getAxis1MotorSpeed() == Approx(zSpeed));
+    REQUIRE(model.getAxis2MotorSpeed() == Approx(xSpeed));
+
+    // The second starts cutting
+    model.multiPassGo();
+    REQUIRE(model.multiPass().inProgress());
+    REQUIRE(model.multiPass().totalPasses() == 3);
+    model.stopAllMotors();
+}
+
+TEST_CASE("Model:   without a retract, X moves away from the work before Z, and in after")
+{
+    for (const bool startFurtherOut : { true, false }) {
+        mgo::MockConfigReader config;
+        mgo::MockGpio gpio(false);
+        mgo::Model model(gpio, config);
+        model.initialise();
+        model.axis1SetSpeed(200.0);
+        const double intoWork = model.multiPassPositions().feedIntoWork;
+        // The start is here: Z 0, X 0
+        model.changeMode(mgo::Mode::MultiPass);
+        REQUIRE(model
+                    .setMultiPassSetup({ .cutDistance = 0.2,
+                                         .feedInfeed = 0.02,
+                                         .feedPerPass = 0.01,
+                                         .retractBeforeMoveToStart = false })
+                    .empty());
+        // Away along Z, and in or out from the start along X
+        model.axis1GoToPosition(0.3);
+        model.axis2GoToPosition((startFurtherOut ? 0.05 : -0.05) * intoWork);
+        REQUIRE(runUntilStopped(model));
+
+        model.multiPassGo();
+        bool bothMoved = false;
+        bool xAtStartWhenZMoved = true;
+        bool zAtStartWhenXMoved = true;
+        REQUIRE(runUntilAtStart(model, [&] {
+            const bool z = model.isAxis1MotorRunning();
+            const bool x = model.isAxis2MotorRunning();
+            bothMoved = bothMoved || (z && x);
+            if (z) {
+                xAtStartWhenZMoved = xAtStartWhenZMoved
+                    && std::abs(model.getAxis2MotorPosition()) < 0.0001;
+            }
+            if (x) {
+                zAtStartWhenXMoved
+                    = zAtStartWhenXMoved && std::abs(model.getAxis1MotorPosition()) < 0.0001;
+            }
+        }));
+        REQUIRE(!bothMoved); // (one at a time)
+        INFO("Start further out: " << startFurtherOut);
+        if (startFurtherOut) {
+            // X out to the start first, then Z along
+            REQUIRE(xAtStartWhenZMoved);
+        } else {
+            // Z along first, then X in to the start
+            REQUIRE(zAtStartWhenXMoved);
+        }
+        REQUIRE(model.multiPassAtStart());
+        REQUIRE(!model.getIsAxis2Retracted());
+    }
+}
+
+TEST_CASE("Model:   Space stops a move to a multi-pass's start")
+{
+    mgo::MockConfigReader config;
+    mgo::MockGpio gpio(false);
+    mgo::Model model(gpio, config);
+    model.initialise();
+    model.axis1SetSpeed(20.0);
+    model.changeMode(mgo::Mode::MultiPass);
+    REQUIRE(model.setMultiPassSetup({ .cutDistance = 0.2, .feedPerPass = 0.01 }).empty());
+    model.axis1GoToPosition(2.0);
+    REQUIRE(runUntilStopped(model));
+    model.multiPassGo();
+    model.checkStatus();
+    REQUIRE(model.multiPassMovingToStart());
+    model.stopAllMotors();
+    REQUIRE(!model.multiPassMovingToStart());
+    model.checkStatus();
+    REQUIRE(!model.isAxis1MotorRunning());
+    REQUIRE(!model.isAxis2MotorRunning());
+    REQUIRE(!model.multiPass().inProgress());
 }
 
 namespace {
@@ -2232,7 +2540,14 @@ TEST_CASE("Model:   nudging X while a multi-pass is paused")
     model.axis2StorePosition(0.05);
     model.selectPreviousMemorySlot();
     model.changeMode(mgo::Mode::MultiPass);
-    model.setMultiPassOptions({ .feedPerPass = 0.01, .pause = true, .retract = true });
+    REQUIRE(model
+                .setMultiPassSetup({ .startMemory = 0,
+                                     .cutEndMemory = 1,
+                                     .feedEndMemory = 1,
+                                     .feedPerPass = 0.01,
+                                     .pause = true,
+                                     .retract = true })
+                .empty());
     model.multiPassGo();
     REQUIRE(model.multiPass().inProgress());
     // Not while cutting...

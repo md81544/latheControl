@@ -81,14 +81,6 @@ enum class Axis {
     Axis2
 };
 
-// The options chosen when entering multi-pass mode. (The cut's start and end
-// come from memory slots 1 and 2 when it starts)
-struct MultiPassOptions {
-    double feedPerPass { 0.0 }; // mm
-    bool pause { false };
-    bool retract { false };
-};
-
 // Threading: what to do with X when a pass's Z move ends (with ThreadingAutoRetract).
 // "arrived" is whether Z reached its target, rather than being stopped short;
 // "retractedAtStart" and "retractedNow" are whether X was retracted when the
@@ -298,12 +290,25 @@ public:
 
     const IConfigReader& config() const;
 
-    // Multi-pass mode: the options are set on entering it. multiPassGo()
-    // starts the multi-pass from Mem 1 to Mem 2 (or continues it, if paused);
-    // if it can't start, the warning says why
-    void setMultiPassOptions(const MultiPassOptions& options);
-    const MultiPassOptions& getMultiPassOptions() const;
+    // Multi-pass mode. The setup is chosen on entering it, and its start and
+    // end positions are fixed then, from where the axes and memory slots are
+    // at the time (so moving the axes, or changing a memory slot, doesn't
+    // change them). Returns an empty string, or why the setup can't be used
+    // (in which case nothing is changed)
+    std::string setMultiPassSetup(const MultiPassSetup& setup);
+    const MultiPassSetup& getMultiPassSetup() const;
+    const MultiPassRange& getMultiPassRange() const;
+    // Where the axes and memory slots are now, for resolveMultiPass()
+    MultiPassPositions multiPassPositions() const;
+    // Enter, in the mode. If the axes aren't at the start, moves them there
+    // (retracting X first, if the setup says so) and waits; once there,
+    // starts the multi-pass. If it's paused, continues it. If it can't do
+    // any of these, the warning says why
     void multiPassGo();
+    // Whether both axes are at the multi-pass's start
+    bool multiPassAtStart() const;
+    // Whether the axes are moving to the start (after a multiPassGo())
+    bool multiPassMovingToStart() const;
     const MultiPass& multiPass() const;
 
 private:
@@ -378,8 +383,10 @@ private:
     // "Breadcrumb" trail of positions for axes:
     std::stack<double> m_axis1PreviousPositions;
     std::stack<double> m_axis2PreviousPositions;
-    MultiPassOptions m_multiPassOptions;
+    MultiPassSetup m_multiPassSetup;
+    MultiPassRange m_multiPassRange;
     MultiPass m_multiPass { *this };
+    bool m_multiPassMovingToStart { false };
 
     std::set<unsigned> m_axisLocks;
 
@@ -433,6 +440,11 @@ private:
     void feedMoveTo(double position) override;
     void retract() override;
     bool isRetracted() const override;
+    // Moving to the multi-pass's start (see multiPassGo())
+    void multiPassMoveToStart();
+    // +1 if X's position increases as it moves into the work (i.e. the
+    // opposite way to a retract), or -1 if it decreases
+    double axis2IntoWorkSign() const;
     // Threading
     // Starts a threading pass: Z follows the spindle to endStep. Returns false
     // if it couldn't start (with a warning)

@@ -508,8 +508,9 @@ std::string Model::getFaultMessage() const
 
 void Model::changeMode(Mode mode)
 {
-    if (mode != Mode::None || m_multiPass.inProgress()) {
-        // (Leaving multi-pass mode part way through stops it, too)
+    if (mode != Mode::None || m_multiPass.inProgress() || m_multiPassMovingToStart) {
+        // (Leaving multi-pass mode part way through stops it, too, as it
+        // does a move to its start)
         stopAllMotors();
     }
     axis2SynchroniseOff();
@@ -1940,19 +1941,143 @@ const IConfigReader& Model::config() const
     return m_config;
 }
 
-void Model::setMultiPassOptions(const MultiPassOptions& options)
+std::string Model::setMultiPassSetup(const MultiPassSetup& setup)
 {
-    m_multiPassOptions = options;
+    const MultiPassResolved resolved = resolveMultiPass(
+        setup,
+        multiPassPositions(),
+        m_config.read("Axis1Label", "Z"),
+        m_config.read("Axis2Label", "X"));
+    if (!resolved.error.empty()) {
+        return resolved.error;
+    }
+    m_multiPassSetup = setup;
+    m_multiPassRange = resolved.range;
+    MGOLOG(fmt::format(
+        "Multi-pass set up: Z {} to {}, X {} to {}",
+        m_multiPassRange.cutStart,
+        m_multiPassRange.cutEnd,
+        m_multiPassRange.feedStart,
+        m_multiPassRange.feedEnd));
+    return {};
 }
 
-const MultiPassOptions& Model::getMultiPassOptions() const
+const MultiPassSetup& Model::getMultiPassSetup() const
 {
-    return m_multiPassOptions;
+    return m_multiPassSetup;
+}
+
+const MultiPassRange& Model::getMultiPassRange() const
+{
+    return m_multiPassRange;
+}
+
+MultiPassPositions Model::multiPassPositions() const
+{
+    MultiPassPositions p;
+    p.cutHere = m_axis1Motor->getPosition();
+    p.feedHere = m_axis2Motor->getPosition();
+    for (std::size_t slot = 0; slot < m_axis1Memory.size(); ++slot) {
+        p.cutMemory.push_back(getAxis1MemoryAsPosition(slot));
+        p.feedMemory.push_back(getAxis2MemoryAsPosition(slot));
+    }
+    p.feedIntoWork = axis2IntoWorkSign();
+    return p;
+}
+
+double Model::axis2IntoWorkSign() const
+{
+    // As axis2Retract() moves: its steps, then those in mm
+    double retractSteps = m_xRetractionDirection == XDirection::Inwards ? 1.0 : -1.0;
+    if (m_config.readBool("Axis2MotorFlipDirection", false)) {
+        retractSteps = -retractSteps;
+    }
+    const double retractMm = retractSteps * m_axis2Motor->getConversionFactor();
+    return retractMm > 0.0 ? -1.0 : 1.0;
+}
+
+bool Model::multiPassAtStart() const
+{
+    return atMultiPassPosition(m_axis1Motor->getPosition(), m_multiPassRange.cutStart)
+        && atMultiPassPosition(m_axis2Motor->getPosition(), m_multiPassRange.feedStart);
+}
+
+bool Model::multiPassMovingToStart() const
+{
+    return m_multiPassMovingToStart;
+}
+
+void Model::multiPassMoveToStart()
+{
+    const double zStart = m_multiPassRange.cutStart;
+    const double xStart = m_multiPassRange.feedStart;
+    const bool zToMove = !atMultiPassPosition(m_axis1Motor->getPosition(), zStart);
+    const bool xToMove = !atMultiPassPosition(m_axis2Motor->getPosition(), xStart);
+    const double oldZSpeed = m_axis1Motor->getSpeed();
+    const double oldXSpeed = m_axis2Motor->getSpeed();
+
+    const auto zStopped = [this]() { return !m_axis1Motor->isRunning(); };
+    const auto xStopped = [this]() { return !m_axis2Motor->isRunning(); };
+    const MotionSequence::Step retractStep { [this]() { axis2Retract(); }, xStopped };
+    const MotionSequence::Step zStep { [this, zStart]() {
+                                          m_axis1Status = "to start";
+                                          m_axis1Motor->setSpeed(m_axis1Motor->getMaxRpm());
+                                          m_axis1Motor->goToPosition(zStart);
+                                      },
+                                       zStopped };
+    // (At the retract speed. Once X is moving to the start, it's no longer
+    // at a retracted position, so isn't counted as retracted)
+    const MotionSequence::Step xStep { [this, xStart]() {
+                                          m_axis2Retracted = false;
+                                          m_axis2Status = "to start";
+                                          m_axis2Motor->setSpeed(1.0); // (so it ramps)
+                                          m_axis2Motor->setSpeed(100.0);
+                                          m_axis2Motor->goToPosition(xStart);
+                                      },
+                                       xStopped };
+
+    // X moves away from the work before Z moves, and towards it after, so
+    // that Z doesn't move with the tool deeper in than it need be. With a
+    // retract (only needed if Z moves), X starts by moving away anyway
+    std::vector<MotionSequence::Step> steps;
+    const bool retractFirst
+        = zToMove && m_multiPassSetup.retractBeforeMoveToStart && !m_axis2Retracted;
+    const bool xAwayFromWork
+        = (xStart - m_axis2Motor->getPosition()) * axis2IntoWorkSign() < 0.0;
+    const bool xFirst = xToMove && xAwayFromWork && !retractFirst;
+    // (If X was already retracted, it's moved to the start even if it's
+    // there, to count as unretracted)
+    const bool xLast = !xFirst && (retractFirst || xToMove || m_axis2Retracted);
+    if (retractFirst) {
+        steps.push_back(retractStep);
+    }
+    if (xFirst) {
+        steps.push_back(xStep);
+    }
+    if (zToMove) {
+        steps.push_back(zStep);
+    }
+    if (xLast) {
+        steps.push_back(xStep);
+    }
+    MGOLOG(fmt::format(
+        "Multi-pass: moving to the start, Z {}, X {}{}",
+        zStart,
+        xStart,
+        retractFirst ? " (retracting first)" : ""));
+    m_multiPassMovingToStart = true;
+    m_motionSequence.start(std::move(steps), [this, oldZSpeed, oldXSpeed]() {
+        m_axis1Motor->setSpeed(oldZSpeed);
+        m_axis2Motor->setSpeed(oldXSpeed);
+        m_multiPassMovingToStart = false;
+        axis1SaveBreadcrumbPosition();
+        axis2SaveBreadcrumbPosition();
+    });
 }
 
 void Model::multiPassGo()
 {
-    if (m_mode != Mode::MultiPass) {
+    if (m_mode != Mode::MultiPass || m_multiPassMovingToStart) {
         return;
     }
     if (m_multiPass.state() == MultiPass::State::Paused) {
@@ -1963,28 +2088,26 @@ void Model::multiPassGo()
     if (m_multiPass.inProgress()) {
         return;
     }
-    // From Mem 1 to Mem 2
-    const auto zStart = getAxis1MemoryAsPosition(0);
-    const auto zEnd = getAxis1MemoryAsPosition(1);
-    const auto xStart = getAxis2MemoryAsPosition(0);
-    const auto xEnd = getAxis2MemoryAsPosition(1);
-    if (!zStart || !zEnd || !xStart || !xEnd) {
-        m_warning = fmt::format(
-            "Store {} and {} in Mem 1 and Mem 2 first",
-            m_config.read("Axis1Label", "Z"),
-            m_config.read("Axis2Label", "X"));
+    if (m_axis1Motor->isRunning() || m_axis2Motor->isRunning()) {
+        m_warning = "Stop the motors first";
+        return;
+    }
+    if (!multiPassAtStart() || m_axis2Retracted) {
+        // The first Enter moves to the start; the next starts cutting
+        m_warning = "";
+        multiPassMoveToStart();
         return;
     }
     MultiPassPlan plan;
-    plan.cutStart = *zStart;
-    plan.cutEnd = *zEnd;
-    plan.feedStart = *xStart;
-    plan.feedEnd = *xEnd;
-    plan.feedPerPass = std::abs(m_multiPassOptions.feedPerPass);
-    plan.retract = m_multiPassOptions.retract;
-    plan.pause = m_multiPassOptions.pause;
+    plan.cutStart = m_multiPassRange.cutStart;
+    plan.cutEnd = m_multiPassRange.cutEnd;
+    plan.feedStart = m_multiPassRange.feedStart;
+    plan.feedEnd = m_multiPassRange.feedEnd;
+    plan.feedPerPass = std::abs(m_multiPassSetup.feedPerPass);
+    plan.retract = m_multiPassSetup.retract;
+    plan.pause = m_multiPassSetup.pause;
     if (const std::string error = m_multiPass.start(plan); !error.empty()) {
-        m_warning = error == "Go to the start position first" ? "Go to Mem 1 first" : error;
+        m_warning = error;
         return;
     }
     m_warning = "";

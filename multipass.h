@@ -1,6 +1,9 @@
 #pragma once
 
+#include <cstddef>
+#include <optional>
 #include <string>
+#include <vector>
 
 namespace mgo {
 
@@ -52,6 +55,90 @@ struct MultiPassPlan {
     // Wait for continueAfterPause() before each pass after the first
     bool pause { false };
 };
+
+// Where a multi-pass's start and end positions come from, as chosen in its
+// dialog. The start is a point (both axes); each axis's end is chosen
+// separately, so e.g. the cut can end at a shoulder stored in a memory slot
+// while the feed goes in by a distance from wherever the tool is now.
+// Lengths are in mm.
+struct MultiPassSetup {
+    // The start: a memory slot (its position on both axes), or nullopt for
+    // where the axes are now
+    std::optional<std::size_t> startMemory;
+    // The cut axis's end: a memory slot (its cut axis position), or nullopt
+    // for cutDistance from the start
+    std::optional<std::size_t> cutEndMemory;
+    // The feed axis's end: a memory slot (its feed axis position), or
+    // nullopt for feedInfeed from the start
+    std::optional<std::size_t> feedEndMemory;
+    // The cut axis's change from start to end (signed, as the display shows
+    // positions)
+    double cutDistance { 0.0 };
+    // How far the feed axis goes into the work, from start to end (not
+    // negative). Which way "into the work" is depends on the retraction
+    // direction (see MultiPassPositions::feedIntoWork)
+    double feedInfeed { 0.0 };
+    double feedPerPass { 0.0 };
+    bool pause { false };
+    bool retract { false };
+    // Retract the feed axis before moving to the start (when the cut axis
+    // has to move to get there)
+    bool retractBeforeMoveToStart { true };
+};
+
+// What's needed to work out a MultiPassSetup's positions (in mm)
+struct MultiPassPositions {
+    // Where the axes are now
+    double cutHere { 0.0 };
+    double feedHere { 0.0 };
+    // Each memory slot's position on each axis (nullopt if not set)
+    std::vector<std::optional<double>> cutMemory;
+    std::vector<std::optional<double>> feedMemory;
+    // +1 if the feed axis's position increases as it moves into the work,
+    // -1 if it decreases (the opposite way to a retract)
+    double feedIntoWork { -1.0 };
+};
+
+// A multi-pass's start and end positions, worked out from a MultiPassSetup
+struct MultiPassRange {
+    double cutStart { 0.0 };
+    double cutEnd { 0.0 };
+    double feedStart { 0.0 };
+    double feedEnd { 0.0 };
+};
+
+// Either the range, or (if error isn't empty) why there isn't one
+struct MultiPassResolved {
+    MultiPassRange range;
+    std::string error;
+};
+
+// Works out a setup's start and end positions. cutLabel and feedLabel (e.g.
+// "Z" and "X") are for the error messages
+MultiPassResolved resolveMultiPass(
+    const MultiPassSetup& setup,
+    const MultiPassPositions& positions,
+    const std::string& cutLabel = "Z",
+    const std::string& feedLabel = "X");
+
+// The setup the dialog starts with, from the one used last time:
+// - The start is a memory slot if the axes are at one (set on both axes),
+//   or else where they are now.
+// - Each end is the previous one's memory slot if that's still set (and,
+//   for the cut axis, isn't the start), or else, if the start is a memory
+//   slot, the first other slot set on that axis, or else a distance.
+// - The distances, step-over, pause and retract are as before. Retracting
+//   before moving to the start is always on.
+MultiPassSetup defaultMultiPassSetup(
+    const MultiPassSetup& previous, const MultiPassPositions& positions);
+
+// True if an axis is at a position (within MultiPass::TOLERANCE)
+bool atMultiPassPosition(double position, double target);
+
+// How many passes a range takes with a step-over (the first at the feed
+// axis's start, the last at its end), or 0 if repeating until stopped (a
+// step-over of zero)
+int multiPassCount(const MultiPassRange& range, double feedPerPass);
 
 // A series of cuts: cut, (retract,) return, (unretract,) (pause,) feed on,
 // and repeat until a cut has been made at the feed axis's end position.

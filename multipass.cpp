@@ -12,7 +12,135 @@ bool near(double a, double b)
     return std::abs(a - b) < MultiPass::TOLERANCE;
 }
 
+std::optional<double> memoryAt(const std::vector<std::optional<double>>& memory, std::size_t slot)
+{
+    return slot < memory.size() ? memory[slot] : std::nullopt;
+}
+
+std::string slotName(std::size_t slot)
+{
+    return "Mem " + std::to_string(slot + 1);
+}
+
 } // end anonymous namespace
+
+bool atMultiPassPosition(double position, double target)
+{
+    return near(position, target);
+}
+
+MultiPassResolved resolveMultiPass(
+    const MultiPassSetup& setup,
+    const MultiPassPositions& positions,
+    const std::string& cutLabel,
+    const std::string& feedLabel)
+{
+    MultiPassResolved r;
+    MultiPassRange& range = r.range;
+    if (setup.startMemory) {
+        const auto cut = memoryAt(positions.cutMemory, *setup.startMemory);
+        const auto feed = memoryAt(positions.feedMemory, *setup.startMemory);
+        if (!cut || !feed) {
+            r.error = slotName(*setup.startMemory) + " isn't set on both " + cutLabel + " and "
+                + feedLabel;
+            return r;
+        }
+        range.cutStart = *cut;
+        range.feedStart = *feed;
+    } else {
+        range.cutStart = positions.cutHere;
+        range.feedStart = positions.feedHere;
+    }
+
+    if (setup.cutEndMemory) {
+        const auto cut = memoryAt(positions.cutMemory, *setup.cutEndMemory);
+        if (!cut) {
+            r.error = slotName(*setup.cutEndMemory) + " has no " + cutLabel + " position";
+            return r;
+        }
+        range.cutEnd = *cut;
+    } else {
+        range.cutEnd = range.cutStart + setup.cutDistance;
+    }
+
+    if (setup.feedEndMemory) {
+        const auto feed = memoryAt(positions.feedMemory, *setup.feedEndMemory);
+        if (!feed) {
+            r.error = slotName(*setup.feedEndMemory) + " has no " + feedLabel + " position";
+            return r;
+        }
+        range.feedEnd = *feed;
+    } else {
+        if (setup.feedInfeed < 0.0) {
+            r.error = "The " + feedLabel + " infeed can't be negative";
+            return r;
+        }
+        range.feedEnd = range.feedStart + positions.feedIntoWork * setup.feedInfeed;
+    }
+
+    if (near(range.cutStart, range.cutEnd)) {
+        r.error = "The " + cutLabel + " start and end are the same";
+        return r;
+    }
+    if (setup.feedPerPass < 0.0) {
+        r.error = "The step-over can't be negative";
+        return r;
+    }
+    return r;
+}
+
+MultiPassSetup defaultMultiPassSetup(
+    const MultiPassSetup& previous, const MultiPassPositions& positions)
+{
+    MultiPassSetup setup = previous;
+    setup.retractBeforeMoveToStart = true;
+    const std::size_t slots = std::min(positions.cutMemory.size(), positions.feedMemory.size());
+
+    // At a memory slot? Then start from it
+    setup.startMemory.reset();
+    for (std::size_t slot = 0; slot < slots; ++slot) {
+        const auto cut = positions.cutMemory[slot];
+        const auto feed = positions.feedMemory[slot];
+        if (cut && feed && near(*cut, positions.cutHere) && near(*feed, positions.feedHere)) {
+            setup.startMemory = slot;
+            break;
+        }
+    }
+
+    const auto endFor = [&](const std::vector<std::optional<double>>& memory,
+                            std::optional<std::size_t> previousEnd,
+                            bool notTheStart) -> std::optional<std::size_t> {
+        const auto usable = [&](std::size_t slot) {
+            return memoryAt(memory, slot).has_value()
+                && !(notTheStart && setup.startMemory == slot);
+        };
+        if (previousEnd && usable(*previousEnd)) {
+            return previousEnd;
+        }
+        if (setup.startMemory) {
+            for (std::size_t slot = 0; slot < memory.size(); ++slot) {
+                if (slot != *setup.startMemory && usable(slot)) {
+                    return slot;
+                }
+            }
+        }
+        return std::nullopt;
+    };
+    // (The cut can't end where it starts, but the feed can: the same depth)
+    setup.cutEndMemory = endFor(positions.cutMemory, previous.cutEndMemory, true);
+    setup.feedEndMemory = endFor(positions.feedMemory, previous.feedEndMemory, false);
+    return setup;
+}
+
+int multiPassCount(const MultiPassRange& range, double feedPerPass)
+{
+    if (feedPerPass < MultiPass::TOLERANCE) {
+        return 0;
+    }
+    const double distance = std::abs(range.feedEnd - range.feedStart);
+    // (As MultiPass::totalPasses(), at the first pass)
+    return 1 + static_cast<int>(std::ceil(std::max(0.0, distance - MultiPass::TOLERANCE) / feedPerPass));
+}
 
 MultiPass::MultiPass(IMultiPassMachine& machine)
     : m_machine(machine)

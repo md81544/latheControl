@@ -35,6 +35,9 @@ public:
         const ThreadTable& threads,
         ThreadChoice current,
         std::function<void(std::optional<ThreadChoice>)> onDone) override;
+    void openMultiPassDialog(
+        const MultiPassDialogInfo& info,
+        std::function<void(std::optional<MultiPassSetup>)> onDone) override;
     bool isDialogOpen() const override;
     void cancelDialog() override;
     void updateDisplay(const Model&) override;

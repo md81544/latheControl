@@ -594,6 +594,21 @@ void ViewQt::openThreadDialog(
         });
 }
 
+void ViewQt::openMultiPassDialog(
+    const MultiPassDialogInfo& info, std::function<void(std::optional<MultiPassSetup>)> onDone)
+{
+    assert(!isDialogOpen()); // (one at a time)
+    m_impl->setDimmed(true);
+    m_impl->dialog = dialog::openMultiPassDialog(
+        m_impl->widget.get(),
+        m_impl->fontFamily,
+        info,
+        [this, onDone = std::move(onDone)](std::optional<MultiPassSetup> setup) {
+            m_impl->dialogClosed();
+            onDone(setup);
+        });
+}
+
 bool ViewQt::isDialogOpen() const
 {
     return !m_impl->dialog.isNull();
@@ -1177,13 +1192,32 @@ void ViewQt::Impl::updateTextFromModel(const Model& model)
 void ViewQt::Impl::updateMultiPassData(const Model& model)
 {
     const MultiPass& mp = model.multiPass();
-    const MultiPassOptions& options = model.getMultiPassOptions();
+    const MultiPassSetup& options = model.getMultiPassSetup();
+    const MultiPassRange& range = model.getMultiPassRange();
+    const std::string z = model.config().read("Axis1Label", "Z");
     const std::string x = model.config().read("Axis2Label", "X");
     const auto xLength = [&model](double mm) {
         return fmt::format(
             "{:.{}f} {}", model.toDisplayUnits(2, mm), model.axisDecimals(2), model.axisUnitName(2));
     };
-    mode.text = "";
+    const auto position = [&model](int axis, double mm) {
+        const int decimals = model.axisDecimals(axis);
+        double value = model.toDisplayUnits(axis, mm);
+        // (Not "-0.00")
+        if (std::abs(value) < 0.5 * std::pow(10.0, -decimals)) {
+            value = 0.0;
+        }
+        return fmt::format("{:.{}f}", value, decimals);
+    };
+    // e.g. "Z 12.35 to 5.35, X 10.20 to 9.70"
+    mode.text = fmt::format(
+        "{} {} to {}, {} {} to {}",
+        z,
+        position(1, range.cutStart),
+        position(1, range.cutEnd),
+        x,
+        position(2, range.feedStart),
+        position(2, range.feedEnd));
     if (options.feedPerPass < MultiPass::TOLERANCE) {
         misc1.text = "Repeating the same cut";
     } else {
@@ -1201,9 +1235,19 @@ void ViewQt::Impl::updateMultiPassData(const Model& model)
         : fmt::format("Pass {} of {}", mp.pass(), mp.totalPasses());
     switch (mp.state()) {
         case MultiPass::State::Idle:
-            misc2.text = mp.message().empty()
-                ? "Go to Mem 1, then press Enter to start"
-                : "Stopped. Go to Mem 1, then press Enter to start again";
+            {
+                const std::string stopped = mp.message().empty() ? "" : "Stopped. ";
+                if (model.multiPassMovingToStart()) {
+                    misc2.text = "Moving to the start";
+                } else if (model.multiPassAtStart() && !model.getIsAxis2Retracted()) {
+                    misc2.text = stopped + "At the start: press Enter to start cutting";
+                } else {
+                    misc2.text = stopped + "Press Enter to move to the start";
+                    if (options.retractBeforeMoveToStart) {
+                        misc2.text += " (" + x + " retracts first)";
+                    }
+                }
+            }
             break;
         case MultiPass::State::Cutting:
             misc2.text = pass + ": cutting";
@@ -1229,7 +1273,10 @@ void ViewQt::Impl::updateMultiPassData(const Model& model)
             misc2.text = "Finishing";
             break;
         case MultiPass::State::Finished:
-            misc2.text = fmt::format("Finished ({} passes). Press Enter to start again", mp.pass());
+            misc2.text = model.multiPassAtStart()
+                ? fmt::format("Finished ({} passes). Enter starts again", mp.pass())
+                : fmt::format(
+                      "Finished ({} passes). Enter moves to the start, to go again", mp.pass());
             break;
     }
     // How far X has stepped over since the first pass
@@ -1241,7 +1288,7 @@ void ViewQt::Impl::updateMultiPassData(const Model& model)
                 " of {}", xLength(std::abs(mp.plan().feedEnd - mp.plan().feedStart)));
         }
     }
-    misc4.text = mp.inProgress() ? "Space stops" : "";
+    misc4.text = mp.inProgress() || model.multiPassMovingToStart() ? "Space stops" : "";
     misc5.text = "";
 }
 

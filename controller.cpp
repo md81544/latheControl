@@ -737,44 +737,38 @@ void Controller::processKey(int t)
                     if (m_model->config().readBool("DisableAxis2", false)) {
                         break;
                     }
-                    if (m_model->getAxis1Memory(0) == AXIS1_UNSET
-                        || m_model->getAxis1Memory(1) == AXIS1_UNSET
-                        || m_model->getAxis2Memory(0) == AXIS2_UNSET
-                        || m_model->getAxis2Memory(1) == AXIS2_UNSET) {
-                        pressAnyKey(
-                            "Multi-pass",
-                            { "Store the start of the cut (both axes) in Mem 1, and the end",
-                              "in Mem 2, before using Multi-pass mode",
-                              "",
-                              "Press a key",
-                              "" },
-                            [] {});
-                        break;
-                    }
-                    const std::string axis1Name = m_model->config().read("Axis1Label", "Z");
-                    const std::string axis2Name = m_model->config().read("Axis2Label", "X");
-                    getNumericInput(
-                        "Multi-pass",
-                        { "Enter the " + axis2Name + " step-over per pass" + unitsSuffix(2) + ".",
-                          "",
-                          "Each pass cuts " + axis1Name + " from Mem 1 to Mem 2, then returns. "
-                              + axis2Name + " steps over",
-                          "between passes, from Mem 1's " + axis2Name + " to Mem 2's.",
-                          "If zero, the same cut is repeated until stopped.",
-                          "",
-                          "In the mode, go to Mem 1 and press Enter to start. Space stops.",
-                          "",
-                          "[&P]: pause between passes (Enter continues)",
-                          "[&R] retract between passes" },
-                        0.0,
-                        [this](const NumericInputReturn& rc) {
-                            if (!rc.cancelled) {
-                                m_model->changeMode(Mode::MultiPass);
-                                m_model->setMultiPassOptions(
-                                    { .feedPerPass
-                                      = std::abs(m_model->fromDisplayUnits(2, rc.value)),
-                                      .pause = rc.optionsSelected.contains('p'),
-                                      .retract = rc.optionsSelected.contains('r') });
+                    // As with all dialogs, stop all motors first
+                    m_model->stopAllMotors();
+                    const auto axis = [this](int n, const char* defaultLabel) {
+                        return MultiPassDialogInfo::Axis {
+                            .label = m_model->config().read(
+                                fmt::format("Axis{}Label", n), defaultLabel),
+                            .unit = m_model->axisUnitName(n),
+                            .decimals = m_model->axisDecimals(n),
+                            .displayPerMm = m_model->toDisplayUnits(n, 1.0)
+                        };
+                    };
+                    MultiPassDialogInfo info;
+                    info.cut = axis(1, "Z");
+                    info.feed = axis(2, "X");
+                    info.positions = m_model->multiPassPositions();
+                    info.diameterKnown = m_model->getDiameterMm().has_value();
+                    info.feedRetractsOutwards
+                        = m_model->getRetractionDirection() == XDirection::Outwards;
+                    info.setup
+                        = defaultMultiPassSetup(m_model->getMultiPassSetup(), info.positions);
+                    m_view->openMultiPassDialog(
+                        info, [this](std::optional<MultiPassSetup> setup) {
+                            if (!setup) {
+                                return;
+                            }
+                            m_model->changeMode(Mode::MultiPass);
+                            // (The dialog only accepts a setup which can be
+                            // used, and nothing has moved since)
+                            if (const std::string error = m_model->setMultiPassSetup(*setup);
+                                !error.empty()) {
+                                m_model->changeMode(Mode::None);
+                                pressAnyKey("Multi-pass", { error, "", "Press a key", "" }, [] {});
                             }
                         });
                     break;

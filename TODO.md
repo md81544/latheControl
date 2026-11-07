@@ -105,8 +105,9 @@
       feed of zero repeats the same cut until stopped. The feed can also be
       manual (it pauses each pass, saying how far to feed), for an axis
       without a motor, though no mode uses that yet
-    - **Done:** multi-pass mode (`F2` `M`) uses it, from Mem 1 to Mem 2.
-      `Enter` starts it once at Mem 1, and continues after a pause. While
+    - **Done:** multi-pass mode (`F2` `M`) uses it (originally from Mem 1 to
+      Mem 2; now as set in its dialog, below). `Enter` starts it once at the
+      start, and continues after a pause. While
       it runs, keys which move an axis are ignored; `Space` (or any stop,
       such as a fault, the spindle stopping or leaving the mode) abandons
       it. The display shows the pass, what it's doing, and how far X has
@@ -114,6 +115,31 @@
     - Cuts are at the Z speed when each cut starts (so it can be changed
       during the cut, for the next ones); the usual reset of speeds above
       `Axis1SpeedResetAbove` / `Axis2SpeedResetAbove` is skipped meanwhile
+    - **Done:** a multi-pass dialog (`F2` `M`) replaces "Mem 1 to Mem 2". The
+      start is where the axes are now, or a memory slot; each axis's end is
+      separately a distance (Z, signed) or infeed (X, into the work, the
+      opposite way to the retraction direction), or a memory slot (e.g. Z
+      to a shoulder, X in by 0.5). With X set as a diameter, the end
+      diameter can be typed instead of the infeed. Left/Right choose where
+      each comes from; choosing the start as the slot an end was at swaps
+      them (Mem 2 to Mem 1 becomes Mem 1 to Mem 2). It shows the positions
+      these come to, and the number of passes, in larger text than the other
+      dialogs. It starts at a memory slot if the tool is at one, ending at
+      the other; the distances and end slots used last time are kept. The
+      positions are fixed when it closes (`resolveMultiPass()`, in
+      multipass.h), so memories aren't needed, or changed
+    - **Done:** in the mode, Enter away from the start moves there (as a
+      `MotionSequence`: retract X, Z at full speed, then X to the start; or,
+      without the retract, X moves away from the work before Z, and towards
+      it after), then waits; Enter again starts cutting. "Retract before
+      moving to the start" is on each time the dialog opens. Space stops the
+      move. Not yet tried on the machine
+    - The first pass is at the start's X (as before), so starting from where
+      the tool touched the work, it's a pass of nothing. Should the first
+      pass be one step in?
+    - The mill: its axis 2 (Y) has no motor yet, so a multi-pass there would
+      need the engine's manual feed ("feed Y by n mm, then press Enter"),
+      and the dialog and the move to the start would need to allow for it
 - [ ] Work on a single line rather than a plane, i.e. if mem0.x == mem1.x,
       interpret it as (say) slot cutting and repeat until the user cancels.
       Could also work if only one axis is defined in config (the engine's

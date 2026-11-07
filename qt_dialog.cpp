@@ -6,7 +6,9 @@
 
 #include <fmt/format.h>
 
+#include <QCoreApplication>
 #include <QDialog>
+#include <QGridLayout>
 #include <QPainter>
 #include <QSignalBlocker>
 #include <QFrame>
@@ -1079,7 +1081,612 @@ private:
     QLabel* m_hint { nullptr };
 };
 
+// ---------------------------------------------------------------------------
+// Multi-pass dialog
+// ---------------------------------------------------------------------------
+
+// Larger, and brighter, than the other dialogs' text: the machine's screen is
+// small, and not very bright
+constexpr int MP_TITLE_FONT_SIZE = 24;
+constexpr int MP_LABEL_FONT_SIZE = 22;
+constexpr int MP_VALUE_FONT_SIZE = 24;
+constexpr int MP_HINT_FONT_SIZE = 18;
+const char* const MP_LABEL_STYLE = "color: rgb(230, 230, 230);";
+const char* const MP_CURRENT_STYLE = "color: rgb(255, 255, 0);";
+const char* const MP_HINT_STYLE = "color: rgb(190, 190, 190);";
+const char* const MP_ERROR_STYLE = "color: rgb(255, 120, 120);";
+const char* const MP_EDIT_STYLE = "background-color: white; color: black;"
+                                  "border: 3px solid rgb(110, 110, 110); padding: 2px;";
+const char* const MP_EDIT_CURRENT_STYLE = "background-color: white; color: black;"
+                                          "border: 3px solid rgb(255, 200, 0); padding: 2px;";
+
+class MultiPassDialog final : public QDialog {
+public:
+    MultiPassDialog(QWidget* parent, const QString& fontFamily, const MultiPassDialogInfo& info)
+        : QDialog(parent, Qt::Dialog | Qt::FramelessWindowHint)
+        , m_info(info)
+        , m_setup(info.setup)
+    {
+        setModal(true);
+        setFocusPolicy(Qt::StrongFocus);
+        QFont titleFont(fontFamily);
+        titleFont.setPixelSize(MP_TITLE_FONT_SIZE);
+        m_labelFont = QFont(fontFamily);
+        m_labelFont.setPixelSize(MP_LABEL_FONT_SIZE);
+        QFont valueFont(fontFamily);
+        valueFont.setPixelSize(MP_VALUE_FONT_SIZE);
+        QFont hintFont(fontFamily);
+        hintFont.setPixelSize(MP_HINT_FONT_SIZE);
+
+        auto* outer = new QVBoxLayout(this);
+        outer->setContentsMargins(0, 0, 0, 0);
+        auto* box = new QFrame(this);
+        box->setObjectName("box");
+        box->setStyleSheet(BOX_STYLE);
+        outer->addWidget(box);
+        auto* layout = new QVBoxLayout(box);
+        layout->setContentsMargins(16, 12, 16, 12);
+        layout->setSpacing(10);
+
+        auto* title = new QLabel("Multi-pass", box);
+        title->setFont(titleFont);
+        title->setStyleSheet(PROMPT_STYLE);
+        layout->addWidget(title);
+
+        auto* grid = new QGridLayout();
+        grid->setHorizontalSpacing(12);
+        grid->setVerticalSpacing(8);
+        layout->addLayout(grid);
+        const std::string& z = m_info.cut.label;
+        const std::string& x = m_info.feed.label;
+        const std::string names[ROW_COUNT]
+            = { "Start", z + " end", x + " end", x + " end Ø", "Step-over" };
+        for (int r = 0; r < ROW_COUNT; ++r) {
+            Row& row = m_rows[r];
+            row.name = addLabel(box, grid, r, 0, names[r], m_labelFont);
+            row.source = addLabel(box, grid, r, 1, "", m_labelFont);
+            row.fixed = addLabel(box, grid, r, 2, "", valueFont);
+            row.result = addLabel(box, grid, r, 3, "", valueFont);
+            if (r != Start) {
+                row.edit = new QLineEdit(box);
+                row.edit->setFont(valueFont);
+                row.edit->setStyleSheet(MP_EDIT_STYLE);
+                row.edit->setFixedWidth(120);
+                // Only the cut axis's distance can be negative: the infeed's
+                // direction is set by the retraction direction
+                row.edit->setValidator(new QRegularExpressionValidator(
+                    QRegularExpression(
+                        r == CutEnd ? R"(^-?[0-9]{0,4}(\.[0-9]*)?$)" : R"(^[0-9]{0,4}(\.[0-9]*)?$)"),
+                    row.edit));
+                row.edit->installEventFilter(this);
+                grid->addWidget(row.edit, r, 2);
+            }
+        }
+        grid->setColumnStretch(3, 1);
+
+        m_options = new QLabel(box);
+        m_options->setTextFormat(Qt::RichText);
+        m_options->setFont(m_labelFont);
+        m_options->setStyleSheet(MP_LABEL_STYLE);
+        layout->addWidget(m_options);
+
+        m_message = new QLabel(box);
+        m_message->setFont(m_labelFont);
+        layout->addWidget(m_message);
+
+        auto* hint = new QLabel(
+            QString::fromStdString(
+                "Up/Down: line   Left/Right: where from   Enter: OK   Esc: cancel\n" + x
+                + " infeed is " + (m_info.feedRetractsOutwards ? "towards" : "away from")
+                + " the centre, as " + x + " retracts "
+                + (m_info.feedRetractsOutwards ? "outwards" : "inwards (boring)")),
+            box);
+        hint->setFont(hintFont);
+        hint->setStyleSheet(MP_HINT_STYLE);
+        layout->addWidget(hint);
+
+        // The values to start with
+        const auto setValue = [](QLineEdit* edit, double displayValue, int decimals) {
+            if (displayValue != 0.0) {
+                edit->setText(QString::number(displayValue, 'f', decimals));
+            }
+        };
+        m_cutDistanceMm = m_setup.cutDistance;
+        m_infeedMm = m_setup.feedInfeed;
+        m_feedPerPassMm = m_setup.feedPerPass;
+        m_cutDistanceTyped = m_setup.cutDistance != 0.0;
+        setValue(
+            m_rows[CutEnd].edit,
+            m_cutDistanceMm * m_info.cut.displayPerMm,
+            m_info.cut.decimals);
+        setValue(
+            m_rows[FeedEnd].edit, m_infeedMm * m_info.feed.displayPerMm, m_info.feed.decimals);
+        setValue(
+            m_rows[StepOver].edit,
+            m_feedPerPassMm * m_info.feed.displayPerMm,
+            m_info.feed.decimals + 1);
+
+        QObject::connect(m_rows[CutEnd].edit, &QLineEdit::textEdited, this, [this] {
+            const auto v = typed(m_rows[CutEnd].edit);
+            m_cutDistanceTyped = v.has_value();
+            m_cutDistanceMm = v.value_or(0.0) / m_info.cut.displayPerMm;
+            refresh();
+        });
+        QObject::connect(m_rows[FeedEnd].edit, &QLineEdit::textEdited, this, [this] {
+            m_infeedMm = typed(m_rows[FeedEnd].edit).value_or(0.0) / m_info.feed.displayPerMm;
+            m_diameterError.clear();
+            refresh();
+        });
+        QObject::connect(m_rows[Diameter].edit, &QLineEdit::textEdited, this, [this] {
+            diameterTyped();
+        });
+        QObject::connect(m_rows[StepOver].edit, &QLineEdit::textEdited, this, [this] {
+            m_feedPerPassMm
+                = typed(m_rows[StepOver].edit).value_or(0.0) / m_info.feed.displayPerMm;
+            refresh();
+        });
+
+        if (!m_info.diameterKnown) {
+            const Row& row = m_rows[Diameter];
+            for (QWidget* w : { static_cast<QWidget*>(row.name),
+                                static_cast<QWidget*>(row.source),
+                                static_cast<QWidget*>(row.fixed),
+                                static_cast<QWidget*>(row.result),
+                                static_cast<QWidget*>(row.edit) }) {
+                w->hide();
+            }
+        }
+
+        refresh();
+        // (Start where something needs typing, if anything does)
+        setCurrentRow(!m_setup.cutEndMemory && !m_cutDistanceTyped ? CutEnd : Start);
+        adjustSize();
+        if (parent) {
+            const QPoint centre = parent->mapToGlobal(parent->rect().center());
+            move(centre - rect().center());
+        }
+    }
+
+    std::optional<MultiPassSetup> chosenSetup() const
+    {
+        if (result() != QDialog::Accepted) {
+            return std::nullopt;
+        }
+        return currentSetup();
+    }
+
+protected:
+    bool eventFilter(QObject* watched, QEvent* event) override
+    {
+        if (event->type() == QEvent::KeyPress
+            && handleKey(watched, static_cast<QKeyEvent*>(event))) {
+            return true;
+        }
+        return QDialog::eventFilter(watched, event);
+    }
+
+    void keyPressEvent(QKeyEvent* event) override
+    {
+        if (!handleKey(this, event)) {
+            QDialog::keyPressEvent(event);
+        }
+    }
+
+private:
+    enum RowId { Start, CutEnd, FeedEnd, Diameter, StepOver, ROW_COUNT };
+
+    struct Row {
+        QLabel* name { nullptr };
+        // Where the position comes from, e.g. "Here" or "Mem 2"
+        QLabel* source { nullptr };
+        // The value typed in (for a distance), or shown in its place
+        QLineEdit* edit { nullptr };
+        QLabel* fixed { nullptr };
+        // The position it comes to
+        QLabel* result { nullptr };
+    };
+
+    static QLabel* addLabel(
+        QWidget* parent,
+        QGridLayout* grid,
+        int row,
+        int column,
+        const std::string& text,
+        const QFont& font)
+    {
+        auto* label = new QLabel(QString::fromStdString(text), parent);
+        label->setFont(font);
+        label->setStyleSheet(MP_LABEL_STYLE);
+        grid->addWidget(label, row, column);
+        return label;
+    }
+
+    // The number in an entry box, in display units (nullopt if none)
+    static std::optional<double> typed(const QLineEdit* edit)
+    {
+        bool ok = false;
+        const double v = edit->text().toDouble(&ok);
+        return ok ? std::optional<double>(v) : std::nullopt;
+    }
+
+    static std::string
+    format(const MultiPassDialogInfo::Axis& axis, double mm, int extraDecimals = 0)
+    {
+        const int decimals = axis.decimals + extraDecimals;
+        double value = mm * axis.displayPerMm;
+        // (Not "-0.00")
+        if (std::abs(value) < 0.5 * std::pow(10.0, -decimals)) {
+            value = 0.0;
+        }
+        return fmt::format("{:.{}f}", value, decimals);
+    }
+
+    static std::string slotName(std::optional<std::size_t> slot, const char* none)
+    {
+        return slot ? "Mem " + std::to_string(*slot + 1) : none;
+    }
+
+    MultiPassSetup currentSetup() const
+    {
+        MultiPassSetup s = m_setup;
+        s.cutDistance = m_cutDistanceMm;
+        s.feedInfeed = m_infeedMm;
+        s.feedPerPass = m_feedPerPassMm;
+        return s;
+    }
+
+    // The setup's positions, or why it can't be used
+    MultiPassResolved resolved() const
+    {
+        MultiPassResolved r
+            = resolveMultiPass(currentSetup(), m_info.positions, m_info.cut.label, m_info.feed.label);
+        if (!m_setup.cutEndMemory && !m_cutDistanceTyped) {
+            r.error = "Type how far " + m_info.cut.label + " moves from the start (+ or -)";
+        }
+        if (r.error.empty() && !m_diameterError.empty()) {
+            r.error = m_diameterError;
+        }
+        return r;
+    }
+
+    // Where the feed axis starts (if its start is known)
+    std::optional<double> feedStart() const
+    {
+        if (!m_setup.startMemory) {
+            return m_info.positions.feedHere;
+        }
+        const auto& memory = m_info.positions.feedMemory;
+        return *m_setup.startMemory < memory.size() ? memory[*m_setup.startMemory] : std::nullopt;
+    }
+
+    // A diameter has been typed: the infeed to reach it
+    void diameterTyped()
+    {
+        const auto diameter = typed(m_rows[Diameter].edit);
+        const auto start = feedStart();
+        m_diameterError.clear();
+        if (!diameter || !start) {
+            refresh();
+            return;
+        }
+        // (X is measured from the centre, on whichever side the tool is)
+        const double end = (*start < 0.0 ? -1.0 : 1.0) * *diameter / m_info.feed.displayPerMm / 2.0;
+        const double infeed = (end - *start) * m_info.positions.feedIntoWork;
+        if (infeed < -MultiPass::TOLERANCE) {
+            m_diameterError = "That diameter is the wrong side of the start";
+        } else {
+            m_infeedMm = std::max(0.0, infeed);
+            // (One more decimal place, as half a diameter may need it)
+            m_rows[FeedEnd].edit->setText(
+                QString::fromStdString(format(m_info.feed, m_infeedMm, 1)));
+        }
+        refresh();
+    }
+
+    // The choices for a row's source, in order
+    std::vector<std::optional<std::size_t>> sourceChoices(int row) const
+    {
+        std::vector<std::optional<std::size_t>> choices { std::nullopt };
+        const auto& p = m_info.positions;
+        const std::size_t slotCount = std::max(p.cutMemory.size(), p.feedMemory.size());
+        const auto set = [](const std::vector<std::optional<double>>& memory, std::size_t slot) {
+            return slot < memory.size() && memory[slot].has_value();
+        };
+        for (std::size_t slot = 0; slot < slotCount; ++slot) {
+            if ((row == Start && set(p.cutMemory, slot) && set(p.feedMemory, slot))
+                || (row == CutEnd && set(p.cutMemory, slot) && m_setup.startMemory != slot)
+                || (row == FeedEnd && set(p.feedMemory, slot))) {
+                choices.push_back(slot);
+            }
+        }
+        return choices;
+    }
+
+    std::optional<std::size_t>* sourceOf(int row)
+    {
+        switch (row) {
+            case Start:
+                return &m_setup.startMemory;
+            case CutEnd:
+                return &m_setup.cutEndMemory;
+            case FeedEnd:
+                return &m_setup.feedEndMemory;
+            default:
+                return nullptr;
+        }
+    }
+
+    void cycleSource(int direction)
+    {
+        std::optional<std::size_t>* source = sourceOf(m_current);
+        if (!source) {
+            return;
+        }
+        const auto choices = sourceChoices(m_current);
+        const auto it = std::find(choices.begin(), choices.end(), *source);
+        const int n = static_cast<int>(choices.size());
+        const int index = it == choices.end() ? 0 : static_cast<int>(it - choices.begin());
+        const std::optional<std::size_t> oldStart = m_setup.startMemory;
+        *source = choices.at(((index + direction) % n + n) % n);
+        if (m_current == Start && m_setup.startMemory) {
+            // An end at the slot that's now the start: the start and end have
+            // been swapped (e.g. Mem 2 to Mem 1, now Mem 1 to Mem 2), so the
+            // end is the old start, or else (the cut can't end where it
+            // starts) a distance
+            const auto& p = m_info.positions;
+            const auto swapped = [&](std::optional<std::size_t>& end,
+                                     const std::vector<std::optional<double>>& memory) {
+                if (end == m_setup.startMemory) {
+                    end = oldStart && *oldStart < memory.size() && memory[*oldStart]
+                        ? oldStart
+                        : std::nullopt;
+                }
+            };
+            swapped(m_setup.cutEndMemory, p.cutMemory);
+            swapped(m_setup.feedEndMemory, p.feedMemory);
+        }
+        m_diameterError.clear();
+        refresh();
+        setCurrentRow(m_current); // (the entry box may have appeared or gone)
+    }
+
+    bool rowShown(int row) const
+    {
+        return row != Diameter || m_info.diameterKnown;
+    }
+
+    // Whether a row's value is typed in (rather than coming from a memory)
+    bool rowTyped(int row) const
+    {
+        switch (row) {
+            case Start:
+                return false;
+            case CutEnd:
+                return !m_setup.cutEndMemory;
+            case FeedEnd:
+            case Diameter:
+                return !m_setup.feedEndMemory;
+            default:
+                return true;
+        }
+    }
+
+    void setCurrentRow(int row)
+    {
+        m_current = row;
+        QLineEdit* edit = m_rows[row].edit;
+        if (edit && rowTyped(row)) {
+            edit->setFocus();
+            edit->selectAll(); // (so typing replaces it)
+        } else {
+            setFocus();
+        }
+        refresh();
+    }
+
+    void moveRow(int direction)
+    {
+        int row = m_current;
+        do {
+            row += direction;
+        } while (row >= 0 && row < ROW_COUNT && !rowShown(row));
+        if (row >= 0 && row < ROW_COUNT) {
+            setCurrentRow(row);
+        }
+    }
+
+    void refresh()
+    {
+        const MultiPassResolved r = resolved();
+        const MultiPassRange& range = r.range;
+        const auto& z = m_info.cut;
+        const auto& x = m_info.feed;
+        // (Positions can only be shown once they're known: an error may mean
+        // they aren't)
+        const bool startKnown = !m_setup.startMemory
+            || resolveMultiPass(MultiPassSetup { .startMemory = m_setup.startMemory,
+                                                 .cutDistance = 1.0 },
+                                m_info.positions)
+                   .error.empty();
+        const MultiPassRange ends = resolveMultiPass(
+                                        [&] {
+                                            MultiPassSetup s = currentSetup();
+                                            if (!m_cutDistanceTyped && !s.cutEndMemory) {
+                                                s.cutDistance = 1.0; // (just for X's end)
+                                            }
+                                            return s;
+                                        }(),
+                                        m_info.positions)
+                                        .range;
+
+        const auto chooser = [](const std::string& text) { return "< " + text + " >"; };
+        m_rows[Start].source->setText(
+            QString::fromStdString(chooser(slotName(m_setup.startMemory, "Here"))));
+        m_rows[Start].result->setText(
+            startKnown ? QString::fromStdString(fmt::format(
+                             "{} {}   {} {}",
+                             z.label,
+                             format(z, range.cutStart),
+                             x.label,
+                             format(x, range.feedStart)))
+                       : "");
+
+        m_rows[CutEnd].source->setText(
+            QString::fromStdString(chooser(slotName(m_setup.cutEndMemory, "Distance"))));
+        const bool cutEndKnown = startKnown && (m_setup.cutEndMemory || m_cutDistanceTyped);
+        m_rows[CutEnd].fixed->setText(
+            cutEndKnown && m_setup.cutEndMemory
+                ? QString::fromStdString(format(z, ends.cutEnd - ends.cutStart))
+                : "");
+        m_rows[CutEnd].result->setText(
+            cutEndKnown ? QString::fromStdString("to " + z.label + " " + format(z, ends.cutEnd))
+                        : "");
+
+        m_rows[FeedEnd].source->setText(
+            QString::fromStdString(chooser(slotName(m_setup.feedEndMemory, "Infeed"))));
+        m_rows[FeedEnd].fixed->setText(
+            startKnown && m_setup.feedEndMemory
+                ? QString::fromStdString(format(
+                      x, (ends.feedEnd - ends.feedStart) * m_info.positions.feedIntoWork))
+                : "");
+        m_rows[FeedEnd].result->setText(
+            startKnown ? QString::fromStdString("to " + x.label + " " + format(x, ends.feedEnd))
+                       : "");
+
+        const std::string diameter
+            = startKnown ? format(x, std::abs(ends.feedEnd) * 2.0) : std::string();
+        m_rows[Diameter].fixed->setText(
+            m_setup.feedEndMemory ? QString::fromStdString(diameter) : "");
+        if (!m_rows[Diameter].edit->hasFocus()) {
+            m_rows[Diameter].edit->setText(QString::fromStdString(diameter));
+        }
+
+        const int passes = multiPassCount(ends, m_feedPerPassMm);
+        m_rows[StepOver].result->setText(
+            passes == 0 ? "repeats until stopped"
+                        : QString::fromStdString(
+                              fmt::format("{} pass{}", passes, passes == 1 ? "" : "es")));
+
+        // Which of each row's entry box and fixed value is shown, and which
+        // row is current
+        for (int row = 0; row < ROW_COUNT; ++row) {
+            Row& w = m_rows[row];
+            if (!rowShown(row)) {
+                continue;
+            }
+            const bool typedRow = rowTyped(row);
+            if (w.edit) {
+                w.edit->setVisible(typedRow);
+                w.edit->setStyleSheet(row == m_current ? MP_EDIT_CURRENT_STYLE : MP_EDIT_STYLE);
+            }
+            w.fixed->setVisible(!typedRow);
+            const char* style = row == m_current ? MP_CURRENT_STYLE : MP_LABEL_STYLE;
+            w.name->setStyleSheet(style);
+            w.source->setStyleSheet(style);
+        }
+
+        const auto option = [](const char* key, const char* text, bool on) {
+            return QString("[%1] %2: <span style='color: %3;'>%4</span>")
+                .arg(key, text, on ? "rgb(255, 255, 0)" : "rgb(190, 190, 190)", on ? "Yes" : "No");
+        };
+        m_options->setText(
+            option("P", "Pause between passes", m_setup.pause) + "&nbsp;&nbsp;&nbsp;"
+            + option("R", "Retract between", m_setup.retract) + "<br>"
+            + option("M", "Retract before moving to the start", m_setup.retractBeforeMoveToStart));
+
+        if (r.error.empty()) {
+            m_message->setStyleSheet(MP_HINT_STYLE);
+            m_message->setText("In the mode, Enter moves to the start; Enter again cuts");
+        } else {
+            m_message->setStyleSheet(MP_ERROR_STYLE);
+            m_message->setText(QString::fromStdString(r.error));
+        }
+    }
+
+    // Returns true if the key press has been dealt with
+    bool handleKey(QObject* /*watched*/, QKeyEvent* event)
+    {
+        const int qtKey = event->key();
+        if (qtKey == Qt::Key_Escape) {
+            reject();
+            return true;
+        }
+        if (qtKey == Qt::Key_Return || qtKey == Qt::Key_Enter) {
+            if (resolved().error.empty()) {
+                accept();
+            }
+            return true; // (not accepted unless it can be used)
+        }
+        if (qtKey == Qt::Key_Up || qtKey == Qt::Key_Down) {
+            moveRow(qtKey == Qt::Key_Up ? -1 : 1);
+            return true;
+        }
+        if ((qtKey == Qt::Key_Left || qtKey == Qt::Key_Right) && sourceOf(m_current)) {
+            cycleSource(qtKey == Qt::Key_Left ? -1 : 1);
+            return true;
+        }
+        if (qtKey == Qt::Key_P || qtKey == Qt::Key_R || qtKey == Qt::Key_M) {
+            bool& option = qtKey == Qt::Key_P ? m_setup.pause
+                : qtKey == Qt::Key_R          ? m_setup.retract
+                                              : m_setup.retractBeforeMoveToStart;
+            option = !option;
+            refresh();
+            return true;
+        }
+        const QString text = event->text();
+        // (Only the cut axis's distance can be negative)
+        const bool numeric = text.size() == 1
+            && (text.at(0).isDigit() || text.at(0) == '.'
+                || (text.at(0) == '-' && m_current == CutEnd));
+        if (numeric && (m_current == CutEnd || m_current == FeedEnd) && !rowTyped(m_current)) {
+            // Typing a number where a memory slot was chosen: a distance instead
+            *sourceOf(m_current) = std::nullopt;
+            m_diameterError.clear();
+            setCurrentRow(m_current);
+            QLineEdit* edit = m_rows[m_current].edit;
+            edit->clear();
+            QKeyEvent copy(QEvent::KeyPress, qtKey, event->modifiers(), text);
+            QCoreApplication::sendEvent(edit, &copy);
+            return true;
+        }
+        if (text.size() == 1 && text.at(0).isLetter()) {
+            return true; // (other letters do nothing)
+        }
+        return false;
+    }
+
+    MultiPassDialogInfo m_info;
+    MultiPassSetup m_setup;
+    double m_cutDistanceMm { 0.0 };
+    // Whether a distance for the cut axis has been typed (it has no default)
+    bool m_cutDistanceTyped { false };
+    double m_infeedMm { 0.0 };
+    double m_feedPerPassMm { 0.0 };
+    // Why the diameter typed can't be used
+    std::string m_diameterError;
+    Row m_rows[ROW_COUNT];
+    int m_current { Start };
+    QFont m_labelFont;
+    QLabel* m_options { nullptr };
+    QLabel* m_message { nullptr };
+};
+
 } // end anonymous namespace
+
+QDialog* openMultiPassDialog(
+    QWidget* parent,
+    const QString& fontFamily,
+    const MultiPassDialogInfo& info,
+    std::function<void(std::optional<MultiPassSetup>)> onDone)
+{
+    auto* dlg = new MultiPassDialog(parent, fontFamily, info);
+    dlg->setAttribute(Qt::WA_DeleteOnClose);
+    QObject::connect(dlg, &QDialog::finished, dlg, [dlg, onDone = std::move(onDone)](int) {
+        onDone(dlg->chosenSetup());
+    });
+    dlg->open();
+    return dlg;
+}
 
 QDialog* openInput(
     QWidget* parent,

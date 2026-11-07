@@ -35,6 +35,28 @@ struct Return {
 
 } // namedpace Input
 
+// What the multi-pass dialog needs to know (see IView::openMultiPassDialog())
+struct MultiPassDialogInfo {
+    struct Axis {
+        std::string label; // e.g. "Z"
+        std::string unit; // as displayed, e.g. "mm"
+        int decimals { 2 }; // as positions are displayed
+        double displayPerMm { 1.0 }; // display units per mm
+    };
+    Axis cut;
+    Axis feed;
+    // Where the axes and memory slots are now
+    MultiPassPositions positions;
+    // Whether X is measured from the centre (it's been set as a diameter),
+    // so the end diameter can be shown, and typed in
+    bool diameterKnown { false };
+    // Whether X retracts outwards (so infeeds towards the centre), as for
+    // turning, or inwards (away from it), as for boring
+    bool feedRetractsOutwards { true };
+    // The setup to start with
+    MultiPassSetup setup;
+};
+
 class IView {
 public:
     virtual void initialise(const Model&) = 0;
@@ -76,6 +98,12 @@ public:
         const ThreadTable& threads,
         ThreadChoice current,
         std::function<void(std::optional<ThreadChoice>)> onDone) = 0;
+    // The multi-pass dialog: where the cut starts and ends, the step-over and
+    // the options. onDone gets the setup chosen (which resolveMultiPass()
+    // accepts with info's positions), or nullopt if cancelled
+    virtual void openMultiPassDialog(
+        const MultiPassDialogInfo& info,
+        std::function<void(std::optional<MultiPassSetup>)> onDone) = 0;
     virtual bool isDialogOpen() const = 0;
     // Closes the open dialog (if any) as if cancelled, calling its onDone
     virtual void cancelDialog() = 0;

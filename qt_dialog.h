@@ -64,5 +64,17 @@ QDialog* openThreadDialog(
     ThreadChoice current,
     std::function<void(std::optional<ThreadChoice>)> onDone);
 
+// The multi-pass dialog: where the cut starts (where the axes are now, or a
+// memory slot), where each axis ends (a distance from the start, or a memory
+// slot), the step-over per pass, and the options, showing the positions
+// these come to. Large text, to be readable on the machine's small screen.
+// Gives onDone the setup chosen, or nullopt if cancelled. It can only be
+// accepted with a setup which resolveMultiPass() accepts
+QDialog* openMultiPassDialog(
+    QWidget* parent,
+    const QString& fontFamily,
+    const MultiPassDialogInfo& info,
+    std::function<void(std::optional<MultiPassSetup>)> onDone);
+
 } // end namespace dialog
 } // end namespace mgo

@@ -22,6 +22,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstdlib>
 #include <functional>
 #include <sstream>
 #include <map>
@@ -501,7 +502,178 @@ void typeInto(QWidget* dialog, const std::string& text)
     }
 }
 
+// Here: Z 12.5, X 10 (X measured from the centre; infeed is -X). Mem 1:
+// Z 2, X 9.5. Mem 2: Z 12.5, X 10. Mem 3: Z 4 only
+mgo::MultiPassDialogInfo multiPassInfo()
+{
+    mgo::MultiPassDialogInfo info;
+    info.cut = { .label = "Z", .unit = "mm", .decimals = 2, .displayPerMm = 1.0 };
+    info.feed = { .label = "X", .unit = "mm", .decimals = 2, .displayPerMm = 1.0 };
+    info.positions.cutHere = 12.5;
+    info.positions.feedHere = 10.0;
+    info.positions.cutMemory = { 2.0, 12.5, 4.0, std::nullopt };
+    info.positions.feedMemory = { 9.5, 10.0, std::nullopt, std::nullopt };
+    info.positions.feedIntoWork = -1.0;
+    info.diameterKnown = true;
+    return info;
+}
+
+std::optional<mgo::MultiPassSetup>
+multiPassDialog(mgo::ViewQt& view, const mgo::MultiPassDialogInfo& info)
+{
+    bool done = false;
+    std::optional<mgo::MultiPassSetup> setup;
+    view.openMultiPassDialog(info, [&](std::optional<mgo::MultiPassSetup> s) {
+        setup = s;
+        done = true;
+    });
+    REQUIRE(QTest::qWaitFor([&done] { return done; }, 5'000));
+    return setup;
+}
+
+void key(QWidget* dialog, Qt::Key k, int times = 1)
+{
+    for (int n = 0; n < times; ++n) {
+        QTest::keyClick(inputWidget(dialog), k);
+    }
+}
+
+// With LC_SNAPSHOT_DIR set, saves an image of a dialog there (to look at)
+void snapshot(QWidget* dialog, const std::string& name)
+{
+    if (const char* dir = std::getenv("LC_SNAPSHOT_DIR")) {
+        QTest::qWait(50);
+        dialog->grab().save(QString::fromStdString(std::string(dir) + "/" + name + ".png"));
+    }
+}
+
 } // end anonymous namespace
+
+TEST_CASE("UI: multi-pass dialog, from here by distances")
+{
+    TestModel tm;
+    mgo::ViewQt view;
+    view.initialise(tm.model);
+    const auto info = multiPassInfo();
+
+    // It starts on Z's distance, as that has to be typed. Enter does nothing
+    // until it is
+    whenDialogShows([](QWidget* dialog) {
+        snapshot(dialog, "multipass_empty");
+        key(dialog, Qt::Key_Return);
+        REQUIRE(dialog->isVisible());
+        typeInto(dialog, "-7");
+        key(dialog, Qt::Key_Down);
+        typeInto(dialog, "0.5"); // (X's infeed)
+        key(dialog, Qt::Key_Down, 2); // (past X's end diameter)
+        typeInto(dialog, "0.1");
+        key(dialog, Qt::Key_P); // (pause)
+        snapshot(dialog, "multipass_here");
+        key(dialog, Qt::Key_Return);
+    });
+    auto setup = multiPassDialog(view, info);
+    REQUIRE(setup.has_value());
+    REQUIRE(!setup->startMemory);
+    REQUIRE(!setup->cutEndMemory);
+    REQUIRE(!setup->feedEndMemory);
+    REQUIRE(setup->cutDistance == Approx(-7.0));
+    REQUIRE(setup->feedInfeed == Approx(0.5));
+    REQUIRE(setup->feedPerPass == Approx(0.1));
+    REQUIRE(setup->pause);
+    REQUIRE(!setup->retract);
+    REQUIRE(setup->retractBeforeMoveToStart);
+
+    // Esc cancels
+    whenDialogShows([](QWidget* dialog) { key(dialog, Qt::Key_Escape); });
+    REQUIRE(!multiPassDialog(view, info).has_value());
+}
+
+TEST_CASE("UI: multi-pass dialog, an end diameter")
+{
+    TestModel tm;
+    mgo::ViewQt view;
+    view.initialise(tm.model);
+    // X 10 is a diameter of 20: turning down to 19.2 is an infeed of 0.4
+    whenDialogShows([](QWidget* dialog) {
+        typeInto(dialog, "-7");
+        key(dialog, Qt::Key_Down, 2);
+        typeInto(dialog, "19.2");
+        snapshot(dialog, "multipass_diameter");
+        key(dialog, Qt::Key_Return);
+    });
+    auto setup = multiPassDialog(view, multiPassInfo());
+    REQUIRE(setup.has_value());
+    REQUIRE(setup->feedInfeed == Approx(0.4));
+
+    // A diameter bigger than the start's can't be used
+    whenDialogShows([](QWidget* dialog) {
+        typeInto(dialog, "-7");
+        key(dialog, Qt::Key_Down, 2);
+        typeInto(dialog, "21");
+        key(dialog, Qt::Key_Return);
+        REQUIRE(dialog->isVisible());
+        key(dialog, Qt::Key_Escape);
+    });
+    REQUIRE(!multiPassDialog(view, multiPassInfo()).has_value());
+}
+
+TEST_CASE("UI: multi-pass dialog, memory slots either way round")
+{
+    TestModel tm;
+    mgo::ViewQt view;
+    view.initialise(tm.model);
+    auto info = multiPassInfo();
+    // At Mem 2, as the defaults would have it: Mem 2 to Mem 1
+    info.setup = mgo::defaultMultiPassSetup({}, info.positions);
+    whenDialogShows([](QWidget* dialog) {
+        snapshot(dialog, "multipass_memories");
+        key(dialog, Qt::Key_Return);
+    });
+    auto setup = multiPassDialog(view, info);
+    REQUIRE(setup.has_value());
+    REQUIRE(setup->startMemory == 1u);
+    REQUIRE(setup->cutEndMemory == 0u);
+    REQUIRE(setup->feedEndMemory == 0u);
+
+    // Left/Right choose where each comes from. Starting from Mem 1 instead
+    // (Here, Mem 1, Mem 2: left from Mem 2) swaps it round: both ends move
+    // to Mem 2
+    whenDialogShows([](QWidget* dialog) {
+        key(dialog, Qt::Key_Left);
+        key(dialog, Qt::Key_Return);
+    });
+    setup = multiPassDialog(view, info);
+    REQUIRE(setup.has_value());
+    REQUIRE(setup->startMemory == 0u);
+    REQUIRE(setup->cutEndMemory == 1u);
+    REQUIRE(setup->feedEndMemory == 1u);
+
+    // Then Z's end at Mem 3, e.g. a shoulder (Distance, Mem 2, Mem 3, as
+    // Mem 1 is the start: right from Mem 2)
+    whenDialogShows([](QWidget* dialog) {
+        key(dialog, Qt::Key_Left);
+        key(dialog, Qt::Key_Down);
+        key(dialog, Qt::Key_Right);
+        key(dialog, Qt::Key_Return);
+    });
+    setup = multiPassDialog(view, info);
+    REQUIRE(setup.has_value());
+    REQUIRE(setup->startMemory == 0u);
+    REQUIRE(setup->cutEndMemory == 2u);
+    REQUIRE(setup->feedEndMemory == 1u);
+
+    // Typing a number on an end from a memory slot makes it a distance
+    whenDialogShows([](QWidget* dialog) {
+        key(dialog, Qt::Key_Down, 2);
+        typeInto(dialog, "0.3");
+        key(dialog, Qt::Key_Return);
+    });
+    setup = multiPassDialog(view, info);
+    REQUIRE(setup.has_value());
+    REQUIRE(setup->cutEndMemory == 0u);
+    REQUIRE(!setup->feedEndMemory);
+    REQUIRE(setup->feedInfeed == Approx(0.3));
+}
 
 TEST_CASE("UI: taper dialog through the controller")
 {
@@ -802,18 +974,27 @@ TEST_CASE("UI: multi-pass through the controller")
     tm.model.axis2StorePosition(0.02);
     tm.model.selectPreviousMemorySlot();
 
-    // F2, M: the dialog asks for the step-over
+    // F2, M: as the tool's at Mem 1, the dialog starts there, ending at Mem 2.
+    // Down to the step-over (past Z's and X's ends), and type it
     whenDialogShows([](QWidget* dialog) {
+        for (int n = 0; n < 3; ++n) {
+            QTest::keyClick(inputWidget(dialog), Qt::Key_Down);
+        }
         typeInto(dialog, "0.01");
         QTest::keyClick(inputWidget(dialog), Qt::Key_Return);
     });
     press(w, controller, Qt::Key_F2);
     press(w, controller, Qt::Key_M);
+    REQUIRE(waitForDialogToClose());
     REQUIRE(tm.model.getMode() == mgo::Mode::MultiPass);
-    REQUIRE(tm.model.getMultiPassOptions().feedPerPass == Approx(0.01));
+    REQUIRE(tm.model.getMultiPassSetup().feedPerPass == Approx(0.01));
+    REQUIRE(tm.model.getMultiPassSetup().startMemory == 0u);
+    REQUIRE(tm.model.getMultiPassRange().cutEnd == Approx(0.3));
     REQUIRE(!tm.model.multiPass().inProgress());
+    controller.tick();
+    snapshot(w, "multipass_mode");
 
-    // Enter starts it
+    // Enter starts it (as it's at the start already)
     press(w, controller, Qt::Key_Return);
     REQUIRE(tm.model.multiPass().inProgress());
     REQUIRE(tm.model.multiPass().totalPasses() == 3);
