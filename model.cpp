@@ -205,10 +205,8 @@ void Model::initialise()
     axis2SaveBreadcrumbPosition();
 }
 
-StatusResult Model::checkStatus()
+void Model::checkStatus()
 {
-    StatusResult statusResult = StatusResult::Ok;
-
     checkMotorFaults();
 
     float chuckRpm = m_rotaryEncoder->getRpm();
@@ -233,41 +231,13 @@ StatusResult Model::checkStatus()
     // motors starting and stopping, which would misread the sequence's moves:
     // e.g. the end of a taper's backlash take-up as the end of a fast return
     if (m_motionSequence.advance()) {
-        return statusResult;
+        return;
     }
 
     if (m_enabledFunction == Mode::Threading) {
         threadingCheckSpeed();
         threadingCheckMoveEnded();
     }
-    if (m_enabledFunction == Mode::MultiPass && m_axis1Motor->isRunning()
-        && m_multiPassStage == MultiPassStage::NotStarted) {
-        // The user has started motion of the tool
-        m_multiPassStage = MultiPassStage::Cutting;
-    }
-    if (m_enabledFunction == Mode::MultiPass && !m_axis1Motor->isRunning()
-        && !m_axis2Motor->isRunning()) {
-        switch (m_multiPassStage) {
-            case MultiPassStage::Cutting:
-                multiPassEndCut(statusResult);
-                break;
-            case MultiPassStage::StepOver:
-                multiPassStepOver();
-                break;
-            case MultiPassStage::NextCut:
-                multiPassNextCut(statusResult);
-                break;
-            case MultiPassStage::Finished:
-                multiPassFinished();
-                break;
-            case MultiPassStage::NotStarted:
-                // Do nothing until the user initiates the first cut
-                break;
-            default:
-                assert(false); // Unhandled MultiPassStage item
-        }
-    }
-
     if (!m_axis2Motor->isRunning()) {
         m_axis2Status = "stopped";
     }
@@ -291,7 +261,9 @@ StatusResult Model::checkStatus()
             axis2SynchroniseOff();
             m_axis2Motor->setSpeed(m_previousAxis2Speed);
         }
-        if (m_axis1WasRunning
+        // (Not during a multi-pass, which sets the speeds itself: the cut
+        // speed must be kept from one pass to the next)
+        if (m_axis1WasRunning && !m_multiPass.inProgress()
             && m_axis1Motor->getSpeed() > m_config.readDouble("Axis1SpeedResetAbove", 100.0)) {
             // We don't allow faster speeds to "stick" to avoid accidental
             // fast motion after a long fast movement
@@ -323,7 +295,7 @@ StatusResult Model::checkStatus()
             m_axis2FastReturning = false;
             m_axis2RapidInProgress = false;
         }
-        if (!(m_enabledFunction == Mode::Taper) && m_axis2WasRunning
+        if (!(m_enabledFunction == Mode::Taper) && m_axis2WasRunning && !m_multiPass.inProgress()
             && m_axis2Motor->getSpeed() >= m_config.readDouble("Axis2SpeedResetAbove", 80.0)) {
             // We don't allow faster speeds to "stick" to avoid accidental
             // fast motion after a long fast movement
@@ -336,7 +308,19 @@ StatusResult Model::checkStatus()
     if (m_enabledFunction == Mode::Taper || m_enabledFunction == Mode::Radius) {
         m_axis2Status = "synchronised";
     }
-    return statusResult;
+
+    // (Last, once the above has dealt with any move that's ended)
+    if (m_multiPass.inProgress()) {
+        m_multiPass.update();
+        if (!m_multiPass.inProgress() && !m_multiPass.message().empty()) {
+            // It stopped, rather than finished
+            MGOLOG("Multi-pass stopped: " << m_multiPass.message());
+            stopAllMotors();
+            m_warning = "Multi-pass stopped: " + m_multiPass.message();
+        } else if (m_multiPass.state() == MultiPass::State::Finished) {
+            MGOLOG("Multi-pass finished");
+        }
+    }
 }
 
 void Model::checkEncoderLostPulses()
@@ -421,7 +405,6 @@ void Model::checkMotorFaults()
         // end any automated function, as its positions are now meaningless
         stopAllMotors();
         if (m_enabledFunction != Mode::None) {
-            m_multiPassStage = MultiPassStage::NotStarted;
             changeMode(Mode::None);
         }
     }
@@ -469,67 +452,10 @@ std::string Model::getFaultMessage() const
     return message;
 }
 
-void Model::multiPassFinished()
-{
-    m_multiPassStage = MultiPassStage::NotStarted;
-    m_enabledFunction = Mode::None;
-}
-
-void Model::multiPassNextCut(mgo::StatusResult& statusResult)
-{
-    if (m_axis2Retracted) {
-        axis2Retract(); // unretracts if already retracted
-        statusResult = StatusResult::WaitForMotors;
-        return;
-    }
-    m_axis1Motor->goToStep(m_axis1Memory[1]);
-    m_axis1Status = "next pass";
-    m_multiPassStage = MultiPassStage::Cutting;
-    statusResult = StatusResult::Ok;
-}
-
-void Model::multiPassStepOver()
-{
-    if (getAxis2MemoryAsPosition(0).has_value() && getAxis2MemoryAsPosition(1).has_value()) {
-        double from = getAxis2MemoryAsPosition(0).value();
-        double to = getAxis2MemoryAsPosition(1).value();
-        // Have we already finished?
-        if (std::abs(m_axis2Motor->getPosition() - to) < 0.0001) {
-            m_multiPassStage = MultiPassStage::Finished;
-            return;
-        }
-        double direction = (to < from) ? -1.0 : 1.0;
-        double stepOver = m_stepOver;
-        stepOver = std::abs(stepOver) * direction;
-        double target = m_axis2Motor->getPosition() + stepOver;
-        if ((direction > 0.0 && target > to) || (direction < 0.0 && target < to)) {
-            target = to;
-        }
-        m_multiPassStage = MultiPassStage::NextCut;
-        m_axis2Motor->goToPosition(target);
-    }
-}
-
-void Model::multiPassEndCut(mgo::StatusResult& statusResult)
-{
-    // We have come to the end of a cut
-    m_currentMemory = 0;
-    if (m_multiPassRetractBetweenCuts && !getIsAxis2Retracted()) {
-        axis2Retract();
-        statusResult = StatusResult::WaitForMotors;
-        return;
-    }
-    axis1FastReturn();
-    if (m_multiPassPauseBetweenCuts) {
-        statusResult = StatusResult::PressAKey;
-    } else {
-        m_multiPassStage = MultiPassStage::StepOver;
-    }
-}
-
 void Model::changeMode(Mode mode)
 {
-    if (mode != Mode::None) {
+    if (mode != Mode::None || m_multiPass.inProgress()) {
+        // (Leaving multi-pass mode part way through stops it, too)
         stopAllMotors();
     }
     axis2SynchroniseOff();
@@ -582,6 +508,7 @@ void Model::stopAllMotors()
     // (After stopping, so a sequence's end, e.g. restoring a nudge's speed,
     // doesn't race with a move it started)
     m_motionSequence.cancel();
+    m_multiPass.stop("stopped");
     m_axis1Status = "stopped";
     m_axis2Status = "stopped";
 #ifdef FAKE
@@ -1884,24 +1811,129 @@ const IConfigReader& Model::config() const
     return m_config;
 }
 
-void Model::setStepOver(double stepover)
+void Model::setMultiPassOptions(const MultiPassOptions& options)
 {
-    m_stepOver = stepover;
+    m_multiPassOptions = options;
 }
 
-void Model::setMultiPassStage(MultiPassStage stage)
+const MultiPassOptions& Model::getMultiPassOptions() const
 {
-    m_multiPassStage = stage;
+    return m_multiPassOptions;
 }
 
-void Model::setMultiPassPauseBetweenCuts(bool value)
+void Model::multiPassGo()
 {
-    m_multiPassPauseBetweenCuts = value;
+    if (m_enabledFunction != Mode::MultiPass) {
+        return;
+    }
+    if (m_multiPass.state() == MultiPass::State::Paused) {
+        MGOLOG("Multi-pass: continuing");
+        m_multiPass.continueAfterPause();
+        return;
+    }
+    if (m_multiPass.inProgress()) {
+        return;
+    }
+    // From Mem 1 to Mem 2
+    const auto zStart = getAxis1MemoryAsPosition(0);
+    const auto zEnd = getAxis1MemoryAsPosition(1);
+    const auto xStart = getAxis2MemoryAsPosition(0);
+    const auto xEnd = getAxis2MemoryAsPosition(1);
+    if (!zStart || !zEnd || !xStart || !xEnd) {
+        m_warning = fmt::format(
+            "Store {} and {} in Mem 1 and Mem 2 first",
+            m_config.read("Axis1Label", "Z"),
+            m_config.read("Axis2Label", "X"));
+        return;
+    }
+    MultiPassPlan plan;
+    plan.cutStart = *zStart;
+    plan.cutEnd = *zEnd;
+    plan.feedStart = *xStart;
+    plan.feedEnd = *xEnd;
+    plan.feedPerPass = std::abs(m_multiPassOptions.feedPerPass);
+    plan.retract = m_multiPassOptions.retract;
+    plan.pause = m_multiPassOptions.pause;
+    if (const std::string error = m_multiPass.start(plan); !error.empty()) {
+        m_warning = error == "Go to the start position first" ? "Go to Mem 1 first" : error;
+        return;
+    }
+    m_warning = "";
+    MGOLOG(fmt::format(
+        "Multi-pass started: Z {} to {}, X {} to {} by {}{}{} ({} passes)",
+        plan.cutStart,
+        plan.cutEnd,
+        plan.feedStart,
+        plan.feedEnd,
+        plan.feedPerPass,
+        plan.retract ? ", retract" : "",
+        plan.pause ? ", pause" : "",
+        m_multiPass.totalPasses()));
 }
 
-void Model::setMultiPassRetractBetweenCuts(bool value)
+const MultiPass& Model::multiPass() const
 {
-    m_multiPassRetractBetweenCuts = value;
+    return m_multiPass;
+}
+
+double Model::cutPosition() const
+{
+    return m_axis1Motor->getPosition();
+}
+
+bool Model::cutMoving() const
+{
+    return m_axis1WasRunning;
+}
+
+void Model::cutMoveTo(double position)
+{
+    m_axis1Motor->goToPosition(position);
+    m_axis1Status = "multi-pass";
+    // (So a move that's over by the next update is still seen to have ended)
+    m_axis1WasRunning = m_axis1Motor->isRunning();
+}
+
+double Model::cutSpeed() const
+{
+    return m_axis1Motor->getSpeed();
+}
+
+void Model::setCutSpeed(double speed)
+{
+    m_axis1Motor->setSpeed(speed);
+}
+
+double Model::cutMaxSpeed() const
+{
+    return m_axis1Motor->getMaxRpm();
+}
+
+double Model::feedPosition() const
+{
+    return m_axis2Motor->getPosition();
+}
+
+bool Model::feedMoving() const
+{
+    return m_axis2WasRunning;
+}
+
+void Model::feedMoveTo(double position)
+{
+    m_axis2Motor->goToPosition(position);
+    m_axis2WasRunning = m_axis2Motor->isRunning();
+}
+
+void Model::retract()
+{
+    axis2Retract();
+    m_axis2WasRunning = m_axis2Motor->isRunning();
+}
+
+bool Model::isRetracted() const
+{
+    return m_axis2Retracted;
 }
 
 }

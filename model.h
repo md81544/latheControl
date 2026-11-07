@@ -3,6 +3,7 @@
 #include "configreader.h"
 #include "linearscale.h"
 #include "motionsequence.h"
+#include "multipass.h"
 #include "rotaryencoder.h"
 #include "stepperControl/steppermotor.h"
 #include "units.h"
@@ -79,19 +80,12 @@ enum class Axis {
     Axis2
 };
 
-enum class MultiPassStage {
-    NotStarted,
-    Cutting,
-    StepOver,
-    NextCut,
-    Finished,
-    Paused
-};
-
-enum class StatusResult {
-    Ok,
-    WaitForMotors,
-    PressAKey
+// The options chosen when entering multi-pass mode. (The cut's start and end
+// come from memory slots 1 and 2 when it starts)
+struct MultiPassOptions {
+    double feedPerPass { 0.0 }; // mm
+    bool pause { false };
+    bool retract { false };
 };
 
 // Threading: what to do with X when a pass's Z move ends (with ThreadingAutoRetract).
@@ -109,7 +103,9 @@ ThreadingStopAction threadingStopAction(
     bool retractedNow,
     bool spindleTurning);
 
-class Model {
+// (Privately an IMultiPassMachine: the multi-pass engine moves the axes
+// through it)
+class Model : private IMultiPassMachine {
 public:
     Model(IGpio& gpio, mgo::IConfigReader& config)
         : m_gpio(gpio)
@@ -120,7 +116,7 @@ public:
     void initialise();
 
     // This should be repeatedly called from the run loop
-    StatusResult checkStatus();
+    void checkStatus();
     
     void changeMode(Mode mode);
     // (Also cancels any motion sequence)
@@ -291,10 +287,13 @@ public:
 
     const IConfigReader& config() const;
 
-    void setStepOver(double stepover);
-    void setMultiPassStage(MultiPassStage stage);
-    void setMultiPassPauseBetweenCuts(bool value);
-    void setMultiPassRetractBetweenCuts(bool value);
+    // Multi-pass mode: the options are set on entering it. multiPassGo()
+    // starts the multi-pass from Mem 1 to Mem 2 (or continues it, if paused);
+    // if it can't start, the warning says why
+    void setMultiPassOptions(const MultiPassOptions& options);
+    const MultiPassOptions& getMultiPassOptions() const;
+    void multiPassGo();
+    const MultiPass& multiPass() const;
 
 private:
     // The steps to move Z to a step: just the move, or, for a taper or
@@ -335,7 +334,6 @@ private:
     int m_keyPressed { 0 };
     double m_taperAngle { 0.0 };
     double m_radius { 0.0 };
-    double m_stepOver { 0.0 };
     float m_taperPreviousXSpeed { 40.f };
     // Stores the current function displayed on the screen:
     Mode m_currentDisplayMode { Mode::None };
@@ -367,9 +365,8 @@ private:
     // "Breadcrumb" trail of positions for axes:
     std::stack<double> m_axis1PreviousPositions;
     std::stack<double> m_axis2PreviousPositions;
-    MultiPassStage m_multiPassStage { MultiPassStage::NotStarted };
-    bool m_multiPassPauseBetweenCuts { false };
-    bool m_multiPassRetractBetweenCuts { false };
+    MultiPassOptions m_multiPassOptions;
+    MultiPass m_multiPass { *this };
 
     std::set<unsigned> m_axisLocks;
 
@@ -402,10 +399,21 @@ private:
     // X is no longer known to be measured from the centre
     void clearDiameter();
     void clearMotorFault(Axis axis);
-    void multiPassFinished();
-    void multiPassNextCut(mgo::StatusResult& statusResult);
-    void multiPassStepOver();
-    void multiPassEndCut(mgo::StatusResult& statusResult);
+    // IMultiPassMachine: the cut axis is axis 1, and the feed axis is axis 2.
+    // (Whether they're moving is as seen by checkStatus(), so the multi-pass
+    // only moves on once checkStatus() has dealt with a move's end, e.g.
+    // clearing the retracted flag after an unretract)
+    double cutPosition() const override;
+    bool cutMoving() const override;
+    void cutMoveTo(double position) override;
+    double cutSpeed() const override;
+    void setCutSpeed(double speed) override;
+    double cutMaxSpeed() const override;
+    double feedPosition() const override;
+    bool feedMoving() const override;
+    void feedMoveTo(double position) override;
+    void retract() override;
+    bool isRetracted() const override;
     // Threading
     bool axis1StartThreadingMove(const std::function<void()>& move);
     void threadingCheckSpeed();

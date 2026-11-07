@@ -62,10 +62,11 @@
       at once, so don't block. Not yet tried on the machine
     - **Note:** deceleration ramping would make `stop()` take time, so the
       `stop()` + `wait()` pairs would then need to be sequence steps too
-    - **Next:** multi-pass, as a sequence (see "Multi-pass" below), which
-      removes the controller's `waitForAxisToStop()`. Leave
-      `callbackAtZeroDegrees()`, as the electronic leadscrew work will
-      replace it
+    - **Done:** multi-pass rewritten as an engine the model moves on each
+      tick (see "Multi-pass" below), so the controller's
+      `waitForAxisToStop()` and modal "press a key" between passes are gone.
+      `callbackAtZeroDegrees()` is left, as the electronic leadscrew work
+      will replace it
     - Then make dialogs non-modal (with a callback when done) so ticks carry
       on while one is open; that's the "Mode" item below. Once nothing
       blocks inside a tick, `getEvents()` and `updateDisplay()` no longer
@@ -74,32 +75,45 @@
       interleaved into program flow and is difficult to maintain. If all
       motors are stopped during a dialog, they can all go on a separate flow
 
-## Multi-pass (experimental; leave until the controller is event-driven)
-- [ ] It doesn't work correctly. The cause, at least with "retract between
-      passes" on:
-    - `multiPassEndCut()` retracts and returns `WaitForMotors` *before*
-      calling `axis1FastReturn()`, so the fast return never happens
-    - `Controller::run()` then forces the stage to `StepOver` whatever stage
-      the model was in, so X steps over while still retracted
-    - `multiPassNextCut()` then un-retracts to the position saved *before*
-      the step-over, undoing it, and the cycle repeats
-- [ ] Rewrite the sequencing as a state machine in the model, advanced by
-      motor-stopped events, with the model owning its stage (the UI mustn't
-      override it). "Pause between passes" becomes a state waiting for a
-      "continue" command rather than a blocking dialog. Unit test the sequence
-      of positions with the mock GPIO
-- [ ] If using "press a key" between cuts, the display should be updated
-      before "press a key" happens
+## Multi-pass (experimental)
+- [ ] Try the rewritten multi-pass on the machine.
+    - **Done:** rewritten as a generic engine (`MultiPass`, in multipass.h),
+      replacing the old, broken code. It's a state machine moved on by the
+      model's `checkStatus()`, and works through an `IMultiPassMachine`
+      (the model; the unit tests use a fake). A plan is: cut from a start to
+      an end on the cut axis (axis 1), then optionally retract, return at
+      full speed, optionally pause (Enter continues), unretract, and feed
+      on (axis 2) by a step towards its end position, until a cut has been
+      made there. The last step may be smaller, to end exactly there. A
+      feed of zero repeats the same cut until stopped. The feed can also be
+      manual (it pauses each pass, saying how far to feed), for an axis
+      without a motor, though no mode uses that yet
+    - **Done:** multi-pass mode (`F2` `M`) uses it, from Mem 1 to Mem 2.
+      `Enter` starts it once at Mem 1, and continues after a pause. While
+      it runs, keys which move an axis are ignored; `Space` (or any stop,
+      such as a fault, the spindle stopping or leaving the mode) abandons
+      it. The display shows the pass, what it's doing, and how far X has
+      stepped over
+    - Cuts are at the Z speed when each cut starts (so it can be changed
+      during the cut, for the next ones); the usual reset of speeds above
+      `Axis1SpeedResetAbove` / `Axis2SpeedResetAbove` is skipped meanwhile
 - [ ] Work on a single line rather than a plane, i.e. if mem0.x == mem1.x,
       interpret it as (say) slot cutting and repeat until the user cancels.
-      Could also work if only one axis is defined in config
+      Could also work if only one axis is defined in config (the engine's
+      manual feed, or a feed of zero, would do the sequencing). At the
+      moment Mem 1 and Mem 2 with the same X give a single pass
 - [ ] Automation of a repeated cut: cut from Mem 1 to Mem 2, fast return,
       wait for a key press, and repeat until cancelled (to make repeated cuts
-      down to depth easier). Could just be multi-pass with "press any key"
-      between passes. Potentially this could work with threading too, currently
-      the operator has to (a) move to a location, (b) fast return to a second
-      location, (c) nudge in a little and repeat. This could be automated to
-      simply (a) nudge and press a key, and it repeats the cut and return.
+      down to depth easier). Multi-pass with a step-over of zero and "pause"
+      now does this, but the operator can't nudge in while it's paused (axis
+      moves are blocked). Allowing a nudge of X while paused, taken as the
+      new depth, would complete it. Potentially this could work with
+      threading too, currently the operator has to (a) move to a location,
+      (b) fast return to a second location, (c) nudge in a little and
+      repeat. This could be automated to simply (a) nudge and press a key,
+      and it repeats the cut and return. Best after the electronic
+      leadscrew work, as each threading pass must start at the same spindle
+      angle
 
 ## Motion and timing (mostly in stepperControl)
 - [ ] Deceleration ramping. At the moment there's only acceleration, so
@@ -338,10 +352,17 @@
       by lining the tool up to where they want the thread to end and storing the z value
       in a memory slot, then moving z out to just past the end of the workpiece and storing
       that z value in a separate memory slot.
+      - **Done:** the engine (`MultiPass`, see "Multi-pass" above): a plan of cut start
+        and end, feed start and end, feed per pass, retract, pause, and manual feed.
+        Multi-pass mode builds one from Mem 1 and Mem 2. New modes (e.g. threading,
+        or facing on the mill) need a plan built from their own inputs, and the
+        mode's display
 - [ ] It should not require the user to reset an axis value
       to keep track of (for example) the current thread depth being cut - instead maybe it
       displays a box showing how much the X axis has changed since the first "scratch pass"
       was taken in the current mode. The axis being displayed should be configurable.
+      - **Partly done:** multi-pass mode shows how far X has stepped over since the
+        first pass (and of how far in all). Not configurable yet, and not in other modes
 - [ ] Once this "generic multi-pass" functionality is available, it could be used for:
         - threading on the lathe
         - turning down to a workpiece to a set diameter (lathe)

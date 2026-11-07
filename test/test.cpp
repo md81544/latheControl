@@ -6,14 +6,20 @@
 #include "menu.h"
 #include "model.h"
 #include "motionsequence.h"
+#include "multipass.h"
 #include "rotaryencoder.h"
 #include "stepperControl/mockgpio.h"
 #include "stepperControl/steppermotor.h"
+
+#include <fmt/format.h>
 
 #include <algorithm>
 #include <chrono>
 #include <set>
 #include <map>
+#include <optional>
+#include <string>
+#include <vector>
 #include <cmath>
 #include <ctime>
 #include <thread>
@@ -1434,4 +1440,379 @@ TEST_CASE("Model:   a taper's backlash take-up doesn't block")
     REQUIRE(runUntilStopped(model));
     REQUIRE(model.getAxis1MotorPosition() == Approx(0.05));
     REQUIRE(std::abs(model.getAxis2MotorPosition()) == Approx(0.05).margin(0.002));
+}
+
+namespace {
+
+// A machine for the multi-pass engine whose moves finish when the test says,
+// and which logs them
+class FakeMultiPassMachine final : public mgo::IMultiPassMachine {
+public:
+    double cutPosition() const override { return m_cut; }
+    bool cutMoving() const override { return m_cutTarget.has_value(); }
+    void cutMoveTo(double position) override
+    {
+        log.push_back(fmt::format("cut {:.6g} at {:.6g}", position, m_cutSpeed));
+        m_cutTarget = position;
+    }
+    double cutSpeed() const override { return m_cutSpeed; }
+    void setCutSpeed(double speed) override { m_cutSpeed = speed; }
+    double cutMaxSpeed() const override { return 1'000.0; }
+    double feedPosition() const override { return m_feed; }
+    bool feedMoving() const override { return m_feedTarget.has_value(); }
+    void feedMoveTo(double position) override
+    {
+        log.push_back(fmt::format("feed {:.6g}", position));
+        m_feedTarget = position;
+    }
+    void retract() override
+    {
+        if (m_retracted) {
+            log.push_back("unretract");
+            m_feedTarget = m_feed - RETRACT;
+            m_retracted = false;
+        } else {
+            log.push_back("retract");
+            m_feedTarget = m_feed + RETRACT;
+            m_retracted = true;
+        }
+    }
+    bool isRetracted() const override { return m_retracted; }
+
+    // Finishes any moves in progress (or, if given, stops the cut short there)
+    void finishMoves(std::optional<double> cutStopsAt = std::nullopt)
+    {
+        if (m_cutTarget) {
+            m_cut = cutStopsAt.value_or(*m_cutTarget);
+            m_cutTarget.reset();
+        }
+        if (m_feedTarget) {
+            m_feed = *m_feedTarget;
+            m_feedTarget.reset();
+        }
+    }
+    // Updates the multi-pass, finishing each move, until it's paused, finished
+    // or stopped (or 100 updates, if it's repeating)
+    void run(mgo::MultiPass& mp)
+    {
+        for (int n = 0; n < 100 && mp.inProgress() && mp.state() != mgo::MultiPass::State::Paused;
+             ++n) {
+            finishMoves();
+            mp.update();
+        }
+    }
+
+    static constexpr double RETRACT = 2.0;
+    std::vector<std::string> log;
+    double m_cut { 0.0 };
+    double m_feed { 5.0 };
+    double m_cutSpeed { 40.0 };
+    bool m_retracted { false };
+
+private:
+    std::optional<double> m_cutTarget;
+    std::optional<double> m_feedTarget;
+};
+
+using Log = std::vector<std::string>;
+
+mgo::MultiPassPlan basicPlan()
+{
+    mgo::MultiPassPlan plan;
+    plan.cutStart = 0.0;
+    plan.cutEnd = -10.0;
+    plan.feedStart = 5.0;
+    plan.feedEnd = 4.75;
+    plan.feedPerPass = 0.1;
+    return plan;
+}
+
+} // end anonymous namespace
+
+TEST_CASE("MultiPass: cuts, returns and steps over until the end")
+{
+    FakeMultiPassMachine machine;
+    mgo::MultiPass mp(machine);
+    REQUIRE(mp.start(basicPlan()).empty());
+    REQUIRE(mp.state() == mgo::MultiPass::State::Cutting);
+    REQUIRE(mp.pass() == 1);
+    // 0.25 in steps of 0.1: three steps over, the last one smaller
+    REQUIRE(mp.totalPasses() == 4);
+    machine.run(mp);
+    REQUIRE(mp.state() == mgo::MultiPass::State::Finished);
+    REQUIRE(!mp.inProgress());
+    REQUIRE(mp.pass() == 4);
+    REQUIRE(mp.fed() == Approx(0.25));
+    REQUIRE(mp.message().empty());
+    // (Cuts at the cut speed; returns at full speed)
+    REQUIRE(machine.log
+            == Log { "cut -10 at 40", "cut 0 at 1000", "feed 4.9",
+                     "cut -10 at 40", "cut 0 at 1000", "feed 4.8",
+                     "cut -10 at 40", "cut 0 at 1000", "feed 4.75",
+                     "cut -10 at 40", "cut 0 at 1000" });
+    REQUIRE(machine.cutSpeed() == Approx(40.0));
+    REQUIRE(machine.feedPosition() == Approx(4.75));
+
+    // It can be started again (e.g. for another part), from the start
+    machine.m_feed = 5.0;
+    REQUIRE(mp.start(basicPlan()).empty());
+}
+
+TEST_CASE("MultiPass: a speed set during a cut is used for the next")
+{
+    FakeMultiPassMachine machine;
+    mgo::MultiPass mp(machine);
+    REQUIRE(mp.start(basicPlan()).empty());
+    machine.setCutSpeed(25.0);
+    machine.run(mp);
+    REQUIRE(machine.log.at(3) == "cut -10 at 25");
+    REQUIRE(machine.cutSpeed() == Approx(25.0));
+}
+
+TEST_CASE("MultiPass: stepping over outwards, and in one pass")
+{
+    FakeMultiPassMachine machine;
+    mgo::MultiPass mp(machine);
+    auto plan = basicPlan();
+    plan.feedEnd = 5.2; // (e.g. boring)
+    REQUIRE(mp.start(plan).empty());
+    REQUIRE(mp.totalPasses() == 3);
+    machine.run(mp);
+    REQUIRE(machine.log.at(2) == "feed 5.1");
+    REQUIRE(machine.log.at(5) == "feed 5.2");
+    REQUIRE(mp.state() == mgo::MultiPass::State::Finished);
+
+    // If the feed's start and end are the same, it's a single pass
+    machine.log.clear();
+    machine.m_feed = 5.0;
+    plan.feedEnd = 5.0;
+    REQUIRE(mp.start(plan).empty());
+    REQUIRE(mp.totalPasses() == 1);
+    machine.run(mp);
+    REQUIRE(machine.log == Log { "cut -10 at 40", "cut 0 at 1000" });
+}
+
+TEST_CASE("MultiPass: retracting between passes")
+{
+    FakeMultiPassMachine machine;
+    mgo::MultiPass mp(machine);
+    auto plan = basicPlan();
+    plan.feedEnd = 4.9;
+    plan.retract = true;
+    REQUIRE(mp.start(plan).empty());
+    machine.run(mp);
+    REQUIRE(mp.state() == mgo::MultiPass::State::Finished);
+    // (Unretracted at the end, so the feed axis shows the final position)
+    REQUIRE(machine.log
+            == Log { "cut -10 at 40", "retract", "cut 0 at 1000", "unretract", "feed 4.9",
+                     "cut -10 at 40", "retract", "cut 0 at 1000", "unretract" });
+    REQUIRE(!machine.isRetracted());
+    REQUIRE(machine.feedPosition() == Approx(4.9));
+}
+
+TEST_CASE("MultiPass: pausing between passes")
+{
+    FakeMultiPassMachine machine;
+    mgo::MultiPass mp(machine);
+    auto plan = basicPlan();
+    plan.pause = true;
+    REQUIRE(mp.start(plan).empty());
+    machine.run(mp);
+    REQUIRE(mp.state() == mgo::MultiPass::State::Paused);
+    REQUIRE(mp.inProgress());
+    REQUIRE(mp.nextFeed() == Approx(0.1));
+    // Nothing happens until it's continued
+    mp.update();
+    REQUIRE(machine.log.size() == 2);
+    mp.continueAfterPause();
+    REQUIRE(mp.pass() == 2);
+    REQUIRE(machine.log.back() == "feed 4.9");
+    machine.run(mp);
+    REQUIRE(mp.state() == mgo::MultiPass::State::Paused);
+    mp.continueAfterPause();
+    machine.run(mp);
+    mp.continueAfterPause();
+    REQUIRE(mp.nextFeed() == Approx(0.0)); // (the last pass: no more to feed)
+    machine.run(mp);
+    // (No pause after the last pass)
+    REQUIRE(mp.state() == mgo::MultiPass::State::Finished);
+}
+
+TEST_CASE("MultiPass: a manual feed pauses for the user each pass")
+{
+    FakeMultiPassMachine machine;
+    mgo::MultiPass mp(machine);
+    auto plan = basicPlan();
+    plan.feedManual = true;
+    plan.feedStart = 0.0;
+    plan.feedEnd = 0.25;
+    machine.m_feed = 99.0; // (not used: there's no feed motor)
+    REQUIRE(mp.start(plan).empty());
+    REQUIRE(mp.totalPasses() == 4);
+    for (const double feed : { 0.1, 0.1, 0.05 }) {
+        machine.run(mp);
+        REQUIRE(mp.state() == mgo::MultiPass::State::Paused);
+        REQUIRE(mp.nextFeed() == Approx(feed));
+        mp.continueAfterPause();
+    }
+    machine.run(mp);
+    REQUIRE(mp.state() == mgo::MultiPass::State::Finished);
+    REQUIRE(mp.fed() == Approx(0.25));
+    for (const auto& entry : machine.log) {
+        REQUIRE(entry.starts_with("cut"));
+    }
+
+    // (Retracting needs a motorised feed)
+    plan.retract = true;
+    REQUIRE(!mp.start(plan).empty());
+}
+
+TEST_CASE("MultiPass: zero step-over repeats the same cut until stopped")
+{
+    FakeMultiPassMachine machine;
+    mgo::MultiPass mp(machine);
+    auto plan = basicPlan();
+    plan.feedPerPass = 0.0;
+    REQUIRE(mp.start(plan).empty());
+    REQUIRE(mp.totalPasses() == 0);
+    machine.run(mp);
+    REQUIRE(mp.inProgress());
+    REQUIRE(mp.pass() > 10);
+    for (const auto& entry : machine.log) {
+        REQUIRE(entry.starts_with("cut"));
+    }
+    mp.stop("stopped");
+    REQUIRE(mp.state() == mgo::MultiPass::State::Idle);
+    REQUIRE(mp.message() == "stopped");
+    // (Updates do nothing now)
+    const auto moves = machine.log.size();
+    machine.run(mp);
+    REQUIRE(machine.log.size() == moves);
+}
+
+TEST_CASE("MultiPass: won't start unless ready")
+{
+    FakeMultiPassMachine machine;
+    mgo::MultiPass mp(machine);
+    auto plan = basicPlan();
+
+    machine.m_cut = 1.0;
+    REQUIRE(!mp.start(plan).empty()); // (not at the start)
+    machine.m_cut = 0.0;
+    machine.m_feed = 4.0;
+    REQUIRE(!mp.start(plan).empty());
+    machine.m_feed = 5.0;
+    machine.m_retracted = true;
+    REQUIRE(!mp.start(plan).empty());
+    machine.m_retracted = false;
+    plan.cutEnd = plan.cutStart;
+    REQUIRE(!mp.start(plan).empty());
+    plan = basicPlan();
+    plan.feedPerPass = -0.1;
+    REQUIRE(!mp.start(plan).empty());
+    REQUIRE(mp.state() == mgo::MultiPass::State::Idle);
+    REQUIRE(machine.log.empty());
+
+    REQUIRE(mp.start(basicPlan()).empty());
+    REQUIRE(!mp.start(basicPlan()).empty()); // (already running)
+}
+
+TEST_CASE("MultiPass: stops if a move stops short")
+{
+    FakeMultiPassMachine machine;
+    mgo::MultiPass mp(machine);
+    REQUIRE(mp.start(basicPlan()).empty());
+    machine.finishMoves(-6.0);
+    mp.update();
+    REQUIRE(mp.state() == mgo::MultiPass::State::Idle);
+    REQUIRE(!mp.message().empty());
+    REQUIRE(machine.log.size() == 1); // (no return)
+}
+
+TEST_CASE("Model:   a multi-pass from Mem 1 to Mem 2")
+{
+    mgo::MockConfigReader config;
+    mgo::MockGpio gpio(false);
+    mgo::Model model(gpio, config);
+    model.initialise();
+    model.axis1SetSpeed(200.0);
+    model.axis2SetSpeed(100.0);
+    // Mem 1: the start, where the tool is now (Z 0, X 0). Mem 2: Z 0.2, X 0.025
+    model.axis1StorePosition(0.0);
+    model.axis2StorePosition(0.0);
+    model.selectNextMemorySlot();
+    model.axis1StorePosition(0.2);
+    model.axis2StorePosition(0.025);
+    model.selectPreviousMemorySlot();
+
+    model.changeMode(mgo::Mode::MultiPass);
+    model.setMultiPassOptions({ .feedPerPass = 0.01, .pause = false, .retract = true });
+    // Keys which would move an axis aren't allowed while it runs
+    REQUIRE(mgo::keyAllowedInCurrentMode(mgo::key::a, model));
+    model.multiPassGo();
+    REQUIRE(model.getWarning().empty());
+    REQUIRE(model.multiPass().inProgress());
+    REQUIRE(model.multiPass().totalPasses() == 4);
+    REQUIRE(!mgo::keyAllowedInCurrentMode(mgo::key::a, model));
+    REQUIRE(!mgo::keyAllowedInCurrentMode(mgo::key::r, model));
+    REQUIRE(mgo::keyAllowedInCurrentMode(mgo::key::SPACE, model));
+    REQUIRE(mgo::keyAllowedInCurrentMode(mgo::key::EQUALS, model));
+
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(20);
+    while (model.multiPass().inProgress()) {
+        REQUIRE(std::chrono::steady_clock::now() < deadline);
+        model.checkStatus();
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    REQUIRE(model.multiPass().state() == mgo::MultiPass::State::Finished);
+    REQUIRE(model.multiPass().pass() == 4);
+    REQUIRE(model.getAxis1MotorPosition() == Approx(0.0).margin(0.0001));
+    REQUIRE(model.getAxis2MotorPosition() == Approx(0.025).margin(0.0001));
+    REQUIRE(!model.getIsAxis2Retracted());
+    REQUIRE(model.getAxis1MotorSpeed() == Approx(200.0));
+    REQUIRE(mgo::keyAllowedInCurrentMode(mgo::key::a, model));
+}
+
+TEST_CASE("Model:   stopping a multi-pass")
+{
+    mgo::MockConfigReader config;
+    mgo::MockGpio gpio(false);
+    mgo::Model model(gpio, config);
+    model.initialise();
+    model.axis1SetSpeed(20.0);
+    model.axis1StorePosition(0.0);
+    model.axis2StorePosition(0.0);
+    model.selectNextMemorySlot();
+    model.axis1StorePosition(1.0);
+    model.axis2StorePosition(0.1);
+    model.selectPreviousMemorySlot();
+    model.changeMode(mgo::Mode::MultiPass);
+    model.setMultiPassOptions({ .feedPerPass = 0.01 });
+
+    // Not at Mem 1: it won't start
+    model.setAxis1Position(0.5);
+    model.multiPassGo();
+    REQUIRE(!model.multiPass().inProgress());
+    REQUIRE(!model.getWarning().empty());
+    model.setAxis1Position(0.0);
+
+    model.multiPassGo();
+    REQUIRE(model.multiPass().inProgress());
+    REQUIRE(model.getWarning().empty());
+    model.checkStatus();
+    REQUIRE(model.isAxis1MotorRunning());
+    // Stopping the motors (e.g. Space) stops it
+    model.stopAllMotors();
+    REQUIRE(model.multiPass().state() == mgo::MultiPass::State::Idle);
+    model.checkStatus();
+    REQUIRE(!model.isAxis1MotorRunning());
+
+    // As does leaving the mode part way
+    model.axis1GoToPosition(0.0);
+    REQUIRE(runUntilStopped(model));
+    model.multiPassGo();
+    REQUIRE(model.multiPass().inProgress());
+    model.changeMode(mgo::Mode::None);
+    REQUIRE(!model.multiPass().inProgress());
+    REQUIRE(!model.isAxis1MotorRunning());
 }

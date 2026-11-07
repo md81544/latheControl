@@ -13,18 +13,6 @@
 
 namespace mgo {
 
-namespace {
-
-// Pause the UI loop. This used to spin calling yield(), which kept a CPU core
-// busy; a real sleep is fine here as UI timing isn't critical (the
-// time-critical work all happens in the motor threads)
-void uiSleep(std::chrono::microseconds microsecs)
-{
-    std::this_thread::sleep_for(microsecs);
-}
-
-} // end anonymous namespace
-
 Controller::Controller(Model* model)
     : m_model(model)
     , m_menu(buildCommands(model->config()))
@@ -92,26 +80,8 @@ void Controller::tick()
 void Controller::tickBody()
 {
     processKeyPress();
-
-    StatusResult rc = m_model->checkStatus();
-
+    m_model->checkStatus();
     m_view->updateDisplay(*m_model);
-
-    if (rc == StatusResult::PressAKey || rc == StatusResult::WaitForMotors) {
-        if (!waitForAxisToStop(1) || !waitForAxisToStop(2)) {
-            // User pressed a key to abort: motors have been stopped, so
-            // abandon the multi-pass operation rather than carrying on
-            MGOLOG("Multi-pass aborted by user");
-            m_model->setMultiPassStage(MultiPassStage::NotStarted);
-            m_model->changeMode(Mode::None);
-            return;
-        }
-        m_view->updateDisplay(*m_model);
-        if (rc == StatusResult::PressAKey) {
-            pressAnyKey("Press a key to continue", {});
-        }
-        m_model->setMultiPassStage(MultiPassStage::StepOver);
-    }
 }
 
 std::string Controller::unitsSuffix(int axisNumber) const
@@ -355,6 +325,12 @@ void Controller::processKey(int t)
                     break;
                 }
             case key::ENTER:
+                if (m_model->getEnabledFunction() == Mode::MultiPass) {
+                    // Starts the multi-pass, or continues it after a pause
+                    m_model->multiPassGo();
+                    break;
+                }
+                [[fallthrough]];
             case key::a1_ENTER:
                 {
                     if (m_model->getAxis1Memory(m_model->getCurrentMemorySlot()) == AXIS1_UNSET) {
@@ -737,13 +713,11 @@ void Controller::processKey(int t)
                     if (m_model->getAxis1Memory(0) == AXIS1_UNSET
                         || m_model->getAxis1Memory(1) == AXIS1_UNSET
                         || m_model->getAxis2Memory(0) == AXIS2_UNSET
-                        || m_model->getAxis2Memory(1) == AXIS2_UNSET
-                        || m_model->getAxis1MotorCurrentStep() != m_model->getAxis1Memory(0)
-                        || m_model->getAxis2MotorCurrentStep() != m_model->getAxis2Memory(0)) {
+                        || m_model->getAxis2Memory(1) == AXIS2_UNSET) {
                         pressAnyKey(
-                            "Invalid Conditions",
-                            { "Memory slots 1 and 2 must be filled, and the current position",
-                              "should be on M1 (for both axes) before using Multi-pass mode",
+                            "Multi-pass",
+                            { "Store the start of the cut (both axes) in Mem 1, and the end",
+                              "in Mem 2, before using Multi-pass mode",
                               "",
                               "Press a key",
                               "" });
@@ -752,31 +726,25 @@ void Controller::processKey(int t)
                     const std::string axis1Name = m_model->config().read("Axis1Label", "Z");
                     const std::string axis2Name = m_model->config().read("Axis2Label", "X");
                     const auto rc = getNumericInput(
-                        "Multi-Pass",
-                        { "Enter " + axis2Name + " step-over per pass" + unitsSuffix(2) + ".",
+                        "Multi-pass",
+                        { "Enter the " + axis2Name + " step-over per pass" + unitsSuffix(2) + ".",
                           "",
-                          "This mode will automatically move FROM m1." + axis1Name + ",m1."
-                              + axis2Name + " TO m2." + axis1Name + ",m2." + axis2Name,
-                          "with the step-over you specify above.",
+                          "Each pass cuts " + axis1Name + " from Mem 1 to Mem 2, then returns. "
+                              + axis2Name + " steps over",
+                          "between passes, from Mem 1's " + axis2Name + " to Mem 2's.",
+                          "If zero, the same cut is repeated until stopped.",
                           "",
-                          "If zero is entered, the same cut is repeated until cancelled.",
+                          "In the mode, go to Mem 1 and press Enter to start. Space stops.",
                           "",
-                          "[&P]: pause between passes",
+                          "[&P]: pause between passes (Enter continues)",
                           "[&R] retract between passes" },
                         0.0);
                     if (!rc.cancelled) {
-                        m_model->setStepOver(m_model->fromDisplayUnits(2, rc.value));
                         m_model->changeMode(Mode::MultiPass);
-                        if (rc.optionsSelected.contains('p')) {
-                            m_model->setMultiPassPauseBetweenCuts(true);
-                        } else {
-                            m_model->setMultiPassPauseBetweenCuts(false);
-                        }
-                        if (rc.optionsSelected.contains('r')) {
-                            m_model->setMultiPassRetractBetweenCuts(true);
-                        } else {
-                            m_model->setMultiPassRetractBetweenCuts(false);
-                        }
+                        m_model->setMultiPassOptions(
+                            { .feedPerPass = std::abs(m_model->fromDisplayUnits(2, rc.value)),
+                              .pause = rc.optionsSelected.contains('p'),
+                              .retract = rc.optionsSelected.contains('r') });
                     }
                     break;
                 }
@@ -974,27 +942,6 @@ void Controller::processKey(int t)
                     break;
                 }
         }
-    }
-}
-
-bool Controller::waitForAxisToStop(uint8_t axis)
-{
-    for (;;) {
-        if (axis == 1 && !m_model->isAxis1MotorRunning()) {
-            return true;
-        }
-        if (axis == 2 && !m_model->isAxis2MotorRunning()) {
-            return true;
-        }
-        // Any key press while we wait is treated as "stop": otherwise there
-        // would be no way to halt e.g. a multi-pass fast return from the keyboard
-        if (const int k = m_view->getEvents(); k != key::None) {
-            MGOLOG("Stopping all motors (key " << k << " while waiting for an axis)");
-            m_model->stopAllMotors();
-            return false;
-        }
-        uiSleep(std::chrono::microseconds(50'000));
-        m_view->updateDisplay(*m_model);
     }
 }
 

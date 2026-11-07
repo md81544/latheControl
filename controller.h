@@ -33,9 +33,6 @@ public:
     // redraws the display. Quits the event loop once the model is quitting
     void tick();
     void processKeyPress();
-    // Returns false if the user aborted the wait with a key press, in which
-    // case all motors will have been stopped
-    bool waitForAxisToStop(uint8_t axis);
     bool isMenuOpen() const;
 
     // How often tick() is called. (The threading speed is updated each tick)

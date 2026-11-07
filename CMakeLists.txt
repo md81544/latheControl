@@ -64,6 +64,7 @@ add_library(shared_with_test OBJECT
 	log.cpp
 	model.cpp
 	motionsequence.cpp
+	multipass.cpp
 	cpuaffinity.cpp
 )
 target_link_libraries(shared_with_test PUBLIC

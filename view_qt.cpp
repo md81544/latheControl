@@ -433,6 +433,7 @@ struct ViewQt::Impl {
 
     void updateTextFromModel(const Model& model);
     void updateThreadData(const Model& model);
+    void updateMultiPassData(const Model& model);
 };
 
 ViewQt::ViewQt()
@@ -1058,8 +1059,16 @@ void ViewQt::Impl::updateTextFromModel(const Model& model)
         // The following are all handled now by the new dialog:
         case Mode::Taper:
         case Mode::Radius:
-        case Mode::MultiPass:
             break;
+        case Mode::MultiPass:
+            {
+                updateMultiPassData(model);
+                warning.text = model.getWarning();
+                if (!model.getWarning().empty()) {
+                    warning.colour = ++iteration % 6 < 3 ? RED : YELLOW;
+                }
+                break;
+            }
         case Mode::Setup:
             {
                 // TODO probably remove this
@@ -1110,6 +1119,77 @@ void ViewQt::Impl::updateTextFromModel(const Model& model)
     if (model.getEnabledFunction() == Mode::Threading) {
         updateThreadData(model);
     }
+}
+
+void ViewQt::Impl::updateMultiPassData(const Model& model)
+{
+    const MultiPass& mp = model.multiPass();
+    const MultiPassOptions& options = model.getMultiPassOptions();
+    const std::string x = model.config().read("Axis2Label", "X");
+    const auto xLength = [&model](double mm) {
+        return fmt::format(
+            "{:.{}f} {}", model.toDisplayUnits(2, mm), model.axisDecimals(2), model.axisUnitName(2));
+    };
+    mode.text = "";
+    if (options.feedPerPass < MultiPass::TOLERANCE) {
+        misc1.text = "Repeating the same cut";
+    } else {
+        misc1.text = fmt::format("{} step-over {} per pass", x, xLength(options.feedPerPass));
+    }
+    if (options.pause) {
+        misc1.text += ", pausing";
+    }
+    if (options.retract) {
+        misc1.text += ", retracting";
+    }
+
+    const std::string pass = mp.totalPasses() == 0
+        ? fmt::format("Pass {}", mp.pass())
+        : fmt::format("Pass {} of {}", mp.pass(), mp.totalPasses());
+    switch (mp.state()) {
+        case MultiPass::State::Idle:
+            misc2.text = mp.message().empty()
+                ? "Go to Mem 1, then press Enter to start"
+                : "Stopped. Go to Mem 1, then press Enter to start again";
+            break;
+        case MultiPass::State::Cutting:
+            misc2.text = pass + ": cutting";
+            break;
+        case MultiPass::State::Retracting:
+            misc2.text = pass + ": retracting";
+            break;
+        case MultiPass::State::Returning:
+            misc2.text = pass + ": returning";
+            break;
+        case MultiPass::State::Paused:
+            misc2.text = mp.plan().feedManual
+                ? fmt::format("{} done: feed {} by {}, then press Enter", pass, x, xLength(mp.nextFeed()))
+                : pass + " done: press Enter for the next";
+            break;
+        case MultiPass::State::Unretracting:
+            misc2.text = pass + ": unretracting";
+            break;
+        case MultiPass::State::Feeding:
+            misc2.text = pass + ": stepping over";
+            break;
+        case MultiPass::State::Finishing:
+            misc2.text = "Finishing";
+            break;
+        case MultiPass::State::Finished:
+            misc2.text = fmt::format("Finished ({} passes). Press Enter to start again", mp.pass());
+            break;
+    }
+    // How far X has stepped over since the first pass
+    misc3.text = "";
+    if (mp.pass() > 0) {
+        misc3.text = fmt::format("{} stepped over: {}", x, xLength(mp.fed()));
+        if (mp.totalPasses() != 0) {
+            misc3.text += fmt::format(
+                " of {}", xLength(std::abs(mp.plan().feedEnd - mp.plan().feedStart)));
+        }
+    }
+    misc4.text = mp.inProgress() ? "Space stops" : "";
+    misc5.text = "";
 }
 
 void ViewQt::Impl::updateThreadData(const Model& model)

@@ -249,6 +249,31 @@ bool keyAllowedInCurrentMode(int k, const Model& model)
     if (k == key::CtrlQ || k == key::ESC || k == key::ENTER) {
         return true;
     }
+    // While a multi-pass is running (or paused between passes), anything else
+    // moving an axis would upset it. Space stops it; the speeds can be changed
+    // (Z's is used for the next cut); and the units shown
+    if (model.getEnabledFunction() == Mode::MultiPass && model.multiPass().inProgress()) {
+        switch (k) {
+            case key::SPACE:
+            case key::EQUALS:
+            case key::MINUS:
+            case key::ONE:
+            case key::TWO:
+            case key::THREE:
+            case key::FOUR:
+            case key::FIVE:
+            case key::SIX:
+            case key::SEVEN:
+            case key::EIGHT:
+            case key::NINE:
+            case key::ZERO:
+            case key::u:
+            case key::U:
+                return true;
+            default:
+                return false;
+        }
+    }
     // Don't allow any x movement when retracted
     if (model.getIsAxis2Retracted()
         && (k == key::UP || k == key::DOWN || k == key::W || k == key::w || k == key::s
@@ -393,6 +418,16 @@ std::vector<Command> buildCommands(const IConfigReader& config, DisplayUnits uni
     b.add(c, "Quick chamfer (45 deg taper)", key::h, BOTH, nullptr, 'h');
     b.add(c, "Radius...", key::f2o, BOTH, nullptr, 'o');
     b.add(c, "Multi-pass (experimental)...", key::f2m, BOTH, nullptr, 'm');
+    b.add(
+        c,
+        "Start / continue multi-pass",
+        key::ENTER,
+        BOTH,
+        [](const Model& m) {
+            return m.getEnabledFunction() == Mode::MultiPass
+                && (!m.multiPass().inProgress() || m.multiPass().state() == MultiPass::State::Paused);
+        },
+        'g');
     b.add(c, fmt::format("{} retraction direction...", a2), key::f2r, BOTH, nullptr, 'r');
     b.add(c, "Setup (measure backlash)", key::f2s, NONE, nullptr, 's');
     b.add(c, "Exit mode", key::ESC, NONE, nullptr, 'x');

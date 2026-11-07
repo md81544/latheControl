@@ -608,6 +608,50 @@ TEST_CASE("UI: keys wait while a nudge is moving, except Space")
     REQUIRE(tm.model.getAxis1MotorSpeed() == Approx(speed));
 }
 
+TEST_CASE("UI: multi-pass through the controller")
+{
+    TestModel tm;
+    mgo::Controller controller(&tm.model);
+    QWidget* w = mainWindow();
+    REQUIRE(w);
+    // (run() would set these from the presets)
+    tm.model.setAxis1MotorSpeed(500.0);
+    tm.model.setAxis2MotorSpeed(20.0);
+    // Mem 1 where the tool is (0, 0); Mem 2 at Z 0.3, X 0.02
+    tm.model.axis1StorePosition(0.0);
+    tm.model.axis2StorePosition(0.0);
+    tm.model.selectNextMemorySlot();
+    tm.model.axis1StorePosition(0.3);
+    tm.model.axis2StorePosition(0.02);
+    tm.model.selectPreviousMemorySlot();
+
+    // F2, M: the dialog asks for the step-over
+    whenDialogShows([](QWidget* dialog) {
+        typeInto(dialog, "0.01");
+        QTest::keyClick(inputWidget(dialog), Qt::Key_Return);
+    });
+    press(w, controller, Qt::Key_F2);
+    press(w, controller, Qt::Key_M);
+    REQUIRE(tm.model.getEnabledFunction() == mgo::Mode::MultiPass);
+    REQUIRE(tm.model.getMultiPassOptions().feedPerPass == Approx(0.01));
+    REQUIRE(!tm.model.multiPass().inProgress());
+
+    // Enter starts it
+    press(w, controller, Qt::Key_Return);
+    REQUIRE(tm.model.multiPass().inProgress());
+    REQUIRE(tm.model.multiPass().totalPasses() == 3);
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(20);
+    while (tm.model.multiPass().inProgress()) {
+        REQUIRE(std::chrono::steady_clock::now() < deadline);
+        controller.tick();
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    INFO("Stopped: " << tm.model.multiPass().message() << " / " << tm.model.getWarning());
+    REQUIRE(tm.model.multiPass().state() == mgo::MultiPass::State::Finished);
+    REQUIRE(tm.model.getAxis1MotorPosition() == Approx(0.0).margin(0.0001));
+    REQUIRE(tm.model.getAxis2MotorPosition() == Approx(0.02).margin(0.0001));
+}
+
 TEST_CASE("UI: run() returns at once if already quitting")
 {
     TestModel tm;
