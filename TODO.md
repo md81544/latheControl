@@ -454,6 +454,13 @@
       - NB internal metric/UN threads now use the ISO depth of 0.541 x pitch; the old
         table had 0.469 x pitch (and M18 had 1.072 where M20 had 1.172). Change
         femaleDepth in threadpitches.cpp's FORMS if 0.469 was deliberate
+- [ ] Start a fresh log each session: at start-up, before `INIT_MGOLOG("lc.log")`
+      in main.cpp, rename any existing lc.log to lc.log.previous (replacing an
+      older one), so there's always this session's log and the last one's. The
+      log grows without limit now that threading passes, retracts, spindle
+      readings and lost pulses are all logged, and the session in question
+      after a workshop test is hard to find in it. (`std::filesystem::rename`;
+      ignore a failure, e.g. no log yet, rather than refusing to start)
 - [ ] Add some form of generic multi-pass functionality (defining a start position,
       a required end position, and how axes should change per pass -- e.g. for a lathe
       operation, we'd define a z start, a z end, and an x infeed per pass).
