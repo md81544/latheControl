@@ -41,9 +41,8 @@ void Controller::run()
 
 void Controller::tick()
 {
-    // Nothing in a tick processes Qt's events (dialogs don't block; a
-    // threading pass's wait for zero degrees blocks, but without processing
-    // events), so the timer can't call us again before we've finished. This
+    // Nothing in a tick blocks or processes Qt's events (dialogs don't
+    // block), so the timer can't call us again before we've finished. This
     // guard is a safety net, should something ever do so
     if (m_inTick) {
         return;

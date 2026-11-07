@@ -177,6 +177,18 @@ void Model::initialise()
         m_config.readLong("RotaryEncoderPulsesPerRev", 2'000),
         m_config.readDouble("RotaryEncoderGearingNumerator", 35.0)
             / m_config.readDouble("RotaryEncoderGearingDivisor", 30.0));
+    {
+        // Threading counts whole revolutions in pulses, so needs a whole number
+        const double pulsesPerRev = m_config.readLong("RotaryEncoderPulsesPerRev", 2'000)
+            * m_config.readDouble("RotaryEncoderGearingNumerator", 35.0)
+            / m_config.readDouble("RotaryEncoderGearingDivisor", 30.0);
+        if (std::abs(pulsesPerRev - std::round(pulsesPerRev)) > 0.001) {
+            MGOLOG(fmt::format(
+                "*** Warning *** {} rotary encoder pulses per spindle revolution isn't a whole "
+                "number, so threading passes won't all start at the same angle",
+                pulsesPerRev));
+        }
+    }
 
     m_linearScaleAxis1 = std::make_unique<mgo::LinearScale>(
         m_gpio,
@@ -588,7 +600,7 @@ std::vector<MotionSequence::Step> Model::axis1MoveSteps(long step)
 {
     const auto move = [this, step]() {
         if (m_enabledFunction == Mode::Threading) {
-            axis1StartThreadingMove([this, step]() { m_axis1Motor->goToStep(step); });
+            axis1StartThreadingPass(step);
         } else {
             m_axis1Motor->goToStep(step);
         }
@@ -638,38 +650,36 @@ void Model::setThreadingWarning(const std::string& warning, bool sticky)
 
 void Model::threadingCheckSpeed()
 {
-    // We are cutting threads, so Z's speed is set by the spindle's speed and
-    // the thread pitch
+    // Z follows the spindle's position (see axis1StartThreadingPass()), so the
+    // spindle's speed doesn't set Z's: it's only used here for warnings, and
+    // to show the speed Z moves at
     const double pitch = threadPitches.at(m_threadPitchIndex).pitchMm;
     const float rpm = m_rotaryEncoder->getRpm();
-    if (rpm < SPINDLE_STOPPED_RPM && m_axis1Motor->isRunning()) {
-        // Probably a momentary misreading (see checkSpindleStopped(), which
-        // stops the motors if the spindle really has stopped). Setting a
-        // speed of zero would stop Z part way through the pass, so we keep
-        // the last speed
+    const double speed = pitch * rpm;
+    const double startLimit = threadingMaxZSpeed() * THREADING_START_SPEED_FRACTION;
+    if (rpm >= SPINDLE_STOPPED_RPM) {
+        m_threadingZSpeed = speed;
+    }
+    if (m_axis1Motor->isFollowing() && m_threadingTarget) {
+        // If Z has fallen well behind (the spindle has sped up beyond what it
+        // can follow), this pass is cutting a different thread: stop it
+        const long lag = std::abs(m_threadingTarget() - m_axis1Motor->getCurrentStep());
+        if (lag > m_threadingMaxLagSteps) {
+            m_axis1Motor->stop();
+            MGOLOG(fmt::format(
+                "Threading pass stopped: Z {} steps behind the spindle (at {:.0f} rpm)",
+                lag,
+                rpm));
+            setThreadingWarning(
+                fmt::format(
+                    "Z couldn't keep up with the spindle ({:.0f} rpm): pass stopped. Thread at "
+                    "{:.0f} rpm or less",
+                    rpm,
+                    startLimit / pitch),
+                true);
+        }
         return;
     }
-    const double speed = pitch * rpm;
-    const double maxSpeed = threadingMaxZSpeed();
-    const double startLimit = maxSpeed * THREADING_START_SPEED_FRACTION;
-    if (m_axis1Motor->isRunning() && speed > maxSpeed) {
-        // Z can't keep up, so the pitch would be wrong: stop the pass. (A pass
-        // can't start this fast, but the spindle may have sped up during it)
-        m_axis1Motor->stop();
-        m_axis1Motor->wait();
-        MGOLOG(fmt::format(
-            "Threading pass stopped: spindle at {:.0f} rpm needs Z at {:.0f} mm/min (max {:.0f})",
-            rpm,
-            speed,
-            maxSpeed));
-        setThreadingWarning(
-            fmt::format(
-                "Spindle too fast ({:.0f} rpm): pass stopped. Thread at {:.0f} rpm or less",
-                rpm,
-                startLimit / pitch),
-            true);
-    }
-    m_axis1Motor->setSpeed(speed);
     if (!m_threadingWarningSticky) {
         if (!m_axis1Motor->isRunning() && speed > startLimit) {
             setThreadingWarning(
@@ -683,18 +693,18 @@ void Model::threadingCheckSpeed()
     }
 }
 
-bool Model::axis1StartThreadingMove(const std::function<void()>& move)
+bool Model::axis1StartThreadingPass(long endStep)
 {
-    // Every pass must start at the same point of the spindle's rotation, so we
-    // wait for zero degrees before starting the move
     const double pitch = threadPitches.at(m_threadPitchIndex).pitchMm;
     const float rpm = m_rotaryEncoder->getRpm();
     if (rpm < SPINDLE_STOPPED_RPM) {
         setThreadingWarning("Start the spindle before threading", true);
         return false;
     }
-    const double startLimit = threadingMaxZSpeed() * THREADING_START_SPEED_FRACTION;
-    if (pitch * rpm > startLimit) {
+    const double nominalSpeed = pitch * rpm;
+    const double maxSpeed = threadingMaxZSpeed();
+    const double startLimit = maxSpeed * THREADING_START_SPEED_FRACTION;
+    if (nominalSpeed > startLimit) {
         MGOLOG(fmt::format("Threading pass not started: spindle too fast at {:.0f} rpm", rpm));
         setThreadingWarning(
             fmt::format(
@@ -703,28 +713,61 @@ bool Model::axis1StartThreadingMove(const std::function<void()>& move)
             false);
         return false;
     }
-    setThreadingWarning("", false);
-    bool called = false;
-    m_rotaryEncoder->callbackAtZeroDegrees([&]() {
-        called = true;
-        move();
-    });
-    if (!called) {
-        setThreadingWarning("Couldn't find the spindle's position: try again", true);
+    const long startStep = m_axis1Motor->getCurrentStep();
+    if (endStep == startStep) {
         return false;
     }
-    if (!m_axis1Motor->isRunning()) {
-        // e.g. it was already at the target
+    setThreadingWarning("", false);
+
+    // Z is locked to the spindle's position, as if geared to it: Z's target is
+    // the start, plus the pitch for every revolution since the pass started.
+    // Every pass must start at the same point of the spindle's rotation, so
+    // it starts at a whole number of revolutions of the encoder's count: the
+    // next one, at least an eighth of a revolution away (so it can't have
+    // passed by the time the motor thread first looks)
+    const int64_t pulsesPerRev = m_rotaryEncoder->getPulsesPerSpindleRev();
+    const int spindleSign
+        = m_rotaryEncoder->getRotationDirection() == RotationDirection::normal ? 1 : -1;
+    const int64_t margin = pulsesPerRev / 8;
+    const int64_t now = m_rotaryEncoder->getSpindlePulses();
+    int64_t startPulse;
+    if (spindleSign > 0) {
+        const int64_t from = now + margin;
+        startPulse = (from / pulsesPerRev + (from % pulsesPerRev > 0 ? 1 : 0)) * pulsesPerRev;
+    } else {
+        const int64_t from = now - margin;
+        startPulse = (from / pulsesPerRev - (from % pulsesPerRev < 0 ? 1 : 0)) * pulsesPerRev;
+    }
+    const double stepsPerRev = pitch / std::abs(m_axis1Motor->getConversionFactor());
+    const double stepsPerPulse = stepsPerRev / static_cast<double>(pulsesPerRev);
+    const int zSign = endStep > startStep ? 1 : -1;
+    const RotaryEncoder* encoder = m_rotaryEncoder.get();
+    m_threadingTarget = [encoder, startPulse, spindleSign, startStep, stepsPerPulse, zSign]() {
+        const double pulses
+            = (encoder->getSpindlePosition() - static_cast<double>(startPulse)) * spindleSign;
+        if (pulses <= 0.0) {
+            return startStep;
+        }
+        return startStep + zSign * std::lround(pulses * stepsPerPulse);
+    };
+    m_threadingMaxLagSteps = std::max(1L, std::lround(stepsPerRev / 4.0));
+    // Z's speed only limits how fast it can follow: twice what it needs now
+    // leaves room for the spindle speeding up
+    m_axis1Motor->setSpeed(std::min(maxSpeed, 2.0 * nominalSpeed));
+    m_axis1Motor->followTo(endStep, m_threadingTarget);
+    if (!m_axis1Motor->isFollowing()) {
         return false;
     }
     m_threadingMoveInProgress = true;
-    m_threadingMoveTarget = m_axis1Motor->getTargetStep();
+    m_threadingMoveTarget = endStep;
     m_threadingMoveStartedRetracted = m_axis2Retracted;
     MGOLOG(fmt::format(
-        "Threading pass: Z from step {} to {} at {:.0f} rpm, X {}",
-        m_axis1Motor->getCurrentStep(),
-        m_threadingMoveTarget,
+        "Threading pass: Z from step {} to {} at {:.0f} rpm, from spindle pulse {} (now {}), X {}",
+        startStep,
+        endStep,
         rpm,
+        startPulse,
+        now,
         m_axis2Retracted ? "retracted" : "in"));
     return true;
 }
@@ -1428,6 +1471,16 @@ bool Model::isShuttingDown() const
 void Model::shutDown()
 {
     m_shutdown = true;
+}
+
+int64_t Model::getSpindlePulses() const
+{
+    return m_rotaryEncoder->getSpindlePulses();
+}
+
+double Model::getThreadingZSpeed() const
+{
+    return m_threadingZSpeed;
 }
 
 bool Model::isMotionSequenceRunning() const

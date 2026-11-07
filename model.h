@@ -243,6 +243,10 @@ public:
     double getAxis1MotorPosition() const;
     double getAxis2MotorPosition() const;
     double getAxis1MotorSpeed() const;
+    // See RotaryEncoder::getSpindlePulses()
+    int64_t getSpindlePulses() const;
+    // When threading: the speed Z moves at (pitch x the spindle's speed)
+    double getThreadingZSpeed() const;
     double getAxis2MotorSpeed() const;
     double getAxis1MotorCurrentStep() const;
     double getAxis2MotorCurrentStep() const;
@@ -381,6 +385,12 @@ private:
     bool m_threadingMoveInProgress { false };
     long m_threadingMoveTarget { 0 };
     bool m_threadingMoveStartedRetracted { false };
+    // During a pass: the step Z should be at now (from the spindle's position)
+    std::function<long()> m_threadingTarget;
+    // How far Z may fall behind that before the pass is stopped
+    long m_threadingMaxLagSteps { 0 };
+    // The speed Z moves at when threading (pitch x spindle speed), for display
+    double m_threadingZSpeed { 0.0 };
     // For logging the end of a retract or unretract
     bool m_axis2RetractMoveInProgress { false };
     // Set if encoder pulses are lost while threading (see
@@ -415,7 +425,9 @@ private:
     void retract() override;
     bool isRetracted() const override;
     // Threading
-    bool axis1StartThreadingMove(const std::function<void()>& move);
+    // Starts a threading pass: Z follows the spindle to endStep. Returns false
+    // if it couldn't start (with a warning)
+    bool axis1StartThreadingPass(long endStep);
     void threadingCheckSpeed();
     void threadingCheckMoveEnded();
     double threadingMaxZSpeed() const;

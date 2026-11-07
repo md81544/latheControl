@@ -74,8 +74,8 @@
       Gamepad keys are ignored meanwhile, as before; closing the window
       cancels the dialog and quits. Nothing in a tick processes Qt's events
       any more. Not yet tried on the machine
-    - The one remaining block in a tick is `callbackAtZeroDegrees()` (up to a
-      spindle revolution), which the electronic leadscrew work will replace
+    - The one remaining block in a tick was `callbackAtZeroDegrees()`, now
+      gone with the electronic leadscrew work, so nothing in a tick blocks
 - [ ] Address the "Mode" concept, which provides pseudo-modal "dialogs"
       interleaved into program flow and is difficult to maintain. If all
       motors are stopped during a dialog, they can all go on a separate flow
@@ -176,6 +176,24 @@
       detected, logged and warned about)
     - **Testing:** with the mock encoder, change the spindle speed part way
       through a pass and check that Z's position still tracks pulses × pitch
+    - **Done:** implemented as above. stepperControl v1.4.0 adds
+      `StepperMotor::followTo()`: the motor thread steps towards a target
+      function's result before each step period. The encoder keeps a pulse
+      count which never wraps, and `getSpindlePosition()` carries it on past
+      the last pulse at the current rate (up to 2ms), which covers both the
+      resolution and the batching latency. A pass locks on at the next whole
+      revolution of the count (at least an eighth of a revolution ahead), so
+      `callbackAtZeroDegrees()` and its busy-wait are gone. Z's speed is now
+      only a limit on how fast it can follow: twice what's needed at the
+      start of the pass (up to Z's maximum). If Z falls more than a quarter
+      of the pitch behind, the pass stops with a warning. Unit tests cover
+      the spindle slowing to half speed mid-pass, every pass (both ways)
+      starting at a whole revolution, and Z not keeping up. **Not yet tried
+      on the machine**
+    - On the machine, check: the thread's pitch (e.g. over 20 turns), that
+      repeated passes stay in one groove, and how Z starts (it now goes
+      straight to the spindle's speed at the start revolution, as before;
+      ramping is still off for Z when threading)
 - [ ] I defined some constants for a slight Z infeed when cutting threads
       (see INFEED and SIDEFEED) but never used them. Maybe implement to
       simulate the use of the topslide

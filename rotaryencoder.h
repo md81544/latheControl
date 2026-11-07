@@ -7,7 +7,6 @@
 
 #include <atomic>
 #include <cstdint>
-#include <functional>
 #include <ostream>
 
 namespace mgo {
@@ -71,12 +70,18 @@ public:
     float getPositionDegrees();
     RotationDirection getRotationDirection();
 
-    void callbackAtZeroDegrees(std::function<void()> cb);
-
-    void setAdvanceValueMicroseconds(float value)
-    {
-        m_advanceValueMicroseconds = value;
-    }
+    // The spindle's position in encoder pulses, counted from start-up: up as
+    // it turns in the normal direction, down when reversed. Never wraps. Every
+    // whole multiple of getPulsesPerSpindleRev() is the same angle. Lost
+    // pulses (see getLostPulseEvents()) leave it wrong.
+    int64_t getSpindlePulses() const;
+    // The same, but continuing past the last pulse at the current rate, by
+    // the time since it (up to MAX_EXTRAPOLATION_MICROSECONDS). Pulses reach us
+    // in batches, about every millisecond, so this keeps the position up to
+    // date in between. Can be called from any thread
+    double getSpindlePosition() const;
+    static constexpr uint32_t MAX_EXTRAPOLATION_MICROSECONDS = 2'000;
+    int getPulsesPerSpindleRev() const;
 
     bool warmingUp()
     {
@@ -105,11 +110,16 @@ private:
     // These are written by the callback thread and read by the UI thread:
     std::atomic<bool> m_warmingUp { true };
     std::atomic<uint32_t> m_lastTick { 0 };
-    std::atomic<uint32_t> m_lastZeroDegreesTick { 0 };
     std::atomic<uint32_t> m_pulseCount { 0 };
     std::atomic<float> m_averageTickDelta { 0.f };
     std::atomic<RotationDirection> m_direction { RotationDirection::normal };
-    std::atomic<float> m_advanceValueMicroseconds { 0.f };
+    // See getSpindlePulses(). These three are only consistent with each other
+    // while m_spindleSequence is even and unchanged (it's odd while they're
+    // being written)
+    std::atomic<int64_t> m_spindlePulses { 0 };
+    std::atomic<uint32_t> m_spindlePulseTick { 0 };
+    std::atomic<uint32_t> m_spindlePulseInterval { 0 }; // (µs; 0 = not known)
+    std::atomic<uint32_t> m_spindleSequence { 0 };
     std::atomic<uint32_t> m_lostPulseEvents { 0 };
     std::atomic<uint32_t> m_lastLostPulseGap { 0 };
 };

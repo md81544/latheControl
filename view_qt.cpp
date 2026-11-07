@@ -992,9 +992,13 @@ void ViewQt::Impl::updateTextFromModel(const Model& model)
     axis1Pos.text = formatMotorPosition(
         model.toDisplayUnits(1, model.getAxis1MotorPosition()), model.axisDecimals(1));
 
-    axis1Speed.text = fmt::format(
+    // (When threading, Z's speed is set by the spindle's)
+    const double axis1Speed = model.getEnabledFunction() == Mode::Threading
+        ? model.getThreadingZSpeed()
+        : model.getAxis1MotorSpeed();
+    this->axis1Speed.text = fmt::format(
         "{:<.{}f} {}/min",
-        model.toDisplayUnits(1, model.getAxis1MotorSpeed()),
+        model.toDisplayUnits(1, axis1Speed),
         speedDecimals(1),
         model.axisUnitName(1));
 

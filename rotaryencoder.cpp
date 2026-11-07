@@ -1,5 +1,8 @@
 #include "rotaryencoder.h"
 
+#include <algorithm>
+#include <cmath>
+
 namespace mgo {
 
 void RotaryEncoder::staticCallback(int pin, int level, uint32_t tick, void* userData)
@@ -88,14 +91,12 @@ void RotaryEncoder::callback(int pin, int level, uint32_t tick)
             }
             m_tickDiffTotal = 0;
             m_pulsesInTotal = 0;
-            // We remember what the tick was at the last zero degrees position
-            // (we arbitrarily call the start position zero) so we can extrapolate
-            // out to the next one for accurate starting when waiting to cut a
-            // thread. Owing to the latency on the callbacks, it's not sufficient
-            // to simply wait for the next zero-degree tick. With the 1 ms latency,
-            // this could result in an inaccuracy of up to 6° at 1,000 rpm.
-            m_lastZeroDegreesTick = tick;
         }
+        ++m_spindleSequence; // (odd: writing)
+        m_spindlePulses += m_direction == RotationDirection::normal ? 1 : -1;
+        m_spindlePulseTick = tick;
+        m_spindlePulseInterval = tick - m_lastTick;
+        ++m_spindleSequence;
         checkForLostPulses(tick - m_lastTick);
         m_tickDiffTotal += tick - m_lastTick; // don't need to worry about wrap
         ++m_pulsesInTotal;
@@ -172,41 +173,45 @@ RotationDirection RotaryEncoder::getRotationDirection()
     return m_direction;
 }
 
-void RotaryEncoder::callbackAtZeroDegrees(std::function<void()> cb)
+int64_t RotaryEncoder::getSpindlePulses() const
 {
-    // We just need to start threading operations at a
-    // repeatable rotational position each time, so we
-    // arbitrarily choose zero.
-    // Because there is a latency on the callback (the pigpio
-    // library batches up the callbacks), we interpolate here
-    // for better accuracy.
-    // Note: ramping should be turned off for threading operations
-    // NB if we return without calling cb(), the requested motion doesn't start.
-    // All tick comparisons are done as signed differences, as the tick counter
-    // wraps every ~71.6 minutes.
-    if (m_warmingUp || microsecondsSinceLastPulse() > 100'000) {
-        MGOLOG("callbackAtZeroDegrees: spindle not running, ignoring");
-        return;
-    }
-    // If the spindle has only just started, we may not yet have seen the zero
-    // position, or measured a full revolution. Wait (with a timeout) for both.
-    constexpr uint32_t waitTimeoutMicroseconds = 5'000'000;
-    const uint32_t waitStart = m_gpio.getTick();
-    while (m_lastZeroDegreesTick == 0 || m_averageTickDelta <= 0.f) {
-        if (m_gpio.getTick() - waitStart > waitTimeoutMicroseconds) {
-            MGOLOG("callbackAtZeroDegrees: timed out waiting for spindle position");
-            return;
-        }
-    }
-    const uint32_t timeForOneRevolution = m_averageTickDelta * m_pulsesPerSpindleRev;
-    uint32_t targetTick = m_lastZeroDegreesTick + timeForOneRevolution
-        - static_cast<int32_t>(m_advanceValueMicroseconds);
-    while (static_cast<int32_t>(m_gpio.getTick() - targetTick) > 0) {
-        targetTick += timeForOneRevolution;
-    }
-    // Now spin until we get to the right time
-    while (static_cast<int32_t>(m_gpio.getTick() - targetTick) < 0)
-        ;
-    cb();
+    return m_spindlePulses;
 }
+
+double RotaryEncoder::getSpindlePosition() const
+{
+    int64_t pulses;
+    uint32_t tick;
+    uint32_t interval;
+    RotationDirection direction;
+    for (;;) {
+        const uint32_t sequence = m_spindleSequence;
+        pulses = m_spindlePulses;
+        tick = m_spindlePulseTick;
+        interval = m_spindlePulseInterval;
+        direction = m_direction;
+        if (sequence % 2 == 0 && sequence == m_spindleSequence) {
+            break;
+        }
+        // (The callback thread was part way through a pulse: try again)
+    }
+    if (interval == 0) {
+        return static_cast<double>(pulses);
+    }
+    // (Read after the pulse's tick, so this isn't negative)
+    const int32_t elapsed = static_cast<int32_t>(m_gpio.getTick() - tick);
+    if (elapsed <= 0) {
+        return static_cast<double>(pulses);
+    }
+    const uint32_t extrapolated = std::min(static_cast<uint32_t>(elapsed), MAX_EXTRAPOLATION_MICROSECONDS);
+    const double fraction = static_cast<double>(extrapolated) / interval;
+    return static_cast<double>(pulses)
+        + (direction == RotationDirection::normal ? fraction : -fraction);
+}
+
+int RotaryEncoder::getPulsesPerSpindleRev() const
+{
+    return static_cast<int>(std::lround(m_pulsesPerSpindleRev));
+}
+
 } // end namespace

@@ -10,6 +10,7 @@
 #include "rotaryencoder.h"
 #include "stepperControl/mockgpio.h"
 #include "stepperControl/steppermotor.h"
+#include "threadpitches.h"
 
 #include <fmt/format.h>
 
@@ -74,6 +75,20 @@ void feedEncoderPulse(mgo::RotaryEncoder& re, uint32_t tick)
     re.callback(RE_PIN_A, 0, tick + 4'000);
 }
 
+// Waits (up to a time limit) for a condition to become true
+template <typename F>
+bool waitFor(F condition, std::chrono::milliseconds limit = std::chrono::milliseconds(1'000))
+{
+    const auto deadline = std::chrono::steady_clock::now() + limit;
+    while (!condition()) {
+        if (std::chrono::steady_clock::now() > deadline) {
+            return false;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    return true;
+}
+
 // Runs the model's updates (as the controller's tick does) until any motion
 // sequence (e.g. a taper's backlash take-up) has finished and both motors
 // have stopped. Returns false if that took too long
@@ -119,6 +134,73 @@ TEST_CASE("Stepper: Stop motor")
     motor.wait();
     REQUIRE(!motor.isRunning());
     REQUIRE(motor.getCurrentStep() > 0);
+}
+
+TEST_CASE("Stepper: Follow a moving target")
+{
+    mgo::MockGpio gpio(false);
+    mgo::StepperMotor motor(gpio, 0, 0, 0, 1'000, 1.0, 10'000.0);
+    motor.setRpm(500.0);
+    std::atomic<long> target { 0 };
+    motor.followTo(1'000, [&target] { return target.load(); });
+    REQUIRE(motor.isRunning());
+    REQUIRE(motor.isFollowing());
+    const auto at = [&motor](long step) {
+        return waitFor([&motor, step] { return motor.getCurrentStep() == step; });
+    };
+    // It follows the target, forwards and back, still running when it's there
+    target = 100;
+    REQUIRE(at(100));
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    REQUIRE(motor.getCurrentStep() == 100);
+    REQUIRE(motor.isRunning());
+    target = 40;
+    REQUIRE(at(40));
+    // goToStep() is ignored meanwhile
+    motor.goToStep(500);
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    REQUIRE(motor.getCurrentStep() == 40);
+    // The target is kept between the start and the end...
+    target = -50;
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    REQUIRE(motor.getCurrentStep() == 0);
+    REQUIRE(motor.isRunning());
+    // ...and following ends at the end
+    target = 2'000;
+    REQUIRE(waitFor([&motor] { return !motor.isRunning(); }));
+    REQUIRE(motor.getCurrentStep() == 1'000);
+    REQUIRE(!motor.isFollowing());
+    // (After which it moves normally again)
+    motor.goToStep(990);
+    motor.wait();
+    REQUIRE(motor.getCurrentStep() == 990);
+}
+
+TEST_CASE("Stepper: Stop while following")
+{
+    mgo::MockGpio gpio(false);
+    mgo::StepperMotor motor(gpio, 0, 0, 0, 1'000, 1.0, 10'000.0);
+    motor.setRpm(500.0);
+    std::atomic<long> target { 50 };
+    motor.followTo(-1'000, [&target] { return target.load(); }); // (backwards)
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    REQUIRE(motor.getCurrentStep() == 0); // (50 is beyond the start)
+    target = -30;
+    REQUIRE(waitFor([&motor] { return motor.getCurrentStep() == -30; }));
+    motor.stop();
+    REQUIRE(!motor.isRunning());
+    REQUIRE(!motor.isFollowing());
+    target = -60;
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    REQUIRE(motor.getCurrentStep() == -30);
+
+    // It won't start following while running, or to where it is already
+    motor.goToStep(100'000);
+    motor.followTo(-1'000, [] { return -1'000L; });
+    REQUIRE(!motor.isFollowing());
+    motor.stop();
+    motor.followTo(motor.getCurrentStep(), [] { return 0L; });
+    REQUIRE(!motor.isFollowing());
 }
 
 TEST_CASE("Stepper: Stop stopped motor")
@@ -224,21 +306,6 @@ TEST_CASE("Stepper: Rotary Encoder RPM")
     }
     gpio.delayMicroSeconds(2'000'000);
     REQUIRE(re.getRpm() > 0.f);
-}
-
-TEST_CASE("Stepper: Rotary Encoder Position Callback")
-{
-    mgo::MockGpio gpio(false);
-    mgo::RotaryEncoder re(gpio, 23, 24, 2000, 35.f / 30.f);
-    bool called = false;
-    while (re.warmingUp()) {
-        gpio.delayMicroSeconds(1'000);
-    }
-    re.callbackAtZeroDegrees([&]() {
-        called = true;
-    });
-    REQUIRE(re.warmingUp() == false);
-    REQUIRE(called == true);
 }
 
 TEST_CASE("Stepper: Check backlash compensation")
@@ -480,50 +547,54 @@ TEST_CASE("Scale:   Full cycle forwards then backwards")
     REQUIRE(scale.getPositionInMm() == 0.f);
 }
 
-TEST_CASE("Encoder: Zero degrees callback with spindle stopped doesn't hang")
+TEST_CASE("Encoder: spindle pulses count up, and down when reversed")
 {
     FakeTickGpio gpio(1'000'000);
-    mgo::RotaryEncoder re(gpio, RE_PIN_A, RE_PIN_B, 4, 1.f);
-    feedEncoderPulse(re, 100); // ends warm-up, but long ago
-    REQUIRE(re.warmingUp() == false);
-    bool called = false;
-    re.callbackAtZeroDegrees([&]() { called = true; });
-    REQUIRE(called == false);
+    mgo::RotaryEncoder re(gpio, RE_PIN_A, RE_PIN_B, 2'000, 0.35f);
+    REQUIRE(re.getPulsesPerSpindleRev() == 700);
+    // (The first pulse ends the warm-up)
+    for (uint32_t k = 0; k < 6; ++k) {
+        feedEncoderPulse(re, 500'000 + k * 1'000);
+    }
+    REQUIRE(re.getSpindlePulses() == 5);
+    // Reversed: pin A leads pin B. (The first cycle or two may still count
+    // forwards, while the direction change is seen)
+    const auto reversedPulse = [&re](uint32_t tick) {
+        re.callback(RE_PIN_A, 1, tick);
+        re.callback(RE_PIN_B, 1, tick + 200);
+        re.callback(RE_PIN_A, 0, tick + 400);
+        re.callback(RE_PIN_B, 0, tick + 600);
+    };
+    reversedPulse(510'000);
+    reversedPulse(511'000);
+    REQUIRE(re.getRotationDirection() == mgo::RotationDirection::reversed);
+    const int64_t before = re.getSpindlePulses();
+    for (uint32_t k = 0; k < 4; ++k) {
+        reversedPulse(512'000 + k * 1'000);
+    }
+    REQUIRE(re.getSpindlePulses() == before - 4);
 }
 
-TEST_CASE("Encoder: Zero degrees callback before a full revolution doesn't hang")
+TEST_CASE("Encoder: spindle position carries on from the last pulse, up to a limit")
 {
+    // Pulses every 1ms, the last one half a millisecond before "now"
     const uint32_t now = 1'000'000;
     FakeTickGpio gpio(now);
-    mgo::RotaryEncoder re(gpio, RE_PIN_A, RE_PIN_B, 4, 1.f);
-    // Enough pulses to see zero degrees, but not to measure a revolution
-    for (uint32_t k = 0; k < 3; ++k) {
-        feedEncoderPulse(re, now - 30'000 + k * 10'000);
+    mgo::RotaryEncoder re(gpio, RE_PIN_A, RE_PIN_B, 2'000, 0.35f);
+    for (uint32_t k = 0; k <= 10; ++k) {
+        feedEncoderPulse(re, now - 10'500 + k * 1'000);
     }
-    bool called = false;
-    re.callbackAtZeroDegrees([&]() { called = true; });
-    REQUIRE(called == false);
-}
-
-TEST_CASE("Encoder: Zero degrees callback across tick wraparound")
-{
-    // Start the clock 20ms before the 32-bit tick counter wraps
-    const uint32_t now = std::numeric_limits<uint32_t>::max() - 20'000 + 1;
-    FakeTickGpio gpio(now);
-    // 4 pulses per spindle rev, one pulse every 10ms => one rev = 40ms
-    mgo::RotaryEncoder re(gpio, RE_PIN_A, RE_PIN_B, 4, 1.f);
-    const uint32_t firstPulse = now - 60'000;
-    for (uint32_t k = 0; k < 6; ++k) {
-        feedEncoderPulse(re, firstPulse + k * 10'000);
-    }
-    const uint32_t lastZero = firstPulse + 50'000;
-    REQUIRE(re.getRpm() == Approx(1'500.f));
-    // The next zero degrees is at lastZero + 40ms, which is after the wrap
-    uint32_t firedAt = 0;
-    re.callbackAtZeroDegrees([&]() { firedAt = gpio.peekTick(); });
-    const uint32_t sinceLastZero = firedAt - lastZero; // modular arithmetic
-    REQUIRE(sinceLastZero >= 40'000);
-    REQUIRE(sinceLastZero < 40'010);
+    REQUIRE(re.getSpindlePulses() == 10);
+    // So half a pulse on. (Each getTick() moves the fake clock on by 1µs)
+    REQUIRE(re.getSpindlePosition() == Approx(10.5).margin(0.01));
+    // ...but no more than the limit's worth, e.g. if the spindle has stopped
+    gpio.delayMicroSeconds(100'000);
+    const double limit
+        = static_cast<double>(mgo::RotaryEncoder::MAX_EXTRAPOLATION_MICROSECONDS) / 1'000.0;
+    REQUIRE(re.getSpindlePosition() == Approx(10.0 + limit));
+    // A new pulse starts again from there
+    feedEncoderPulse(re, gpio.peekTick() - 4'000);
+    REQUIRE(re.getSpindlePulses() == 11);
 }
 
 TEST_CASE("Encoder: Callbacks stop when encoder is destroyed")
@@ -700,20 +771,6 @@ public:
 private:
     std::map<std::string, std::string> m_values;
 };
-
-// Waits (up to a time limit) for a condition to become true
-template <typename F>
-bool waitFor(F condition, std::chrono::milliseconds limit = std::chrono::milliseconds(1'000))
-{
-    const auto deadline = std::chrono::steady_clock::now() + limit;
-    while (!condition()) {
-        if (std::chrono::steady_clock::now() > deadline) {
-            return false;
-        }
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
-    }
-    return true;
-}
 
 constexpr int ALARM_PIN = 17;
 
@@ -1815,4 +1872,145 @@ TEST_CASE("Model:   stopping a multi-pass")
     model.changeMode(mgo::Mode::None);
     REQUIRE(!model.multiPass().inProgress());
     REQUIRE(!model.isAxis1MotorRunning());
+}
+
+namespace {
+
+// A model whose mock spindle turns, with 700 encoder pulses per revolution
+// (as on the lathe), set up for threading at 1mm pitch: 1000 Z steps per rev
+struct ThreadingTestModel {
+    explicit ThreadingTestModel(
+        long pulseDelayMicroseconds, std::map<std::string, std::string> extraConfig = {})
+        : config([&] {
+            extraConfig["RotaryEncoderGearingDivisor"] = "100"; // (35:100)
+            return extraConfig;
+        }())
+        , gpio(false, [&] {
+            mgo::MockGpioOptions options;
+            options.rotaryDirectionNormal = true;
+            options.rotaryEncoderDelayMicroseconds = pulseDelayMicroseconds;
+            return options;
+        }())
+        , model(gpio, config)
+    {
+        model.initialise();
+        model.setThreadPitch(4); // (M6: 1mm)
+        REQUIRE(mgo::threadPitches.at(4).pitchMm == Approx(1.0));
+        model.changeMode(mgo::Mode::Threading);
+        // (The spindle's speed is known once it's done a revolution)
+        REQUIRE(waitFor([this] { return model.getRotaryEncoderRpm() > 30.f; },
+                        std::chrono::seconds(5)));
+        model.checkStatus();
+    }
+    // How far a pulse is from a whole revolution of the encoder's count
+    static int64_t pulsesFromWholeRev(int64_t pulses)
+    {
+        const int64_t r = ((pulses % PULSES_PER_REV) + PULSES_PER_REV) % PULSES_PER_REV;
+        return std::min(r, PULSES_PER_REV - r);
+    }
+    // Waits for Z to leave its current step, returning the pulse count then
+    int64_t pulsesWhenZStarts()
+    {
+        const long start = model.getAxis1MotorCurrentStep();
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
+        while (model.getAxis1MotorCurrentStep() == start) {
+            REQUIRE(std::chrono::steady_clock::now() < deadline);
+            std::this_thread::sleep_for(std::chrono::microseconds(100));
+        }
+        return model.getSpindlePulses();
+    }
+    // Runs the model's updates for a while (as the controller's ticks would)
+    void runFor(std::chrono::milliseconds time)
+    {
+        const auto end = std::chrono::steady_clock::now() + time;
+        while (std::chrono::steady_clock::now() < end) {
+            model.checkStatus();
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+    }
+
+    static constexpr int64_t PULSES_PER_REV = 700;
+    static constexpr double STEPS_PER_PULSE = 1'000.0 / 700.0;
+    TestConfigReader config;
+    mgo::MockGpio gpio;
+    mgo::Model model;
+};
+
+} // end anonymous namespace
+
+TEST_CASE("Threading: Z follows the spindle's position, even as its speed changes")
+{
+    ThreadingTestModel t(400);
+    t.model.axis1GoToStep(5'000); // (5mm, i.e. five revolutions)
+    REQUIRE(t.model.isAxis1MotorRunning());
+    // The pass starts at a whole revolution of the encoder's count
+    const int64_t started = t.pulsesWhenZStarts();
+    REQUIRE(ThreadingTestModel::pulsesFromWholeRev(started) <= 5);
+    const int64_t startPulse = (started + 350) / 700 * 700;
+
+    // Z is where the spindle's position says, i.e. the pitch per revolution
+    // since the start. (Read one after the other, so allow a few steps)
+    const auto checkPosition = [&] {
+        const int64_t pulses = t.model.getSpindlePulses();
+        const long expected
+            = std::lround((pulses - startPulse) * ThreadingTestModel::STEPS_PER_PULSE);
+        const long z = t.model.getAxis1MotorCurrentStep();
+        INFO("pulses " << pulses << ", Z step " << z << ", expected " << expected);
+        REQUIRE(std::abs(z - expected) <= 6);
+    };
+    t.runFor(std::chrono::milliseconds(300));
+    checkPosition();
+    t.runFor(std::chrono::milliseconds(300));
+    checkPosition();
+    // The spindle slows (e.g. under the cutting load), to half speed: Z keeps
+    // to the pitch, rather than running on at the old speed
+    t.gpio.setRotaryEncoderDelayMicroseconds(800);
+    t.runFor(std::chrono::milliseconds(300));
+    checkPosition();
+    t.runFor(std::chrono::milliseconds(300));
+    checkPosition();
+
+    // It ends exactly at the end
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(15);
+    while (t.model.isAxis1MotorRunning()) {
+        REQUIRE(std::chrono::steady_clock::now() < deadline);
+        t.runFor(std::chrono::milliseconds(50));
+    }
+    REQUIRE(t.model.getAxis1MotorCurrentStep() == 5'000);
+    REQUIRE(t.model.getWarning().empty());
+}
+
+TEST_CASE("Threading: every pass starts at the same spindle angle")
+{
+    ThreadingTestModel t(300);
+    // Out, back and out again: each starts at a whole revolution
+    for (const long end : { 1'000L, 0L, 1'000L }) {
+        t.model.axis1GoToStep(end);
+        REQUIRE(t.model.isAxis1MotorRunning());
+        const int64_t started = t.pulsesWhenZStarts();
+        INFO("Pass to " << end << " started at pulse " << started);
+        REQUIRE(ThreadingTestModel::pulsesFromWholeRev(started) <= 5);
+        REQUIRE(waitFor([&t] { return !t.model.isAxis1MotorRunning(); }, std::chrono::seconds(5)));
+        REQUIRE(t.model.getAxis1MotorCurrentStep() == end);
+        t.model.checkStatus();
+    }
+}
+
+TEST_CASE("Threading: a pass stops if Z can't keep up with the spindle")
+{
+    ThreadingTestModel t(1'000);
+    t.model.axis1GoToStep(20'000);
+    t.pulsesWhenZStarts();
+    t.runFor(std::chrono::milliseconds(100));
+    REQUIRE(t.model.isAxis1MotorRunning());
+    // Z may follow at up to twice the speed it needed at the start, so a
+    // spindle going (much) faster than that leaves it behind
+    t.gpio.setRotaryEncoderDelayMicroseconds(100);
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    while (t.model.isAxis1MotorRunning()) {
+        REQUIRE(std::chrono::steady_clock::now() < deadline);
+        t.runFor(std::chrono::milliseconds(20));
+    }
+    REQUIRE(t.model.getAxis1MotorCurrentStep() < 20'000);
+    REQUIRE(t.model.getWarning().find("keep up") != std::string::npos);
 }
