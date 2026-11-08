@@ -483,10 +483,46 @@ change.
         - Touching each tool off on the same known surface (a turned
           diameter for X, a faced end for Z) and recording the difference
         - Probing (see "Probing" above) could automate this later
+        - Probably the initial way will be to define the most-used tool (a right-hand
+          turning tool) as tool 1, which will then be used as a reference for all others.
+        - Envisaged approach:
+            - Use tool 1 to approach a dial indicator in the Z axis and depress the
+              indicator's plunger maybe half-way. Zero the indicator.
+            - Change to new tool, and approach the dial indicator's zero to within,
+              say, -50 microns by nudging up.
+            - The program then goes into an extremely fine feed and the user presses
+              a key when the indicator reaches zero. Offset is stored.
+            - The process is repeated along the X axis.
+            - Caveats/Points of note:
+                - Some tools' cutting points will be hard to get a dial indicator to
+                  measure on accurately on one axis: for example a thread-cutting tool
+                  has a very small cutting point pointing along the X axis. The dial indicator
+                  would need to be set at an angle. Cosine error shouldn't matter, as all we're
+                  doing is determining when the point matches tool 1's recorded position.
+                - We will probably need a tool attribute to determine cutting direction (e.g.
+                  for a left-hand turning tool).
+                - Tool radius will matter (as noted elsewhere) for instance a button tool (where
+                  the "point" is a circle of maybe 4mm diameter).
+                - Some tools (e.g. an internal boring bar) face the other way on the X axis 
+                  so this needs to be taken into account
+                - Some tools (e.g. a parting blade or a grooving tool) would need a thickness
+                  defining rather than a radius. This should then allow the user to place a 
+                  groove, or cut off, at a position relative to the feature's zEnd.
+                - Some tools may not be applicable at all, and maybe should be defined as
+                  such in the tool library, which would prevent feature values like
+                  diameter and zEnd to be used.
+                - Changing a tool in the UI should be very easy for the user: a single
+                  keypress (e.g. `T` if it's not used) rather than digging through menus.
     - **Repeatability caveat:** offsets are only as good as the toolpost's
-      repeatability (a QCTP holder should be fine; re-shimming a tool in a
-      four-way post means measuring its offset again). The UI could show
-      when each tool's offset was last measured
+      repeatability.
+        - QCTP holder should be reasonably OK (it's always used)
+        - HOWEVER: there are occasions when the QCTP's position or rotation might change on
+          the carriage to allow, say, a longer tool to be used. We'd need some way to
+          allow the user to manually record this as happening, so feature diameter/zEnd would be invalidated. Same for if a boring bar is moved within its QCTP holder to extend reach.
+        - The UI could show when each tool's offset was last measured, and maybe record an
+          invalidation (e.g. the boring bar being extended example above). An invalidation
+          would prevent the tool from being used in operations which use the feature
+          diameter/zEnd attributes until being re-calibrated against the reference tool.
     - **Nose radius:** worth storing even before it's used, as radius and
       chamfer accuracy will eventually depend on it
 
@@ -494,6 +530,7 @@ change.
 - [ ] Incorporate electronicRotaryTable repo
     - Pull functionality of ERT into this repo. ERT is designed specifically
       for cutting gears, so we could have a mode for gear cutting.
+    - The old ERT was a text/ncurses-based UI so will need updating to Qt.
     - This would require a set-up screen to ensure the user has connected a
       rotary table, replacing one axis.
     - This would mean we could also incorporate the repo stepperControl as it
@@ -503,14 +540,11 @@ change.
       on its X axis)
     - lc_rt.cfg is redundant and should be removed.
 - [ ] Lots of refactoring still needed, as this grew a bit organically
-- [ ] Replace all "Axis1..." and "Axis2..." references with an array, to
+- [ ] (undecided) Replace all "Axis1..." and "Axis2..." references with an array, to
       allow for future expansion. Might be difficult owing to the axes'
       different behaviours
 - [ ] Support three axes, to enable X, Y and a rotary table (or Z, X, and
       manual rotation of the chuck on the lathe)
-    - axes should just be a collection of axis types
-    - specific axes which require specialised behaviour can have attributes,
-      perhaps (e.g. retraction). Determine which behaviour needs extracting
 - [x] `axis.cpp` / `axis.h` are compiled but unused, and their `mgo::Axis`
       class clashes in name with `enum class mgo::Axis` in model.h
     - **Done:** removed (they're in git's history, if the "array of axes"
@@ -519,6 +553,14 @@ change.
     - **Done:** `Axis2RetractionDirection` (outwards or inwards) in lc.cfg
 
 ## Miscellaneous
+- [ ] New mode for "cut knurling":
+    - A series of thread-like cuts are made at regular starting angles to produce
+      multiple spiral grooves along the piece. The angle of the grooves on an imaginary
+      ZY plane tangent to the workpiece's surface should default to 45°.
+    - The user then selects a new tool (this will be easier when tool library is implemented)
+      and does the same series of operations, on the oppositve side of the workpiece (using,
+      say, an internal threading tool), with the lathe running in reverse.
+    - This should result in a knurl. 
 - [x] Add ability to add new thread pitches without recompilation. Move the
       definitions in threadpitches.h into separate config file (threadpitches.cfg)
       which is loaded at program start.
