@@ -12,8 +12,8 @@
       work. Choosing a command acts exactly as its shortcut does. Rapids are
       deliberately not in the menu, as they rely on holding the keys down
     - **Done:** open the menu from the gamepad with a button chord
-      (`JoystickMenuChord`, default 4,6: previous + next memory slot). Not
-      yet tried on the machine
+      (`JoystickMenuChord`, default 4,6: previous + next memory slot).
+      Tried on the machine: works well
     - **Done:** hotkey letters for the categories, Modes (as F2), System and
       axis locks, highlighted in yellow and underlined. Not given to the
       many paired or small commands, which have quick shortcuts already
