@@ -494,11 +494,11 @@
               position (in x) reaches zero. (That's assuming a full ball end is required -
               will need to specify x end point so if the user requires just a "fillet" on the
               stock's end they could specify an end x value of greater than zero).
-                - This prompts an interesting idea - maybe radius, once set, should be
-                  a constant value, i.e. the current radius of the stock, and moving x in or out
+                - This prompts an interesting idea - maybe diameter, once set, should be
+                  a constant value, i.e. the current diameter of the stock, and moving x in or out
                   manually shouldn't change that. This might be useful for the program to
                   remember; although it would of course go out of date if the user made further
-                  manual turning down operations (e.g. a shoulder - what would the radius
+                  manual turning down operations (e.g. a shoulder - what would the diameter
                   refer to? Maybe the current "feature"? To consider further.)
         - chamfering (lathe)
         - facing an entire workpiece (mill) i.e. the X axis does a pass, and each pass
