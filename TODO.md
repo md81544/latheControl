@@ -484,6 +484,16 @@
         - threading on the lathe
         - turning down to a workpiece to a set diameter (lathe)
         - radiusing (lathe)
+            - Maybe radius should rely on diameter being set and the the work faced off;
+              if a diameter is set after turning down bar stock to a known diameter, then facing
+              the end, the program would know where (a) the centre line of the stock is, and
+              (b) that the tool is at the end of the piece (z current value), then doing a
+              radius operation from that point doesn't need to rely on the operator for anything
+              else. The radiusing operation could move X to near the diameter of the stock, take
+              a small radius cut, and repeat, gradually moving z in/down until the cut's start
+              position (in x) reaches zero. (That's assuming a full ball end is required -
+              will need to specify x end point so if the user requires just a "fillet" on the
+              stock's end they could specify an end x value of greater than zero).
         - chamfering (lathe)
         - facing an entire workpiece (mill) i.e. the X axis does a pass, and each pass
           the user is prompted to feed the Y (manual) axis a set amount. When the process reaches
