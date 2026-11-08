@@ -35,6 +35,21 @@
 - [ ] Make the display more "modular": display elements in definable boxes,
       perhaps a class which encapsulates a display element. This will make the
       layout easier to change
+- [ ] **Drop the `F2` leader key?** In practice the menu (e.g. `Tab` `M` `T`
+      for threading) has taken over from `F2`, which is now a second route
+      to the same commands
+    - The `f2*` key codes (e.g. `key::f2t`) are also the internal command IDs
+      the menu dispatches (commands.cpp), so they stay. Only the `F2` leader
+      handling in the controller goes, along with its entry in the
+      leader-key hint panel and any `F2` mentions in the UI. Later, perhaps
+      rename the codes to something like `cmd::threading`, so they don't
+      suggest a key that no longer exists
+    - Frees the letters that follow `F2` for use at the top level, e.g. `T`
+      for "choose tool" (see "Current tool and a tool database") without
+      clashing with `F2` `T` for threading
+    - Check nothing else relies on `F2`: the gamepad, the help panel's
+      contents, and the README and TODO references (e.g. "`F2` `M`" for
+      multi-pass, "F2 S" for Setup mode)
 - [ ] Make use of the keys on the right (#, Home, PgUp, PgDn, End)?
 - [ ] Remove Alt-Arrows for rapids once controller set up for mill?
       Now that they behave more safely, maybe not
@@ -468,8 +483,9 @@ change.
     - **Current tool:** the user picks the tool in use (number and
       description), and it's shown prominently on screen. Changing tool
       must be very easy: a single keypress, not a trip through menus. `T`
-      might do, if it's free at the top level, but `t` is already Threading
-      under the F2 leader, so the two could be confused. Selecting a
+      might do, if it's free at the top level. `t` is Threading under the F2
+      leader, so the two could be confused, unless `F2` is dropped (see
+      "Drop the `F2` leader key?"). Selecting a
       different tool counts as a tool change, so the current feature is
       cleared (or shifted, once offsets are known, below)
     - **Tool database:** a config file of predefined tools. Must be quick to
