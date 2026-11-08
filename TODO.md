@@ -466,65 +466,87 @@ change.
       tool is changed, but the feature values above belong to the tool that
       touched off. A different tool will be out by its offset.
     - **Current tool:** the user picks the tool in use (number and
-      description), and it's shown prominently on screen. Selecting a
-      different tool counts as a tool change and clears the current feature
-      (until offsets are known, below)
-    - **Tool database:** a config file of predefined tools, e.g. number,
-      description, type (turning, facing, parting, threading, boring...),
-      nose radius, and later X/Z offsets. Picking from the list should be
-      quick, and must work without a mouse
+      description), and it's shown prominently on screen. Changing tool
+      must be very easy: a single keypress, not a trip through menus. `T`
+      might do, if it's free at the top level, but `t` is already Threading
+      under the F2 leader, so the two could be confused. Selecting a
+      different tool counts as a tool change, so the current feature is
+      cleared (or shifted, once offsets are known, below)
+    - **Tool database:** a config file of predefined tools. Must be quick to
+      pick from without a mouse. Possible attributes:
+        - Number and description
+        - Type (turning, facing, chamfering, parting, grooving, threading,
+          boring, button, knurling...)
+        - **Tip orientation:** which corner or side of the tool is its
+          reference point, like CNC lathes' "tip direction" codes (Fanuc's
+          1-9). This one attribute covers left-hand and right-hand turning
+          tools, boring bars facing the other way in X, and which side of the
+          nose radius a button tool is measured from
+        - **Nose radius:** worth storing even before it's used, as radius and
+          chamfer accuracy will eventually depend on it (e.g. a button tool,
+          whose "point" is a circle of maybe 4 mm diameter)
+        - **Point angle**, e.g. 60° threading tool, 90° chamfering tool (see
+          "cut knurling")
+        - **Width and reference edge**, for parting and grooving tools: a
+          thickness rather than a radius, plus which edge is the reference.
+          Then a groove or cut-off can be placed relative to the feature's
+          end Z from either side
+        - **Not applicable:** some tools can't usefully have offsets (e.g. a
+          knurling tool, or anything in the tailstock such as a centre drill
+          or reamer, which isn't on the carriage at all). Operations that use
+          the feature Ø and end Z won't be allowed with these tools
+        - X and Z offsets, when each was last measured, and whether it has
+          been invalidated (see below)
     - **Tool offsets (later):** if each tool's X and Z offsets relative to a
       reference tool are known, a tool change can shift the datums instead
       of clearing them, so the feature Ø and end Z stay valid across a swap.
-      Ways to measure offsets:
-        - Semi-manual, with a dial indicator: bring each tool's tip up to a
-          fixed reference (e.g. a DTI zeroed on a known surface) on each axis,
-          and the program records the difference from the reference tool
-        - Touching each tool off on the same known surface (a turned
-          diameter for X, a faced end for Z) and recording the difference
-        - Probing (see "Probing" above) could automate this later
-        - Probably the initial way will be to define the most-used tool (a right-hand
-          turning tool) as tool 1, which will then be used as a reference for all others.
-        - Envisaged approach:
-            - Use tool 1 to approach a dial indicator in the Z axis and depress the
-              indicator's plunger maybe half-way. Zero the indicator.
-            - Change to new tool, and approach the dial indicator's zero to within,
-              say, -50 microns by nudging up.
-            - The program then goes into an extremely fine feed and the user presses
-              a key when the indicator reaches zero. Offset is stored.
-            - The process is repeated along the X axis.
-            - Caveats/Points of note:
-                - Some tools' cutting points will be hard to get a dial indicator to
-                  measure on accurately on one axis: for example a thread-cutting tool
-                  has a very small cutting point pointing along the X axis. The dial indicator
-                  would need to be set at an angle. Cosine error shouldn't matter, as all we're
-                  doing is determining when the point matches tool 1's recorded position.
-                - We will probably need a tool attribute to determine cutting direction (e.g.
-                  for a left-hand turning tool).
-                - Tool radius will matter (as noted elsewhere) for instance a button tool (where
-                  the "point" is a circle of maybe 4mm diameter).
-                - Some tools (e.g. an internal boring bar) face the other way on the X axis 
-                  so this needs to be taken into account
-                - Some tools (e.g. a parting blade or a grooving tool) would need a thickness
-                  defining rather than a radius. This should then allow the user to place a 
-                  groove, or cut off, at a position relative to the feature's zEnd.
-                - Some tools may not be applicable at all, and maybe should be defined as
-                  such in the tool library, which would prevent feature values like
-                  diameter and zEnd to be used.
-                - Changing a tool in the UI should be very easy for the user: a single
-                  keypress (e.g. `T` if it's not used) rather than digging through menus.
-    - **Repeatability caveat:** offsets are only as good as the toolpost's
-      repeatability.
-        - QCTP holder should be reasonably OK (it's always used)
-        - HOWEVER: there are occasions when the QCTP's position or rotation might change on
-          the carriage to allow, say, a longer tool to be used. We'd need some way to
-          allow the user to manually record this as happening, so feature diameter/zEnd would be invalidated. Same for if a boring bar is moved within its QCTP holder to extend reach.
-        - The UI could show when each tool's offset was last measured, and maybe record an
-          invalidation (e.g. the boring bar being extended example above). An invalidation
-          would prevent the tool from being used in operations which use the feature
-          diameter/zEnd attributes until being re-calibrated against the reference tool.
-    - **Nose radius:** worth storing even before it's used, as radius and
-      chamfer accuracy will eventually depend on it
+        - **Reference tool:** tool 1, the most-used tool (a right-hand turning
+          tool). All other offsets are measured relative to it
+        - **Calibrating with a dial indicator** (the planned first method),
+          once for Z and again for X:
+            1. With tool 1, approach a dial indicator fixed to the bed (e.g. on
+               a magnetic base) and press its plunger in about half-way. Zero
+               the indicator; the program records tool 1's position
+            2. Change to the new tool and nudge it up to within about 50 µm of
+               the indicator's zero
+            3. The program takes up backlash in the approach direction (X is
+               open-loop, so this matters most there), then either:
+                - feeds extremely slowly and the user presses a key when the
+                  needle reaches zero (at, say, 2 µm/s, a 0.2 s reaction time
+                  costs only about 0.4 µm), or
+                - steps 1 µm per keypress until the needle reads zero, which
+                  avoids reaction time completely, as the reading is taken
+                  with nothing moving
+            4. The difference from tool 1's position is stored as the offset
+        - **Notes on calibrating:**
+            - Every tool must approach the indicator from the same direction
+              as tool 1 did, so backlash doesn't creep in
+            - The indicator mustn't move between tool 1's reading and the
+              other tool's reading
+            - Some tools' points are hard to get an indicator square on, e.g.
+              a threading tool's small point, which faces along X. The
+              indicator can be set at an angle. Cosine error doesn't matter,
+              because we're only matching tool 1's position, not measuring a
+              distance
+        - **Other ways to measure offsets:** touching each tool off on the
+          same known surface (a turned diameter for X, a faced end for Z);
+          probing (see "Probing" above) could automate this later
+    - **Repeatability and invalidation:** offsets are only as good as the
+      toolpost's repeatability. A QCTP (always used) should be reasonably
+      good, but things can change:
+        - **The QCTP is moved or rotated on the carriage** (e.g. to fit a
+          longer tool): moving it without rotating would shift every tool
+          equally, but rotating it wouldn't, so the user needs a "toolpost
+          moved" action that invalidates *every* tool's offset (and the
+          current feature)
+        - **A single tool is adjusted in its holder** (e.g. a boring bar
+          extended for reach): the user marks that tool's offset invalid
+        - **Tool 1 itself is adjusted:** every other offset becomes invalid
+          at once, so this needs handling as a separate case
+        - An invalidated tool can't be used for operations that need the
+          feature Ø and end Z until it's calibrated against tool 1 again.
+          The UI shows when each tool's offset was last measured and whether
+          it's been invalidated
 
 ## Structure and refactoring
 - [ ] Incorporate electronicRotaryTable repo
@@ -553,14 +575,39 @@ change.
     - **Done:** `Axis2RetractionDirection` (outwards or inwards) in lc.cfg
 
 ## Miscellaneous
-- [ ] New mode for "cut knurling":
-    - A series of thread-like cuts are made at regular starting angles to produce
-      multiple spiral grooves along the piece. The angle of the grooves on an imaginary
-      ZY plane tangent to the workpiece's surface should default to 45°.
-    - The user then selects a new tool (this will be easier when tool library is implemented)
-      and does the same series of operations, on the oppositve side of the workpiece (using,
-      say, an internal threading tool), with the lathe running in reverse.
-    - This should result in a knurl. 
+- [ ] **New mode: "cut knurling".** A cut (rather than pressed) knurl, made
+      with a single-point tool as two sets of multi-start "threads" of
+      opposite hand.
+    - **First set:** a series of thread-like cuts at evenly spaced starting
+      angles, giving several helical grooves along the piece. The helix
+      angle (the grooves' angle to the axis, on the work's surface) defaults
+      to 45°
+    - **Second set, opposite hand:** cut with the *same tool*, spindle still
+      running forwards, but with Z moving the other way (outwards from the
+      chuck, towards the tailstock). The electronic leadscrew makes this
+      easy. No tool change means no offsets to worry about, and both sets
+      line up with each other. These cuts start at the chuck end, so that
+      end needs a relief groove or runout to start in
+    - **Tool:** a 90° point (e.g. an HSS chamfering tool) gives the usual
+      90° knurl form; a 60° threading tool would also work, giving a slightly
+      different profile
+    - **Lead depends on diameter:** for a helix angle θ, the lead (Z travel
+      per spindle revolution, per start) is π × Ø / tan θ, which for 45° is
+      π × Ø. On a 10 mm bar that's about 31 mm per revolution, so Z has to
+      move very fast for the spindle speed. The spindle will need to run
+      very slowly to stay within Z's speed and acceleration limits; the mode
+      should work out and show the maximum spindle speed allowed. The Ø
+      comes straight from the current feature (see "Work geometry and
+      tools"), or the user enters it
+    - **Number of starts:** sets the diamond size (diamond pitch about
+      π × Ø ÷ N). The mode could ask for a target pitch (fine, medium,
+      coarse) and choose N to suit the diameter
+    - **Starting angles:** each start is the previous one plus 360° ÷ N of
+      spindle rotation, using the encoder, like a multi-start thread. Any
+      multi-start threading support would share this
+    - **Passes:** each start probably needs several passes in X to reach full
+      depth, so this fits the generic multi-pass engine: for each pass
+      depth, cut every start (or every start to full depth in turn)
 - [x] Add ability to add new thread pitches without recompilation. Move the
       definitions in threadpitches.h into separate config file (threadpitches.cfg)
       which is loaded at program start.
