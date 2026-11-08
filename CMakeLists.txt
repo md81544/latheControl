@@ -47,7 +47,11 @@ FetchContent_MakeAvailable(stepperControl)
 # Options shared by every target (warnings, FAKE)
 # ---------------------------------------------------------------------------
 add_library(lc_options INTERFACE)
-target_compile_options(lc_options INTERFACE -Wall -Wextra -Werror -Wpedantic)
+target_compile_options(lc_options INTERFACE -Wall -Wextra -Werror -Wpedantic
+	# Designated initializers that leave out members with defaults, e.g.
+	# MultiPassSetup { .startMemory = 0, .cutDistance = 1.0 }, are intended.
+	# GCC (on the Pi) warns about them under -Wextra; clang doesn't
+	-Wno-missing-field-initializers)
 if(FAKE)
 	target_compile_definitions(lc_options INTERFACE FAKE)
 endif()
