@@ -396,9 +396,99 @@
     - Z probing: would need an insulated known-length bar, which could be
       held on the end of a workpiece
     - Will need a dedicated pin on the Pi for monitoring
-- [ ] Tool numbers with both Z and X offsets, for repeatable positioning
-      after a tool swap? Not sure how realistic this is. Maybe some form of
-      probing like on the CNC?
+## Work geometry and tools (lathe)
+Background: "set diameter" currently means only that **X is measured from the
+spindle centreline** (`m_xDiameterSet`). The diameter shown is the *tool's*
+position (2 × |X|), so it changes whenever X moves. Knowing the centreline is
+the valuable part. Once we have it, remembering where the *work* is costs very
+little: we store numbers in axis coordinates, which moving the axes doesn't
+change.
+
+- [ ] **Current feature: a remembered diameter and end Z.** Temporary: kept
+      for this session only, never saved across a restart. Its purpose is to
+      help the operator while they make one particular feature.
+    - **Values (each optional, set separately):**
+        - *Feature Ø*: the diameter of the surface being worked on. Once set,
+          it stays fixed however X is moved
+        - *End Z*: the Z position of the feature's end (e.g. after facing)
+        - Perhaps later: the original stock Ø as a second value, so it can be
+          kept after a shoulder has been turned (see "Single feature vs many")
+    - **Setting them:**
+        - "Set diameter" could do both jobs at once: set the centreline datum
+          *and* record the feature Ø, since the tool is on a surface the
+          user has just measured at that moment
+        - A "mark end" action after facing records the current Z as end Z
+        - Automations update the values themselves when they know the result,
+          e.g. a multi-pass "turn to Ø" sets the feature Ø to the target when
+          it finishes
+    - **Clearing them:**
+        - The user can clear the feature at any time (e.g. to move on to a
+          shoulder further along the work)
+        - Re-zeroing X clears the feature Ø, as it already clears the
+          centreline datum. Re-zeroing Z clears end Z
+        - A motor fault or lost position on an axis clears that axis's value.
+          This matters most for X, which is open-loop, so the remembered
+          surface is only as good as X not having lost steps
+        - A tool change clears both, unless the tools' offsets are known (see
+          "Tool database" below)
+    - **Keeping it up to date:** if the spindle is running and the tool moves
+      inside the remembered Ø, *warn* that the feature Ø may be out of date.
+      Don't try to work out the new value from tool movement, as that's easy
+      to get subtly wrong
+    - **Display:** a "Current feature" box on screen showing Ø, end Z and the
+      tool they were taken with, kept separate from the live tool Ø so the
+      two can't be confused. Empty or hidden when no feature is set
+    - **Single feature vs many:** start with one "current feature" that the
+      user resets. A list of features (`{Z start, Z end, Ø}` segments) amounts
+      to a part profile. Appealing, but much more work in the UI and in
+      keeping it consistent
+    - **Which side of end Z is material?** Usually towards the chuck, but this
+      should be explicit (from the config, or worked out from the facing
+      direction) so a chamfer or radius never cuts air or goes the wrong way
+    - **Lathe only:** only enable when the config has an X axis that can be
+      set as a diameter. Keep it optional like other per-axis features
+    - **Uses:**
+        - Pre-fill multi-pass start positions (Ø and Z) from the feature. A
+          cheap, low-risk first use
+        - Chamfer "on the end of the piece": from Ø, end Z and a size, the
+          program knows where every pass goes. A 45° chamfer is a linear X/Z
+          move, which taper mode's X-to-Z synchronisation can already do
+        - Radius/fillet (see "radiusing" under generic multi-pass): start near
+          Ø/2, step inwards, finish at a given end X (> 0 for a fillet). Arcs
+          aren't a fixed X:Z ratio, so this needs either a chain of short
+          tapers (`MotionSequence` could run them) or proper arc
+          synchronisation. Tool nose radius starts to matter here too
+    - **Suggested first slice:** feature Ø and end Z with set and clear, their
+      own display box, cleared on re-zero, fault or tool change, and used to
+      pre-fill multi-pass
+
+- [ ] **Current tool and a tool database.** The program has no idea when the
+      tool is changed, but the feature values above belong to the tool that
+      touched off. A different tool will be out by its offset.
+    - **Current tool:** the user picks the tool in use (number and
+      description), and it's shown prominently on screen. Selecting a
+      different tool counts as a tool change and clears the current feature
+      (until offsets are known, below)
+    - **Tool database:** a config file of predefined tools, e.g. number,
+      description, type (turning, facing, parting, threading, boring...),
+      nose radius, and later X/Z offsets. Picking from the list should be
+      quick, and must work without a mouse
+    - **Tool offsets (later):** if each tool's X and Z offsets relative to a
+      reference tool are known, a tool change can shift the datums instead
+      of clearing them, so the feature Ø and end Z stay valid across a swap.
+      Ways to measure offsets:
+        - Semi-manual, with a dial indicator: bring each tool's tip up to a
+          fixed reference (e.g. a DTI zeroed on a known surface) on each axis,
+          and the program records the difference from the reference tool
+        - Touching each tool off on the same known surface (a turned
+          diameter for X, a faced end for Z) and recording the difference
+        - Probing (see "Probing" above) could automate this later
+    - **Repeatability caveat:** offsets are only as good as the toolpost's
+      repeatability (a QCTP holder should be fine; re-shimming a tool in a
+      four-way post means measuring its offset again). The UI could show
+      when each tool's offset was last measured
+    - **Nose radius:** worth storing even before it's used, as radius and
+      chamfer accuracy will eventually depend on it
 
 ## Structure and refactoring
 - [ ] Incorporate electronicRotaryTable repo
@@ -500,6 +590,7 @@
                   remember; although it would of course go out of date if the user made further
                   manual turning down operations (e.g. a shoulder - what would the diameter
                   refer to? Maybe the current "feature"? To consider further.)
+                  **See "Work geometry and tools" for this worked out further.**
         - chamfering (lathe)
         - facing an entire workpiece (mill) i.e. the X axis does a pass, and each pass
           the user is prompted to feed the Y (manual) axis a set amount. When the process reaches
