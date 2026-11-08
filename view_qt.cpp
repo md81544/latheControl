@@ -1045,7 +1045,7 @@ void ViewQt::Impl::updateTextFromModel(const Model& model)
 
     if (!model.getIsAxis2Retracted()) {
         axis2Pos.text = formatMotorPosition(
-            model.toDisplayUnits(2, model.getAxis2MotorPosition()), model.axisDecimals(2));
+            model.toDisplayUnits(2, model.getAxis2Position()), model.axisDecimals(2));
     } else {
         axis2Pos.text = "     ---";
     }
@@ -1236,6 +1236,9 @@ void ViewQt::Impl::updateMultiPassData(const Model& model)
     }
     if (options.retract) {
         misc1.text += ", retracting";
+    }
+    if (model.taperCorrection() != 0.0) {
+        misc1.text += ", correcting taper";
     }
 
     const std::string pass = mp.totalPasses() == 0

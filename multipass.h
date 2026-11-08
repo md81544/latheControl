@@ -17,8 +17,12 @@ public:
     virtual ~IMultiPassMachine() = default;
 
     virtual double cutPosition() const = 0;
+    // (Including the feed axis catching up, if it's following)
     virtual bool cutMoving() const = 0;
-    virtual void cutMoveTo(double position) = 0; // (at the cut axis's speed)
+    // At the cut axis's speed. If feedFollows isn't zero, the feed axis
+    // follows the cut axis, moving by feedFollows times as far (if it's
+    // retracted, where it unretracts to moves by that much instead)
+    virtual void cutMoveTo(double position, double feedFollows) = 0;
     virtual double cutSpeed() const = 0;
     virtual void setCutSpeed(double speed) = 0;
     virtual double cutMaxSpeed() const = 0;
@@ -54,6 +58,11 @@ struct MultiPassPlan {
     bool retract { false };
     // Wait for continueAfterPause() before each pass after the first
     bool pause { false };
+    // (Experimental) For a machine which cuts a slight taper: how far the
+    // feed axis follows the cut axis, as a fraction of the cut axis's
+    // movement, during each cut (and back again on the return), to cancel
+    // it out. e.g. tan(angle). Zero for none. Not with a manual feed
+    double feedCorrection { 0.0 };
 };
 
 // Where a multi-pass's start and end positions come from, as chosen in its

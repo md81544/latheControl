@@ -161,6 +161,9 @@ std::string MultiPass::start(const MultiPassPlan& plan)
     if (plan.feedManual && plan.retract) {
         return "Can't retract with a manual feed";
     }
+    if (plan.feedManual && plan.feedCorrection != 0.0) {
+        return "Can't correct a taper with a manual feed";
+    }
     if (m_machine.cutMoving() || (!plan.feedManual && m_machine.feedMoving())) {
         return "Stop the motors first";
     }
@@ -347,7 +350,7 @@ double MultiPass::nextFeedTarget(double from) const
 void MultiPass::startCut()
 {
     m_state = State::Cutting;
-    m_machine.cutMoveTo(m_plan.cutEnd);
+    m_machine.cutMoveTo(m_plan.cutEnd, m_plan.feedCorrection);
 }
 
 void MultiPass::startReturn()
@@ -357,7 +360,8 @@ void MultiPass::startReturn()
     m_cutSpeed = m_machine.cutSpeed();
     m_machine.setCutSpeed(m_machine.cutMaxSpeed());
     m_state = State::Returning;
-    m_machine.cutMoveTo(m_plan.cutStart);
+    // (Following back, so the feed axis is where the cut started)
+    m_machine.cutMoveTo(m_plan.cutStart, m_plan.feedCorrection);
 }
 
 void MultiPass::afterReturn()

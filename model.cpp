@@ -306,8 +306,13 @@ void Model::checkStatus()
             m_synchronisedCutEnding = false;
             axis2SynchroniseOff();
             m_axis2Motor->setSpeed(m_previousAxis2Speed);
+            if (m_multiPassXFollowing) {
+                m_multiPassXFollowing = false;
+                multiPassXFollowEnded();
+            }
         }
-        if ((m_mode == Mode::Taper || m_mode == Mode::Radius) && m_axis1WasRunning) {
+        if ((m_mode == Mode::Taper || m_mode == Mode::Radius || m_multiPassXFollowing)
+            && m_axis1WasRunning) {
             // The end of a taper or radius cut. X follows Z in small updates,
             // so may still be a few steps behind: leave it synchronised until
             // it's stopped too (on a later update, by when it's had Z's final
@@ -333,6 +338,7 @@ void Model::checkStatus()
         if (m_axis2WasRunning) {
             axis2SaveBreadcrumbPosition();
         }
+        m_multiPassXSettling = false;
         if (m_axis2RetractMoveInProgress) {
             // (If this shows the target was reached, but the tool didn't move
             // that far, the motor stalled. If it stopped short, it was stopped)
@@ -572,6 +578,13 @@ void Model::stopAllMotors()
     // Otherwise X, synchronised to Z (in a taper or radius), would carry on
     // following it. (Its speed is still restored when the cut's end is seen)
     axis2SynchroniseOff();
+    m_multiPassXSettling = false;
+    if (m_multiPassXFollowing) {
+        // (Its end won't be seen if stopped while taking up the backlash)
+        m_multiPassXFollowing = false;
+        m_synchronisedCutEnding = false;
+        m_axis2Motor->setSpeed(m_previousAxis2Speed);
+    }
     m_multiPass.stop("stopped");
     m_axis1Status = "stopped";
     m_axis2Status = "stopped";
@@ -606,14 +619,12 @@ MotionSequence::Step Model::takeUpXBacklashStep(int stepAdd)
              [this]() { return !m_axis2Motor->isRunning(); } };
 }
 
-void Model::synchroniseXForTaper()
+void Model::synchroniseXForTaper(double ratio)
 {
     m_synchronisedCutEnding = false; // (a new cut)
-    double angleConversion = std::tan(m_taperAngle * DEG_TO_RAD);
-    m_axis2Motor->synchroniseOn(
-        m_axis1Motor.get(), [angleConversion](double zPosDelta, double) -> double {
-            return zPosDelta * angleConversion;
-        });
+    m_axis2Motor->synchroniseOn(m_axis1Motor.get(), [ratio](double zPosDelta, double) -> double {
+        return zPosDelta * ratio;
+    });
 }
 
 void Model::synchroniseXForRadius()
@@ -675,29 +686,38 @@ std::vector<MotionSequence::Step> Model::axis1MoveSteps(long step)
         };
         return { std::move(takeUp), { move, {} } };
     }
-    if (m_mode != Mode::Taper && m_mode != Mode::Radius) {
+    if (m_mode == Mode::Taper) {
+        // (Plus any correction for a taper the machine cuts itself)
+        return xFollowsZSteps(step, std::tan((m_taperAngle + taperCorrection()) * DEG_TO_RAD), move);
+    }
+    if (m_mode != Mode::Radius) {
         return { { move, {} } };
     }
-    // Tapers and radii synchronise X to Z, after first taking up the backlash
-    // on both, so that X moves as soon as Z does
-    int xStepAdd;
-    if (m_mode == Mode::Taper) {
-        xStepAdd = -1;
-        if ((direction == ZDirection::Left && m_taperAngle < 0.0)
-            || (direction == ZDirection::Right && m_taperAngle > 0.0)) {
-            xStepAdd = 1;
-        }
-    } else {
-        xStepAdd = direction == ZDirection::Left ? -1 : 1;
+    // Radii synchronise X to Z, after first taking up the backlash on both,
+    // so that X moves as soon as Z does
+    return { takeUpZBacklashStep(direction),
+             takeUpXBacklashStep(direction == ZDirection::Left ? -1 : 1),
+             { [this, move]() {
+                  synchroniseXForRadius();
+                  move();
+              },
+               {} } };
+}
+
+std::vector<MotionSequence::Step>
+Model::xFollowsZSteps(long step, double ratio, std::function<void()> move)
+{
+    const ZDirection direction
+        = step < getAxis1MotorCurrentStep() ? ZDirection::Right : ZDirection::Left;
+    // X's backlash is taken up the way it's about to move
+    int xStepAdd = -1;
+    if ((direction == ZDirection::Left && ratio < 0.0) || (direction == ZDirection::Right && ratio > 0.0)) {
+        xStepAdd = 1;
     }
     return { takeUpZBacklashStep(direction),
              takeUpXBacklashStep(xStepAdd),
-             { [this, move]() {
-                  if (m_mode == Mode::Taper) {
-                      synchroniseXForTaper();
-                  } else {
-                      synchroniseXForRadius();
-                  }
+             { [this, ratio, move = std::move(move)]() {
+                  synchroniseXForTaper(ratio);
                   move();
               },
                {} } };
@@ -1458,7 +1478,7 @@ std::optional<double> Model::getDiameterMm() const
     // While retracted (from the start of a retract to the end of the
     // unretract), where X will return to: the diameter being cut
     const double x = m_axis2Retracted ? m_axis2Motor->getPosition(m_xOldPosition)
-                                      : m_axis2Motor->getPosition();
+                                      : getAxis2Position();
     return std::abs(x * 2.0);
 }
 
@@ -1760,6 +1780,11 @@ double Model::getAxis1MotorPosition() const
         return m_linearScaleAxis1->getPositionInMm();
     }
     return m_axis1Motor->getPosition();
+}
+
+double Model::getAxis2Position() const
+{
+    return getAxis2MotorPosition() - multiPassXCorrection();
 }
 
 double Model::getAxis2MotorPosition() const
@@ -2132,13 +2157,14 @@ void Model::multiPassGo()
     plan.feedPerPass = std::abs(m_multiPassSetup.feedPerPass);
     plan.retract = m_multiPassSetup.retract;
     plan.pause = m_multiPassSetup.pause;
+    plan.feedCorrection = std::tan(taperCorrection() * DEG_TO_RAD);
     if (const std::string error = m_multiPass.start(plan); !error.empty()) {
         m_warning = error;
         return;
     }
     m_warning = "";
     MGOLOG(fmt::format(
-        "Multi-pass started: Z {} to {}, X {} to {} by {}{}{} ({} passes)",
+        "Multi-pass started: Z {} to {}, X {} to {} by {}{}{}{} ({} passes)",
         plan.cutStart,
         plan.cutEnd,
         plan.feedStart,
@@ -2146,6 +2172,8 @@ void Model::multiPassGo()
         plan.feedPerPass,
         plan.retract ? ", retract" : "",
         plan.pause ? ", pause" : "",
+        plan.feedCorrection != 0.0 ? fmt::format(", taper correction {} deg", taperCorrection())
+                                   : "",
         m_multiPass.totalPasses()));
 }
 
@@ -2161,15 +2189,35 @@ double Model::cutPosition() const
 
 bool Model::cutMoving() const
 {
-    return m_axis1WasRunning;
+    // (Including taking up the backlash first, and X catching up with Z)
+    return m_axis1WasRunning || m_motionSequence.isRunning() || m_multiPassXFollowing
+        || m_multiPassXSettling;
 }
 
-void Model::cutMoveTo(double position)
+void Model::cutMoveTo(double position, double feedFollows)
 {
-    m_axis1Motor->goToPosition(position);
     m_axis1Status = "multi-pass";
-    // (So a move that's over by the next update is still seen to have ended)
-    m_axis1WasRunning = m_axis1Motor->isRunning();
+    // (While retracted, X doesn't follow: the correction was taken off where
+    // it unretracts to when it retracted. See retract())
+    if (feedFollows == 0.0 || m_axis2Retracted) {
+        m_axis1Motor->goToPosition(position);
+        // (So a move that's over by the next update is still seen to have ended)
+        m_axis1WasRunning = m_axis1Motor->isRunning();
+        return;
+    }
+    // As for a taper (the backlash taken up first, so X moves as soon as Z
+    // does). X's speed is restored once it's caught up (see checkStatus())
+    m_multiPassXFollowing = true;
+    m_previousAxis2Speed = m_axis2Motor->getSpeed();
+    if (atMultiPassPosition(m_axis1Motor->getPosition(), m_multiPass.plan().cutStart)) {
+        // A cut (not a return): where X is, so it can unretract back to it
+        m_multiPassCutStartXStep = m_axis2Motor->getCurrentStep();
+    }
+    const long step = std::lround(position / m_axis1Motor->getConversionFactor());
+    m_motionSequence.start(xFollowsZSteps(step, feedFollows, [this, step]() {
+        m_axis1Motor->goToStep(step);
+        m_axis1WasRunning = true;
+    }));
 }
 
 double Model::cutSpeed() const
@@ -2189,7 +2237,7 @@ double Model::cutMaxSpeed() const
 
 double Model::feedPosition() const
 {
-    return m_axis2Motor->getPosition();
+    return getAxis2Position();
 }
 
 bool Model::feedMoving() const
@@ -2199,14 +2247,56 @@ bool Model::feedMoving() const
 
 void Model::feedMoveTo(double position)
 {
-    m_axis2Motor->goToPosition(position);
+    m_axis2Motor->goToPosition(position + multiPassXCorrection());
     m_axis2WasRunning = m_axis2Motor->isRunning();
 }
 
 void Model::retract()
 {
+    const bool correcting = multiPassXCorrection() != 0.0;
     axis2Retract();
+    if (m_axis2Retracted && correcting) {
+        // Rather than follow Z back while retracted, X unretracts to where
+        // it would have been if it had: where the cut started (see
+        // cutMoveTo()). (Not by the correction the cut should have made: X
+        // can lag Z a little, so it may have moved slightly less)
+        m_xOldPosition = m_multiPassCutStartXStep;
+    }
     m_axis2WasRunning = m_axis2Motor->isRunning();
+}
+
+void Model::multiPassXFollowEnded()
+{
+    // After following Z back to the start, X should be where the cut
+    // started. It can lag Z a little as it starts following (more so on the
+    // cut than the return), so may be a step or so short: if so, it finishes
+    // the move, so that nothing builds up from pass to pass
+    if (m_axis2Retracted || !m_multiPass.inProgress()
+        || !atMultiPassPosition(m_axis1Motor->getPosition(), m_multiPass.plan().cutStart)
+        || m_axis2Motor->getCurrentStep() == m_multiPassCutStartXStep) {
+        return;
+    }
+    MGOLOG(fmt::format(
+        "Multi-pass: X ended the return at step {}, not {}: moving there",
+        m_axis2Motor->getCurrentStep(),
+        m_multiPassCutStartXStep));
+    m_axis2Motor->goToStep(m_multiPassCutStartXStep);
+    m_multiPassXSettling = true;
+    m_axis2WasRunning = true;
+}
+
+double Model::taperCorrection() const
+{
+    return m_config.readDouble("TaperCorrection", 0.0);
+}
+
+double Model::multiPassXCorrection() const
+{
+    if (!m_multiPass.inProgress() || m_axis2Retracted) {
+        return 0.0;
+    }
+    return m_multiPass.plan().feedCorrection
+        * (m_axis1Motor->getPosition() - m_multiPass.plan().cutStart);
 }
 
 bool Model::isRetracted() const

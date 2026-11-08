@@ -1552,10 +1552,14 @@ class FakeMultiPassMachine final : public mgo::IMultiPassMachine {
 public:
     double cutPosition() const override { return m_cut; }
     bool cutMoving() const override { return m_cutTarget.has_value(); }
-    void cutMoveTo(double position) override
+    void cutMoveTo(double position, double feedFollows) override
     {
         log.push_back(fmt::format("cut {:.6g} at {:.6g}", position, m_cutSpeed));
+        if (feedFollows != 0.0) {
+            log.back() += fmt::format(" following {:.6g}", feedFollows);
+        }
         m_cutTarget = position;
+        m_cutFollows = feedFollows;
     }
     double cutSpeed() const override { return m_cutSpeed; }
     void setCutSpeed(double speed) override { m_cutSpeed = speed; }
@@ -1585,8 +1589,12 @@ public:
     void finishMoves(std::optional<double> cutStopsAt = std::nullopt)
     {
         if (m_cutTarget) {
+            const double from = m_cut;
             m_cut = cutStopsAt.value_or(*m_cutTarget);
             m_cutTarget.reset();
+            // (Retracting is relative here, so following while retracted
+            // moves where it unretracts to, too)
+            m_feed += m_cutFollows * (m_cut - from);
         }
         if (m_feedTarget) {
             m_feed = *m_feedTarget;
@@ -1613,6 +1621,7 @@ public:
 
 private:
     std::optional<double> m_cutTarget;
+    double m_cutFollows { 0.0 };
     std::optional<double> m_feedTarget;
 };
 
@@ -1794,6 +1803,51 @@ TEST_CASE("MultiPass: a pause request does nothing if pausing anyway")
     REQUIRE(!mp.pauseRequested());
 }
 
+TEST_CASE("MultiPass: correcting a taper, the feed axis follows each cut and back")
+{
+    FakeMultiPassMachine machine;
+    mgo::MultiPass mp(machine);
+    auto plan = basicPlan();
+    plan.feedEnd = 4.9; // (two passes)
+    plan.feedCorrection = 0.01;
+    REQUIRE(mp.start(plan).empty());
+    machine.run(mp);
+    REQUIRE(mp.state() == mgo::MultiPass::State::Finished);
+    REQUIRE(machine.log
+            == Log { "cut -10 at 40 following 0.01", "cut 0 at 1000 following 0.01", "feed 4.9",
+                     "cut -10 at 40 following 0.01", "cut 0 at 1000 following 0.01" });
+    // (Back where the last cut started)
+    REQUIRE(machine.feedPosition() == Approx(4.9));
+}
+
+TEST_CASE("MultiPass: correcting a taper, with a retract")
+{
+    FakeMultiPassMachine machine;
+    mgo::MultiPass mp(machine);
+    auto plan = basicPlan();
+    plan.feedEnd = 4.9;
+    plan.feedCorrection = -0.01;
+    plan.retract = true;
+    REQUIRE(mp.start(plan).empty());
+    machine.run(mp);
+    REQUIRE(mp.state() == mgo::MultiPass::State::Finished);
+    REQUIRE(machine.log
+            == Log { "cut -10 at 40 following -0.01", "retract", "cut 0 at 1000 following -0.01",
+                     "unretract", "feed 4.9", "cut -10 at 40 following -0.01", "retract",
+                     "cut 0 at 1000 following -0.01", "unretract" });
+    REQUIRE(machine.feedPosition() == Approx(4.9));
+}
+
+TEST_CASE("MultiPass: no taper correction with a manual feed")
+{
+    FakeMultiPassMachine machine;
+    mgo::MultiPass mp(machine);
+    auto plan = basicPlan();
+    plan.feedManual = true;
+    plan.feedCorrection = 0.01;
+    REQUIRE(!mp.start(plan).empty());
+}
+
 TEST_CASE("MultiPass: a manual feed pauses for the user each pass")
 {
     FakeMultiPassMachine machine;
@@ -1935,6 +1989,76 @@ TEST_CASE("Model:   a multi-pass from Mem 1 to Mem 2")
     REQUIRE(!model.getIsAxis2Retracted());
     REQUIRE(model.getAxis1MotorSpeed() == Approx(200.0));
     REQUIRE(mgo::keyAllowedInCurrentMode(mgo::key::a, model));
+}
+
+namespace {
+
+// Runs a two-pass multi-pass (Z 0 to 0.2, X 0 to 0.01) with a (large) taper
+// correction, checking X is shown as not moving during each cut and return
+// while it actually follows Z
+void runCorrectedMultiPass(bool retract)
+{
+    TestConfigReader config({ { "TaperCorrection", "5" } });
+    mgo::MockGpio gpio(false);
+    mgo::Model model(gpio, config);
+    model.initialise();
+    model.axis1SetSpeed(200.0);
+    model.axis2SetSpeed(100.0);
+    model.changeMode(mgo::Mode::MultiPass);
+    REQUIRE(model
+                .setMultiPassSetup({ .cutDistance = 0.2,
+                                     .feedInfeed = 0.01,
+                                     .feedPerPass = 0.01,
+                                     .pause = false,
+                                     .retract = retract })
+                .empty());
+    const double xEnd = model.getMultiPassRange().feedEnd;
+    model.multiPassGo();
+    REQUIRE(model.getWarning().empty());
+    REQUIRE(model.multiPass().totalPasses() == 2);
+    REQUIRE(model.multiPass().plan().feedCorrection == Approx(std::tan(5.0 * M_PI / 180.0)));
+
+    // (The tan of 5 degrees: about 0.0175 of X for 0.2 of Z)
+    double mostCorrected = 0.0;
+    double mostShownMoved = 0.0;
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(20);
+    while (model.multiPass().inProgress()) {
+        REQUIRE(std::chrono::steady_clock::now() < deadline);
+        model.checkStatus();
+        const auto state = model.multiPass().state();
+        if ((state == mgo::MultiPass::State::Cutting || state == mgo::MultiPass::State::Returning)
+            && !model.getIsAxis2Retracted()) {
+            // Where this pass cuts: 0, then xEnd
+            const double passX = model.multiPass().pass() == 1 ? 0.0 : xEnd;
+            mostShownMoved
+                = std::max(mostShownMoved, std::abs(model.getAxis2Position() - passX));
+            mostCorrected = std::max(
+                mostCorrected,
+                std::abs(model.getAxis2MotorPosition() - model.getAxis2Position()));
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+    REQUIRE(model.multiPass().state() == mgo::MultiPass::State::Finished);
+    REQUIRE(mostCorrected > 0.01);
+    REQUIRE(mostShownMoved < 0.002);
+    // Back where the last cut started, with nothing left over
+    REQUIRE(model.getAxis1MotorPosition() == Approx(0.0).margin(0.0001));
+    REQUIRE(model.getAxis2MotorPosition() == Approx(xEnd).margin(0.0001));
+    REQUIRE(model.getAxis2Position() == model.getAxis2MotorPosition());
+    REQUIRE(!model.getIsAxis2Retracted());
+    REQUIRE(model.getAxis2MotorSpeed() == Approx(100.0));
+}
+
+} // end anonymous namespace
+
+TEST_CASE("Model:   a multi-pass correcting a taper")
+{
+    runCorrectedMultiPass(false);
+}
+
+TEST_CASE("Model:   a multi-pass correcting a taper, retracting")
+{
+    runCorrectedMultiPass(true);
 }
 
 TEST_CASE("Model:   stopping a multi-pass")

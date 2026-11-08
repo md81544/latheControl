@@ -289,6 +289,31 @@
       that cuts a slight taper (taper mode works brilliantly, but this should
       be a config item applied automatically). Idea: calculate the angle
       required from two measurements and a distance
+    - Tested (Nov 2026), a 23.4 mm multi-pass with two spring passes, short
+      stick-out, measured at the far end (A), middle (B) and chuck end (C):
+      unsupported, A 15.315, B 15.298, C 15.277; with a dead centre,
+      A 14.727, B 14.700, C 14.685. So about 0.04 mm smaller on diameter
+      at the chuck end over the cut (about 0.05 degrees), the same with or
+      without the centre, and the second spring pass removed nothing: not
+      deflection, but the machine's geometry. The lathe (an old Hobbymat
+      MD65) has no obvious way to adjust it out
+    - An earlier experiment with a tiny angle in taper mode turned a bar of
+      about 150 mm to the same diameter along its length, so correcting it
+      in software works
+    - **Done (stage 1, experimental):** `TaperCorrection` in the config (an
+      angle in degrees, as for taper mode; see lc.cfg for working it out).
+      It's added to taper mode's angle, and each multi-pass cut is made as
+      a taper of that angle (X following Z as in taper mode, backlash taken
+      up first), following back on the return, or, if retracted,
+      unretracting to where the cut started. X (and the diameter) is shown
+      as if it weren't moving. If X lags Z a little as it starts following,
+      it finishes the return's move, so nothing builds up from pass to
+      pass. Not yet tried on the machine: start from about -0.047, check the
+      sign, then tune on a 150 mm bar
+    - Stage 2, if stage 1 works: everywhere Z moves (X following Z all the
+      time, with the backlash take-up taper mode does when Z reverses, and
+      X shown corrected everywhere: memories, going to them, nudges,
+      retracts, threading)
 - [ ] Support the enable pin for each motor
 - [ ] **Motor stalls: stop when the driver goes into its error mode.** At the
       moment, if a motor stalls and its driver goes into error mode, the

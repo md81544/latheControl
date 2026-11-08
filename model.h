@@ -242,6 +242,13 @@ public:
     void resetMotorThreads();
     double getAxis1MotorPosition() const;
     double getAxis2MotorPosition() const;
+    // X's position as shown: the motor's, less any taper correction it's
+    // making (see multiPassXCorrection())
+    double getAxis2Position() const;
+    // (Experimental) The config's TaperCorrection: an angle (in degrees,
+    // as for taper mode) added to tapers and multi-pass cuts, to cancel out
+    // a slight taper the machine cuts
+    double taperCorrection() const;
     double getAxis1MotorSpeed() const;
     // See RotaryEncoder::getSpindlePulses()
     int64_t getSpindlePulses() const;
@@ -318,10 +325,21 @@ private:
     // radius, taking up both axes' backlash, then synchronising X and moving.
     // (The last step's done is left empty, so the sequence ends once Z starts)
     std::vector<MotionSequence::Step> axis1MoveSteps(long step);
+    // The steps to move Z to a step with X following it, moving ratio times
+    // as far (e.g. tan of a taper angle): take up both axes' backlash, then
+    // synchronise X and start Z with move
+    std::vector<MotionSequence::Step>
+    xFollowsZSteps(long step, double ratio, std::function<void()> move);
     MotionSequence::Step takeUpZBacklashStep(ZDirection direction);
     MotionSequence::Step takeUpXBacklashStep(int stepAdd);
-    void synchroniseXForTaper();
+    void synchroniseXForTaper(double ratio);
     void synchroniseXForRadius();
+    // How far X has moved (in mm) to correct the taper, during a multi-pass
+    // (0 if none, or while retracted, when X unretracts to where the cut
+    // started instead)
+    double multiPassXCorrection() const;
+    // When X has caught up at the end of a multi-pass move it followed
+    void multiPassXFollowEnded();
     MotionSequence m_motionSequence;
 
     IGpio& m_gpio;
@@ -389,6 +407,13 @@ private:
     MultiPassRange m_multiPassRange;
     MultiPass m_multiPass { *this };
     bool m_multiPassMovingToStart { false };
+    // X is following Z, to correct the taper, in a multi-pass cut or return
+    // (and stays so until it's caught up with Z, as at the end of a taper)
+    bool m_multiPassXFollowing { false };
+    // Where X was when the last such cut started (in steps)
+    long m_multiPassCutStartXStep { 0 };
+    // X is finishing a return: see multiPassXFollowEnded()
+    bool m_multiPassXSettling { false };
 
     std::set<unsigned> m_axisLocks;
 
@@ -433,7 +458,7 @@ private:
     // clearing the retracted flag after an unretract)
     double cutPosition() const override;
     bool cutMoving() const override;
-    void cutMoveTo(double position) override;
+    void cutMoveTo(double position, double feedFollows) override;
     double cutSpeed() const override;
     void setCutSpeed(double speed) override;
     double cutMaxSpeed() const override;
