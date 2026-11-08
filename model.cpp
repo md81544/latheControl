@@ -2104,6 +2104,14 @@ void Model::multiPassGo()
         return;
     }
     if (m_multiPass.inProgress()) {
+        // While a pass is under way: pause before the next (or not, if asked
+        // already)
+        const bool wasRequested = m_multiPass.pauseRequested();
+        m_multiPass.togglePauseRequest();
+        if (m_multiPass.pauseRequested() != wasRequested) {
+            MGOLOG((wasRequested ? "Multi-pass: pause request cancelled"
+                                 : "Multi-pass: pause requested"));
+        }
         return;
     }
     if (m_axis1Motor->isRunning() || m_axis2Motor->isRunning()) {

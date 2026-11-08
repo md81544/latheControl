@@ -173,6 +173,7 @@ std::string MultiPass::start(const MultiPassPlan& plan)
     }
     m_plan = plan;
     m_message.clear();
+    m_pauseRequested = false;
     m_pass = 1;
     m_feedTarget = plan.feedStart;
     startCut();
@@ -184,6 +185,19 @@ void MultiPass::continueAfterPause()
     if (m_state == State::Paused) {
         startNextPass();
     }
+}
+
+void MultiPass::togglePauseRequest()
+{
+    if (!inProgress() || m_state == State::Paused || m_plan.pause || m_plan.feedManual) {
+        return;
+    }
+    m_pauseRequested = !m_pauseRequested;
+}
+
+bool MultiPass::pauseRequested() const
+{
+    return m_pauseRequested;
 }
 
 void MultiPass::stop(const std::string& reason)
@@ -365,7 +379,9 @@ void MultiPass::afterReturn()
 
 void MultiPass::readyForNextPass()
 {
-    if (m_plan.pause || m_plan.feedManual) {
+    if (m_plan.pause || m_plan.feedManual || m_pauseRequested) {
+        // (A request is for one pause only)
+        m_pauseRequested = false;
         m_state = State::Paused;
         return;
     }
@@ -399,6 +415,8 @@ void MultiPass::startFeed()
 
 void MultiPass::finish()
 {
+    // (No pause after the last pass)
+    m_pauseRequested = false;
     // Unretract, so the feed axis shows the final position
     if (m_machine.isRetracted()) {
         m_machine.retract();
@@ -411,6 +429,7 @@ void MultiPass::finish()
 void MultiPass::abandon(const std::string& reason)
 {
     m_state = State::Idle;
+    m_pauseRequested = false;
     m_message = reason;
 }
 

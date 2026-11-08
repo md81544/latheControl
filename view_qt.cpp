@@ -631,6 +631,14 @@ void ViewQt::Impl::dialogClosed()
 {
     dialog = nullptr;
     setDimmed(false);
+    // Take the keyboard focus back from the dialog. Otherwise the window
+    // manager may give it elsewhere (seen on Raspberry Pi OS: the desktop's
+    // panel appeared, and keys were lost until the window was clicked).
+    // (The "offscreen" platform, used by the UI tests, has no windows to raise)
+    if (QGuiApplication::platformName() != "offscreen") {
+        widget->raise();
+        widget->activateWindow();
+    }
 }
 
 void ViewQt::setMenu(const Menu* menu)
@@ -1278,6 +1286,9 @@ void ViewQt::Impl::updateMultiPassData(const Model& model)
                 : fmt::format(
                       "Finished ({} passes). Enter moves to the start, to go again", mp.pass());
             break;
+    }
+    if (mp.pauseRequested()) {
+        misc2.text += " (pausing after this pass; Enter cancels)";
     }
     // How far X has stepped over since the first pass
     misc3.text = "";

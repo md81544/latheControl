@@ -1741,6 +1741,59 @@ TEST_CASE("MultiPass: pausing between passes")
     REQUIRE(mp.state() == mgo::MultiPass::State::Finished);
 }
 
+TEST_CASE("MultiPass: asking for a pause before the next pass")
+{
+    FakeMultiPassMachine machine;
+    mgo::MultiPass mp(machine);
+    auto plan = basicPlan(); // (not pausing)
+    plan.feedEnd = 4.8;
+    // (Not before it's started)
+    mp.togglePauseRequest();
+    REQUIRE(!mp.pauseRequested());
+    REQUIRE(mp.start(plan).empty());
+    REQUIRE(mp.totalPasses() == 3);
+    REQUIRE(mp.state() == mgo::MultiPass::State::Cutting);
+    // Asked during the first pass, it pauses after it, once
+    mp.togglePauseRequest();
+    REQUIRE(mp.pauseRequested());
+    machine.run(mp);
+    REQUIRE(mp.state() == mgo::MultiPass::State::Paused);
+    REQUIRE(mp.pass() == 1);
+    REQUIRE(!mp.pauseRequested());
+    // (Not while paused)
+    mp.togglePauseRequest();
+    REQUIRE(!mp.pauseRequested());
+    mp.continueAfterPause();
+    REQUIRE(mp.pass() == 2);
+    // Asked and cancelled: no pause
+    mp.togglePauseRequest();
+    mp.togglePauseRequest();
+    REQUIRE(!mp.pauseRequested());
+    for (int n = 0; n < 100 && mp.pass() == 2; ++n) {
+        machine.finishMoves();
+        mp.update();
+        REQUIRE(mp.state() != mgo::MultiPass::State::Paused);
+    }
+    REQUIRE(mp.pass() == 3);
+    // Asked during the last pass: it just finishes
+    mp.togglePauseRequest();
+    REQUIRE(mp.pauseRequested());
+    machine.run(mp);
+    REQUIRE(mp.state() == mgo::MultiPass::State::Finished);
+    REQUIRE(!mp.pauseRequested());
+}
+
+TEST_CASE("MultiPass: a pause request does nothing if pausing anyway")
+{
+    FakeMultiPassMachine machine;
+    mgo::MultiPass mp(machine);
+    auto plan = basicPlan();
+    plan.pause = true;
+    REQUIRE(mp.start(plan).empty());
+    mp.togglePauseRequest();
+    REQUIRE(!mp.pauseRequested());
+}
+
 TEST_CASE("MultiPass: a manual feed pauses for the user each pass")
 {
     FakeMultiPassMachine machine;

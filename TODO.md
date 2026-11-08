@@ -108,7 +108,17 @@
       `processModeInputKeys()`, now removed)
 
 ## Multi-pass (experimental)
-- [ ] Try the rewritten multi-pass on the machine.
+- [x] Try the rewritten multi-pass on the machine.
+    - **Done:** tried on aluminium, without pausing: it worked, finishing
+      within a few hundredths of a mm of the target diameter (the machine's
+      repeatability). Two things came of it:
+    - **Done:** Enter during a pass (when not pausing anyway) pauses once
+      it's done, e.g. to clear stringy swarf wrapping around the chuck;
+      Enter again cancels the request. Not yet tried on the machine
+    - **Done:** the main window takes the focus back when a dialog closes.
+      Sometimes after the multi-pass dialog (and another), Pi OS's panel
+      appeared and keys were lost until the window was clicked. Not yet
+      tried on the machine
     - **Done:** rewritten as a generic engine (`MultiPass`, in multipass.h),
       replacing the old, broken code. It's a state machine moved on by the
       model's `checkStatus()`, and works through an `IMultiPassMachine`

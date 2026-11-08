@@ -426,13 +426,10 @@ std::vector<Command> buildCommands(const IConfigReader& config, DisplayUnits uni
     b.add(c, "Multi-pass (experimental)...", key::f2m, BOTH, nullptr, 'm');
     b.add(
         c,
-        "Start / continue multi-pass",
+        "Start / continue / pause multi-pass",
         key::ENTER,
         BOTH,
-        [](const Model& m) {
-            return m.getMode() == Mode::MultiPass
-                && (!m.multiPass().inProgress() || m.multiPass().state() == MultiPass::State::Paused);
-        },
+        [](const Model& m) { return m.getMode() == Mode::MultiPass; },
         'g');
     b.add(c, fmt::format("{} retraction direction...", a2), key::f2r, BOTH, nullptr, 'r');
     b.add(c, "Setup (measure backlash)", key::f2s, NONE, nullptr, 's');

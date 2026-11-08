@@ -175,6 +175,13 @@ public:
     std::string start(const MultiPassPlan& plan);
     // Moves on from Paused. Does nothing in any other state
     void continueAfterPause();
+    // While a pass is under way (not paused): asks for a pause before the
+    // next pass, as if the plan paused (e.g. to clear swarf), or, if already
+    // asked, cancels the request. Does nothing if it would pause anyway, or
+    // in any other state. There's no pause after the last pass
+    void togglePauseRequest();
+    // True if a pause before the next pass has been asked for
+    bool pauseRequested() const;
     // Abandons the multi-pass, giving the reason (shown by message()). The
     // caller stops the motors
     void stop(const std::string& reason);
@@ -222,6 +229,8 @@ private:
     double m_feedTarget { 0.0 };
     // The cut axis's speed for cutting, while returning at full speed
     double m_cutSpeed { 0.0 };
+    // (See togglePauseRequest())
+    bool m_pauseRequested { false };
     std::string m_message;
 };
 

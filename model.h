@@ -303,7 +303,8 @@ public:
     MultiPassPositions multiPassPositions() const;
     // Enter, in the mode. If the axes aren't at the start, moves them there
     // (retracting X first, if the setup says so) and waits; once there,
-    // starts the multi-pass. If it's paused, continues it. If it can't do
+    // starts the multi-pass. If it's paused, continues it; if it's running,
+    // asks it to pause before the next pass (or cancels that). If it can't do
     // any of these, the warning says why
     void multiPassGo();
     // Whether both axes are at the multi-pass's start
