@@ -138,8 +138,10 @@ int multiPassCount(const MultiPassRange& range, double feedPerPass)
         return 0;
     }
     const double distance = std::abs(range.feedEnd - range.feedStart);
-    // (As MultiPass::totalPasses(), at the first pass)
-    return 1 + static_cast<int>(std::ceil(std::max(0.0, distance - MultiPass::TOLERANCE) / feedPerPass));
+    // (As MultiPass::totalPasses(). The first pass is a step in, so a
+    // distance of nothing still takes one)
+    return std::max(
+        1, static_cast<int>(std::ceil(std::max(0.0, distance - MultiPass::TOLERANCE) / feedPerPass)));
 }
 
 MultiPass::MultiPass(IMultiPassMachine& machine)
@@ -177,9 +179,19 @@ std::string MultiPass::start(const MultiPassPlan& plan)
     m_plan = plan;
     m_message.clear();
     m_pauseRequested = false;
+    // The first pass is one step in from the start (which is usually where
+    // the tool touched the work, so a pass there would cut nothing)
+    const double firstTarget = nextFeedTarget(plan.feedStart);
+    if (plan.feedManual && !near(firstTarget, plan.feedStart)) {
+        // (Paused first, for the user to feed it in)
+        m_pass = 0;
+        m_feedTarget = plan.feedStart;
+        m_state = State::Paused;
+        return {};
+    }
     m_pass = 1;
-    m_feedTarget = plan.feedStart;
-    startCut();
+    m_feedTarget = firstTarget;
+    startFeed();
     return {};
 }
 
@@ -300,8 +312,9 @@ int MultiPass::totalPasses() const
     // a nudge while paused can change the number)
     const double remaining = std::abs(m_plan.feedEnd - m_feedTarget);
     // (Less the tolerance, so that rounding doesn't add a pass of nothing)
-    return std::max(1, m_pass)
-        + static_cast<int>(std::ceil(std::max(0.0, remaining - TOLERANCE) / m_plan.feedPerPass));
+    return std::max(
+        1,
+        m_pass + static_cast<int>(std::ceil(std::max(0.0, remaining - TOLERANCE) / m_plan.feedPerPass)));
 }
 
 double MultiPass::fed() const

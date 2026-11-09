@@ -159,9 +159,11 @@
       it after), then waits; Enter again starts cutting. "Retract before
       moving to the start" is on each time the dialog opens. Space stops the
       move. Not yet tried on the machine
-    - The first pass is at the start's X (as before), so starting from where
-      the tool touched the work, it's a pass of nothing. Should the first
-      pass be one step in?
+    - **Done:** the first pass is one step in from the start's X (it was at
+      the start, so starting from where the tool touched the work, it was a
+      pass of nothing). So the passes are the infeed / step-over, rounded
+      up. With a step-over of zero, it's still at the start; with a manual
+      feed, it pauses first for the user to feed in
     - The mill: its axis 2 (Y) has no motor yet, so a multi-pass there would
       need the engine's manual feed ("feed Y by n mm, then press Enter"),
       and the dialog and the move to the start would need to allow for it

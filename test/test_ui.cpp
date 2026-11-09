@@ -997,7 +997,8 @@ TEST_CASE("UI: multi-pass through the controller")
     // Enter starts it (as it's at the start already)
     press(w, controller, Qt::Key_Return);
     REQUIRE(tm.model.multiPass().inProgress());
-    REQUIRE(tm.model.multiPass().totalPasses() == 3);
+    // (X in by 0.02, 0.01 at a time)
+    REQUIRE(tm.model.multiPass().totalPasses() == 2);
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(20);
     while (tm.model.multiPass().inProgress()) {
         REQUIRE(std::chrono::steady_clock::now() < deadline);

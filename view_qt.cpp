@@ -1271,7 +1271,11 @@ void ViewQt::Impl::updateMultiPassData(const Model& model)
             break;
         case MultiPass::State::Paused:
             misc2.text = mp.plan().feedManual
-                ? fmt::format("{} done: feed {} by {}, then press Enter", pass, x, xLength(mp.nextFeed()))
+                ? fmt::format(
+                      "{}feed {} by {}, then press Enter",
+                      mp.pass() == 0 ? "" : pass + " done: ",
+                      x,
+                      xLength(mp.nextFeed()))
                 : pass + " done: press Enter for the next (" + x + " can be nudged)";
             break;
         case MultiPass::State::Unretracting:

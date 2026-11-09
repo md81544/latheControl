@@ -43,8 +43,9 @@ struct MultiPassPlan {
     // Each cut moves the cut axis from cutStart to cutEnd, then returns
     double cutStart { 0.0 };
     double cutEnd { 0.0 };
-    // The feed axis's position for the first pass and the last. With a
-    // manual feed, these just give the distance to feed in total
+    // Where the feed axis starts (e.g. where the tool touched the work: the
+    // first pass is a step in from here), and its position for the last
+    // pass. With a manual feed, these just give the distance to feed in total
     double feedStart { 0.0 };
     double feedEnd { 0.0 };
     // How far the feed axis moves on between passes (towards feedEnd). The
@@ -144,13 +145,15 @@ MultiPassSetup defaultMultiPassSetup(
 // True if an axis is at a position (within MultiPass::TOLERANCE)
 bool atMultiPassPosition(double position, double target);
 
-// How many passes a range takes with a step-over (the first at the feed
-// axis's start, the last at its end), or 0 if repeating until stopped (a
-// step-over of zero)
+// How many passes a range takes with a step-over (the first a step in from
+// the feed axis's start, the last at its end; at least one), or 0 if
+// repeating until stopped (a step-over of zero)
 int multiPassCount(const MultiPassRange& range, double feedPerPass);
 
-// A series of cuts: cut, (retract,) return, (unretract,) (pause,) feed on,
-// and repeat until a cut has been made at the feed axis's end position.
+// A series of cuts: feed in (a step from the start), cut, (retract,) return,
+// (unretract,) (pause,) and repeat until a cut has been made at the feed
+// axis's end position. (With a step-over of zero, there's no feeding in:
+// the same cut is repeated, at the start, until stopped.)
 // While paused, a motorised feed axis may be moved (e.g. nudged): the next
 // pass then feeds on from where it is.
 // Non-blocking: call update() regularly (e.g. on each tick), and it starts
@@ -178,9 +181,10 @@ public:
 
     explicit MultiPass(IMultiPassMachine& machine);
 
-    // Starts the first cut. The cut and feed axes must be at the plan's start
-    // positions (unless the feed is manual). Returns an empty string if
-    // started, or else why not
+    // Starts the first pass, feeding in by a step (with a manual feed, it
+    // pauses first, for the user to). The cut and feed axes must be at the
+    // plan's start positions (unless the feed is manual). Returns an empty
+    // string if started, or else why not
     std::string start(const MultiPassPlan& plan);
     // Moves on from Paused. Does nothing in any other state
     void continueAfterPause();
@@ -200,13 +204,14 @@ public:
     State state() const;
     // True from start() until finished or stopped
     bool inProgress() const;
-    // The pass being made (from 1), or 0 if not started
+    // The pass being made (from 1), or 0 if not started (or, with a manual
+    // feed, paused before the first)
     int pass() const;
     // The number of passes in all, or 0 if repeating until stopped. (May
     // change if the feed axis is moved while paused)
     int totalPasses() const;
-    // How far the feed axis has been fed on since the first pass (for the
-    // pass being made, or about to be)
+    // How far the feed axis has been fed in from the start (for the pass
+    // being made, or about to be)
     double fed() const;
     // While paused: how far the feed axis will move on for the next pass
     // (with a manual feed, how far the user should feed it)
