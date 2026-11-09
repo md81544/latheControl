@@ -454,6 +454,57 @@
       made in sections
     - The corrections are about the size of the machine's repeatability,
       so only worth it for the odd piece which needs it
+- [ ] A "profile" mode: an electronic version of a mechanical follower, for
+      turning simple profiles (e.g. a chess piece) from a file. Idea only,
+      for discussion, but it shares its machinery with the bump map above:
+      X follows a function of Z's position, from a table of points
+    - Radius mode already does this for a circle (`synchroniseXForRadius()`
+      works out X from Z's absolute position). A profile swaps Pythagoras
+      for a lookup in the table. Since X depends only on where Z is, Z can
+      be wound back and forth, stopped and restarted anywhere, and the tool
+      retraces the profile, just as a mechanical follower would. That suits
+      the app as an aid to manual machining: the operator drives Z (keys,
+      gamepad, or later a multi-pass cut) and steps the depth in between
+      passes as an X offset
+    - **Input:** a simple file of `Z, Ø` points, interpolated linearly, in
+      the style of threadpitches.cfg, rather than SVG (paths, Béziers,
+      transforms and units are a lot to parse in the app). A separate
+      script in the repo could turn an SVG path (e.g. from Inkscape) into
+      that file: flatten the curves into close points, allow for the tool's
+      nose radius (offsetting along the surface's normal, so the file holds
+      the tool tip's path), and warn about the steepest slope and any
+      undercuts
+    - **Motor thread:** precompute X for every Z step when the profile is
+      loaded, so the synchronisation callback is just an array index (no
+      searching, allocating or locks on the real-time path)
+    - **Backlash:** the hardest part. A chess piece's profile reverses X
+      many times, and X is open-loop with no scale, so every reversal would
+      leave a step of about the backlash in the surface. Either the
+      synchronisation adds the backlash as X changes direction (in the
+      motor thread, so carefully), or the cut is made in sections, each
+      moving X in one direction only. The same problem as the bump map's
+    - **Steep slopes:** X has to move at Z's speed times the slope, so on a
+      steep rise it lags and the profile comes out wrong. A vertical face
+      isn't a function of Z at all. Options: cap Z's speed from the
+      steepest slope in the profile (simple, but slow); make a vertical step
+      a separate X move with Z waiting; or leave square shoulders to manual
+      work. A mechanical follower's stylus angle has the same limit
+    - **The tool:** a profile both rising and falling needs a tool that cuts
+      both ways (a round nose or a pointed insert), and a falling slope can
+      be no steeper than the tool's trailing clearance allows. The operator
+      has to judge what will work with the tool in use; the app can only
+      warn about the obvious cases
+    - **Roughing:** from bar, passes at `X = min(stock Ø, profile +
+      allowance)` with the allowance shrinking each pass would fit the
+      multi-pass engine, if its X following (`feedFollows`) became a
+      function of Z rather than a fixed ratio. Offsetting in X only leaves
+      thinner material on steep parts, the safe way to be wrong
+    - **Suggested first slice:** profile mode beside taper and radius: load
+      a points file, zero at the start as radius mode asks, drive Z by hand
+      with X following, and step the depth by hand. Test it on a profile
+      whose X only moves one way (e.g. a cone with a radiused end), so
+      backlash doesn't come into it yet. Lathe only, and off unless the
+      config enables it
 - [ ] Support the enable pin for each motor
 - [ ] **Motor stalls: stop when the driver goes into its error mode.** At the
       moment, if a motor stalls and its driver goes into error mode, the
