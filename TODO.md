@@ -221,10 +221,27 @@
              (`IMultiPassMachine::cutStepSize()` / `feedStepSize()`). It
              could also have happened in multi-pass mode, e.g. with a typed
              end diameter
-        3. Carry on past the nominal depth, pass by pass. The M14 thread
-           needed a few extra passes before the nut fitted, so pausing and
-           continuing matters here (as the step-over-of-zero-with-pause
-           mode already does)
+           - **Tried on the machine (2026-11-09):** an M8 male thread. The
+             stock was turned down with a multi-pass to a commercial M8
+             bolt's OD (7.82 mm) and chamfered in taper mode. The thread ran
+             from Mem 2 (just off the end) to Mem 1, at 0.1 mm per pass. A
+             lovely-looking thread. It needed about eight spring passes
+             (done by hand in threading mode) before a commercial nut went
+             on, each taking off a noticeable amount more: possibly the
+             cross-slide's gib being a little loose (it can't be much
+             tighter, or it stalls X's stepper), or the tool and work being
+             pushed away with both flanks cutting at once (a plunge infeed).
+             Then a beautifully fitting thread
+        3. Carry on past the nominal depth, pass by pass. The M14 and M8
+           threads needed several extra passes before the nut fitted. The M8
+           ones were done by leaving the threading passes, which a key in
+           the passes should save (see below)
+           - **Suggested:** once the passes have finished, Enter takes a
+             spring pass at the same depth, then pauses: W/S nudge X in
+             first if wanted, and Enter takes another, until Space. (As
+             multi-pass's step-over of zero with pausing, started from
+             where X is.) Starting the whole set again would be from the
+             dialog
         4. Optionally, each pass removes a constant area rather than a
            constant depth, as CNC threading cycles do: the passes get
            shallower as the tool goes deeper, which is gentler on the tool.
