@@ -856,6 +856,23 @@ void Controller::processKey(int t)
                     m_model->clearFeature();
                     break;
                 }
+            case key::featureStart:
+            case key::featureStartExact:
+                {
+                    m_model->featureGoToStart(kp == key::featureStart);
+                    break;
+                }
+            case key::featureDiameter:
+                {
+                    m_model->featureGoToDiameter();
+                    break;
+                }
+            case key::featureEnd:
+            case key::featureEndExact:
+                {
+                    m_model->featureGoToWorkEnd(kp == key::featureEnd);
+                    break;
+                }
             case key::a1_s: // Axis1 position set
                 {
                     const std::string axisName = m_model->config().read("Axis1Label", "Z");

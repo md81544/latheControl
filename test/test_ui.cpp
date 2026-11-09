@@ -1185,9 +1185,15 @@ TEST_CASE("UI: the current feature through the controller")
     press(w, controller, Qt::Key_E);
     REQUIRE(tm.model.getWorkEndZ() == Approx(0.0));
 
-    // The menu's Feature, Clear
+    // The menu's Feature, Clear. (With LC_SNAPSHOT_DIR set, an image of the
+    // menu's Feature category, to look at)
     press(w, controller, Qt::Key_Tab);
     press(w, controller, Qt::Key_F);
+    if (const char* dir = std::getenv("LC_SNAPSHOT_DIR")) {
+        controller.tick();
+        QTest::qWait(150);
+        w->grab().save(QString::fromStdString(std::string(dir) + "/menu_feature.png"));
+    }
     press(w, controller, Qt::Key_C);
     REQUIRE(!tm.model.getFeatureDiameterMm());
     REQUIRE(!tm.model.getWorkEndZ());

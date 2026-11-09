@@ -168,6 +168,11 @@ constexpr int f2r = 7004; // X retraction mode
 constexpr int f2o = 7005; // radius mode
 constexpr int f2m = 7007; // multipass
 constexpr int clearFeature = 7008; // clear the current feature
+constexpr int featureStart = 7009; // go to the feature's start, clear of the end
+constexpr int featureStartExact = 7010; // go to the feature's start, at the end exactly
+constexpr int featureDiameter = 7011; // X to the feature's diameter
+constexpr int featureEnd = 7012; // Z to the work's end, clear of it
+constexpr int featureEndExact = 7013; // Z to the work's end exactly
 
 // Joystick specific "keys"
 // Note some joystick commands just return regular keycodes.

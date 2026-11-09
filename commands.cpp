@@ -153,6 +153,11 @@ bool menuOnly(int k)
         case key::f2o:
         case key::f2m:
         case key::clearFeature:
+        case key::featureStart:
+        case key::featureStartExact:
+        case key::featureDiameter:
+        case key::featureEnd:
+        case key::featureEndExact:
             return true;
         default:
             return false;
@@ -433,11 +438,40 @@ std::vector<Command> buildCommands(const IConfigReader& config, DisplayUnits uni
         b.add(c, fmt::format("Mark the work's end ({} here)", a1), key::a1_e, BOTH, nullptr, 'e');
         b.add(
             c,
-            "Record the diameter here as the feature's",
+            "Record the diameter here",
             key::a2_d,
             BOTH,
             [](const Model& m) { return m.getDiameterMm().has_value(); },
             'd');
+        const auto goTo = [](bool diameter, bool workEnd) {
+            return [diameter, workEnd](const Model& m) {
+                return m.featureGoToAllowed() && (!diameter || m.getFeatureDiameterMm())
+                    && (!workEnd || m.getWorkEndZ());
+            };
+        };
+        b.add(c, "Go to its start (clear of the end)", key::featureStart, BOTH, goTo(true, true), 'g');
+        b.add(
+            c,
+            "Go to its start (at the end exactly)",
+            key::featureStartExact,
+            BOTH,
+            goTo(true, true),
+            'h');
+        b.add(c, fmt::format("{} to its Ø", a2), key::featureDiameter, BOTH, goTo(true, false), 'x');
+        b.add(
+            c,
+            fmt::format("{} to the work's end (clear of it)", a1),
+            key::featureEnd,
+            BOTH,
+            goTo(false, true),
+            'z');
+        b.add(
+            c,
+            fmt::format("{} to the work's end (exactly)", a1),
+            key::featureEndExact,
+            BOTH,
+            goTo(false, true),
+            'w');
         b.add(
             c,
             "Clear the feature",

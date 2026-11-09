@@ -191,6 +191,27 @@ public:
     void markWorkEnd();
     void clearWorkEnd();
     void clearFeature();
+    // Going to the current feature (each needs the values it goes to). "Clear"
+    // is FeatureStartClearance off the work's end, away from the chuck (see
+    // Axis1TowardsChuck); otherwise exactly at it. If one can't be done, the
+    // warning says why.
+    // - The start: X on the feature's surface, Z at the work's end (both
+    //   axes, moving as moveToSafely(), retracting first)
+    // - X to the feature's surface (Z doesn't move)
+    // - X to the feature's surface goes as moveToSafely() does (so if X was
+    //   retracted, it's no longer)
+    // - Z to the work's end, as a Z go to (at Z's speed; X doesn't move). Only
+    //   if X isn't deeper into the work than the feature's surface, so Z can't
+    //   run the tool into it
+    void featureGoToStart(bool clear);
+    void featureGoToDiameter();
+    void featureGoToWorkEnd(bool clear);
+    // Whether going to the feature is possible now: not while threading or
+    // tapering (whose Z moves are synchronised), during a multi-pass, or
+    // while a series of moves is under way
+    bool featureGoToAllowed() const;
+    // The work's end Z, or (if clear) off it by FeatureStartClearance
+    std::optional<double> featureWorkEndTarget(bool clear) const;
 
     // Getters/setters:
     XDirection getRetractionDirection() const;
@@ -494,6 +515,17 @@ private:
     bool isRetracted() const override;
     // Moving to the multi-pass's start (see multiPassGo())
     void multiPassMoveToStart();
+    // Moves both axes to a position without dragging the tool through the
+    // work: X moves away from the work (or retracts first, if retract and Z
+    // has to move) before Z moves, and towards it after. Z moves at full
+    // speed. status is shown for each axis meanwhile; onDone is called once
+    // there (not if stopped)
+    void moveToSafely(
+        double zTarget,
+        double xTarget,
+        bool retract,
+        const std::string& status,
+        std::function<void()> onDone);
     // +1 if X's position increases as it moves into the work (i.e. the
     // opposite way to a retract), or -1 if it decreases
     double axis2IntoWorkSign() const;

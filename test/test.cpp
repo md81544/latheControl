@@ -3129,3 +3129,146 @@ TEST_CASE("Commands: the current feature's")
     REQUIRE(mgo::isAvailable(*find(mgo::key::a2_d), model));
     REQUIRE(mgo::isAvailable(*find(mgo::key::clearFeature), model));
 }
+
+namespace {
+
+// A model with the current feature: the work's end at Z 0, 1.0 diameter
+// (X 0.5)
+struct FeatureModel {
+    TestConfigReader config;
+    mgo::MockGpio gpio { false };
+    mgo::Model model { gpio, config };
+    explicit FeatureModel(std::map<std::string, std::string> extra = {})
+        : config([&extra] {
+            extra["CurrentFeature"] = "true";
+            return extra;
+        }())
+    {
+        model.initialise();
+        model.axis1SetSpeed(200.0);
+        model.axis2SetSpeed(100.0);
+        model.setAxis2Position(0.5);
+        model.diameterIsSet();
+        model.markWorkEnd();
+    }
+    // X's position this far deeper into the work than the feature's surface
+    double deeper(double mm)
+    {
+        return 0.5 + model.multiPassPositions().feedIntoWork * mm;
+    }
+    void moveTo(double z, double x)
+    {
+        model.axis1GoToPosition(z);
+        model.axis2GoToPosition(x);
+        REQUIRE(runUntilStopped(model));
+    }
+};
+
+} // end anonymous namespace
+
+TEST_CASE("Model:   where the work's end is, clear of it or exactly")
+{
+    FeatureModel f;
+    REQUIRE(f.model.featureWorkEndTarget(false) == Approx(0.0));
+    // Away from the chuck, which is -Z unless set otherwise
+    REQUIRE(f.model.featureWorkEndTarget(true) == Approx(0.5));
+    FeatureModel other({ { "Axis1TowardsChuck", "positive" }, { "FeatureStartClearance", "1" } });
+    REQUIRE(other.model.featureWorkEndTarget(true) == Approx(-1.0));
+    other.model.clearWorkEnd();
+    REQUIRE(!other.model.featureWorkEndTarget(true));
+}
+
+TEST_CASE("Model:   going to the feature's start, X clear of the work while Z moves")
+{
+    FeatureModel f;
+    // Part way along, deeper than the feature's surface
+    f.moveTo(-0.3, f.deeper(0.2));
+    REQUIRE(f.model.featureGoToAllowed());
+    const double intoWork = f.model.multiPassPositions().feedIntoWork;
+    f.model.featureGoToStart(true);
+    REQUIRE(f.model.getWarning().empty());
+    REQUIRE(f.model.isMotionSequenceRunning());
+    bool zMovedWithXOut = true;
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(20);
+    while (f.model.isMotionSequenceRunning()) {
+        REQUIRE(std::chrono::steady_clock::now() < deadline);
+        f.model.checkStatus();
+        if (f.model.isAxis1MotorRunning()) {
+            // (Further out than the surface)
+            zMovedWithXOut
+                = zMovedWithXOut && (f.model.getAxis2MotorPosition() - 0.5) * intoWork < 0.0;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+    REQUIRE(runUntilStopped(f.model));
+    REQUIRE(zMovedWithXOut);
+    REQUIRE(f.model.getAxis1MotorPosition() == Approx(0.5).margin(0.0001));
+    REQUIRE(f.model.getAxis2MotorPosition() == Approx(0.5).margin(0.0001));
+    REQUIRE(!f.model.getIsAxis2Retracted());
+
+    // At the end exactly
+    f.moveTo(-0.3, f.deeper(0.2));
+    f.model.featureGoToStart(false);
+    REQUIRE(runUntilStopped(f.model));
+    REQUIRE(f.model.getAxis1MotorPosition() == Approx(0.0).margin(0.0001));
+    REQUIRE(f.model.getAxis2MotorPosition() == Approx(0.5).margin(0.0001));
+}
+
+TEST_CASE("Model:   X to the feature's diameter, or Z to the work's end")
+{
+    FeatureModel f;
+    // X only
+    f.moveTo(-0.3, f.deeper(0.2));
+    f.model.featureGoToDiameter();
+    REQUIRE(runUntilStopped(f.model));
+    REQUIRE(f.model.getAxis1MotorPosition() == Approx(-0.3).margin(0.0001));
+    REQUIRE(f.model.getAxis2MotorPosition() == Approx(0.5).margin(0.0001));
+
+    // Z only, but not with X deeper than the surface
+    f.moveTo(-0.3, f.deeper(0.2));
+    f.model.featureGoToWorkEnd(true);
+    REQUIRE(f.model.getWarning().find("clear of the work") != std::string::npos);
+    REQUIRE(runUntilStopped(f.model));
+    REQUIRE(f.model.getAxis1MotorPosition() == Approx(-0.3).margin(0.0001));
+    // On the surface, or further out, it goes (and X stays put)
+    f.moveTo(-0.3, 0.5);
+    f.model.featureGoToWorkEnd(true);
+    REQUIRE(f.model.getWarning().empty());
+    REQUIRE(runUntilStopped(f.model));
+    REQUIRE(f.model.getAxis1MotorPosition() == Approx(0.5).margin(0.0001));
+    REQUIRE(f.model.getAxis2MotorPosition() == Approx(0.5).margin(0.0001));
+    f.moveTo(-0.3, f.deeper(-0.2));
+    f.model.featureGoToWorkEnd(false);
+    REQUIRE(runUntilStopped(f.model));
+    REQUIRE(f.model.getAxis1MotorPosition() == Approx(0.0).margin(0.0001));
+    REQUIRE(f.model.getAxis2MotorPosition() == Approx(f.deeper(-0.2)).margin(0.0001));
+}
+
+TEST_CASE("Model:   going to the feature needs it, and isn't allowed in some modes")
+{
+    FeatureModel f;
+    f.model.changeMode(mgo::Mode::Threading);
+    REQUIRE(!f.model.featureGoToAllowed());
+    f.model.changeMode(mgo::Mode::Taper);
+    REQUIRE(!f.model.featureGoToAllowed());
+    f.model.changeMode(mgo::Mode::None);
+    REQUIRE(f.model.featureGoToAllowed());
+
+    // The menu's items are available only with what they go to
+    const auto commands = mgo::buildCommands(f.config);
+    const auto available = [&](int k) {
+        const auto it = std::find_if(
+            commands.begin(), commands.end(), [k](const mgo::Command& c) { return c.key == k; });
+        REQUIRE(it != commands.end());
+        return mgo::isAvailable(*it, f.model);
+    };
+    REQUIRE(available(mgo::key::featureStart));
+    REQUIRE(available(mgo::key::featureEndExact));
+    f.model.clearWorkEnd();
+    REQUIRE(!available(mgo::key::featureStart));
+    REQUIRE(!available(mgo::key::featureEnd));
+    REQUIRE(available(mgo::key::featureDiameter));
+    f.model.featureGoToStart(true);
+    REQUIRE(!f.model.getWarning().empty());
+    REQUIRE(!f.model.isMotionSequenceRunning());
+}

@@ -1543,6 +1543,91 @@ void Model::clearFeature()
     m_workEndZ.reset();
 }
 
+bool Model::featureGoToAllowed() const
+{
+    const bool modeAllows = m_mode == Mode::None
+        || (m_mode == Mode::MultiPass && !m_multiPass.inProgress() && !m_multiPassMovingToStart);
+    return currentFeatureEnabled() && modeAllows && !m_motionSequence.isRunning()
+        && !m_axis1Faulted && !m_axis2Faulted;
+}
+
+std::optional<double> Model::featureWorkEndTarget(bool clear) const
+{
+    if (!m_workEndZ) {
+        return std::nullopt;
+    }
+    if (!clear) {
+        return m_workEndZ;
+    }
+    const double towardsChuck
+        = m_config.read("Axis1TowardsChuck", "negative") == "positive" ? 1.0 : -1.0;
+    return *m_workEndZ - towardsChuck * m_config.readDouble("FeatureStartClearance", 0.5);
+}
+
+void Model::featureGoToStart(bool clear)
+{
+    if (!featureGoToAllowed()) {
+        return;
+    }
+    const auto z = featureWorkEndTarget(clear);
+    if (!z || !m_featureX) {
+        m_warning = "The feature's diameter and the work's end are both needed";
+        return;
+    }
+    if (m_axis1Motor->isRunning() || m_axis2Motor->isRunning()) {
+        m_warning = "Stop the motors first";
+        return;
+    }
+    m_warning = "";
+    moveToSafely(*z, *m_featureX, true, "to feature", {});
+}
+
+void Model::featureGoToDiameter()
+{
+    if (!featureGoToAllowed()) {
+        return;
+    }
+    if (!m_featureX) {
+        m_warning = "The feature's diameter isn't set";
+        return;
+    }
+    if (m_axis2Motor->isRunning()) {
+        m_warning = "Stop the motors first";
+        return;
+    }
+    m_warning = "";
+    // (Not retracting: X stays where Z is)
+    moveToSafely(m_axis1Motor->getPosition(), *m_featureX, false, "to feature", {});
+}
+
+void Model::featureGoToWorkEnd(bool clear)
+{
+    if (!featureGoToAllowed()) {
+        return;
+    }
+    const auto z = featureWorkEndTarget(clear);
+    if (!z) {
+        m_warning = "The work's end isn't set";
+        return;
+    }
+    if (m_axis1Motor->isRunning() || m_axis2Motor->isRunning()) {
+        m_warning = "Stop the motors first";
+        return;
+    }
+    // X must be clear of the work: not deeper in than the feature's surface.
+    // (Without the diameter, nothing's known: X is the user's responsibility,
+    // as for any Z move)
+    if (m_featureX
+        && (m_axis2Motor->getPosition() - *m_featureX) * axis2IntoWorkSign()
+            > MultiPass::TOLERANCE) {
+        m_warning = "Move " + m_config.read("Axis2Label", "X") + " clear of the work first";
+        return;
+    }
+    m_warning = "";
+    // (As a Z go to: at Z's speed, and X stays as it is, even if retracted)
+    axis1GoToPosition(*z);
+}
+
 XDirection Model::getRetractionDirection() const
 {
     return m_xRetractionDirection;
@@ -2120,30 +2205,48 @@ bool Model::multiPassMovingToStart() const
 
 void Model::multiPassMoveToStart()
 {
-    const double zStart = m_multiPassRange.cutStart;
-    const double xStart = m_multiPassRange.feedStart;
-    const bool zToMove = !atMultiPassPosition(m_axis1Motor->getPosition(), zStart);
-    const bool xToMove = !atMultiPassPosition(m_axis2Motor->getPosition(), xStart);
+    MGOLOG(fmt::format(
+        "Multi-pass: moving to the start, Z {}, X {}",
+        m_multiPassRange.cutStart,
+        m_multiPassRange.feedStart));
+    m_multiPassMovingToStart = true;
+    moveToSafely(
+        m_multiPassRange.cutStart,
+        m_multiPassRange.feedStart,
+        m_multiPassSetup.retractBeforeMoveToStart,
+        "to start",
+        [this]() { m_multiPassMovingToStart = false; });
+}
+
+void Model::moveToSafely(
+    double zTarget,
+    double xTarget,
+    bool retract,
+    const std::string& status,
+    std::function<void()> onDone)
+{
+    const bool zToMove = !atMultiPassPosition(m_axis1Motor->getPosition(), zTarget);
+    const bool xToMove = !atMultiPassPosition(m_axis2Motor->getPosition(), xTarget);
     const double oldZSpeed = m_axis1Motor->getSpeed();
     const double oldXSpeed = m_axis2Motor->getSpeed();
 
     const auto zStopped = [this]() { return !m_axis1Motor->isRunning(); };
     const auto xStopped = [this]() { return !m_axis2Motor->isRunning(); };
     const MotionSequence::Step retractStep { [this]() { axis2Retract(); }, xStopped };
-    const MotionSequence::Step zStep { [this, zStart]() {
-                                          m_axis1Status = "to start";
+    const MotionSequence::Step zStep { [this, zTarget, status]() {
+                                          m_axis1Status = status;
                                           m_axis1Motor->setSpeed(m_axis1Motor->getMaxRpm());
-                                          m_axis1Motor->goToPosition(zStart);
+                                          m_axis1Motor->goToPosition(zTarget);
                                       },
                                        zStopped };
-    // (At the retract speed. Once X is moving to the start, it's no longer
+    // (At the retract speed. Once X is moving to its target, it's no longer
     // at a retracted position, so isn't counted as retracted)
-    const MotionSequence::Step xStep { [this, xStart]() {
+    const MotionSequence::Step xStep { [this, xTarget, status]() {
                                           m_axis2Retracted = false;
-                                          m_axis2Status = "to start";
+                                          m_axis2Status = status;
                                           m_axis2Motor->setSpeed(1.0); // (so it ramps)
                                           m_axis2Motor->setSpeed(100.0);
-                                          m_axis2Motor->goToPosition(xStart);
+                                          m_axis2Motor->goToPosition(xTarget);
                                       },
                                        xStopped };
 
@@ -2151,12 +2254,11 @@ void Model::multiPassMoveToStart()
     // that Z doesn't move with the tool deeper in than it need be. With a
     // retract (only needed if Z moves), X starts by moving away anyway
     std::vector<MotionSequence::Step> steps;
-    const bool retractFirst
-        = zToMove && m_multiPassSetup.retractBeforeMoveToStart && !m_axis2Retracted;
+    const bool retractFirst = zToMove && retract && !m_axis2Retracted;
     const bool xAwayFromWork
-        = (xStart - m_axis2Motor->getPosition()) * axis2IntoWorkSign() < 0.0;
+        = (xTarget - m_axis2Motor->getPosition()) * axis2IntoWorkSign() < 0.0;
     const bool xFirst = xToMove && xAwayFromWork && !retractFirst;
-    // (If X was already retracted, it's moved to the start even if it's
+    // (If X was already retracted, it's moved to its target even if it's
     // there, to count as unretracted)
     const bool xLast = !xFirst && (retractFirst || xToMove || m_axis2Retracted);
     if (retractFirst) {
@@ -2172,18 +2274,17 @@ void Model::multiPassMoveToStart()
         steps.push_back(xStep);
     }
     MGOLOG(fmt::format(
-        "Multi-pass: moving to the start, Z {}, X {}{}",
-        zStart,
-        xStart,
-        retractFirst ? " (retracting first)" : ""));
-    m_multiPassMovingToStart = true;
-    m_motionSequence.start(std::move(steps), [this, oldZSpeed, oldXSpeed]() {
-        m_axis1Motor->setSpeed(oldZSpeed);
-        m_axis2Motor->setSpeed(oldXSpeed);
-        m_multiPassMovingToStart = false;
-        axis1SaveBreadcrumbPosition();
-        axis2SaveBreadcrumbPosition();
-    });
+        "Moving {}: Z {}, X {}{}", status, zTarget, xTarget, retractFirst ? " (retracting first)" : ""));
+    m_motionSequence.start(
+        std::move(steps), [this, oldZSpeed, oldXSpeed, onDone = std::move(onDone)]() {
+            m_axis1Motor->setSpeed(oldZSpeed);
+            m_axis2Motor->setSpeed(oldXSpeed);
+            if (onDone) {
+                onDone();
+            }
+            axis1SaveBreadcrumbPosition();
+            axis2SaveBreadcrumbPosition();
+        });
 }
 
 void Model::multiPassGo()

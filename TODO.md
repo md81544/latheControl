@@ -512,6 +512,19 @@ change.
       feature asks first (an OK / Cancel dialog, listing what it would
       clear). Not set as a diameter, as that replaces the Ø rather than
       losing it, nor faults (nothing to ask) or the menu's Clear
+    - **Done:** going back to the feature, from the menu's Feature category
+      (e.g. after moving away without storing its start in a memory slot):
+      to its start (both axes, X retracting before Z moves, as a multi-pass
+      moves to its start: the shared `Model::moveToSafely()`), X alone to
+      the Ø, or Z alone to the work's end (refused if X is deeper than the
+      surface). Z's target is the work's end exactly, or clear of it by
+      `FeatureStartClearance`, away from the chuck (`Axis1TowardsChuck`).
+      Not yet tried on the machine
+    - [ ] **The feature's other end.** Save where the feature ends along Z
+      (e.g. a shoulder), as well as the work's end: set from a key, or by a
+      multi-pass from the work's end (its cut's end). Then it could be gone
+      to as well, offered as a multi-pass's Z end, and shown in the box. A
+      step towards "Single feature vs many" (a list of segments)
     - Still to do from below: the warning when the tool goes inside the Ø
       with the spindle running, tools (and clearing on a tool change), and
       chamfers / radii from the feature Temporary: kept
