@@ -61,6 +61,8 @@ private:
         std::string_view prompt,
         std::vector<std::string> listItems,
         std::function<void(std::optional<std::size_t>)> onDone);
+    // The multi-pass dialog's axes, positions and directions (not its setup)
+    MultiPassDialogInfo multiPassDialogInfo() const;
     void pressAnyKey(
         std::string_view prompt,
         std::vector<std::string> additionalText,

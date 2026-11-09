@@ -152,6 +152,7 @@ bool menuOnly(int k)
         case key::f2r:
         case key::f2o:
         case key::f2m:
+        case key::threadingPasses:
         case key::clearFeature:
         case key::featureStart:
         case key::featureStartExact:
@@ -243,7 +244,8 @@ bool keyAllowedInCurrentMode(int k, const Model& model)
     // (Z's is used for the next cut); and the units shown. While it's paused,
     // X can be nudged: the next pass steps over from there. (Not the Alt
     // nudges: releasing Alt stops everything, which would end the multi-pass)
-    if (model.getMode() == Mode::MultiPass && model.multiPass().inProgress()) {
+    // (In multi-pass mode, or threading passes in threading mode)
+    if (model.multiPass().inProgress()) {
         if (model.multiPass().state() == MultiPass::State::Paused
             && (k == key::w || k == key::W || k == key::s || k == key::S)) {
             return true;
@@ -415,10 +417,20 @@ std::vector<Command> buildCommands(const IConfigReader& config, DisplayUnits uni
     b.add(c, "Multi-pass (experimental)...", key::f2m, BOTH, nullptr, 'm');
     b.add(
         c,
+        "Threading passes...",
+        key::threadingPasses,
+        BOTH,
+        [](const Model& m) { return m.getMode() == Mode::Threading; },
+        'n');
+    b.add(
+        c,
         "Start / continue / pause multi-pass",
         key::ENTER,
         BOTH,
-        [](const Model& m) { return m.getMode() == Mode::MultiPass; },
+        [](const Model& m) {
+            return m.getMode() == Mode::MultiPass
+                || (m.getMode() == Mode::Threading && m.threadingPassesSet());
+        },
         'g');
     b.add(c, fmt::format("{} retraction direction...", a2), key::f2r, BOTH, nullptr, 'r');
     b.add(c, "Setup (measure backlash)", key::f2s, NONE, nullptr, 's');

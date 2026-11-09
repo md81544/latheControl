@@ -350,7 +350,25 @@ public:
     const MultiPassRange& getMultiPassRange() const;
     // Where the axes and memory slots are now, for resolveMultiPass()
     MultiPassPositions multiPassPositions() const;
-    // Enter, in the mode. If the axes aren't at the start, moves them there
+    // Threading passes: a multi-pass in threading mode, each cut a threading
+    // pass, always retracting (see MultiPassCut::Thread). Set up as for
+    // setMultiPassSetup() (with the retract on, whatever setup says), but only
+    // in threading mode with a thread chosen. Cleared on changing mode
+    // (including choosing a thread again), so Enter goes back to the slot
+    std::string setThreadingPassesSetup(const MultiPassSetup& setup);
+    const MultiPassSetup& getThreadingPassesSetup() const;
+    bool threadingPassesSet() const;
+    // The setup the threading passes dialog starts with: as for
+    // defaultMultiPassSetup(), from last time's, but if the thread has
+    // changed since, the infeed is the new thread's depth
+    MultiPassSetup threadingPassesDialogSetup() const;
+    // The chosen thread's depth (male or female, as chosen), if one is chosen
+    std::optional<double> getThreadDepthMm() const;
+    // The setup of the multi-pass that Enter runs: the threading passes' in
+    // threading mode, otherwise multi-pass mode's
+    const MultiPassSetup& activeMultiPassSetup() const;
+    // Enter, in multi-pass mode, or threading mode once threading passes are
+    // set up. If the axes aren't at the start, moves them there
     // (retracting X first, if the setup says so) and waits; once there,
     // starts the multi-pass. If it's paused, continues it; if it's running,
     // asks it to pause before the next pass (or cancels that). If it can't do
@@ -450,7 +468,13 @@ private:
     std::stack<double> m_axis1PreviousPositions;
     std::stack<double> m_axis2PreviousPositions;
     MultiPassSetup m_multiPassSetup;
+    // (The range is for whichever was set up last: multi-pass mode's, or the
+    // threading passes'. Each is set up on entering its mode, or after it)
     MultiPassRange m_multiPassRange;
+    MultiPassSetup m_threadingPassesSetup;
+    // The thread m_threadingPassesSetup was for (see threadingPassesDialogSetup())
+    std::string m_threadingPassesThread;
+    bool m_threadingPassesSet { false };
     MultiPass m_multiPass { *this };
     bool m_multiPassMovingToStart { false };
     // X is following Z, to correct the taper, in a multi-pass cut or return
@@ -510,6 +534,8 @@ private:
     double cutMaxSpeed() const override;
     // (Only in threading mode, with a thread chosen)
     std::string cutThreadTo(double position) override;
+    double cutStepSize() const override;
+    double feedStepSize() const override;
     double feedPosition() const override;
     bool feedMoving() const override;
     void feedMoveTo(double position) override;

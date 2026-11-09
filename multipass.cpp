@@ -212,8 +212,8 @@ std::string MultiPass::start(const MultiPassPlan& plan)
     if (!plan.feedManual && m_machine.isRetracted()) {
         return "Unretract first";
     }
-    if (!near(m_machine.cutPosition(), plan.cutStart)
-        || (!plan.feedManual && !near(m_machine.feedPosition(), plan.feedStart))) {
+    if (!cutAt(plan.cutStart)
+        || (!plan.feedManual && !feedAt(plan.feedStart))) {
         return "Go to the start position first";
     }
     m_plan = plan;
@@ -279,7 +279,7 @@ void MultiPass::update()
             if (m_machine.cutMoving()) {
                 return;
             }
-            if (!near(m_machine.cutPosition(), m_plan.cutEnd)) {
+            if (!cutAt(m_plan.cutEnd)) {
                 abandon("The cut stopped short of its end");
                 return;
             }
@@ -304,7 +304,7 @@ void MultiPass::update()
                 return;
             }
             m_machine.setCutSpeed(m_cutSpeed);
-            if (!near(m_machine.cutPosition(), m_plan.cutStart)) {
+            if (!cutAt(m_plan.cutStart)) {
                 abandon("The return stopped short of the start");
                 return;
             }
@@ -319,7 +319,7 @@ void MultiPass::update()
             if (feedMoving) {
                 return;
             }
-            if (!near(m_machine.feedPosition(), m_feedTarget)) {
+            if (!feedAt(m_feedTarget)) {
                 abandon("The feed stopped short");
                 return;
             }
@@ -381,6 +381,27 @@ const std::string& MultiPass::message() const
 const MultiPassPlan& MultiPass::plan() const
 {
     return m_plan;
+}
+
+namespace {
+
+// Whether an axis is at a position: within half a step of its motor (it can
+// only stop on a whole step), or else within the tolerance
+bool atPosition(double position, double target, double stepSize)
+{
+    return std::abs(position - target) < MultiPass::TOLERANCE + stepSize / 2.0;
+}
+
+} // end anonymous namespace
+
+bool MultiPass::cutAt(double target) const
+{
+    return atPosition(m_machine.cutPosition(), target, m_machine.cutStepSize());
+}
+
+bool MultiPass::feedAt(double target) const
+{
+    return atPosition(m_machine.feedPosition(), target, m_machine.feedStepSize());
 }
 
 bool MultiPass::isLastPass() const
@@ -472,7 +493,7 @@ void MultiPass::startFeed()
         startCut();
         return;
     }
-    if (near(m_machine.feedPosition(), m_feedTarget)) {
+    if (feedAt(m_feedTarget)) {
         // e.g. repeating the same cut
         startCut();
         return;

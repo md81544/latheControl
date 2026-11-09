@@ -200,11 +200,27 @@
            a threading pass is as by hand (Z's backlash taken up, then
            locked to the spindle); the return is at full speed, with Z's
            ramping on for it only; ThreadingAutoRetract is left alone; and a
-           thread doesn't update the current feature's Ø. Only in threading
-           mode, and nothing starts one yet (step 2), so the model's side
-           isn't tested yet
-        2. A threading dialog builds the plan: start and end Z (or memory
-           slots), the infeed per pass and the total depth
+           thread doesn't update the current feature's Ø
+        2. **Done:** threading passes run in threading mode (decided: the
+           thread, the spindle speed warnings and Z's settings are already
+           there). `Tab` `M` `N` opens the multi-pass dialog in a threading
+           form: the thread in the title, the infeed starting at the thread's
+           depth when the thread has changed, "infeed per pass", and the
+           retract always on. Then Enter moves to the start and runs them, as
+           in multi-pass mode; the display shows the thread, then the passes.
+           Choosing a thread again, or leaving the mode, clears them, so Enter
+           goes back to the memory slot. Z ramps for the move to the start
+           and the returns (full speed), and not for the passes. Tested with
+           the mock encoder (each pass starts at a whole revolution). Not yet
+           tried on the machine
+           - **Fixed:** tried in a FAKE build (M8, 0.05 per pass), it
+             stopped on the last pass with "the feed stopped short". M8's
+             depth (0.7668 mm) is 1840.3 of X's 1/2400 mm steps, so X stops
+             0.3 of a step from it, more than the engine allowed. The engine
+             now counts an axis as there within half a step
+             (`IMultiPassMachine::cutStepSize()` / `feedStepSize()`). It
+             could also have happened in multi-pass mode, e.g. with a typed
+             end diameter
         3. Carry on past the nominal depth, pass by pass. The M14 thread
            needed a few extra passes before the nut fitted, so pausing and
            continuing matters here (as the step-over-of-zero-with-pause

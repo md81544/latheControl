@@ -324,7 +324,8 @@ void Controller::processKey(int t)
                     break;
                 }
             case key::ENTER:
-                if (m_model->getMode() == Mode::MultiPass) {
+                if (m_model->getMode() == Mode::MultiPass
+                    || (m_model->getMode() == Mode::Threading && m_model->threadingPassesSet())) {
                     // Starts the multi-pass, or continues it after a pause
                     m_model->multiPassGo();
                     break;
@@ -744,22 +745,7 @@ void Controller::processKey(int t)
                     }
                     // As with all dialogs, stop all motors first
                     m_model->stopAllMotors();
-                    const auto axis = [this](int n, const char* defaultLabel) {
-                        return MultiPassDialogInfo::Axis {
-                            .label = m_model->config().read(
-                                fmt::format("Axis{}Label", n), defaultLabel),
-                            .unit = m_model->axisUnitName(n),
-                            .decimals = m_model->axisDecimals(n),
-                            .displayPerMm = m_model->toDisplayUnits(n, 1.0)
-                        };
-                    };
-                    MultiPassDialogInfo info;
-                    info.cut = axis(1, "Z");
-                    info.feed = axis(2, "X");
-                    info.positions = m_model->multiPassPositions();
-                    info.diameterKnown = m_model->getDiameterMm().has_value();
-                    info.feedRetractsOutwards
-                        = m_model->getRetractionDirection() == XDirection::Outwards;
+                    MultiPassDialogInfo info = multiPassDialogInfo();
                     info.setup
                         = defaultMultiPassSetup(m_model->getMultiPassSetup(), info.positions);
                     m_view->openMultiPassDialog(
@@ -776,6 +762,38 @@ void Controller::processKey(int t)
                                 pressAnyKey("Multi-pass", { error, "", "Press a key", "" }, [] {});
                             }
                         });
+                    break;
+                }
+            case key::threadingPasses: // a multi-pass of threading passes
+                {
+                    const Thread* thread = m_model->getThread();
+                    if (m_model->getMode() != Mode::Threading || !thread) {
+                        break;
+                    }
+                    // As with all dialogs, stop all motors first
+                    m_model->stopAllMotors();
+                    MultiPassDialogInfo info = multiPassDialogInfo();
+                    info.setup = m_model->threadingPassesDialogSetup();
+                    info.threading = MultiPassDialogInfo::Threading {
+                        .thread = fmt::format(
+                            "{} {}, pitch {}",
+                            thread->name,
+                            m_model->getThreadChoice().female ? "female" : "male",
+                            describePitch(*thread)),
+                        .depthMm = *m_model->getThreadDepthMm()
+                    };
+                    m_view->openMultiPassDialog(info, [this](std::optional<MultiPassSetup> setup) {
+                        if (!setup) {
+                            return;
+                        }
+                        // (The dialog only accepts a setup which can be
+                        // used, and nothing has moved since)
+                        if (const std::string error = m_model->setThreadingPassesSetup(*setup);
+                            !error.empty()) {
+                            const std::vector<std::string> text { error, "", "Press a key", "" };
+                            pressAnyKey("Threading passes", text, [] {});
+                        }
+                    });
                     break;
                 }
             case key::f2p: // taper mode
@@ -1128,6 +1146,24 @@ void Controller::listPicker(
         [onDone = std::move(onDone)](const Input::Return& rc) { onDone(rc.pickedItem); },
         "",
         std::move(listItems));
+}
+
+MultiPassDialogInfo Controller::multiPassDialogInfo() const
+{
+    const auto axis = [this](int n, const char* defaultLabel) {
+        return MultiPassDialogInfo::Axis { .label = m_model->config().read(
+                                               fmt::format("Axis{}Label", n), defaultLabel),
+                                           .unit = m_model->axisUnitName(n),
+                                           .decimals = m_model->axisDecimals(n),
+                                           .displayPerMm = m_model->toDisplayUnits(n, 1.0) };
+    };
+    MultiPassDialogInfo info;
+    info.cut = axis(1, "Z");
+    info.feed = axis(2, "X");
+    info.positions = m_model->multiPassPositions();
+    info.diameterKnown = m_model->getDiameterMm().has_value();
+    info.feedRetractsOutwards = m_model->getRetractionDirection() == XDirection::Outwards;
+    return info;
 }
 
 void Controller::pressAnyKey(

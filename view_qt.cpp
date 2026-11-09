@@ -1199,9 +1199,21 @@ void ViewQt::Impl::updateTextFromModel(const Model& model)
             }
         case Mode::Threading:
             {
-                updateThreadData(model);
-                misc4.text = "";
-                misc5.text = "";
+                if (model.threadingPassesSet()) {
+                    // The thread on the first line, then the passes
+                    updateThreadData(model);
+                    const std::string thread = misc1.text;
+                    updateMultiPassData(model);
+                    misc5.text = misc4.text;
+                    misc4.text = misc3.text;
+                    misc3.text = misc2.text;
+                    misc2.text = misc1.text;
+                    misc1.text = thread;
+                } else {
+                    updateThreadData(model);
+                    misc4.text = "";
+                    misc5.text = "";
+                }
                 // e.g. the spindle is too fast for the pitch
                 warning.text = model.getWarning();
                 if (!model.getWarning().empty()) {
@@ -1236,7 +1248,9 @@ void ViewQt::Impl::updateTextFromModel(const Model& model)
 void ViewQt::Impl::updateMultiPassData(const Model& model)
 {
     const MultiPass& mp = model.multiPass();
-    const MultiPassSetup& options = model.getMultiPassSetup();
+    const MultiPassSetup& options = model.activeMultiPassSetup();
+    // (Threading passes feed in, rather than step over)
+    const bool threading = model.getMode() == Mode::Threading;
     const MultiPassRange& range = model.getMultiPassRange();
     const std::string z = model.config().read("Axis1Label", "Z");
     const std::string x = model.config().read("Axis2Label", "X");
@@ -1265,15 +1279,19 @@ void ViewQt::Impl::updateMultiPassData(const Model& model)
     if (options.feedPerPass < MultiPass::TOLERANCE) {
         misc1.text = "Repeating the same cut";
     } else {
-        misc1.text = fmt::format("{} step-over {} per pass", x, xLength(options.feedPerPass));
+        misc1.text = fmt::format(
+            "{} {} {} per pass",
+            x,
+            threading ? "infeed" : "step-over",
+            xLength(options.feedPerPass));
     }
     if (options.pause) {
         misc1.text += ", pausing";
     }
-    if (options.retract) {
+    if (options.retract && !threading) {
         misc1.text += ", retracting";
     }
-    if (model.taperCorrection() != 0.0) {
+    if (model.taperCorrection() != 0.0 && !threading) {
         misc1.text += ", correcting taper";
     }
 
@@ -1297,7 +1315,7 @@ void ViewQt::Impl::updateMultiPassData(const Model& model)
             }
             break;
         case MultiPass::State::Cutting:
-            misc2.text = pass + ": cutting";
+            misc2.text = pass + (threading ? ": threading" : ": cutting");
             break;
         case MultiPass::State::Retracting:
             misc2.text = pass + ": retracting";
@@ -1318,7 +1336,7 @@ void ViewQt::Impl::updateMultiPassData(const Model& model)
             misc2.text = pass + ": unretracting";
             break;
         case MultiPass::State::Feeding:
-            misc2.text = pass + ": stepping over";
+            misc2.text = pass + (threading ? ": feeding in" : ": stepping over");
             break;
         case MultiPass::State::Finishing:
             misc2.text = "Finishing";
@@ -1336,7 +1354,8 @@ void ViewQt::Impl::updateMultiPassData(const Model& model)
     // How far X has stepped over since the first pass
     misc3.text = "";
     if (mp.pass() > 0) {
-        misc3.text = fmt::format("{} stepped over: {}", x, xLength(mp.fed()));
+        misc3.text
+            = fmt::format("{} {}: {}", x, threading ? "fed in" : "stepped over", xLength(mp.fed()));
         if (mp.totalPasses() != 0) {
             misc3.text += fmt::format(
                 " of {}", xLength(std::abs(mp.plan().feedEnd - mp.plan().feedStart)));

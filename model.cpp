@@ -559,6 +559,8 @@ void Model::changeMode(Mode mode)
     m_warning = "";
     m_threadingMoveInProgress = false;
     m_threadingPositionLost = false;
+    // (Set up afresh in the mode, if wanted: Enter goes back to the slot)
+    m_threadingPassesSet = false;
     setThreadingWarning("", false);
     m_mode = mode;
     m_input = "";
@@ -2185,6 +2187,90 @@ const MultiPassRange& Model::getMultiPassRange() const
     return m_multiPassRange;
 }
 
+namespace {
+
+// e.g. "M6 male": which thread a threading passes setup was for
+std::string threadKey(const Thread& thread, bool female)
+{
+    return thread.name + (female ? " female" : " male");
+}
+
+} // end anonymous namespace
+
+std::string Model::setThreadingPassesSetup(const MultiPassSetup& setup)
+{
+    if (m_mode != Mode::Threading) {
+        return "Threading passes are only in threading mode";
+    }
+    const Thread* thread = getThread();
+    if (!thread) {
+        return "Choose a thread first";
+    }
+    MultiPassSetup s = setup;
+    // (The return isn't locked to the spindle, so would drag the tool across
+    // the thread)
+    s.retract = true;
+    const MultiPassResolved resolved = resolveMultiPass(
+        s,
+        multiPassPositions(),
+        m_config.read("Axis1Label", "Z"),
+        m_config.read("Axis2Label", "X"));
+    if (!resolved.error.empty()) {
+        return resolved.error;
+    }
+    m_threadingPassesSetup = s;
+    m_threadingPassesThread = threadKey(*thread, m_threadChoice.female);
+    m_multiPassRange = resolved.range;
+    m_threadingPassesSet = true;
+    MGOLOG(
+        fmt::format(
+            "Threading passes set up for {}: Z {} to {}, X {} to {} by {}",
+            m_threadingPassesThread,
+            m_multiPassRange.cutStart,
+            m_multiPassRange.cutEnd,
+            m_multiPassRange.feedStart,
+            m_multiPassRange.feedEnd,
+            s.feedPerPass));
+    return {};
+}
+
+const MultiPassSetup& Model::getThreadingPassesSetup() const
+{
+    return m_threadingPassesSetup;
+}
+
+bool Model::threadingPassesSet() const
+{
+    return m_threadingPassesSet;
+}
+
+MultiPassSetup Model::threadingPassesDialogSetup() const
+{
+    MultiPassSetup s = defaultMultiPassSetup(m_threadingPassesSetup, multiPassPositions());
+    s.retract = true;
+    const Thread* thread = getThread();
+    if (thread && threadKey(*thread, m_threadChoice.female) != m_threadingPassesThread) {
+        // A different thread: in by its depth
+        s.feedEndMemory = std::nullopt;
+        s.feedInfeed = *getThreadDepthMm();
+    }
+    return s;
+}
+
+std::optional<double> Model::getThreadDepthMm() const
+{
+    const Thread* thread = getThread();
+    if (!thread) {
+        return std::nullopt;
+    }
+    return m_threadChoice.female ? thread->femaleDepth() : thread->maleDepth();
+}
+
+const MultiPassSetup& Model::activeMultiPassSetup() const
+{
+    return m_mode == Mode::Threading ? m_threadingPassesSetup : m_multiPassSetup;
+}
+
 MultiPassPositions Model::multiPassPositions() const
 {
     MultiPassPositions p;
@@ -2235,7 +2321,7 @@ void Model::multiPassMoveToStart()
     moveToSafely(
         m_multiPassRange.cutStart,
         m_multiPassRange.feedStart,
-        m_multiPassSetup.retractBeforeMoveToStart,
+        activeMultiPassSetup().retractBeforeMoveToStart,
         "to start",
         [this]() { m_multiPassMovingToStart = false; });
 }
@@ -2257,6 +2343,12 @@ void Model::moveToSafely(
     const MotionSequence::Step retractStep { [this]() { axis2Retract(); }, xStopped };
     const MotionSequence::Step zStep { [this, zTarget, status]() {
                                           m_axis1Status = status;
+                                          if (m_mode == Mode::Threading) {
+                                              // (Z doesn't ramp while threading,
+                                              // but this is at full speed. Off
+                                              // again at the end, or on a stop)
+                                              m_axis1Motor->enableRamping(true);
+                                          }
                                           m_axis1Motor->setSpeed(m_axis1Motor->getMaxRpm());
                                           m_axis1Motor->goToPosition(zTarget);
                                       },
@@ -2299,6 +2391,9 @@ void Model::moveToSafely(
         "Moving {}: Z {}, X {}{}", status, zTarget, xTarget, retractFirst ? " (retracting first)" : ""));
     m_motionSequence.start(
         std::move(steps), [this, oldZSpeed, oldXSpeed, onDone = std::move(onDone)]() {
+            if (m_mode == Mode::Threading) {
+                m_axis1Motor->enableRamping(false);
+            }
             m_axis1Motor->setSpeed(oldZSpeed);
             m_axis2Motor->setSpeed(oldXSpeed);
             if (onDone) {
@@ -2311,7 +2406,8 @@ void Model::moveToSafely(
 
 void Model::multiPassGo()
 {
-    if (m_mode != Mode::MultiPass || m_multiPassMovingToStart) {
+    const bool threading = m_mode == Mode::Threading && m_threadingPassesSet;
+    if ((m_mode != Mode::MultiPass && !threading) || m_multiPassMovingToStart) {
         return;
     }
     if (m_multiPass.state() == MultiPass::State::Paused) {
@@ -2340,22 +2436,26 @@ void Model::multiPassGo()
         multiPassMoveToStart();
         return;
     }
+    const MultiPassSetup& setup = activeMultiPassSetup();
     MultiPassPlan plan;
+    plan.cut = threading ? MultiPassCut::Thread : MultiPassCut::Feed;
     plan.cutStart = m_multiPassRange.cutStart;
     plan.cutEnd = m_multiPassRange.cutEnd;
     plan.feedStart = m_multiPassRange.feedStart;
     plan.feedEnd = m_multiPassRange.feedEnd;
-    plan.feedPerPass = std::abs(m_multiPassSetup.feedPerPass);
-    plan.retract = m_multiPassSetup.retract;
-    plan.pause = m_multiPassSetup.pause;
-    plan.feedCorrection = std::tan(taperCorrection() * DEG_TO_RAD);
+    plan.feedPerPass = std::abs(setup.feedPerPass);
+    plan.retract = threading || setup.retract;
+    plan.pause = setup.pause;
+    // (A thread's cut is locked to the spindle, so X can't follow Z)
+    plan.feedCorrection = threading ? 0.0 : std::tan(taperCorrection() * DEG_TO_RAD);
     if (const std::string error = m_multiPass.start(plan); !error.empty()) {
         m_warning = error;
         return;
     }
     m_warning = "";
     MGOLOG(fmt::format(
-        "Multi-pass started: Z {} to {}, X {} to {} by {}{}{}{} ({} passes)",
+        "{} started: Z {} to {}, X {} to {} by {}{}{}{} ({} passes)",
+        threading ? "Threading passes" : "Multi-pass",
         plan.cutStart,
         plan.cutEnd,
         plan.feedStart,
@@ -2430,6 +2530,16 @@ void Model::setCutSpeed(double speed)
 double Model::cutMaxSpeed() const
 {
     return m_axis1Motor->getMaxRpm();
+}
+
+double Model::cutStepSize() const
+{
+    return std::abs(m_axis1Motor->getConversionFactor());
+}
+
+double Model::feedStepSize() const
+{
+    return std::abs(m_axis2Motor->getConversionFactor());
 }
 
 std::string Model::cutThreadTo(double position)

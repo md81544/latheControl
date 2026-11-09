@@ -1160,7 +1160,11 @@ public:
         layout->setContentsMargins(16, 12, 16, 12);
         layout->setSpacing(10);
 
-        auto* title = new QLabel("Multi-pass", box);
+        auto* title = new QLabel(
+            m_info.threading
+                ? QString::fromStdString("Threading passes: " + m_info.threading->thread)
+                : QString("Multi-pass"),
+            box);
         title->setFont(titleFont);
         title->setStyleSheet(PROMPT_STYLE);
         layout->addWidget(title);
@@ -1171,8 +1175,11 @@ public:
         layout->addLayout(grid);
         const std::string& z = m_info.cut.label;
         const std::string& x = m_info.feed.label;
-        const std::string names[ROW_COUNT]
-            = { "Start", z + " end", x + " end", x + " end Ø", "Step-over" };
+        const std::string names[ROW_COUNT] = { "Start",
+                                               z + " end",
+                                               x + " end",
+                                               x + " end Ø",
+                                               m_info.threading ? "Infeed per pass" : "Step-over" };
         for (int r = 0; r < ROW_COUNT; ++r) {
             Row& row = m_rows[r];
             row.name = addLabel(box, grid, r, 0, names[r], m_labelFont);
@@ -1643,14 +1650,23 @@ private:
             return QString("[%1] %2: <span style='color: %3;'>%4</span>")
                 .arg(key, text, on ? "rgb(255, 255, 0)" : "rgb(190, 190, 190)", on ? "Yes" : "No");
         };
+        // (Threading always retracts: the return isn't locked to the spindle)
         m_options->setText(
             option("P", "Pause between passes", m_setup.pause) + "&nbsp;&nbsp;&nbsp;"
-            + option("R", "Retract between", m_setup.retract) + "<br>"
+            + (m_info.threading ? QString("Retracts between passes")
+                                : option("R", "Retract between", m_setup.retract))
+            + "<br>"
             + option("M", "Retract before moving to the start", m_setup.retractBeforeMoveToStart));
 
         if (r.error.empty()) {
             m_message->setStyleSheet(MP_HINT_STYLE);
-            m_message->setText("In the mode, Enter moves to the start; Enter again cuts");
+            m_message->setText(
+                QString::fromStdString(
+                    (m_info.threading
+                         ? "Thread depth " + format(m_info.feed, m_info.threading->depthMm, 1) + " "
+                             + m_info.feed.unit + ". "
+                         : std::string())
+                    + "In the mode, Enter moves to the start; Enter again cuts"));
         } else {
             m_message->setStyleSheet(MP_ERROR_STYLE);
             m_message->setText(QString::fromStdString(r.error));
@@ -1678,6 +1694,9 @@ private:
         if ((qtKey == Qt::Key_Left || qtKey == Qt::Key_Right) && sourceOf(m_current)) {
             cycleSource(qtKey == Qt::Key_Left ? -1 : 1);
             return true;
+        }
+        if (qtKey == Qt::Key_R && m_info.threading) {
+            return true; // (always on)
         }
         if (qtKey == Qt::Key_P || qtKey == Qt::Key_R || qtKey == Qt::Key_M) {
             bool& option = qtKey == Qt::Key_P ? m_setup.pause

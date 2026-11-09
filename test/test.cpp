@@ -1574,8 +1574,10 @@ public:
     void feedMoveTo(double position) override
     {
         log.push_back(fmt::format("feed {:.6g}", position));
-        m_feedTarget = position;
+        // (A motor stops on the nearest whole step)
+        m_feedTarget = feedStep == 0.0 ? position : std::round(position / feedStep) * feedStep;
     }
+    double feedStepSize() const override { return feedStep; }
     void retract() override
     {
         if (m_retracted) {
@@ -1625,6 +1627,8 @@ public:
     bool m_retracted { false };
     // If set, cutThreadTo() refuses with this
     std::string threadError;
+    // The feed axis's step size (0 to move anywhere)
+    double feedStep { 0.0 };
 
 private:
     std::optional<double> m_cutTarget;
@@ -1954,6 +1958,27 @@ TEST_CASE("MultiPass: stops if a move stops short")
     REQUIRE(machine.log.size() == 2); // (no return)
 }
 
+TEST_CASE("MultiPass: an end that isn't a whole number of steps")
+{
+    // e.g. M8's depth (0.7668 mm) with X's steps of 1/2400 mm (1840.3 of
+    // them): the last feed stops on the nearest step, 0.3 of a step short
+    FakeMultiPassMachine machine;
+    machine.feedStep = 1.0 / 2'400.0;
+    machine.m_feed = 5.0 - 2'000 * machine.feedStep; // (on a step)
+    mgo::MultiPass mp(machine);
+    auto plan = basicPlan();
+    plan.feedStart = machine.m_feed;
+    plan.feedEnd = plan.feedStart - 0.7668;
+    plan.feedPerPass = 0.05;
+    REQUIRE(mp.start(plan).empty());
+    REQUIRE(mp.totalPasses() == 16);
+    machine.run(mp);
+    INFO(mp.message());
+    REQUIRE(mp.state() == mgo::MultiPass::State::Finished);
+    REQUIRE(mp.pass() == 16);
+    REQUIRE(machine.feedPosition() == Approx(plan.feedEnd).margin(machine.feedStep / 2.0));
+}
+
 namespace {
 
 mgo::MultiPassPlan threadingPlan()
@@ -2094,6 +2119,36 @@ TEST_CASE("Model:   a multi-pass from Mem 1 to Mem 2")
     REQUIRE(!model.getIsAxis2Retracted());
     REQUIRE(model.getAxis1MotorSpeed() == Approx(200.0));
     REQUIRE(mgo::keyAllowedInCurrentMode(mgo::key::a, model));
+}
+
+TEST_CASE("Model:   a multi-pass whose X end isn't a whole number of steps")
+{
+    // (X's steps are 1 um here: 16.6 of them)
+    mgo::MockConfigReader config;
+    mgo::MockGpio gpio(false);
+    mgo::Model model(gpio, config);
+    model.initialise();
+    model.axis1SetSpeed(200.0);
+    model.axis2SetSpeed(100.0);
+    model.changeMode(mgo::Mode::MultiPass);
+    REQUIRE(model
+                .setMultiPassSetup({ .cutDistance = 0.1,
+                                     .feedInfeed = 0.0166,
+                                     .feedPerPass = 0.01,
+                                     .pause = false,
+                                     .retract = false })
+                .empty());
+    model.multiPassGo();
+    REQUIRE(model.multiPass().totalPasses() == 2);
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(20);
+    while (model.multiPass().inProgress()) {
+        REQUIRE(std::chrono::steady_clock::now() < deadline);
+        model.checkStatus();
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    INFO(model.multiPass().message());
+    REQUIRE(model.multiPass().state() == mgo::MultiPass::State::Finished);
+    REQUIRE(model.getWarning().empty());
 }
 
 namespace {
@@ -2668,6 +2723,7 @@ TEST_CASE("Threading: Z's backlash is taken up before a pass reverses")
             t.runFor(std::chrono::milliseconds(20));
         }
         REQUIRE(t.model.getAxis1MotorCurrentStep() == end);
+        INFO("Warning: " << t.model.getWarning());
         REQUIRE(t.model.getWarning().empty());
     }
 }
@@ -2822,6 +2878,141 @@ TEST_CASE("Model:   choosing a thread")
     // No threads: none chosen
     model.setThreads({});
     REQUIRE(model.getThread() == nullptr);
+}
+
+TEST_CASE("Model:   threading passes are set up only in threading mode")
+{
+    mgo::MockConfigReader config;
+    mgo::MockGpio gpio(false);
+    mgo::Model model(gpio, config);
+    model.initialise();
+    std::istringstream in("[M | ISO]\nM6, 6, 1\nM8, 8, 1.25\n");
+    std::vector<std::string> errors;
+    model.setThreads(mgo::readThreads(in, errors));
+    model.setThread({ 0, 0, false });
+    const mgo::MultiPassSetup setup { .cutDistance = 1.0, .feedInfeed = 0.6, .feedPerPass = 0.1 };
+    REQUIRE(!model.setThreadingPassesSetup(setup).empty());
+    REQUIRE(!model.threadingPassesSet());
+
+    model.changeMode(mgo::Mode::Threading);
+    // The dialog starts at the thread's depth (M6: 0.613 x 1 mm)
+    REQUIRE(
+        model.threadingPassesDialogSetup().feedInfeed == Approx(model.getThread()->maleDepth()));
+    REQUIRE(model.getThread()->maleDepth() == Approx(0.613).epsilon(0.001));
+    REQUIRE(model.threadingPassesDialogSetup().retract);
+    REQUIRE(model.setThreadingPassesSetup(setup).empty());
+    REQUIRE(model.threadingPassesSet());
+    // (Always retracting)
+    REQUIRE(model.getThreadingPassesSetup().retract);
+    REQUIRE(model.activeMultiPassSetup().feedInfeed == Approx(0.6));
+    REQUIRE(mgo::keyAllowedInCurrentMode(mgo::key::a, model));
+    // The same thread again: as last time
+    REQUIRE(model.threadingPassesDialogSetup().feedInfeed == Approx(0.6));
+
+    // Choosing a thread again (which changes mode) clears them; a different
+    // thread starts at its own depth (M8: 0.613 x 1.25 mm)
+    model.setThread({ 0, 1, false });
+    model.changeMode(mgo::Mode::Threading);
+    REQUIRE(!model.threadingPassesSet());
+    REQUIRE(
+        model.threadingPassesDialogSetup().feedInfeed == Approx(model.getThread()->maleDepth()));
+    REQUIRE(model.getThread()->pitchMm == Approx(1.25));
+    model.multiPassGo(); // (does nothing: not set up)
+    REQUIRE(!model.multiPass().inProgress());
+    REQUIRE(!model.multiPassMovingToStart());
+}
+
+TEST_CASE("Model:   threading passes, each locked to the spindle")
+{
+    ThreadingTestModel t(300);
+    REQUIRE(waitFor(
+        [&t] {
+            return !t.model.isAxis1MotorRunning();
+        },
+        std::chrono::seconds(5)));
+    t.model.checkStatus();
+    t.model.axis2SetSpeed(100.0);
+    // Z 1 mm (a revolution, at M6's pitch), X in 0.02 by 0.01: two passes
+    REQUIRE(
+        t.model
+            .setThreadingPassesSetup(
+                { .cutDistance = 1.0, .feedInfeed = 0.02, .feedPerPass = 0.01, .retract = false })
+            .empty());
+    const double zStart = t.model.getMultiPassRange().cutStart;
+    const double xEnd = t.model.getMultiPassRange().feedEnd;
+    t.model.multiPassGo();
+    REQUIRE(t.model.getWarning().empty());
+    REQUIRE(t.model.multiPass().inProgress());
+    REQUIRE(t.model.multiPass().plan().cut == mgo::MultiPassCut::Thread);
+    // (Retracting, though the setup said not to)
+    REQUIRE(t.model.multiPass().plan().retract);
+    REQUIRE(t.model.multiPass().totalPasses() == 2);
+    // Only Space, speeds and units while it runs
+    REQUIRE(!mgo::keyAllowedInCurrentMode(mgo::key::a, t.model));
+
+    // Each pass starts at a whole revolution of the spindle. While Z follows
+    // the spindle, its steps from the start give the pulses since the pass
+    // started, so any reading during the cut shows where it started (to
+    // within a few steps, as Z and the spindle are read one after the other).
+    // A pass that wasn't synchronised could start up to half a revolution
+    // (350 pulses) away
+    const long startStep = t.model.getAxis1MotorCurrentStep();
+    std::map<int, int64_t> passStarts; // (by pass)
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(20);
+    while (t.model.multiPass().inProgress()) {
+        REQUIRE(std::chrono::steady_clock::now() < deadline);
+        t.model.checkStatus();
+        const int pass = t.model.multiPass().pass();
+        const int64_t pulses = t.model.getSpindlePulses();
+        const long steps = std::abs(t.model.getAxis1MotorCurrentStep() - startStep);
+        if (t.model.multiPass().state() == mgo::MultiPass::State::Cutting && steps > 50
+            && steps < 950 && !passStarts.contains(pass)) {
+            passStarts[pass] = pulses
+                - std::lround(static_cast<double>(steps) / ThreadingTestModel::STEPS_PER_PULSE);
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    INFO(t.model.multiPass().message());
+    REQUIRE(t.model.multiPass().state() == mgo::MultiPass::State::Finished);
+    REQUIRE(passStarts.size() == 2);
+    for (const auto& [pass, pulses] : passStarts) {
+        INFO("Pass " << pass << " started at pulse " << pulses);
+        REQUIRE(ThreadingTestModel::pulsesFromWholeRev(pulses) <= 10);
+    }
+    REQUIRE(t.model.getAxis1MotorPosition() == Approx(zStart).margin(0.0001));
+    REQUIRE(t.model.getAxis2MotorPosition() == Approx(xEnd).margin(0.0001));
+    REQUIRE(!t.model.getIsAxis2Retracted());
+    REQUIRE(t.model.getWarning().empty());
+    // Still in threading mode, ready to go again
+    REQUIRE(t.model.getMode() == mgo::Mode::Threading);
+    REQUIRE(t.model.threadingPassesSet());
+}
+
+TEST_CASE("Model:   threading passes stop if a pass can't start")
+{
+    ThreadingTestModel t(300);
+    REQUIRE(t.model
+                .setThreadingPassesSetup(
+                    { .cutDistance = 1.0, .feedInfeed = 0.02, .feedPerPass = 0.01 })
+                .empty());
+    t.model.axis2SetSpeed(100.0);
+    // Too fast for Z to follow at this pitch (over 800 rpm)
+    t.gpio.setRotaryEncoderDelayMicroseconds(50);
+    REQUIRE(waitFor(
+        [&t] {
+            return t.model.getRotaryEncoderRpm() > 1'000.f;
+        },
+        std::chrono::seconds(5)));
+    t.model.multiPassGo();
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    while (t.model.multiPass().inProgress()) {
+        REQUIRE(std::chrono::steady_clock::now() < deadline);
+        t.model.checkStatus();
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+    REQUIRE(t.model.multiPass().state() == mgo::MultiPass::State::Idle);
+    INFO(t.model.getWarning());
+    REQUIRE(t.model.getWarning().find("too fast") != std::string::npos);
 }
 
 TEST_CASE("MultiPass: unretracts before pausing")

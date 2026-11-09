@@ -33,6 +33,12 @@ public:
     // else why not (e.g. the spindle isn't turning). If it's stopped part
     // way (e.g. the cut axis couldn't keep up), it ends short of position
     virtual std::string cutThreadTo(double position) = 0;
+    // The size of a step of each axis's motor (in mm; 0 if it can move
+    // anywhere). An axis can only stop on a whole step, so it counts as at a
+    // position if it's within half a step: e.g. a thread's depth is seldom a
+    // whole number of steps
+    virtual double cutStepSize() const { return 0.0; }
+    virtual double feedStepSize() const { return 0.0; }
 
     // (Not used if the feed is manual)
     virtual double feedPosition() const = 0;
@@ -253,6 +259,9 @@ public:
     const MultiPassPlan& plan() const;
 
 private:
+    // Whether the cut or feed axis is at a position (see cutStepSize())
+    bool cutAt(double target) const;
+    bool feedAt(double target) const;
     bool isLastPass() const;
     // Where the next step on starts from: the feed axis's position (or, for
     // a manual feed, where it should be)

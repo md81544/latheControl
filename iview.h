@@ -55,6 +55,14 @@ struct MultiPassDialogInfo {
     bool feedRetractsOutwards { true };
     // The setup to start with
     MultiPassSetup setup;
+    // For threading passes (in threading mode): the thread, as shown (e.g.
+    // "M14 male, pitch 2 mm"), and its depth in mm. The retract is then
+    // always on
+    struct Threading {
+        std::string thread;
+        double depthMm { 0.0 };
+    };
+    std::optional<Threading> threading;
 };
 
 class IView {
