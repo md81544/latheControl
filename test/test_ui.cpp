@@ -43,14 +43,16 @@ QWidget* mainWindow()
     return nullptr;
 }
 
-// Arranges for fn to be called with the modal dialog once it is showing.
+// Arranges for fn to be called with the modal dialog once it is showing,
+// and active (until then, its keyboard focus may not be where it will be).
 // (Dialogs block in their own event loop, so this must be set up beforehand.)
 void whenDialogShows(std::function<void(QWidget*)> fn)
 {
     auto* timer = new QTimer();
     timer->setInterval(10);
     QObject::connect(timer, &QTimer::timeout, [timer, fn]() {
-        if (QWidget* dialog = QApplication::activeModalWidget()) {
+        QWidget* dialog = QApplication::activeModalWidget();
+        if (dialog && dialog->isActiveWindow()) {
             timer->stop();
             timer->deleteLater();
             fn(dialog);
@@ -1225,4 +1227,98 @@ TEST_CASE("UI: the current feature is shown")
         QTest::qWait(150);
         w->grab().save(QString::fromStdString(std::string(dir) + "/main_feature.png"));
     }
+}
+
+TEST_CASE("UI: an OK / Cancel dialog")
+{
+    TestModel tm;
+    mgo::ViewQt view;
+    view.initialise(tm.model);
+    const auto ask = [&view](Qt::Key k) {
+        whenDialogShows([k](QWidget* dialog) { QTest::keyClick(inputWidget(dialog), k); });
+        return !getInput(view, mgo::Input::Type::OkCancel, "Sure?", { "Really?" }).cancelled;
+    };
+    REQUIRE(ask(Qt::Key_Return));
+    REQUIRE(ask(Qt::Key_Y));
+    REQUIRE(!ask(Qt::Key_Escape));
+    REQUIRE(!ask(Qt::Key_N));
+}
+
+TEST_CASE("UI: zeroing or setting a position asks before clearing the current feature")
+{
+    FeatureTestModel tm;
+    mgo::Controller controller(&tm.model);
+    QWidget* w = mainWindow();
+    REQUIRE(w);
+    tm.model.setAxis2Position(7.5);
+    tm.model.diameterIsSet();
+    tm.model.setAxis1Position(3.0);
+    tm.model.markWorkEnd();
+    bool asked = false;
+    const auto answer = [&asked](Qt::Key k) {
+        asked = false;
+        whenDialogShows([&asked, k](QWidget* dialog) {
+            asked = true;
+            QTest::keyClick(inputWidget(dialog), k);
+        });
+    };
+
+    // X Z: cancelled, nothing changes
+    answer(Qt::Key_Escape);
+    press(w, controller, Qt::Key_X);
+    press(w, controller, Qt::Key_Z);
+    REQUIRE(asked);
+    REQUIRE(tm.model.getAxis2MotorPosition() == Approx(7.5));
+    REQUIRE(tm.model.getFeatureDiameterMm() == Approx(15.0));
+
+    // Z Z: going ahead zeroes Z, clearing the work's end (but not the diameter)
+    answer(Qt::Key_Return);
+    press(w, controller, Qt::Key_Z);
+    press(w, controller, Qt::Key_Z);
+    REQUIRE(asked);
+    REQUIRE(tm.model.getAxis1MotorPosition() == Approx(0.0));
+    REQUIRE(!tm.model.getWorkEndZ());
+    REQUIRE(tm.model.getFeatureDiameterMm() == Approx(15.0));
+
+    // ...after which Z Z doesn't ask (there's nothing of the feature to
+    // lose). (No answer is set up for it: press() would fail if it asked, as
+    // the dialog would stay open)
+    tm.model.setAxis1Position(2.0);
+    press(w, controller, Qt::Key_Z);
+    press(w, controller, Qt::Key_Z);
+    REQUIRE(tm.model.getAxis1MotorPosition() == Approx(0.0));
+
+    // X S, set as a diameter: the diameter's replaced, without asking (as
+    // above, press() would fail if it asked)
+    whenDialogShows([](QWidget* dialog) {
+        typeInto(dialog, "14");
+        QTest::keyClick(inputWidget(dialog), Qt::Key_D, Qt::AltModifier);
+        QTest::keyClick(inputWidget(dialog), Qt::Key_Return);
+    });
+    press(w, controller, Qt::Key_X);
+    press(w, controller, Qt::Key_S);
+    REQUIRE(tm.model.getFeatureDiameterMm() == Approx(14.0));
+
+    // X S, not as a diameter: asks; N cancels (nothing's set)
+    whenDialogShows([&answer](QWidget* dialog) {
+        typeInto(dialog, "3");
+        answer(Qt::Key_N);
+        QTest::keyClick(inputWidget(dialog), Qt::Key_Return);
+    });
+    press(w, controller, Qt::Key_X);
+    press(w, controller, Qt::Key_S);
+    REQUIRE(asked);
+    REQUIRE(tm.model.getAxis2MotorPosition() == Approx(7.0));
+    REQUIRE(tm.model.getFeatureDiameterMm() == Approx(14.0));
+    // Y sets it, clearing the diameter
+    whenDialogShows([&answer](QWidget* dialog) {
+        typeInto(dialog, "3");
+        answer(Qt::Key_Y);
+        QTest::keyClick(inputWidget(dialog), Qt::Key_Return);
+    });
+    press(w, controller, Qt::Key_X);
+    press(w, controller, Qt::Key_S);
+    REQUIRE(asked);
+    REQUIRE(tm.model.getAxis2MotorPosition() == Approx(3.0));
+    REQUIRE(!tm.model.getFeatureDiameterMm());
 }

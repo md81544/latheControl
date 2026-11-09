@@ -508,6 +508,10 @@ change.
       work's end; features part way along wait for "Single feature vs many".
       For the same reason, a multi-pass only updates the Ø if its cut
       started at (or off) the work's end
+    - **Done:** a re-zero or a position set which would clear any of the
+      feature asks first (an OK / Cancel dialog, listing what it would
+      clear). Not set as a diameter, as that replaces the Ø rather than
+      losing it, nor faults (nothing to ask) or the menu's Clear
     - Still to do from below: the warning when the tool goes inside the Ø
       with the spindle running, tools (and clearing on a tool change), and
       chamfers / radii from the feature Temporary: kept

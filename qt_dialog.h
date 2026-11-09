@@ -28,6 +28,7 @@ namespace dialog {
 //   it), Enter to accept, Esc to cancel. Numeric only accepts a number.
 // - ListPicker: Up/Down to choose from listItems, Enter to accept, Esc to cancel.
 // - PressAnyKey: any key closes it.
+// - OkCancel: Enter or Y accepts, Esc or N cancels.
 // Lines of additionalText containing "&x" define option hotkeys: pressing x
 // (or Alt-x, which is required in a Text dialog) toggles that option, shown
 // with a tick, and selected options are returned in optionsSelected.

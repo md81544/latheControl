@@ -196,13 +196,7 @@ public:
             const QPoint centre = parent->mapToGlobal(parent->rect().center());
             move(centre - rect().center());
         }
-        if (m_edit) {
-            m_edit->setFocus();
-        } else if (m_list) {
-            m_list->setFocus();
-        } else {
-            setFocus();
-        }
+        focusInput();
     }
 
     Input::Return inputResult() const
@@ -232,6 +226,22 @@ public:
     }
 
 protected:
+    // (Sometimes, as the dialog's shown or activated, the focus ends up on the
+    // dialog itself rather than its entry box, so typing is lost: put it back)
+    void showEvent(QShowEvent* event) override
+    {
+        QDialog::showEvent(event);
+        focusInput();
+    }
+
+    void changeEvent(QEvent* event) override
+    {
+        QDialog::changeEvent(event);
+        if (event->type() == QEvent::ActivationChange && isActiveWindow()) {
+            focusInput();
+        }
+    }
+
     bool eventFilter(QObject* watched, QEvent* event) override
     {
         if (event->type() == QEvent::KeyPress && handleKey(static_cast<QKeyEvent*>(event))) {
@@ -248,6 +258,18 @@ protected:
     }
 
 private:
+    // The keyboard focus to the entry box or list, if there is one
+    void focusInput()
+    {
+        if (m_edit) {
+            m_edit->setFocus();
+        } else if (m_list) {
+            m_list->setFocus();
+        } else {
+            setFocus();
+        }
+    }
+
     // Returns true if the key press has been dealt with
     bool handleKey(QKeyEvent* event)
     {
@@ -263,6 +285,14 @@ private:
         if (m_type == Input::Type::PressAnyKey) {
             if (!isModifierKey(qtKey)) {
                 accept();
+            }
+            return true;
+        }
+        if (m_type == Input::Type::OkCancel) {
+            if (qtKey == Qt::Key_Y) {
+                accept();
+            } else if (qtKey == Qt::Key_N) {
+                reject();
             }
             return true;
         }

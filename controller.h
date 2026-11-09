@@ -65,6 +65,20 @@ private:
         std::string_view prompt,
         std::vector<std::string> additionalText,
         std::function<void()> onDone);
+    // Enter (or Y) calls onOk; Esc (or N) cancels
+    void okCancel(
+        std::string_view prompt,
+        std::vector<std::string> additionalText,
+        std::function<void()> onOk);
+    // Does action at once if it wouldn't clear any of the current feature (its
+    // diameter, if diameter, and the work's end, if workEnd, as far as either
+    // is set); otherwise only once the user agrees. what (e.g. "Zeroing X")
+    // says what's about to clear it
+    void confirmFeatureLoss(
+        const std::string& what,
+        bool diameter,
+        bool workEnd,
+        std::function<void()> action);
 };
 
 } // end namespace

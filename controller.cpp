@@ -594,18 +594,32 @@ void Controller::processKey(int t)
                 }
             case key::a1_z:
                 {
-                    m_model->axis1Zero();
+                    confirmFeatureLoss(
+                        "Zeroing " + m_model->config().read("Axis1Label", "Z"),
+                        false,
+                        true,
+                        [this] {
+                            m_model->axis1Zero();
+                        });
                     break;
                 }
             case key::a2_z:
                 {
-                    m_model->axis2Zero();
+                    confirmFeatureLoss(
+                        "Zeroing " + m_model->config().read("Axis2Label", "X"),
+                        true,
+                        false,
+                        [this] {
+                            m_model->axis2Zero();
+                        });
                     break;
                 }
             case key::aAll_z:
                 {
-                    m_model->axis1Zero();
-                    m_model->axis2Zero();
+                    confirmFeatureLoss("Zeroing both axes", true, true, [this] {
+                        m_model->axis1Zero();
+                        m_model->axis2Zero();
+                    });
                     break;
                 }
             case key::a1_g:
@@ -849,17 +863,26 @@ void Controller::processKey(int t)
                         axisName + " position set" + unitsSuffix(1),
                         { "[&A] adjust (keeps memory slots)" },
                         0.0,
-                        [this](const NumericInputReturn& result) {
+                        [this, axisName](const NumericInputReturn& result) {
                             if (result.cancelled) {
                                 return;
                             }
-                            m_model->setAxis1Position(m_model->fromDisplayUnits(1, result.value));
-                            // This will invalidate any memorised Z positions, so we clear them
-                            // unless the user specified not to with 'A'
-                            if (!result.optionsSelected.contains('a')) {
-                                m_model->clearAllAxis1Memories();
-                                m_model->clearWorkEnd();
-                            }
+                            // (Adjusting keeps the memory slots, and the work's end)
+                            const bool adjust = result.optionsSelected.contains('a');
+                            confirmFeatureLoss(
+                                "Setting " + axisName + "'s position",
+                                false,
+                                !adjust,
+                                [this, result, adjust] {
+                                    m_model->setAxis1Position(
+                                        m_model->fromDisplayUnits(1, result.value));
+                                    // This will invalidate any memorised Z positions, so we
+                                    // clear them unless the user specified not to with 'A'
+                                    if (!adjust) {
+                                        m_model->clearAllAxis1Memories();
+                                        m_model->clearWorkEnd();
+                                    }
+                                });
                         });
                     break;
                 }
@@ -871,25 +894,33 @@ void Controller::processKey(int t)
                         axisName + " position set" + unitsSuffix(2),
                         { "[&D] set as diameter", "[&A] adjusts (keeps memory slots)" },
                         0.0,
-                        [this](const NumericInputReturn& result) {
+                        [this, axisName](const NumericInputReturn& result) {
                             if (result.cancelled) {
                                 return;
                             }
-                            double position = m_model->fromDisplayUnits(2, result.value);
                             const bool diameter = result.optionsSelected.contains('d');
-                            if (diameter) {
-                                position /= 2;
-                            }
-                            m_model->setAxis2Position(position);
-                            // (After setting the position, which clears any diameter)
-                            if (diameter) {
-                                m_model->diameterIsSet();
-                            }
-                            // This will invalidate any memorised X positions, so we clear them
-                            // unless the user specified not to with 'A'
-                            if (!result.optionsSelected.contains('a')) {
-                                m_model->clearAllAxis2Memories();
-                            }
+                            // (Set as a diameter, the feature's is replaced by the
+                            // one just measured, rather than lost)
+                            confirmFeatureLoss(
+                                "Setting " + axisName + "'s position (not as a diameter)",
+                                !diameter,
+                                false,
+                                [this, result, diameter] {
+                                    double position = m_model->fromDisplayUnits(2, result.value);
+                                    if (diameter) {
+                                        position /= 2;
+                                    }
+                                    m_model->setAxis2Position(position);
+                                    // (After setting the position, which clears any diameter)
+                                    if (diameter) {
+                                        m_model->diameterIsSet();
+                                    }
+                                    // This will invalidate any memorised X positions, so we
+                                    // clear them unless the user specified not to with 'A'
+                                    if (!result.optionsSelected.contains('a')) {
+                                        m_model->clearAllAxis2Memories();
+                                    }
+                                });
                         });
                     break;
                 }
@@ -1093,6 +1124,56 @@ void Controller::pressAnyKey(
         prompt,
         std::move(additionalText),
         [onDone = std::move(onDone)](const Input::Return&) { onDone(); });
+}
+
+void Controller::okCancel(
+    std::string_view prompt,
+    std::vector<std::string> additionalText,
+    std::function<void()> onOk)
+{
+    m_model->stopAllMotors();
+    m_view->openInput(
+        Input::Type::OkCancel,
+        prompt,
+        std::move(additionalText),
+        [onOk = std::move(onOk)](const Input::Return& rc) {
+            if (!rc.cancelled) {
+                onOk();
+            }
+        });
+}
+
+void Controller::confirmFeatureLoss(
+    const std::string& what,
+    bool diameter,
+    bool workEnd,
+    std::function<void()> action)
+{
+    const auto featureDiameter = diameter ? m_model->getFeatureDiameterMm() : std::nullopt;
+    const auto featureWorkEnd = workEnd ? m_model->getWorkEndZ() : std::nullopt;
+    if (!featureDiameter && !featureWorkEnd) {
+        action();
+        return;
+    }
+    const auto length = [this](int axis, double mm) {
+        return fmt::format(
+            "{:.{}f} {}",
+            m_model->toDisplayUnits(axis, mm),
+            m_model->axisDecimals(axis),
+            m_model->axisUnitName(axis));
+    };
+    std::vector<std::string> lines { what + " clears the current feature's:" };
+    if (featureDiameter) {
+        lines.push_back("    Ø " + length(2, *featureDiameter));
+    }
+    if (featureWorkEnd) {
+        lines.push_back(
+            "    end, " + m_model->config().read("Axis1Label", "Z") + " "
+            + length(1, *featureWorkEnd));
+    }
+    lines.push_back("");
+    lines.push_back("Enter (or Y): go ahead   Esc (or N): cancel");
+    okCancel("Clear the current feature?", std::move(lines), std::move(action));
 }
 
 } // end namespace
