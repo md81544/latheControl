@@ -429,6 +429,9 @@ struct ViewQt::Impl {
     QElapsedTimer hintTimer;
     void drawLeaderHints(std::vector<DrawItem>& frame, const Model& model) const;
 
+    // The current feature (diameter and work end), when either is set
+    void drawFeature(std::vector<DrawItem>& frame, const Model& model) const;
+
     std::vector<TextItem> memoryLabel;
     TextItem axis1MemoryLabel;
     TextItem axis2MemoryLabel;
@@ -772,6 +775,49 @@ void ViewQt::Impl::drawMenu(std::vector<DrawItem>& frame, const Model& model) co
                                "Space stops all motors. Rapids: Alt+arrow" });
 }
 
+void ViewQt::Impl::drawFeature(std::vector<DrawItem>& frame, const Model& model) const
+{
+    const auto diameter = model.getFeatureDiameterMm();
+    const auto workEnd = model.getWorkEndZ();
+    if (!model.currentFeatureEnabled() || (!diameter && !workEnd)) {
+        return;
+    }
+    // Below the memory slots, to the right of the mode's lines (which can
+    // reach about x = 1020)
+    constexpr float boxX = 1010.f;
+    constexpr float boxY = 380.f;
+    constexpr float boxWidth = 255.f;
+    constexpr float boxHeight = 112.f;
+    constexpr float margin = 12.f;
+    constexpr int fontSize = 26;
+    const QColor grey(128, 128, 128);
+    const QColor value(0, 192, 0);
+    frame.push_back(
+        RectItem { QRectF(boxX, boxY, boxWidth, boxHeight), QColor(20, 20, 20), grey });
+    frame.push_back(TextItem { QPointF(boxX + margin, boxY + 8.f), 18, grey, "Current feature" });
+    const auto line = [&](float y, const std::string& label, const std::string& text) {
+        frame.push_back(TextItem { QPointF(boxX + margin, y), fontSize, grey, label });
+        TextItem item { QPointF(boxX + margin, y), fontSize, text == "-" ? grey : value, text };
+        item.rightAlignWidth = boxWidth - 2.f * margin;
+        frame.push_back(item);
+    };
+    const auto length = [&model](int axis, double mm) {
+        const int decimals = model.axisDecimals(axis);
+        double v = model.toDisplayUnits(axis, mm);
+        // (Not "-0.00")
+        if (std::abs(v) < 0.5 * std::pow(10.0, -decimals)) {
+            v = 0.0;
+        }
+        return fmt::format("{:.{}f} {}", v, decimals, model.axisUnitName(axis));
+    };
+    line(boxY + 36.f, "Ø", diameter ? length(2, *diameter) : "-");
+    // (The work's end, as "Z 0.00 mm": not "Z end", which in the multi-pass
+    // dialog is the cut's end)
+    line(boxY + 72.f,
+         "End",
+         workEnd ? model.config().read("Axis1Label", "Z") + " " + length(1, *workEnd) : "-");
+}
+
 void ViewQt::Impl::drawLeaderHints(std::vector<DrawItem>& frame, const Model& model) const
 {
     // In the same place as the menu
@@ -973,6 +1019,7 @@ void ViewQt::updateDisplay(const Model& model)
         if (model.getMode() != Mode::None) {
             draw(d.mode);
         }
+        d.drawFeature(frame, model);
         draw(d.misc1);
         draw(d.misc2);
         draw(d.misc3);

@@ -1090,3 +1090,139 @@ int main(int argc, char* argv[])
     }
     return Catch::Session().run(argc, argv);
 }
+
+namespace {
+
+// With the current feature enabled
+struct FeatureTestModel {
+    MapConfigReader config { { { "CurrentFeature", "true" } } };
+    mgo::MockGpio gpio { false };
+    mgo::Model model { gpio, config };
+};
+
+} // end anonymous namespace
+
+TEST_CASE("UI: multi-pass dialog, from the current feature")
+{
+    TestModel tm;
+    mgo::ViewQt view;
+    view.initialise(tm.model);
+    auto info = multiPassInfo();
+    // Not at a memory slot, with the feature set (the work's end at Z 0, 15
+    // diameter): the defaults start from it
+    info.positions.cutHere = 20.0;
+    info.positions.featureWorkEnd = 0.0;
+    info.positions.featureFeed = 7.5;
+    info.positions.featureClearance = 0.5;
+    info.setup = mgo::defaultMultiPassSetup({}, info.positions);
+    REQUIRE(info.setup.startFeature);
+
+    // Z 20 into the work from its end, to 14 diameter, 0.1 per pass
+    whenDialogShows([](QWidget* dialog) {
+        typeInto(dialog, "-20");
+        key(dialog, Qt::Key_Down, 2); // (to X's end diameter)
+        typeInto(dialog, "14");
+        key(dialog, Qt::Key_Down);
+        typeInto(dialog, "0.1");
+        snapshot(dialog, "multipass_feature");
+        key(dialog, Qt::Key_Return);
+    });
+    auto setup = multiPassDialog(view, info);
+    REQUIRE(setup.has_value());
+    REQUIRE(setup->startFeature);
+    REQUIRE(!setup->startMemory);
+    REQUIRE(setup->cutDistance == Approx(-20.0));
+    REQUIRE(setup->feedInfeed == Approx(0.5));
+    const auto r = mgo::resolveMultiPass(*setup, info.positions);
+    REQUIRE(r.error.empty());
+    REQUIRE(r.range.cutStart == Approx(0.5));
+    REQUIRE(r.range.cutEnd == Approx(-20.0));
+    REQUIRE(r.range.feedEnd == Approx(7.0));
+
+    // The start's choices: Here, Feature, then the memory slots
+    info.setup = *setup;
+    whenDialogShows([](QWidget* dialog) {
+        key(dialog, Qt::Key_Up, 3); // (to the start)
+        key(dialog, Qt::Key_Left);
+        key(dialog, Qt::Key_Return);
+    });
+    setup = multiPassDialog(view, info);
+    REQUIRE(setup.has_value());
+    REQUIRE(!setup->startFeature);
+    REQUIRE(!setup->startMemory);
+    whenDialogShows([](QWidget* dialog) {
+        key(dialog, Qt::Key_Up, 3);
+        key(dialog, Qt::Key_Right);
+        key(dialog, Qt::Key_Return);
+    });
+    setup = multiPassDialog(view, info);
+    REQUIRE(setup.has_value());
+    REQUIRE(!setup->startFeature);
+    REQUIRE(setup->startMemory == 0u);
+}
+
+TEST_CASE("UI: the current feature through the controller")
+{
+    FeatureTestModel tm;
+    mgo::Controller controller(&tm.model);
+    QWidget* w = mainWindow();
+    REQUIRE(w);
+
+    // Set X as a 15 diameter: that's the feature's
+    whenDialogShows([](QWidget* dialog) {
+        typeInto(dialog, "15");
+        QTest::keyClick(inputWidget(dialog), Qt::Key_D, Qt::AltModifier);
+        QTest::keyClick(inputWidget(dialog), Qt::Key_Return);
+    });
+    press(w, controller, Qt::Key_X);
+    press(w, controller, Qt::Key_S);
+    REQUIRE(tm.model.getFeatureDiameterMm() == Approx(15.0));
+
+    // Z E marks the work's end
+    press(w, controller, Qt::Key_Z);
+    press(w, controller, Qt::Key_E);
+    REQUIRE(tm.model.getWorkEndZ() == Approx(0.0));
+
+    // The menu's Feature, Clear
+    press(w, controller, Qt::Key_Tab);
+    press(w, controller, Qt::Key_F);
+    press(w, controller, Qt::Key_C);
+    REQUIRE(!tm.model.getFeatureDiameterMm());
+    REQUIRE(!tm.model.getWorkEndZ());
+}
+
+TEST_CASE("UI: the current feature is shown")
+{
+    FeatureTestModel tm;
+    tm.model.initialise();
+    // (Any main windows from earlier tests are hidden, so this one's found)
+    for (QWidget* other : QApplication::topLevelWidgets()) {
+        if (other->windowTitle() == "Lathe Control") {
+            other->hide();
+        }
+    }
+    mgo::ViewQt view;
+    view.initialise(tm.model);
+    tm.model.setAxis2Position(7.5);
+    tm.model.diameterIsSet();
+    tm.model.markWorkEnd();
+    // In multi-pass mode, whose lines run alongside it
+    tm.model.changeMode(mgo::Mode::MultiPass);
+    REQUIRE(tm.model
+                .setMultiPassSetup({ .startFeature = true,
+                                     .cutDistance = -20.0,
+                                     .feedInfeed = 0.5,
+                                     .feedPerPass = 0.1,
+                                     .retract = true })
+                .empty());
+    tm.model.axis2GoToPosition(9.0);
+    tm.model.axis2Wait();
+    view.updateDisplay(tm.model);
+    QWidget* w = mainWindow();
+    REQUIRE(w);
+    // (With LC_SNAPSHOT_DIR set, an image of the main window, to look at)
+    if (const char* dir = std::getenv("LC_SNAPSHOT_DIR")) {
+        QTest::qWait(150);
+        w->grab().save(QString::fromStdString(std::string(dir) + "/main_feature.png"));
+    }
+}

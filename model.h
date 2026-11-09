@@ -162,13 +162,35 @@ public:
 
     void repeatLastRelativeMove(Axis axis);
     // The X position has been set as a diameter (so X is now measured from
-    // the centre). This lasts until X is zeroed, or its position is set again
+    // the centre). This lasts until X is zeroed, or its position is set again.
+    // As the tool is on the surface just measured, its diameter becomes the
+    // current feature's (if the current feature is enabled)
     void diameterIsSet();
     // The work's diameter at the tool (twice the X position), once the X
     // position has been set as a diameter (so X is measured from the centre);
     // nullopt until then. While X is retracted, it's the diameter X will
     // return to (so it doesn't change as X retracts and unretracts)
     std::optional<double> getDiameterMm() const;
+
+    // The current feature (lathe; enabled by CurrentFeature in the config): a
+    // remembered diameter of the surface being worked on, and the Z of the
+    // work's end (e.g. after facing). Each is optional, and kept for this
+    // session only. Unlike getDiameterMm(), the diameter doesn't change as X
+    // moves. Each is cleared when its axis's position is lost or changed: a
+    // re-zero, a motor fault, or (by the controller, unless adjusting) a
+    // position set. The diameter also goes when X is no longer measured from
+    // the centre. A multi-pass which cuts from the work's end sets the
+    // diameter to the one it finished at.
+    bool currentFeatureEnabled() const;
+    std::optional<double> getFeatureDiameterMm() const;
+    std::optional<double> getWorkEndZ() const;
+    // Records the diameter at the tool (as getDiameterMm()) as the feature's.
+    // Returns false (and changes nothing, but warns) if it isn't known
+    bool recordFeatureDiameter();
+    // Records Z here as the work's end
+    void markWorkEnd();
+    void clearWorkEnd();
+    void clearFeature();
 
     // Getters/setters:
     XDirection getRetractionDirection() const;
@@ -394,6 +416,10 @@ private:
     // Once the user has set the x position once then we use
     // the status bar to display the effective diameter
     bool m_xDiameterSet { false };
+    // The current feature (see getFeatureDiameterMm()): X's position on the
+    // feature's surface (so its diameter is twice this), and the work's end Z
+    std::optional<double> m_featureX;
+    std::optional<double> m_workEndZ;
     DisplayUnits m_displayUnits { DisplayUnits::Metric };
     double m_axis1LastRelativeMove { 0.0 };
     double m_axis2LastRelativeMove { 0.0 };
@@ -471,6 +497,10 @@ private:
     // +1 if X's position increases as it moves into the work (i.e. the
     // opposite way to a retract), or -1 if it decreases
     double axis2IntoWorkSign() const;
+    // Updates the current feature after a multi-pass finishes
+    void multiPassFinished();
+    // X's position, or while retracted, where it will return to
+    double axis2WorkPosition() const;
     // Threading
     // Starts a threading pass: Z follows the spindle to endStep. Returns false
     // if it couldn't start (with a warning)

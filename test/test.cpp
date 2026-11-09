@@ -2863,3 +2863,269 @@ TEST_CASE("Model:   X's retraction direction from the config")
         REQUIRE(model.getRetractionDirection() == mgo::XDirection::Outwards);
     }
 }
+
+// ===== The current feature =====
+
+namespace {
+
+// testPositions(), with the feature set: the work's end at Z 0, its surface
+// at X 7.5 (so 15 diameter). (Into the work is -X)
+mgo::MultiPassPositions featurePositions()
+{
+    mgo::MultiPassPositions p = testPositions();
+    p.featureWorkEnd = 0.0;
+    p.featureFeed = 7.5;
+    p.featureClearance = 0.5;
+    return p;
+}
+
+TestConfigReader featureConfig()
+{
+    return TestConfigReader({ { "CurrentFeature", "true" } });
+}
+
+} // end anonymous namespace
+
+TEST_CASE("MultiPass: a start from the feature")
+{
+    // Z towards the chuck (-): the start is off the work's end the other way
+    mgo::MultiPassSetup setup { .startFeature = true, .cutDistance = -20.0, .feedInfeed = 0.5 };
+    auto r = mgo::resolveMultiPass(setup, featurePositions());
+    REQUIRE(r.error.empty());
+    REQUIRE(r.range.cutStart == Approx(0.5));
+    REQUIRE(r.range.cutEnd == Approx(-20.0)); // (the distance is from the work's end)
+    REQUIRE(r.range.feedStart == Approx(7.5));
+    REQUIRE(r.range.feedEnd == Approx(7.0));
+
+    // The other way
+    setup.cutDistance = 20.0;
+    r = mgo::resolveMultiPass(setup, featurePositions());
+    REQUIRE(r.range.cutStart == Approx(-0.5));
+    REQUIRE(r.range.cutEnd == Approx(20.0));
+
+    // To a shoulder in a memory slot (Mem 1, Z 2): the direction is from that
+    setup = { .startFeature = true, .cutEndMemory = 0, .feedInfeed = 0.5 };
+    r = mgo::resolveMultiPass(setup, featurePositions());
+    REQUIRE(r.error.empty());
+    REQUIRE(r.range.cutStart == Approx(-0.5));
+    REQUIRE(r.range.cutEnd == Approx(2.0));
+
+    // A different clearance
+    auto positions = featurePositions();
+    positions.featureClearance = 1.0;
+    r = mgo::resolveMultiPass(setup, positions);
+    REQUIRE(r.range.cutStart == Approx(-1.0));
+
+    // Can't be used without the feature (both values), or ending at the work's end
+    positions = featurePositions();
+    positions.featureWorkEnd.reset();
+    REQUIRE(!mgo::resolveMultiPass(setup, positions).error.empty());
+    positions = featurePositions();
+    positions.featureFeed.reset();
+    REQUIRE(!mgo::resolveMultiPass(setup, positions).error.empty());
+    setup = { .startFeature = true, .cutDistance = 0.0 };
+    REQUIRE(mgo::resolveMultiPass(setup, featurePositions()).error
+            == "The Z end is at the work's end");
+}
+
+TEST_CASE("MultiPass: the dialog starts from the feature, if it's set")
+{
+    mgo::MultiPassSetup previous { .cutDistance = -7.0 };
+    // At Mem 2: a memory slot still comes first
+    auto s = mgo::defaultMultiPassSetup(previous, featurePositions());
+    REQUIRE(s.startMemory == 1u);
+    REQUIRE(!s.startFeature);
+    // Elsewhere: the feature
+    auto positions = featurePositions();
+    positions.cutHere = 11.0;
+    s = mgo::defaultMultiPassSetup(previous, positions);
+    REQUIRE(!s.startMemory);
+    REQUIRE(s.startFeature);
+    // Not without the feature (even if used last time)
+    positions.featureWorkEnd.reset();
+    previous.startFeature = true;
+    s = mgo::defaultMultiPassSetup(previous, positions);
+    REQUIRE(!s.startFeature);
+}
+
+TEST_CASE("Model:   the current feature is off unless enabled")
+{
+    mgo::MockConfigReader config;
+    mgo::MockGpio gpio(false);
+    mgo::Model model(gpio, config);
+    model.initialise();
+    REQUIRE(!model.currentFeatureEnabled());
+    model.setAxis2Position(7.5);
+    model.diameterIsSet();
+    model.markWorkEnd();
+    REQUIRE(!model.getFeatureDiameterMm());
+    REQUIRE(!model.getWorkEndZ());
+    REQUIRE(!model.recordFeatureDiameter());
+    REQUIRE(model.getWarning().empty());
+    REQUIRE(!model.multiPassPositions().featureFeed);
+    // Nor in the menu
+    for (const auto& c : mgo::buildCommands(config)) {
+        REQUIRE(c.category != "Feature");
+    }
+}
+
+TEST_CASE("Model:   setting and clearing the current feature")
+{
+    auto config = featureConfig();
+    mgo::MockGpio gpio(false);
+    mgo::Model model(gpio, config);
+    model.initialise();
+    REQUIRE(model.currentFeatureEnabled());
+    REQUIRE(!model.getFeatureDiameterMm());
+    REQUIRE(!model.getWorkEndZ());
+
+    // Its diameter needs X set as a diameter
+    REQUIRE(!model.recordFeatureDiameter());
+    REQUIRE(!model.getWarning().empty());
+
+    // Setting the diameter records it, and moving X doesn't change it
+    model.setAxis2Position(7.5);
+    model.diameterIsSet();
+    REQUIRE(model.getFeatureDiameterMm() == Approx(15.0));
+    model.setAxis2MotorSpeed(100.0);
+    model.axis2GoToPosition(5.0);
+    model.axis2Wait();
+    REQUIRE(model.getDiameterMm() == Approx(10.0).margin(0.01));
+    REQUIRE(model.getFeatureDiameterMm() == Approx(15.0));
+    // ...until recorded again
+    REQUIRE(model.recordFeatureDiameter());
+    REQUIRE(model.getFeatureDiameterMm() == Approx(10.0).margin(0.01));
+
+    // The work's end is Z here
+    model.setAxis1MotorSpeed(100.0);
+    model.axis1GoToPosition(3.0);
+    model.axis1Wait();
+    model.markWorkEnd();
+    REQUIRE(model.getWorkEndZ() == Approx(3.0).margin(0.01));
+    const auto positions = model.multiPassPositions();
+    REQUIRE(positions.featureWorkEnd == Approx(3.0).margin(0.01));
+    REQUIRE(positions.featureFeed == Approx(5.0).margin(0.01));
+    REQUIRE(positions.featureClearance == Approx(0.5));
+
+    // Each axis's value goes when its position does
+    model.axis1Zero();
+    REQUIRE(!model.getWorkEndZ());
+    REQUIRE(model.getFeatureDiameterMm());
+    model.axis2Zero();
+    REQUIRE(!model.getFeatureDiameterMm());
+
+    model.setAxis2Position(7.5);
+    model.diameterIsSet();
+    model.setAxis2Position(7.0); // (not as a diameter)
+    REQUIRE(!model.getFeatureDiameterMm());
+
+    // Clearing it
+    model.setAxis2Position(7.5);
+    model.diameterIsSet();
+    model.markWorkEnd();
+    model.clearFeature();
+    REQUIRE(!model.getFeatureDiameterMm());
+    REQUIRE(!model.getWorkEndZ());
+}
+
+TEST_CASE("Model:   a motor fault clears that axis's part of the current feature")
+{
+    TestConfigReader config({ { "CurrentFeature", "true" },
+                              { "Axis1AlarmPin", "17" },
+                              { "Axis1AlarmActiveLevel", "low" } });
+    mgo::MockGpio gpio(false);
+    mgo::Model model(gpio, config);
+    model.initialise();
+    model.setAxis2Position(7.5);
+    model.diameterIsSet();
+    model.markWorkEnd();
+    gpio.setInputPinLevel(ALARM_PIN, mgo::PinState::low);
+    model.setAxis1MotorSpeed(100.0);
+    model.axis1GoToPosition(1.0);
+    REQUIRE(waitFor([&] {
+        model.checkStatus();
+        return !model.getFaultMessage().empty();
+    }));
+    REQUIRE(!model.getWorkEndZ());
+    REQUIRE(model.getFeatureDiameterMm() == Approx(15.0));
+}
+
+TEST_CASE("Model:   a multi-pass from the work's end sets the feature's diameter")
+{
+    auto config = featureConfig();
+    mgo::MockGpio gpio(false);
+    mgo::Model model(gpio, config);
+    model.initialise();
+    model.axis1SetSpeed(200.0);
+    model.axis2SetSpeed(100.0);
+    // The work's end at Z 0, 1.0 diameter (X 0.5)
+    model.setAxis2Position(0.5);
+    model.diameterIsSet();
+    model.markWorkEnd();
+
+    // From the feature: Z 0.2 into the work (-Z), X in by 0.02
+    model.changeMode(mgo::Mode::MultiPass);
+    REQUIRE(model
+                .setMultiPassSetup({ .startFeature = true,
+                                     .cutDistance = -0.2,
+                                     .feedInfeed = 0.02,
+                                     .feedPerPass = 0.01 })
+                .empty());
+    REQUIRE(model.getMultiPassRange().cutStart == Approx(0.5));
+    model.multiPassGo(); // (to the start)
+    REQUIRE(runUntilAtStart(model));
+    model.multiPassGo();
+    REQUIRE(model.multiPass().inProgress());
+    REQUIRE(runUntilStopped(model));
+    REQUIRE(model.multiPass().state() == mgo::MultiPass::State::Finished);
+    REQUIRE(model.getFeatureDiameterMm() == Approx(0.96).margin(0.0001));
+
+    // Part way along (starting in the work, from Z -0.1): it's unchanged
+    model.axis1GoToPosition(-0.1);
+    model.axis1Wait();
+    REQUIRE(model
+                .setMultiPassSetup(
+                    { .cutDistance = -0.1, .feedInfeed = 0.02, .feedPerPass = 0.02 })
+                .empty());
+    model.multiPassGo();
+    REQUIRE(model.multiPass().inProgress());
+    REQUIRE(runUntilStopped(model));
+    REQUIRE(model.multiPass().state() == mgo::MultiPass::State::Finished);
+    REQUIRE(model.getAxis2MotorPosition() == Approx(0.46).margin(0.0001));
+    REQUIRE(model.getFeatureDiameterMm() == Approx(0.96).margin(0.0001));
+}
+
+TEST_CASE("Commands: the current feature's")
+{
+    auto config = featureConfig();
+    const auto commands = mgo::buildCommands(config);
+    const auto find = [&commands](int k) {
+        return std::find_if(
+            commands.begin(), commands.end(), [k](const mgo::Command& c) { return c.key == k; });
+    };
+    REQUIRE(find(mgo::key::a1_e) != commands.end());
+    REQUIRE(find(mgo::key::a2_d) != commands.end());
+    REQUIRE(find(mgo::key::clearFeature) != commands.end());
+    REQUIRE(find(mgo::key::clearFeature)->category == "Feature");
+    REQUIRE(mgo::categoryHotkey("Feature") == 'f');
+    REQUIRE(mgo::shortcutText(mgo::key::a1_e, config) == "z e");
+    REQUIRE(mgo::shortcutText(mgo::key::a2_d, config) == "x d");
+    REQUIRE(mgo::shortcutText(mgo::key::clearFeature, config).empty()); // (menu only)
+    // Clear (menu only) isn't among the keys following a leader
+    for (const auto mode : { mgo::KeyMode::Axis1, mgo::KeyMode::Axis2, mgo::KeyMode::AxisAll }) {
+        for (const auto* c : mgo::commandsForLeader(commands, mode)) {
+            REQUIRE(c->key != mgo::key::clearFeature);
+        }
+    }
+
+    // What's available depends on the model
+    mgo::MockGpio gpio(false);
+    mgo::Model model(gpio, config);
+    model.initialise();
+    REQUIRE(!mgo::isAvailable(*find(mgo::key::a2_d), model));
+    REQUIRE(!mgo::isAvailable(*find(mgo::key::clearFeature), model));
+    model.setAxis2Position(7.5);
+    model.diameterIsSet();
+    REQUIRE(mgo::isAvailable(*find(mgo::key::a2_d), model));
+    REQUIRE(mgo::isAvailable(*find(mgo::key::clearFeature), model));
+}

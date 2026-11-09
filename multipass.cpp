@@ -37,7 +37,29 @@ MultiPassResolved resolveMultiPass(
 {
     MultiPassResolved r;
     MultiPassRange& range = r.range;
-    if (setup.startMemory) {
+    if (setup.startFeature) {
+        if (!positions.featureWorkEnd || !positions.featureFeed) {
+            r.error = "The feature (the work's end " + cutLabel + " and its Ø) isn't set";
+            return r;
+        }
+        const double workEnd = *positions.featureWorkEnd;
+        // The cut runs into the work, so the start is off its end the other way
+        double cutEnd = workEnd + setup.cutDistance;
+        if (setup.cutEndMemory) {
+            const auto cut = memoryAt(positions.cutMemory, *setup.cutEndMemory);
+            if (!cut) {
+                r.error = slotName(*setup.cutEndMemory) + " has no " + cutLabel + " position";
+                return r;
+            }
+            cutEnd = *cut;
+        }
+        if (near(cutEnd, workEnd)) {
+            r.error = "The " + cutLabel + " end is at the work's end";
+            return r;
+        }
+        range.cutStart = workEnd - (cutEnd > workEnd ? 1.0 : -1.0) * positions.featureClearance;
+        range.feedStart = *positions.featureFeed;
+    } else if (setup.startMemory) {
         const auto cut = memoryAt(positions.cutMemory, *setup.startMemory);
         const auto feed = memoryAt(positions.feedMemory, *setup.startMemory);
         if (!cut || !feed) {
@@ -60,7 +82,9 @@ MultiPassResolved resolveMultiPass(
         }
         range.cutEnd = *cut;
     } else {
-        range.cutEnd = range.cutStart + setup.cutDistance;
+        // (From the work's end, if starting from the feature)
+        range.cutEnd = (setup.startFeature ? *positions.featureWorkEnd : range.cutStart)
+            + setup.cutDistance;
     }
 
     if (setup.feedEndMemory) {
@@ -98,6 +122,7 @@ MultiPassSetup defaultMultiPassSetup(
 
     // At a memory slot? Then start from it
     setup.startMemory.reset();
+    setup.startFeature = false;
     for (std::size_t slot = 0; slot < slots; ++slot) {
         const auto cut = positions.cutMemory[slot];
         const auto feed = positions.feedMemory[slot];
@@ -105,6 +130,10 @@ MultiPassSetup defaultMultiPassSetup(
             setup.startMemory = slot;
             break;
         }
+    }
+    // If not, from the current feature, if it's set
+    if (!setup.startMemory && positions.featureWorkEnd && positions.featureFeed) {
+        setup.startFeature = true;
     }
 
     const auto endFor = [&](const std::vector<std::optional<double>>& memory,

@@ -379,6 +379,7 @@ void Model::checkStatus()
             m_warning = "Multi-pass stopped: " + m_multiPass.message();
         } else if (m_multiPass.state() == MultiPass::State::Finished) {
             MGOLOG("Multi-pass finished");
+            multiPassFinished();
         }
     }
 }
@@ -452,11 +453,13 @@ void Model::checkMotorFaults()
     if (m_axis1Motor->isFaulted() && !m_axis1Faulted) {
         m_axis1Faulted = true;
         newFault = true;
+        clearWorkEnd(); // (the position's lost)
         MGOLOG("*** Axis1 motor fault: driver alarm (e.g. stalled); position lost");
     }
     if (m_axis2Motor->isFaulted() && !m_axis2Faulted) {
         m_axis2Faulted = true;
         newFault = true;
+        m_featureX.reset(); // (the position's lost)
         MGOLOG("*** Axis2 motor fault: driver alarm (e.g. stalled); position lost");
     }
     if (newFault) {
@@ -1006,6 +1009,7 @@ void Model::axis1Zero()
     }
     // Also clear any "breadcrumb" positions
     axis1ClearBreadcrumbs();
+    clearWorkEnd();
     // The position is known again, so a motor fault can be cleared
     clearMotorFault(Axis::Axis1);
 }
@@ -1468,6 +1472,14 @@ void Model::repeatLastRelativeMove(Axis axis)
 void Model::diameterIsSet()
 {
     m_xDiameterSet = true;
+    recordFeatureDiameter();
+}
+
+double Model::axis2WorkPosition() const
+{
+    // While retracted (from the start of a retract to the end of the
+    // unretract), where X will return to: the diameter being cut
+    return m_axis2Retracted ? m_axis2Motor->getPosition(m_xOldPosition) : getAxis2Position();
 }
 
 std::optional<double> Model::getDiameterMm() const
@@ -1475,11 +1487,60 @@ std::optional<double> Model::getDiameterMm() const
     if (!m_xDiameterSet || !m_axis2Motor) {
         return std::nullopt;
     }
-    // While retracted (from the start of a retract to the end of the
-    // unretract), where X will return to: the diameter being cut
-    const double x = m_axis2Retracted ? m_axis2Motor->getPosition(m_xOldPosition)
-                                      : getAxis2Position();
-    return std::abs(x * 2.0);
+    return std::abs(axis2WorkPosition() * 2.0);
+}
+
+bool Model::currentFeatureEnabled() const
+{
+    return m_config.readBool("CurrentFeature", false) && !m_config.readBool("DisableAxis1", false)
+        && !m_config.readBool("DisableAxis2", false);
+}
+
+std::optional<double> Model::getFeatureDiameterMm() const
+{
+    if (!m_featureX) {
+        return std::nullopt;
+    }
+    return std::abs(*m_featureX * 2.0);
+}
+
+std::optional<double> Model::getWorkEndZ() const
+{
+    return m_workEndZ;
+}
+
+bool Model::recordFeatureDiameter()
+{
+    if (!currentFeatureEnabled()) {
+        return false;
+    }
+    if (!getDiameterMm()) {
+        m_warning = "Set " + m_config.read("Axis2Label", "X") + " as a diameter first";
+        return false;
+    }
+    m_featureX = axis2WorkPosition();
+    MGOLOG(fmt::format("Feature diameter recorded: {}", *getFeatureDiameterMm()));
+    return true;
+}
+
+void Model::markWorkEnd()
+{
+    if (!currentFeatureEnabled()) {
+        return;
+    }
+    m_workEndZ = m_axis1Motor->getPosition();
+    MGOLOG(fmt::format("Work end marked: Z {}", *m_workEndZ));
+}
+
+void Model::clearWorkEnd()
+{
+    m_workEndZ.reset();
+}
+
+void Model::clearFeature()
+{
+    m_featureX.reset();
+    m_workEndZ.reset();
 }
 
 XDirection Model::getRetractionDirection() const
@@ -1763,6 +1824,8 @@ void Model::clearDiameter()
         m_xDiameterSet = false;
         m_generalStatus = DEFAULT_GENERAL_STATUS;
     }
+    // (Its diameter needs X measured from the centre)
+    m_featureX.reset();
 }
 
 void Model::resetMotorThreads()
@@ -2025,6 +2088,11 @@ MultiPassPositions Model::multiPassPositions() const
         p.feedMemory.push_back(getAxis2MemoryAsPosition(slot));
     }
     p.feedIntoWork = axis2IntoWorkSign();
+    if (m_featureX) {
+        p.featureFeed = m_featureX;
+    }
+    p.featureWorkEnd = m_workEndZ;
+    p.featureClearance = m_config.readDouble("FeatureStartClearance", 0.5);
     return p;
 }
 
@@ -2304,4 +2372,21 @@ bool Model::isRetracted() const
     return m_axis2Retracted;
 }
 
+void Model::multiPassFinished()
+{
+    // If it cut from the work's end, the feature's diameter is now the one it
+    // finished at. (Not if it cut part way along, which would leave the
+    // diameter at the end as it was: a start from the feature assumes the
+    // diameter runs from the end)
+    const MultiPassPlan& plan = m_multiPass.plan();
+    if (!m_workEndZ || !m_xDiameterSet || plan.feedManual) {
+        return;
+    }
+    const double direction = plan.cutEnd > plan.cutStart ? 1.0 : -1.0;
+    if ((plan.cutStart - *m_workEndZ) * direction <= MultiPass::TOLERANCE) {
+        m_featureX = plan.feedEnd;
+        MGOLOG(fmt::format("Feature diameter now {}", *getFeatureDiameterMm()));
+    }
 }
+
+} // namespace mgo

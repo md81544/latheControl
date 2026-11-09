@@ -487,7 +487,30 @@ the valuable part. Once we have it, remembering where the *work* is costs very
 little: we store numbers in axis coordinates, which moving the axes doesn't
 change.
 
-- [ ] **Current feature: a remembered diameter and end Z.** Temporary: kept
+- [ ] **Current feature: a remembered diameter and end Z.**
+    - **Done (first slice):** `CurrentFeature` in the config turns it on.
+      The feature Ø (stored as X's position on its surface) and the work's
+      end Z, each set and cleared separately: set diameter (`x s`, D) also
+      records the Ø, `x d` records it again, `z e` marks the work's end, and
+      the menu's Feature category has these and Clear. Cleared as below
+      (re-zero, a fault, a position set unless adjusting, X no longer set as
+      a diameter); there's no tool change to clear it on yet. A "Current
+      feature" box (right of the mode's lines) shows them. The multi-pass
+      dialog has a Feature start (the default when set, unless at a memory
+      slot): X on the surface, Z `FeatureStartClearance` (0.5 mm) off the
+      work's end, away from the cut, with Z's distance from the work's end.
+      A multi-pass which cuts from the work's end sets the Ø to its end
+      diameter. Not yet tried on the machine
+    - **Decided:** end Z is the work's *free* end (as faced), not any
+      feature's end. A Z clearance beyond a shoulder part way along would
+      put the tool into the larger diameter beyond it, and the program can't
+      know the profile. So a Feature start assumes the Ø runs from the
+      work's end; features part way along wait for "Single feature vs many".
+      For the same reason, a multi-pass only updates the Ø if its cut
+      started at (or off) the work's end
+    - Still to do from below: the warning when the tool goes inside the Ø
+      with the spindle running, tools (and clearing on a tool change), and
+      chamfers / radii from the feature Temporary: kept
       for this session only, never saved across a restart. Its purpose is to
       help the operator while they make one particular feature.
     - **Values (each optional, set separately):**

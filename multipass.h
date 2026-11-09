@@ -73,8 +73,14 @@ struct MultiPassPlan {
 // Lengths are in mm.
 struct MultiPassSetup {
     // The start: a memory slot (its position on both axes), or nullopt for
-    // where the axes are now
+    // where the axes are now (unless startFeature)
     std::optional<std::size_t> startMemory;
+    // Start from the current feature instead (startMemory is then nullopt):
+    // the feed axis on the feature's surface, and the cut axis just off the
+    // work's end (by MultiPassPositions::featureClearance, the opposite way
+    // to the cut, which runs into the work). A cut distance is then from the
+    // work's end, rather than from the start
+    bool startFeature { false };
     // The cut axis's end: a memory slot (its cut axis position), or nullopt
     // for cutDistance from the start
     std::optional<std::size_t> cutEndMemory;
@@ -107,6 +113,13 @@ struct MultiPassPositions {
     // +1 if the feed axis's position increases as it moves into the work,
     // -1 if it decreases (the opposite way to a retract)
     double feedIntoWork { -1.0 };
+    // The current feature, if set: the work's end on the cut axis, and the
+    // feed axis's position on the feature's surface (see
+    // MultiPassSetup::startFeature)
+    std::optional<double> featureWorkEnd;
+    std::optional<double> featureFeed;
+    // How far off the work's end a start from the feature is
+    double featureClearance { 0.5 };
 };
 
 // A multi-pass's start and end positions, worked out from a MultiPassSetup
@@ -133,7 +146,8 @@ MultiPassResolved resolveMultiPass(
 
 // The setup the dialog starts with, from the one used last time:
 // - The start is a memory slot if the axes are at one (set on both axes),
-//   or else where they are now.
+//   or else the current feature if it's set (both its values), or else
+//   where the axes are now.
 // - Each end is the previous one's memory slot if that's still set (and,
 //   for the cut axis, isn't the start), or else, if the start is a memory
 //   slot, the first other slot set on that axis, or else a distance.

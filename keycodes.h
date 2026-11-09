@@ -127,6 +127,7 @@ constexpr int a1_MINUS = MINUS + 0x1000; // axis1 speed decrease
 constexpr int a1_EQUALS = EQUALS + 0x1000; // axis1 speed increase
 constexpr int a1_FULLSTOP = '.' + 0x1000;
 constexpr int a1_DELETE = key::DELETE + 0x1000;
+constexpr int a1_e = e + 0x1000; // mark the work's end (current feature)
 
 // Axis 2 leader-prefixed keys ( 0x2000 = bit 13 is set )
 constexpr int a2_z = z + 0x2000; // axis2 zero
@@ -148,6 +149,7 @@ constexpr int a2_MINUS = MINUS + 0x2000; // axis2 speed decrease
 constexpr int a2_EQUALS = EQUALS + 0x2000; // axis2 speed increase
 constexpr int a2_FULLSTOP = '.' + 0x2000;
 constexpr int a2_DELETE = key::DELETE + 0x2000;
+constexpr int a2_d = d + 0x2000; // record the feature's diameter (current feature)
 
 // Axis All leader-prefixed keys ( 0x4000 = bit 14 is set )
 constexpr int aAll_z = z + 0x4000; // All axis zero
@@ -157,14 +159,15 @@ constexpr int aAll_l = l + 0x4000; // last position on both axes
 constexpr int aAll_FULLSTOP = '.' + 0x4000;
 constexpr int aAll_DELETE = key::DELETE + 0x4000;
 
-// Commands with no shortcut of their own, chosen from the menu (Modes). The
-// names are from the F2 leader key they used to follow
+// Commands with no shortcut of their own, chosen from the menu. The f2 names
+// are from the F2 leader key they used to follow
 constexpr int f2s = 7001; // setup
 constexpr int f2t = 7002; // threading
 constexpr int f2p = 7003; // taPer
 constexpr int f2r = 7004; // X retraction mode
 constexpr int f2o = 7005; // radius mode
 constexpr int f2m = 7007; // multipass
+constexpr int clearFeature = 7008; // clear the current feature
 
 // Joystick specific "keys"
 // Note some joystick commands just return regular keycodes.

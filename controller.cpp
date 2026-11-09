@@ -827,6 +827,21 @@ void Controller::processKey(int t)
                         });
                     break;
                 }
+            case key::a1_e: // mark the work's end (current feature)
+                {
+                    m_model->markWorkEnd();
+                    break;
+                }
+            case key::a2_d: // record the feature's diameter (current feature)
+                {
+                    m_model->recordFeatureDiameter();
+                    break;
+                }
+            case key::clearFeature:
+                {
+                    m_model->clearFeature();
+                    break;
+                }
             case key::a1_s: // Axis1 position set
                 {
                     const std::string axisName = m_model->config().read("Axis1Label", "Z");
@@ -843,6 +858,7 @@ void Controller::processKey(int t)
                             // unless the user specified not to with 'A'
                             if (!result.optionsSelected.contains('a')) {
                                 m_model->clearAllAxis1Memories();
+                                m_model->clearWorkEnd();
                             }
                         });
                     break;

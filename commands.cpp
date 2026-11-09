@@ -128,6 +128,7 @@ char categoryHotkey(const std::string& category)
         { "Memory", 'e' },
         { "Position", 'p' },
         { "Modes", 'm' },
+        { "Feature", 'f' },
         { "Axis locks", 'l' },
         { "System", 'y' },
     };
@@ -151,6 +152,7 @@ bool menuOnly(int k)
         case key::f2r:
         case key::f2o:
         case key::f2m:
+        case key::clearFeature:
             return true;
         default:
             return false;
@@ -426,6 +428,27 @@ std::vector<Command> buildCommands(const IConfigReader& config, DisplayUnits uni
     };
     const char a1Hotkey = axisHotkey(a1);
     const char a2Hotkey = axisHotkey(a2);
+    if (config.readBool("CurrentFeature", false)) {
+        c = "Feature";
+        b.add(c, fmt::format("Mark the work's end ({} here)", a1), key::a1_e, BOTH, nullptr, 'e');
+        b.add(
+            c,
+            "Record the diameter here as the feature's",
+            key::a2_d,
+            BOTH,
+            [](const Model& m) { return m.getDiameterMm().has_value(); },
+            'd');
+        b.add(
+            c,
+            "Clear the feature",
+            key::clearFeature,
+            BOTH,
+            [](const Model& m) {
+                return m.getFeatureDiameterMm().has_value() || m.getWorkEndZ().has_value();
+            },
+            'c');
+    }
+
     c = "Axis locks";
     b.add(c, fmt::format("Lock / unlock {}", a1), key::a1_k, AXIS1, nullptr, a1Hotkey);
     b.add(c,

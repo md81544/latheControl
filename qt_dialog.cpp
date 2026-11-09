@@ -25,6 +25,7 @@
 #include <cassert>
 #include <cctype>
 #include <cmath>
+#include <limits>
 #include <map>
 #include <set>
 
@@ -1106,6 +1107,7 @@ public:
         : QDialog(parent, Qt::Dialog | Qt::FramelessWindowHint)
         , m_info(info)
         , m_setup(info.setup)
+        , m_startChoice(info.setup.startFeature ? std::optional(FEATURE) : info.setup.startMemory)
     {
         setModal(true);
         setFocusPolicy(Qt::StrongFocus);
@@ -1275,6 +1277,10 @@ protected:
 private:
     enum RowId { Start, CutEnd, FeedEnd, Diameter, StepOver, ROW_COUNT };
 
+    // (Among the start's choices, which are otherwise memory slots, or
+    // nullopt for here) The current feature
+    static constexpr std::size_t FEATURE = std::numeric_limits<std::size_t>::max();
+
     struct Row {
         QLabel* name { nullptr };
         // Where the position comes from, e.g. "Here" or "Mem 2"
@@ -1323,6 +1329,9 @@ private:
 
     static std::string slotName(std::optional<std::size_t> slot, const char* none)
     {
+        if (slot == FEATURE) {
+            return "Feature";
+        }
         return slot ? "Mem " + std::to_string(*slot + 1) : none;
     }
 
@@ -1341,7 +1350,8 @@ private:
         MultiPassResolved r
             = resolveMultiPass(currentSetup(), m_info.positions, m_info.cut.label, m_info.feed.label);
         if (!m_setup.cutEndMemory && !m_cutDistanceTyped) {
-            r.error = "Type how far " + m_info.cut.label + " moves from the start (+ or -)";
+            r.error = "Type how far " + m_info.cut.label + " moves from the "
+                + (m_setup.startFeature ? "work's end" : "start") + " (+ or -)";
         }
         if (r.error.empty() && !m_diameterError.empty()) {
             r.error = m_diameterError;
@@ -1352,6 +1362,9 @@ private:
     // Where the feed axis starts (if its start is known)
     std::optional<double> feedStart() const
     {
+        if (m_setup.startFeature) {
+            return m_info.positions.featureFeed;
+        }
         if (!m_setup.startMemory) {
             return m_info.positions.feedHere;
         }
@@ -1388,6 +1401,9 @@ private:
     {
         std::vector<std::optional<std::size_t>> choices { std::nullopt };
         const auto& p = m_info.positions;
+        if (row == Start && p.featureWorkEnd && p.featureFeed) {
+            choices.push_back(FEATURE);
+        }
         const std::size_t slotCount = std::max(p.cutMemory.size(), p.feedMemory.size());
         const auto set = [](const std::vector<std::optional<double>>& memory, std::size_t slot) {
             return slot < memory.size() && memory[slot].has_value();
@@ -1406,7 +1422,7 @@ private:
     {
         switch (row) {
             case Start:
-                return &m_setup.startMemory;
+                return &m_startChoice;
             case CutEnd:
                 return &m_setup.cutEndMemory;
             case FeedEnd:
@@ -1428,6 +1444,10 @@ private:
         const int index = it == choices.end() ? 0 : static_cast<int>(it - choices.begin());
         const std::optional<std::size_t> oldStart = m_setup.startMemory;
         *source = choices.at(((index + direction) % n + n) % n);
+        if (m_current == Start) {
+            m_setup.startFeature = m_startChoice == FEATURE;
+            m_setup.startMemory = m_setup.startFeature ? std::nullopt : m_startChoice;
+        }
         if (m_current == Start && m_setup.startMemory) {
             // An end at the slot that's now the start: the start and end have
             // been swapped (e.g. Mem 2 to Mem 1, now Mem 1 to Mem 2), so the
@@ -1498,13 +1518,13 @@ private:
     void refresh()
     {
         const MultiPassResolved r = resolved();
-        const MultiPassRange& range = r.range;
         const auto& z = m_info.cut;
         const auto& x = m_info.feed;
         // (Positions can only be shown once they're known: an error may mean
         // they aren't)
-        const bool startKnown = !m_setup.startMemory
+        const bool startKnown = (!m_setup.startMemory && !m_setup.startFeature)
             || resolveMultiPass(MultiPassSetup { .startMemory = m_setup.startMemory,
+                                                 .startFeature = m_setup.startFeature,
                                                  .cutDistance = 1.0 },
                                 m_info.positions)
                    .error.empty();
@@ -1521,22 +1541,26 @@ private:
 
         const auto chooser = [](const std::string& text) { return "< " + text + " >"; };
         m_rows[Start].source->setText(
-            QString::fromStdString(chooser(slotName(m_setup.startMemory, "Here"))));
+            QString::fromStdString(chooser(slotName(m_startChoice, "Here"))));
         m_rows[Start].result->setText(
             startKnown ? QString::fromStdString(fmt::format(
                              "{} {}   {} {}",
                              z.label,
-                             format(z, range.cutStart),
+                             format(z, ends.cutStart),
                              x.label,
-                             format(x, range.feedStart)))
+                             format(x, ends.feedStart)))
                        : "");
 
         m_rows[CutEnd].source->setText(
             QString::fromStdString(chooser(slotName(m_setup.cutEndMemory, "Distance"))));
         const bool cutEndKnown = startKnown && (m_setup.cutEndMemory || m_cutDistanceTyped);
+        // (The distance is from the work's end, if starting from the feature)
+        const double cutFrom = m_setup.startFeature && m_info.positions.featureWorkEnd
+            ? *m_info.positions.featureWorkEnd
+            : ends.cutStart;
         m_rows[CutEnd].fixed->setText(
             cutEndKnown && m_setup.cutEndMemory
-                ? QString::fromStdString(format(z, ends.cutEnd - ends.cutStart))
+                ? QString::fromStdString(format(z, ends.cutEnd - cutFrom))
                 : "");
         m_rows[CutEnd].result->setText(
             cutEndKnown ? QString::fromStdString("to " + z.label + " " + format(z, ends.cutEnd))
@@ -1657,6 +1681,9 @@ private:
 
     MultiPassDialogInfo m_info;
     MultiPassSetup m_setup;
+    // The start chosen: a memory slot, FEATURE, or nullopt for here (kept
+    // in m_setup as startMemory and startFeature)
+    std::optional<std::size_t> m_startChoice;
     double m_cutDistanceMm { 0.0 };
     // Whether a distance for the cut axis has been typed (it has no default)
     bool m_cutDistanceTyped { false };
