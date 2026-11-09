@@ -373,13 +373,22 @@ void Model::checkStatus()
     if (m_multiPass.inProgress()) {
         m_multiPass.update();
         if (!m_multiPass.inProgress() && !m_multiPass.message().empty()) {
-            // It stopped, rather than finished
-            MGOLOG("Multi-pass stopped: " << m_multiPass.message());
+            // It stopped, rather than finished. (If a threading pass stopped
+            // short, e.g. Z couldn't keep up with the spindle, its warning
+            // says why)
+            const std::string reason = m_mode == Mode::Threading && m_threadingWarningSticky
+                ? m_threadingWarning
+                : m_multiPass.message();
+            MGOLOG("Multi-pass stopped: " << reason);
             stopAllMotors();
-            m_warning = "Multi-pass stopped: " + m_multiPass.message();
+            m_warning = "Multi-pass stopped: " + reason;
         } else if (m_multiPass.state() == MultiPass::State::Finished) {
             MGOLOG("Multi-pass finished");
             multiPassFinished();
+        }
+        if (!m_multiPass.inProgress() && m_mode == Mode::Threading) {
+            // (A threading multi-pass's returns turn it on)
+            m_axis1Motor->enableRamping(false);
         }
     }
 }
@@ -589,6 +598,11 @@ void Model::stopAllMotors()
         m_axis2Motor->setSpeed(m_previousAxis2Speed);
     }
     m_multiPass.stop("stopped");
+    if (m_mode == Mode::Threading) {
+        // (In case a threading multi-pass was stopped during a return, which
+        // turns it on)
+        m_axis1Motor->enableRamping(false);
+    }
     m_axis1Status = "stopped";
     m_axis2Status = "stopped";
 #ifdef FAKE
@@ -787,30 +801,37 @@ void Model::threadingCheckSpeed()
     }
 }
 
-bool Model::axis1StartThreadingPass(long endStep)
+Model::ThreadingPassError Model::threadingPassError() const
 {
     if (!getThread()) {
-        setThreadingWarning("Choose a thread first", true);
-        return false;
+        return { "Choose a thread first", true };
     }
     const double pitch = getThread()->pitchMm;
     const float rpm = m_rotaryEncoder->getRpm();
     if (rpm < SPINDLE_STOPPED_RPM) {
-        setThreadingWarning("Start the spindle before threading", true);
+        return { "Start the spindle before threading", true };
+    }
+    const double startLimit = threadingMaxZSpeed() * THREADING_START_SPEED_FRACTION;
+    if (pitch * rpm > startLimit) {
+        return { fmt::format(
+                     "Spindle too fast for this pitch: thread at {:.0f} rpm or less",
+                     startLimit / pitch),
+                 false };
+    }
+    return {};
+}
+
+bool Model::axis1StartThreadingPass(long endStep)
+{
+    if (const auto error = threadingPassError(); !error.message.empty()) {
+        MGOLOG("Threading pass not started: " << error.message);
+        setThreadingWarning(error.message, error.sticky);
         return false;
     }
+    const double pitch = getThread()->pitchMm;
+    const float rpm = m_rotaryEncoder->getRpm();
     const double nominalSpeed = pitch * rpm;
     const double maxSpeed = threadingMaxZSpeed();
-    const double startLimit = maxSpeed * THREADING_START_SPEED_FRACTION;
-    if (nominalSpeed > startLimit) {
-        MGOLOG(fmt::format("Threading pass not started: spindle too fast at {:.0f} rpm", rpm));
-        setThreadingWarning(
-            fmt::format(
-                "Spindle too fast for this pitch: thread at {:.0f} rpm or less",
-                startLimit / pitch),
-            false);
-        return false;
-    }
     const long startStep = m_axis1Motor->getCurrentStep();
     if (endStep == startStep) {
         return false;
@@ -881,7 +902,8 @@ void Model::threadingCheckMoveEnded()
         "Threading pass {} at Z step {}",
         arrived ? "finished" : "STOPPED SHORT",
         m_axis1Motor->getCurrentStep()));
-    if (!m_config.readBool("ThreadingAutoRetract", false)) {
+    // (A multi-pass does its own retracting)
+    if (!m_config.readBool("ThreadingAutoRetract", false) || m_multiPass.inProgress()) {
         return;
     }
     const auto action = threadingStopAction(
@@ -2366,6 +2388,12 @@ bool Model::cutMoving() const
 void Model::cutMoveTo(double position, double feedFollows)
 {
     m_axis1Status = "multi-pass";
+    if (m_mode == Mode::Threading) {
+        // A threading multi-pass's return (retracted, so not locked to the
+        // spindle). Z doesn't ramp while threading, but this is at full
+        // speed, so it does here. (cutThreadTo() turns it off again)
+        m_axis1Motor->enableRamping(true);
+    }
     // (While retracted, X doesn't follow: the correction was taken off where
     // it unretracts to when it retracted. See retract())
     if (feedFollows == 0.0 || m_axis2Retracted) {
@@ -2402,6 +2430,32 @@ void Model::setCutSpeed(double speed)
 double Model::cutMaxSpeed() const
 {
     return m_axis1Motor->getMaxRpm();
+}
+
+std::string Model::cutThreadTo(double position)
+{
+    if (m_mode != Mode::Threading) {
+        return "Threading passes are only in threading mode";
+    }
+    if (const auto error = threadingPassError(); !error.message.empty()) {
+        setThreadingWarning(error.message, error.sticky);
+        return error.message;
+    }
+    m_axis1Status = "threading";
+    // (Z mustn't ramp while it follows the spindle: the return turned it on)
+    m_axis1Motor->enableRamping(false);
+    // As a threading pass by hand: Z's backlash is taken up first if it
+    // reverses (it does, after the return), then the pass waits for the
+    // spindle's next whole revolution
+    auto steps = axis1MoveSteps(std::lround(position / m_axis1Motor->getConversionFactor()));
+    steps.back().action = [this, move = std::move(steps.back().action)]() {
+        move();
+        // (So a pass that's over by the next update is still seen to have
+        // ended, as in cutMoveTo())
+        m_axis1WasRunning = m_axis1Motor->isRunning();
+    };
+    m_motionSequence.start(std::move(steps));
+    return {};
 }
 
 double Model::feedPosition() const
@@ -2479,8 +2533,9 @@ void Model::multiPassFinished()
     // finished at. (Not if it cut part way along, which would leave the
     // diameter at the end as it was: a start from the feature assumes the
     // diameter runs from the end)
+    // (Not for a thread: its depth isn't a surface's diameter)
     const MultiPassPlan& plan = m_multiPass.plan();
-    if (!m_workEndZ || !m_xDiameterSet || plan.feedManual) {
+    if (!m_workEndZ || !m_xDiameterSet || plan.feedManual || plan.cut == MultiPassCut::Thread) {
         return;
     }
     const double direction = plan.cutEnd > plan.cutStart ? 1.0 : -1.0;

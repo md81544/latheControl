@@ -1558,6 +1558,17 @@ public:
     double cutSpeed() const override { return m_cutSpeed; }
     void setCutSpeed(double speed) override { m_cutSpeed = speed; }
     double cutMaxSpeed() const override { return 1'000.0; }
+    std::string cutThreadTo(double position) override
+    {
+        if (!threadError.empty()) {
+            log.push_back("thread refused");
+            return threadError;
+        }
+        log.push_back(fmt::format("thread {:.6g}", position));
+        m_cutTarget = position;
+        m_cutFollows = 0.0;
+        return {};
+    }
     double feedPosition() const override { return m_feed; }
     bool feedMoving() const override { return m_feedTarget.has_value(); }
     void feedMoveTo(double position) override
@@ -1612,6 +1623,8 @@ public:
     double m_feed { 5.0 };
     double m_cutSpeed { 40.0 };
     bool m_retracted { false };
+    // If set, cutThreadTo() refuses with this
+    std::string threadError;
 
 private:
     std::optional<double> m_cutTarget;
@@ -1939,6 +1952,96 @@ TEST_CASE("MultiPass: stops if a move stops short")
     REQUIRE(mp.state() == mgo::MultiPass::State::Idle);
     REQUIRE(!mp.message().empty());
     REQUIRE(machine.log.size() == 2); // (no return)
+}
+
+namespace {
+
+mgo::MultiPassPlan threadingPlan()
+{
+    auto plan = basicPlan();
+    plan.cut = mgo::MultiPassCut::Thread;
+    plan.retract = true;
+    return plan;
+}
+
+} // end anonymous namespace
+
+TEST_CASE("MultiPass: threading, each cut is a threading pass")
+{
+    FakeMultiPassMachine machine;
+    mgo::MultiPass mp(machine);
+    REQUIRE(mp.start(threadingPlan()).empty());
+    REQUIRE(mp.totalPasses() == 3);
+    machine.run(mp);
+    REQUIRE(mp.state() == mgo::MultiPass::State::Finished);
+    // (The returns are plain moves at full speed, retracted)
+    REQUIRE(machine.log
+            == Log { "feed 4.9",  "thread -10", "retract", "cut 0 at 1000", "unretract",
+                     "feed 4.8",  "thread -10", "retract", "cut 0 at 1000", "unretract",
+                     "feed 4.75", "thread -10", "retract", "cut 0 at 1000", "unretract" });
+    REQUIRE(machine.feedPosition() == Approx(4.75));
+    REQUIRE(!machine.isRetracted());
+}
+
+TEST_CASE("MultiPass: threading needs a retract, a motorised feed and no taper correction")
+{
+    FakeMultiPassMachine machine;
+    mgo::MultiPass mp(machine);
+    auto plan = threadingPlan();
+    plan.retract = false;
+    REQUIRE(!mp.start(plan).empty());
+    plan = threadingPlan();
+    plan.retract = false;
+    plan.feedManual = true;
+    REQUIRE(!mp.start(plan).empty());
+    plan = threadingPlan();
+    plan.feedCorrection = 0.01;
+    REQUIRE(!mp.start(plan).empty());
+    REQUIRE(mp.state() == mgo::MultiPass::State::Idle);
+    REQUIRE(machine.log.empty());
+}
+
+TEST_CASE("MultiPass: threading stops if a pass can't start")
+{
+    FakeMultiPassMachine machine;
+    mgo::MultiPass mp(machine);
+    REQUIRE(mp.start(threadingPlan()).empty());
+    machine.finishMoves(); // (the first feed in)
+    machine.threadError = "Start the spindle before threading";
+    mp.update();
+    REQUIRE(mp.state() == mgo::MultiPass::State::Idle);
+    REQUIRE(mp.message() == "Start the spindle before threading");
+    REQUIRE(machine.log == Log { "feed 4.9", "thread refused" });
+
+    // With a step-over of zero, the first pass starts at once, so start()
+    // says why it didn't
+    machine.m_feed = 5.0;
+    machine.log.clear();
+    auto plan = threadingPlan();
+    plan.feedPerPass = 0.0;
+    REQUIRE(mp.start(plan) == "Start the spindle before threading");
+    REQUIRE(!mp.inProgress());
+}
+
+TEST_CASE("MultiPass: threading, repeating the last pass with a step-over of zero and a pause")
+{
+    // e.g. carrying on past the thread's depth until the nut fits: each pass
+    // is at the start's X, which may be nudged in while paused
+    FakeMultiPassMachine machine;
+    mgo::MultiPass mp(machine);
+    auto plan = threadingPlan();
+    plan.feedPerPass = 0.0;
+    plan.pause = true;
+    REQUIRE(mp.start(plan).empty());
+    machine.run(mp);
+    REQUIRE(mp.state() == mgo::MultiPass::State::Paused);
+    machine.m_feed = 4.98; // (nudged in)
+    mp.continueAfterPause();
+    machine.run(mp);
+    REQUIRE(mp.state() == mgo::MultiPass::State::Paused);
+    REQUIRE(machine.log
+            == Log { "thread -10", "retract", "cut 0 at 1000", "unretract",
+                     "thread -10", "retract", "cut 0 at 1000", "unretract" });
 }
 
 TEST_CASE("Model:   a multi-pass from Mem 1 to Mem 2")

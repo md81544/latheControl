@@ -193,8 +193,16 @@
       at the same spindle angle; and the threads table knows the depth
       (0.613 × pitch for a male ISO thread), so the infeed can be filled in.
       The work:
-        1. Make the engine's cut step pluggable: a plain feed or a
-           threading pass
+        1. **Done:** the engine's cut is a plain feed or a threading pass
+           (`MultiPassCut` in the plan; `IMultiPassMachine::cutThreadTo()`).
+           Threading needs a retract (the return isn't locked to the
+           spindle), and no manual feed or taper correction. In the model,
+           a threading pass is as by hand (Z's backlash taken up, then
+           locked to the spindle); the return is at full speed, with Z's
+           ramping on for it only; ThreadingAutoRetract is left alone; and a
+           thread doesn't update the current feature's Ø. Only in threading
+           mode, and nothing starts one yet (step 2), so the model's side
+           isn't tested yet
         2. A threading dialog builds the plan: start and end Z (or memory
            slots), the infeed per pass and the total depth
         3. Carry on past the nominal depth, pass by pass. The M14 thread

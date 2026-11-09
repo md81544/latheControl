@@ -508,6 +508,8 @@ private:
     double cutSpeed() const override;
     void setCutSpeed(double speed) override;
     double cutMaxSpeed() const override;
+    // (Only in threading mode, with a thread chosen)
+    std::string cutThreadTo(double position) override;
     double feedPosition() const override;
     bool feedMoving() const override;
     void feedMoveTo(double position) override;
@@ -537,6 +539,13 @@ private:
     // Starts a threading pass: Z follows the spindle to endStep. Returns false
     // if it couldn't start (with a warning)
     bool axis1StartThreadingPass(long endStep);
+    // Why a threading pass can't start now (empty if it can). sticky is
+    // whether its warning should stay (see setThreadingWarning())
+    struct ThreadingPassError {
+        std::string message;
+        bool sticky { false };
+    };
+    ThreadingPassError threadingPassError() const;
     void threadingCheckSpeed();
     void threadingCheckMoveEnded();
     double threadingMaxZSpeed() const;

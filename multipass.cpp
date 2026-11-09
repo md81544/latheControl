@@ -195,6 +195,17 @@ std::string MultiPass::start(const MultiPassPlan& plan)
     if (plan.feedManual && plan.feedCorrection != 0.0) {
         return "Can't correct a taper with a manual feed";
     }
+    if (plan.cut == MultiPassCut::Thread) {
+        if (!plan.retract) {
+            return "Threading needs a retract between passes";
+        }
+        if (plan.feedManual) {
+            return "Can't thread with a manual feed";
+        }
+        if (plan.feedCorrection != 0.0) {
+            return "Can't correct a taper while threading";
+        }
+    }
     if (m_machine.cutMoving() || (!plan.feedManual && m_machine.feedMoving())) {
         return "Stop the motors first";
     }
@@ -221,6 +232,11 @@ std::string MultiPass::start(const MultiPassPlan& plan)
     m_pass = 1;
     m_feedTarget = firstTarget;
     startFeed();
+    // (A threading pass may fail to start at once, if there was no feeding
+    // in first)
+    if (!inProgress()) {
+        return m_message;
+    }
     return {};
 }
 
@@ -392,6 +408,12 @@ double MultiPass::nextFeedTarget(double from) const
 void MultiPass::startCut()
 {
     m_state = State::Cutting;
+    if (m_plan.cut == MultiPassCut::Thread) {
+        if (std::string error = m_machine.cutThreadTo(m_plan.cutEnd); !error.empty()) {
+            abandon(error);
+        }
+        return;
+    }
     m_machine.cutMoveTo(m_plan.cutEnd, m_plan.feedCorrection);
 }
 

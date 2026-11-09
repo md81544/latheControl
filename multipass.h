@@ -26,6 +26,13 @@ public:
     virtual double cutSpeed() const = 0;
     virtual void setCutSpeed(double speed) = 0;
     virtual double cutMaxSpeed() const = 0;
+    // A threading pass (for MultiPassCut::Thread): the cut axis follows the
+    // spindle to position, at the thread's pitch per revolution, starting at
+    // the same angle of the spindle's rotation as every other pass (so each
+    // pass cuts the same thread). Returns an empty string if it started, or
+    // else why not (e.g. the spindle isn't turning). If it's stopped part
+    // way (e.g. the cut axis couldn't keep up), it ends short of position
+    virtual std::string cutThreadTo(double position) = 0;
 
     // (Not used if the feed is manual)
     virtual double feedPosition() const = 0;
@@ -38,8 +45,19 @@ public:
     virtual bool isRetracted() const = 0;
 };
 
+// What each cut is
+enum class MultiPassCut {
+    // A plain feed along the cut axis, at its speed (e.g. turning)
+    Feed,
+    // A threading pass, locked to the spindle (see
+    // IMultiPassMachine::cutThreadTo()). Needs a retract: the return isn't
+    // locked to the spindle, so would drag the tool across the thread
+    Thread
+};
+
 // The parameters of a multi-pass
 struct MultiPassPlan {
+    MultiPassCut cut { MultiPassCut::Feed };
     // Each cut moves the cut axis from cutStart to cutEnd, then returns
     double cutStart { 0.0 };
     double cutEnd { 0.0 };
@@ -174,8 +192,8 @@ int multiPassCount(const MultiPassRange& range, double feedPerPass);
 // the next move when the last has finished.
 //
 // The cuts are made at the cut axis's speed as it was when each cut starts
-// (so the user can change it while the multi-pass runs); returns are at the
-// cut axis's maximum speed.
+// (so the user can change it while the multi-pass runs), or, for threading,
+// locked to the spindle; returns are at the cut axis's maximum speed.
 class MultiPass {
 public:
     enum class State {
