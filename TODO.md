@@ -111,11 +111,12 @@
       repeatability). Two things came of it:
     - **Done:** Enter during a pass (when not pausing anyway) pauses once
       it's done, e.g. to clear stringy swarf wrapping around the chuck;
-      Enter again cancels the request. Not yet tried on the machine
+      Enter again cancels the request. Used on the machine (2026-11-09) and
+      works as expected
     - **Done:** the main window takes the focus back when a dialog closes.
       Sometimes after the multi-pass dialog (and another), Pi OS's panel
-      appeared and keys were lost until the window was clicked. Not yet
-      tried on the machine
+      appeared and keys were lost until the window was clicked. No focus
+      problems seen on the machine since (2026-11-09)
     - **Done:** rewritten as a generic engine (`MultiPass`, in multipass.h),
       replacing the old, broken code. It's a state machine moved on by the
       model's `checkStatus()`, and works through an `IMultiPassMachine`
