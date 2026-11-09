@@ -308,12 +308,46 @@
       unretracting to where the cut started. X (and the diameter) is shown
       as if it weren't moving. If X lags Z a little as it starts following,
       it finishes the return's move, so nothing builds up from pass to
-      pass. Not yet tried on the machine: start from about -0.047, check the
-      sign, then tune on a 150 mm bar
-    - Stage 2, if stage 1 works: everywhere Z moves (X following Z all the
-      time, with the backlash take-up taper mode does when Z reverses, and
-      X shown corrected everywhere: memories, going to them, nudges,
-      retracts, threading)
+      pass
+    - Tried on the machine (Nov 2026). It works, and the sign is as in
+      lc.cfg (-0.045 makes the work wider towards the chuck), though the
+      effect measured was only about 60% of what's expected: worth
+      checking X's movement with a dial indicator (e.g. one held in the
+      toolpost against a bar held still in the chuck, running the same Z
+      travel with the correction at 0 and then on: the difference is the
+      correction). But it turns out not to be needed:
+        - A 135 mm aluminium bar with a live centre was 0.30 *larger* at
+          the chuck end, curved rather than straight: the tailstock
+          pushing the bar off line
+        - A 40 mm steel bar, 100 mm long, unsupported, spring passed until
+          nothing more came off: A 39.54, B 39.57, C 39.55. No overall
+          taper, but a slight bulge in the middle: the carriage's path
+          along the bed isn't quite straight (bed wear?). The first 23 mm
+          test, near the chuck, measured the slope of this curve there
+      So TaperCorrection is best left at 0. It's left in, as an experimental
+      option, in case a straight taper ever needs correcting
+    - (Stage 2, X following Z everywhere, isn't needed: see the "bump map"
+      instead)
+- [ ] A "bump map" mode, for a finishing cut where a piece must be as
+      accurate as possible: correcting a lathe whose cut isn't straight
+      along its length (here, a slight bulge, about 0.02-0.03 mm on
+      diameter, from the bed, not a simple taper; see above)
+    - After a cut along the work, it asks for the diameter measured every
+      10 mm or so (ideally after spring passes, so it's the tool's path,
+      not deflection), and uses those for the finishing cut: X follows Z
+      through a table of offsets, interpolated between the readings, rather
+      than at a fixed angle as TaperCorrection does
+    - Could be done per piece (measure, then finish), or saved as the
+      machine's map if it proves to be the same from piece to piece (check
+      that first: the tailstock, stick-out and material all change it)
+    - The multi-pass's X following (TaperCorrection's machinery) is the
+      starting point: a function of Z's position in place of a fixed ratio,
+      with X shown corrected, and backlash taken up the way X starts moving.
+      A map whose slope changes sign along the cut reverses X part way: the
+      backlash compensation would have to cope with that, or the cut be
+      made in sections
+    - The corrections are about the size of the machine's repeatability,
+      so only worth it for the odd piece which needs it
 - [ ] Support the enable pin for each motor
 - [ ] **Motor stalls: stop when the driver goes into its error mode.** At the
       moment, if a motor stalls and its driver goes into error mode, the
