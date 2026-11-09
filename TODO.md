@@ -155,12 +155,13 @@
       without the retract, X moves away from the work before Z, and towards
       it after), then waits; Enter again starts cutting. "Retract before
       moving to the start" is on each time the dialog opens. Space stops the
-      move. Not yet tried on the machine
+      move. Used on the machine (2026-11-09) and works well
     - **Done:** the first pass is one step in from the start's X (it was at
       the start, so starting from where the tool touched the work, it was a
       pass of nothing). So the passes are the infeed / step-over, rounded
       up. With a step-over of zero, it's still at the start; with a manual
-      feed, it pauses first for the user to feed in
+      feed, it pauses first for the user to feed in. Used on the machine
+      (2026-11-09)
     - The mill: its axis 2 (Y) has no motor yet, so a multi-pass there would
       need the engine's manual feed ("feed Y by n mm, then press Enter"),
       and the dialog and the move to the start would need to allow for it
@@ -185,6 +186,25 @@
       the same spindle angle now (the electronic leadscrew), so a threading
       multi-pass could use the multi-pass engine, with the threading pass as
       its cut
+    - **Next (suggested 2026-11-08):** the pieces are in place. The engine
+      already does retract, return, unretract, pause and step-in; the
+      electronic leadscrew (tested with the M14 thread) starts every pass
+      at the same spindle angle; and the threads table knows the depth
+      (0.613 × pitch for a male ISO thread), so the infeed can be filled in.
+      The work:
+        1. Make the engine's cut step pluggable: a plain feed or a
+           threading pass
+        2. A threading dialog builds the plan: start and end Z (or memory
+           slots), the infeed per pass and the total depth
+        3. Carry on past the nominal depth, pass by pass. The M14 thread
+           needed a few extra passes before the nut fitted, so pausing and
+           continuing matters here (as the step-over-of-zero-with-pause
+           mode already does)
+        4. Optionally, each pass removes a constant area rather than a
+           constant depth, as CNC threading cycles do: the passes get
+           shallower as the tool goes deeper, which is gentler on the tool.
+           This could be where INFEED / SIDEFEED (below) finally get used,
+           as a compound (topslide-style) infeed
 
 ## Motion and timing (mostly in stepperControl)
 - [ ] Deceleration ramping. At the moment there's only acceleration, so
@@ -500,7 +520,7 @@ change.
       slot): X on the surface, Z `FeatureStartClearance` (0.5 mm) off the
       work's end, away from the cut, with Z's distance from the work's end.
       A multi-pass which cuts from the work's end sets the Ø to its end
-      diameter. Not yet tried on the machine
+      diameter. Used on the machine (2026-11-09) and works well
     - **Decided:** end Z is the work's *free* end (as faced), not any
       feature's end. A Z clearance beyond a shoulder part way along would
       put the tool into the larger diameter beyond it, and the program can't
@@ -519,7 +539,7 @@ change.
       the Ø, or Z alone to the work's end (refused if X is deeper than the
       surface). Z's target is the work's end exactly, or clear of it by
       `FeatureStartClearance`, away from the chuck (`Axis1TowardsChuck`).
-      Not yet tried on the machine
+      Used on the machine (2026-11-09) and works well
     - [ ] **The feature's other end.** Save where the feature ends along Z
       (e.g. a shoulder), as well as the work's end: set from a key, or by a
       multi-pass from the work's end (its cut's end). Then it could be gone
