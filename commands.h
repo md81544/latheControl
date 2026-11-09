@@ -46,16 +46,15 @@ bool keyAllowedInCurrentMode(int key, const Model& model);
 bool isAvailable(const Command& command, const Model& model);
 
 // The keys to press for a key code, e.g. "z g" (axis leader, then g), or "Alt+w".
-// Axis leader keys are as set in the config
+// Axis leader keys are as set in the config. Empty for a command chosen only
+// from the menu (e.g. threading)
 std::string shortcutText(int key, const IConfigReader& config);
 
 // The commands which follow a leader key: e.g. for KeyMode::Axis1, those
-// using the axis 1 leader key (such as "z g"); for KeyMode::Function, those
-// using F2. In the order given
+// using the axis 1 leader key (such as "z g"). In the order given
 std::vector<const Command*> commandsForLeader(const std::vector<Command>& commands, KeyMode mode);
 
-// The key to press after a leader key for a command, e.g. "g" for "z g", or
-// "t" for "F2 t"
+// The key to press after a leader key for a command, e.g. "g" for "z g"
 std::string followUpKeyName(int key);
 
 } // namespace mgo

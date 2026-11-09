@@ -180,15 +180,7 @@ void Controller::processKey(int t)
                 {
                     break;
                 }
-            case key::COLON:
-            case key::F2:
-                {
-                    m_model->setKeyMode(KeyMode::Function);
-                    break;
-                }
-            // End of "Leader" keys ==============
             case key::CtrlQ:
-            case key::f2q:
                 {
                     m_model->stopAllMotors();
                     m_model->quit();
@@ -690,7 +682,6 @@ void Controller::processKey(int t)
                     break;
                 }
             case key::F1: // help: the menu, which shows every command's shortcut
-            case key::f2h:
                 {
                     m_model->setKeyMode(KeyMode::None);
                     m_menu.open();
@@ -1010,46 +1001,6 @@ int Controller::processLeaderKeyModeKeyPress(int keyPress)
         return keyPress + bitFlip;
     }
 
-    if (m_model->getKeyMode() == KeyMode::Function) {
-        switch (keyPress) {
-            case key::h:
-            case key::H:
-                keyPress = key::f2h;
-                break;
-            case key::s:
-            case key::S:
-                keyPress = key::f2s;
-                break;
-            case key::t:
-            case key::T:
-                keyPress = key::f2t;
-                break;
-            case key::p:
-            case key::P:
-            case key::FULLSTOP: // > - looks like a taper
-            case key::COMMA: // < - looks like a taper
-                keyPress = key::f2p;
-                break;
-            case key::r:
-            case key::R:
-                keyPress = key::f2r;
-                break;
-            case key::o:
-            case key::O:
-                keyPress = key::f2o;
-                break;
-            case key::m:
-            case key::M:
-                keyPress = key::f2m;
-                break;
-            case key::q:
-            case key::Q:
-                keyPress = key::f2q;
-                break;
-            default:
-                keyPress = key::None;
-        }
-    }
     m_model->setKeyMode(KeyMode::None);
     return keyPress;
 }

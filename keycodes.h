@@ -157,14 +157,13 @@ constexpr int aAll_l = l + 0x4000; // last position on both axes
 constexpr int aAll_FULLSTOP = '.' + 0x4000;
 constexpr int aAll_DELETE = key::DELETE + 0x4000;
 
-// Functions, leader is F2 (or colon)
-constexpr int f2h = 7000; // help
+// Commands with no shortcut of their own, chosen from the menu (Modes). The
+// names are from the F2 leader key they used to follow
 constexpr int f2s = 7001; // setup
 constexpr int f2t = 7002; // threading
 constexpr int f2p = 7003; // taPer
 constexpr int f2r = 7004; // X retraction mode
 constexpr int f2o = 7005; // radius mode
-constexpr int f2q = 7006; // quit (i.e. :q)
 constexpr int f2m = 7007; // multipass
 
 // Joystick specific "keys"

@@ -14,10 +14,10 @@
     - **Done:** open the menu from the gamepad with a button chord
       (`JoystickMenuChord`, default 4,6: previous + next memory slot).
       Tried on the machine: works well
-    - **Done:** hotkey letters for the categories, Modes (as F2), System and
+    - **Done:** hotkey letters for the categories, Modes, System and
       axis locks, highlighted in yellow and underlined. Not given to the
       many paired or small commands, which have quick shortcuts already
-    - **Done:** half a second after a leader key (`Z`, `X`, `\`, `F2`) is
+    - **Done:** half a second after a leader key (`Z`, `X`, `\`) is
       pressed, a panel shows the keys which can follow and what they do,
       from the same command table
     - **Done:** F1 opens the menu (which shows every shortcut) rather than a
@@ -35,21 +35,18 @@
 - [ ] Make the display more "modular": display elements in definable boxes,
       perhaps a class which encapsulates a display element. This will make the
       layout easier to change
-- [ ] **Drop the `F2` leader key?** In practice the menu (e.g. `Tab` `M` `T`
-      for threading) has taken over from `F2`, which is now a second route
-      to the same commands
-    - The `f2*` key codes (e.g. `key::f2t`) are also the internal command IDs
-      the menu dispatches (commands.cpp), so they stay. Only the `F2` leader
-      handling in the controller goes, along with its entry in the
-      leader-key hint panel and any `F2` mentions in the UI. Later, perhaps
-      rename the codes to something like `cmd::threading`, so they don't
-      suggest a key that no longer exists
-    - Frees the letters that follow `F2` for use at the top level, e.g. `T`
-      for "choose tool" (see "Current tool and a tool database") without
-      clashing with `F2` `T` for threading
-    - Check nothing else relies on `F2`: the gamepad, the help panel's
-      contents, and the README and TODO references (e.g. "`F2` `M`" for
-      multi-pass, "F2 S" for Setup mode)
+- [x] **Drop the `F2` leader key.** In practice the menu (e.g. `Tab` `M` `T`
+      for threading) had taken over from `F2`, which was a second route to
+      the same commands
+    - **Done:** `F2` (and `:`) no longer lead to anything, so the modes
+      (threading, taper, radius, multi-pass, retraction direction, setup) are
+      chosen from the menu's Modes, and show no shortcut there. `F2` `H`
+      (help) and `F2` `Q` / `:q` (quit) went too: F1 and Ctrl+Q do the same.
+      The `f2*` key codes stay as the internal command IDs the menu
+      dispatches; later, perhaps rename them to something like
+      `cmd::threading`, so they don't suggest a key that no longer exists
+    - Frees the top-level letters, e.g. `T` for "choose tool" (see "Current
+      tool and a tool database")
 - [ ] Make use of the keys on the right (#, Home, PgUp, PgDn, End)?
 - [ ] Remove Alt-Arrows for rapids once controller set up for mill?
       Now that they behave more safely, maybe not
@@ -130,7 +127,7 @@
       feed of zero repeats the same cut until stopped. The feed can also be
       manual (it pauses each pass, saying how far to feed), for an axis
       without a motor, though no mode uses that yet
-    - **Done:** multi-pass mode (`F2` `M`) uses it (originally from Mem 1 to
+    - **Done:** multi-pass mode (`Tab` `M` `M`) uses it (originally from Mem 1 to
       Mem 2; now as set in its dialog, below). `Enter` starts it once at the
       start, and continues after a pause. While
       it runs, keys which move an axis are ignored; `Space` (or any stop,
@@ -140,7 +137,7 @@
     - Cuts are at the Z speed when each cut starts (so it can be changed
       during the cut, for the next ones); the usual reset of speeds above
       `Axis1SpeedResetAbove` / `Axis2SpeedResetAbove` is skipped meanwhile
-    - **Done:** a multi-pass dialog (`F2` `M`) replaces "Mem 1 to Mem 2". The
+    - **Done:** a multi-pass dialog (`Tab` `M` `M`) replaces "Mem 1 to Mem 2". The
       start is where the axes are now, or a memory slot; each axis's end is
       separately a distance (Z, signed) or infeed (X, into the work, the
       opposite way to the retraction direction), or a memory slot (e.g. Z
@@ -212,7 +209,7 @@
           (deflection / spring). Ramping isn't worth doing
         - Out by a consistent amount after a change of direction: X's
           backlash compensation (`Axis2BacklashCompensationSteps`) is off;
-          re-measure it in Setup mode (F2 S)
+          re-measure it in Setup mode (`Tab` `M` `S`)
         - Wanders after fast or long moves: steps are being lost, so ramping
           (or a lower maximum X speed) is worth doing
     - Related idea, for sizing: after setting the measured diameter, type the
@@ -554,9 +551,7 @@ change.
     - **Current tool:** the user picks the tool in use (number and
       description), and it's shown prominently on screen. Changing tool
       must be very easy: a single keypress, not a trip through menus. `T`
-      might do, if it's free at the top level. `t` is Threading under the F2
-      leader, so the two could be confused, unless `F2` is dropped (see
-      "Drop the `F2` leader key?"). Selecting a
+      might do (free at the top level now `F2` has gone). Selecting a
       different tool counts as a tool change, so the current feature is
       cleared (or shifted, once offsets are known, below)
     - **Tool database:** a config file of predefined tools. Must be quick to
@@ -720,13 +715,14 @@ change.
       - NB internal metric/UN threads now use the ISO depth of 0.541 x pitch; the old
         table had 0.469 x pitch (and M18 had 1.072 where M20 had 1.172). Change
         femaleDepth in threadpitches.cpp's FORMS if 0.469 was deliberate
-- [ ] Start a fresh log each session: at start-up, before `INIT_MGOLOG("lc.log")`
+- [x] Start a fresh log each session: at start-up, before `INIT_MGOLOG("lc.log")`
       in main.cpp, rename any existing lc.log to lc.log.previous (replacing an
       older one), so there's always this session's log and the last one's. The
       log grows without limit now that threading passes, retracts, spindle
       readings and lost pulses are all logged, and the session in question
       after a workshop test is hard to find in it. (`std::filesystem::rename`;
       ignore a failure, e.g. no log yet, rather than refusing to start)
+    - **Done:** as described. Not yet tried on the Pi
 - [ ] Add some form of generic multi-pass functionality (defining a start position,
       a required end position, and how axes should change per pass -- e.g. for a lathe
       operation, we'd define a z start, a z end, and an x infeed per pass).

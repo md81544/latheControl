@@ -400,7 +400,6 @@ struct ViewQt::Impl {
     TextItem axis1Status;
     TextItem axis2Status;
     TextItem chuckRpm;
-    TextItem leaderNotifier;
     TextItem warning;
     TextItem taperOrRadius;
     TextItem axis1LinearScalePos;
@@ -529,7 +528,6 @@ void ViewQt::initialise(const Model& model)
     d.axis1Status = make(350, STATUS_BAR_Y, 20, GREEN);
     d.axis2Status = make(550, STATUS_BAR_Y, 20, GREEN);
     d.chuckRpm = make(750, STATUS_BAR_Y, 20, GREEN);
-    d.leaderNotifier = make(1000, STATUS_BAR_Y, 20, GREEN);
 
     // Miscellaneous - this is the bank of text which contains, for example,
     // the help, or text for, say, threading
@@ -800,9 +798,6 @@ void ViewQt::Impl::drawLeaderHints(std::vector<DrawItem>& frame, const Model& mo
         case KeyMode::AxisAll:
             title = "\\ (both axes) then...";
             break;
-        case KeyMode::Function:
-            title = "F2 then...";
-            break;
         case KeyMode::None:
             return;
     }
@@ -940,7 +935,6 @@ void ViewQt::updateDisplay(const Model& model)
                 draw(d.surfaceSpeed);
             }
         }
-        draw(d.leaderNotifier);
         draw(d.chuckRpm);
         draw(d.generalStatus);
         draw(d.warning);
@@ -1084,11 +1078,6 @@ void ViewQt::Impl::updateTextFromModel(const Model& model)
     } else if (model.getMode() == Mode::Radius) {
         taperOrRadius.text = fmt::format(
             "Radius: {} {}", model.toDisplayUnits(1, model.getRadius()), model.axisUnitName(1));
-    }
-    if (model.getKeyMode() == KeyMode::Function) {
-        leaderNotifier.text = ": (select function)";
-    } else {
-        leaderNotifier.text = "";
     }
     chuckRpm.text = fmt::format("C: {: >5.1f} deg", model.getChuckAngle());
 

@@ -62,8 +62,7 @@ enum class KeyMode {
     None,
     Axis1,
     Axis2,
-    AxisAll,
-    Function
+    AxisAll
 };
 
 enum class XDirection {

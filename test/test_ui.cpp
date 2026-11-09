@@ -682,7 +682,7 @@ TEST_CASE("UI: taper dialog through the controller")
     QWidget* w = mainWindow();
     REQUIRE(w);
 
-    // F2 then P opens it; choose MT2, tool moving in, and OK. (Found by name,
+    // The menu's Modes, Taper opens it; choose MT2, tool moving in, and OK. (Found by name,
     // so the test doesn't break when the presets are reordered)
     const auto mt2 = std::ranges::find(
         mgo::taperPresets, std::string("Morse taper MT2"), &mgo::TaperPreset::name);
@@ -695,7 +695,8 @@ TEST_CASE("UI: taper dialog through the controller")
         QTest::keyClick(inputWidget(dialog), Qt::Key_I);
         QTest::keyClick(inputWidget(dialog), Qt::Key_Return);
     });
-    press(w, controller, Qt::Key_F2);
+    press(w, controller, Qt::Key_Tab);
+    press(w, controller, Qt::Key_M);
     press(w, controller, Qt::Key_P);
     REQUIRE(tm.model.getMode() == mgo::Mode::Taper);
     REQUIRE(tm.model.getTaperAngle() == Approx(1.4307));
@@ -817,12 +818,13 @@ TEST_CASE("UI: choosing a thread through the controller")
     REQUIRE(w);
     REQUIRE(!tm.model.getThreads().empty());
 
-    // F2, T: the first size of the first type, female
+    // The menu's Modes, Threading: the first size of the first type, female
     whenDialogShows([](QWidget* dialog) {
         QTest::keyClick(inputWidget(dialog), Qt::Key_M);
         QTest::keyClick(inputWidget(dialog), Qt::Key_Return);
     });
-    press(w, controller, Qt::Key_F2);
+    press(w, controller, Qt::Key_Tab);
+    press(w, controller, Qt::Key_M);
     press(w, controller, Qt::Key_T);
     REQUIRE(tm.model.getMode() == mgo::Mode::Threading);
     REQUIRE(tm.model.getThread()->name == tm.model.getThreads().at(0).threads.at(0).name);
@@ -974,7 +976,7 @@ TEST_CASE("UI: multi-pass through the controller")
     tm.model.axis2StorePosition(0.02);
     tm.model.selectPreviousMemorySlot();
 
-    // F2, M: as the tool's at Mem 1, the dialog starts there, ending at Mem 2.
+    // The menu's Modes, Multi-pass: as the tool's at Mem 1, the dialog starts there, ending at Mem 2.
     // Down to the step-over (past Z's and X's ends), and type it
     whenDialogShows([](QWidget* dialog) {
         for (int n = 0; n < 3; ++n) {
@@ -983,7 +985,8 @@ TEST_CASE("UI: multi-pass through the controller")
         typeInto(dialog, "0.01");
         QTest::keyClick(inputWidget(dialog), Qt::Key_Return);
     });
-    press(w, controller, Qt::Key_F2);
+    press(w, controller, Qt::Key_Tab);
+    press(w, controller, Qt::Key_M);
     press(w, controller, Qt::Key_M);
     REQUIRE(waitForDialogToClose());
     REQUIRE(tm.model.getMode() == mgo::Mode::MultiPass);

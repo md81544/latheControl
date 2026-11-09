@@ -12,6 +12,7 @@
 
 #include <QApplication>
 
+#include <filesystem>
 #include <iostream>
 #include <set>
 #include <string>
@@ -27,6 +28,10 @@ int main(int argc, char* argv[])
         // removes any Qt-specific arguments, such as -platform, from argv)
         QApplication app(argc, argv);
 
+        // A fresh log each session, keeping the last session's (replacing the
+        // one before). Not being able to (e.g. no log yet) doesn't matter
+        std::error_code ignored;
+        std::filesystem::rename("lc.log", "lc.log.previous", ignored);
         INIT_MGOLOG("lc.log");
         MGOLOG("Program started");
 

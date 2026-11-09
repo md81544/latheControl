@@ -896,7 +896,7 @@ TEST_CASE("Commands: shortcut text")
     REQUIRE(mgo::shortcutText(mgo::key::AltW, lathe) == "Alt+w");
     REQUIRE(mgo::shortcutText(mgo::key::CtrlQ, lathe) == "Ctrl+q");
     REQUIRE(mgo::shortcutText(mgo::key::A, lathe) == "Shift+a");
-    REQUIRE(mgo::shortcutText(mgo::key::f2t, lathe) == "F2 t");
+    REQUIRE(mgo::shortcutText(mgo::key::f2t, lathe).empty()); // menu only
     REQUIRE(mgo::shortcutText(mgo::key::LBRACKET, lathe) == "[");
     REQUIRE(mgo::shortcutText(mgo::key::SIX, lathe) == "6");
     REQUIRE(mgo::shortcutText(mgo::key::F1, lathe) == "F1");
@@ -1078,7 +1078,7 @@ TEST_CASE("Menu: hotkeys")
     mgo::Menu menu(mgo::buildCommands(config));
     using Type = mgo::Menu::Action::Type;
 
-    // M (Modes), then T (Threading): as F2 T
+    // M (Modes), then T (Threading)
     menu.open();
     REQUIRE(menu.handleKey(mgo::key::m, model).type == Type::None);
     REQUIRE(menu.categories().at(*menu.openCategory()) == "Modes");
@@ -1171,7 +1171,7 @@ TEST_CASE("Commands: hints after a leader key")
     REQUIRE(axis1.contains(mgo::key::a1_g));
     REQUIRE(axis1.contains(mgo::key::a1_z));
     REQUIRE(!axis1.contains(mgo::key::a2_g));
-    // The F2 codes look as if they have the axis 1 leader's bit set
+    // The menu-only codes look as if they have the axis 1 leader's bit set
     REQUIRE(!axis1.contains(mgo::key::f2t));
 
     const auto axis2 = keysFor(mgo::KeyMode::Axis2);
@@ -1182,11 +1182,6 @@ TEST_CASE("Commands: hints after a leader key")
     REQUIRE(both.contains(mgo::key::aAll_z));
     REQUIRE(!both.contains(mgo::key::a1_z));
 
-    const auto function = keysFor(mgo::KeyMode::Function);
-    REQUIRE(function.contains(mgo::key::f2t));
-    REQUIRE(function.contains(mgo::key::f2p));
-    REQUIRE(!function.contains(mgo::key::a1_g));
-
     REQUIRE(keysFor(mgo::KeyMode::None).empty());
 
     // The key to press after the leader
@@ -1194,7 +1189,6 @@ TEST_CASE("Commands: hints after a leader key")
     REQUIRE(mgo::followUpKeyName(mgo::key::a2_ENTER) == "Enter");
     REQUIRE(mgo::followUpKeyName(mgo::key::aAll_DELETE) == "Delete");
     REQUIRE(mgo::followUpKeyName(mgo::key::a1_FULLSTOP) == ".");
-    REQUIRE(mgo::followUpKeyName(mgo::key::f2t) == "t");
 }
 
 TEST_CASE("Commands: shut down is shown, but unavailable, in mock builds")

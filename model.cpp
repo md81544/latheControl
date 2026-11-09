@@ -191,8 +191,8 @@ void Model::initialise()
     }
 
     {
-        // Which way X retracts to start with (F2 R changes it, as does
-        // choosing a male or female thread)
+        // Which way X retracts to start with (the menu's retraction
+        // direction changes it, as does choosing a male or female thread)
         const std::string direction = m_config.read("Axis2RetractionDirection", "outwards");
         if (direction == "inwards") {
             m_xRetractionDirection = XDirection::Inwards;

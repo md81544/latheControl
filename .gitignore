@@ -38,5 +38,6 @@ build/
 # Other
 tags
 *.log
+*.log.previous
 lldb-mi
 .cache/

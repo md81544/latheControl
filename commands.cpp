@@ -141,29 +141,19 @@ char categoryHotkey(const std::string& category)
 
 namespace {
 
-// The letter typed after F2 (the function leader key) for a command, or 0 if
-// it isn't a function leader command
-char functionLeaderLetter(int k)
+// Whether a command is only chosen from the menu (it has no shortcut)
+bool menuOnly(int k)
 {
     switch (k) {
-        case key::f2h:
-            return 'h';
         case key::f2s:
-            return 's';
         case key::f2t:
-            return 't';
         case key::f2p:
-            return 'p';
         case key::f2r:
-            return 'r';
         case key::f2o:
-            return 'o';
-        case key::f2q:
-            return 'q';
         case key::f2m:
-            return 'm';
+            return true;
         default:
-            return 0;
+            return false;
     }
 }
 
@@ -171,9 +161,8 @@ char functionLeaderLetter(int k)
 
 std::string shortcutText(int k, const IConfigReader& config)
 {
-    // Function leader (F2, or colon) commands
-    if (const char letter = functionLeaderLetter(k)) {
-        return std::string("F2 ") + letter;
+    if (menuOnly(k)) {
+        return "";
     }
     if (k & key::ALT) {
         return "Alt+" + keyName(k & ~key::ALT);
@@ -195,9 +184,6 @@ std::string shortcutText(int k, const IConfigReader& config)
 
 std::string followUpKeyName(int k)
 {
-    if (const char letter = functionLeaderLetter(k)) {
-        return std::string(1, letter);
-    }
     return keyName(k & ~(AXIS1_LEADER_BIT | AXIS2_LEADER_BIT | ALL_AXES_LEADER_BIT));
 }
 
@@ -210,12 +196,9 @@ std::vector<const Command*> commandsForLeader(const std::vector<Command>& comman
         if (k & (key::ALT | key::CTRL)) {
             continue;
         }
-        // (The function leader's codes can look as if they have an axis
-        // leader's bit set, so are checked for first)
-        if (functionLeaderLetter(k) != 0) {
-            if (mode == KeyMode::Function) {
-                result.push_back(&c);
-            }
+        // (Nor do the menu-only commands, whose codes can look as if they
+        // have an axis leader's bit set)
+        if (menuOnly(k)) {
             continue;
         }
         bool follows = false;
@@ -229,7 +212,6 @@ std::vector<const Command*> commandsForLeader(const std::vector<Command>& comman
             case KeyMode::AxisAll:
                 follows = (k & ALL_AXES_LEADER_BIT) && !(k & (AXIS1_LEADER_BIT | AXIS2_LEADER_BIT));
                 break;
-            case KeyMode::Function:
             case KeyMode::None:
                 break;
         }
@@ -417,7 +399,7 @@ std::vector<Command> buildCommands(const IConfigReader& config, DisplayUnits uni
     b.add(c, fmt::format("Retract / unretract {}", a2), key::r, AXIS2);
 
     // (The controller requires axis 2 for these modes)
-    // (Hotkeys here are the same letters as with the F2 leader key)
+    // (Most have no shortcut, so are chosen here, by their hotkeys)
     c = "Modes";
     b.add(c, "Threading...", key::f2t, BOTH, nullptr, 't');
     b.add(c, "Taper...", key::f2p, BOTH, nullptr, 'p');
