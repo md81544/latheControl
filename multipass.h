@@ -262,6 +262,12 @@ public:
     // Abandons the multi-pass, giving the reason (shown by message()). The
     // caller stops the motors
     void stop(const std::string& reason);
+    // Stops once the tool is clear of the work: during a cut, the cut is
+    // finished, and the feed axis retracts (if the plan retracts) and the cut
+    // axis returns as usual, but it's left retracted; otherwise (e.g.
+    // paused), at once. e.g. for a threading pass, which, stopped part way,
+    // would leave the tool cutting a ring in the thread
+    void stopAfterPass(const std::string& reason);
     // Starts the next move if the last has finished
     void update();
 
@@ -319,6 +325,8 @@ private:
     double m_cutSpeed { 0.0 };
     // (See togglePauseRequest())
     bool m_pauseRequested { false };
+    // (See stopAfterPass())
+    std::string m_stopAfterPassReason;
     std::string m_message;
 };
 

@@ -265,6 +265,7 @@ std::string MultiPass::start(const MultiPassPlan& plan)
     m_plan = plan;
     m_message.clear();
     m_pauseRequested = false;
+    m_stopAfterPassReason.clear();
     m_passCutStart = plan.cutStart;
     // The first pass is one step in from the start (which is usually where
     // the tool touched the work, so a pass there would cut nothing)
@@ -311,6 +312,24 @@ void MultiPass::stop(const std::string& reason)
 {
     if (inProgress()) {
         abandon(reason);
+    }
+}
+
+void MultiPass::stopAfterPass(const std::string& reason)
+{
+    switch (m_state) {
+        case State::Cutting:
+        case State::Retracting:
+        case State::Returning:
+            // (See afterReturn())
+            m_stopAfterPassReason = reason;
+            return;
+        case State::Finishing:
+            // (The last pass is done: just unretracting)
+            return;
+        default:
+            stop(reason);
+            return;
     }
 }
 
@@ -535,6 +554,11 @@ void MultiPass::startReturn()
 
 void MultiPass::afterReturn()
 {
+    if (!m_stopAfterPassReason.empty()) {
+        // (Before unretracting, so the tool stays clear of the work)
+        abandon(m_stopAfterPassReason);
+        return;
+    }
     if (isLastPass()) {
         finish();
         return;

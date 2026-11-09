@@ -251,6 +251,15 @@
              retracted, even while paused) goes back to the last depth
              before the next pass, rather than cutting air from there. X
              deeper (nudged in) is taken as meant
+           - **Done:** a safety stop if the encoder loses pulses during
+             the passes (seen as a false alarm in the FAKE build, from the
+             Mac throttling the app in the background, which showed the
+             passes carried on regardless). Every later pass would cut a
+             slightly different thread, so they stop once clear of the work:
+             a cut is finished (stopping part way would leave the tool
+             cutting a ring), X retracts and Z returns, and X is left
+             retracted. Enter won't start passes or spring passes again on
+             that thread; choosing the thread again clears it
            - **Done:** Z can move (Left/Right) while paused between spring
              passes, e.g. off the end to try the nut on; Enter moves back
              to the last pass's start first. (Tried in the FAKE build: the

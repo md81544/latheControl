@@ -2088,6 +2088,46 @@ TEST_CASE("MultiPass: a compound infeed moves each cut's start along")
     REQUIRE(mp.passCutStart() == Approx(-0.1));
 }
 
+TEST_CASE("MultiPass: stopping after a pass")
+{
+    // Asked during a cut: the cut finishes, then it retracts and returns as
+    // usual, and stops there, still retracted (clear of the work)
+    FakeMultiPassMachine machine;
+    mgo::MultiPass mp(machine);
+    REQUIRE(mp.start(threadingPlan()).empty());
+    machine.finishMoves(); // (the first feed in)
+    mp.update();
+    REQUIRE(mp.state() == mgo::MultiPass::State::Cutting);
+    mp.stopAfterPass("lost pulses");
+    REQUIRE(mp.inProgress());
+    machine.run(mp);
+    REQUIRE(mp.state() == mgo::MultiPass::State::Idle);
+    REQUIRE(mp.message() == "lost pulses");
+    REQUIRE(machine.log == Log { "feed 4.9", "thread -10", "retract", "cut 0 at 1000" });
+    REQUIRE(machine.isRetracted());
+
+    // Paused (or before a cut starts): at once
+    machine.finishMoves();
+    machine.retract();
+    machine.finishMoves();
+    machine.m_feed = 5.0;
+    auto plan = threadingPlan();
+    plan.pause = true;
+    REQUIRE(mp.start(plan).empty());
+    machine.run(mp);
+    REQUIRE(mp.state() == mgo::MultiPass::State::Paused);
+    mp.stopAfterPass("lost pulses");
+    REQUIRE(mp.state() == mgo::MultiPass::State::Idle);
+    REQUIRE(mp.message() == "lost pulses");
+
+    // Starting again forgets it
+    machine.m_feed = 5.0;
+    machine.log.clear();
+    REQUIRE(mp.start(threadingPlan()).empty());
+    machine.run(mp);
+    REQUIRE(mp.state() == mgo::MultiPass::State::Finished);
+}
+
 TEST_CASE("MultiPass: no compound infeed with a taper correction")
 {
     FakeMultiPassMachine machine;
@@ -3327,6 +3367,69 @@ TEST_CASE("Model:   threading passes with a constant area and a compound infeed"
     REQUIRE(t.model.multiPass().plan().cutShiftPerFeed == 0.0);
     runThreadingPasses(t);
     REQUIRE(t.model.multiPass().state() == mgo::MultiPass::State::Paused);
+    t.model.stopAllMotors();
+}
+
+TEST_CASE("Model:   threading passes stop after a pass if the encoder loses pulses")
+{
+    ThreadingTestModel t(300);
+    REQUIRE(waitFor([&t] { return !t.model.isAxis1MotorRunning(); }, std::chrono::seconds(5)));
+    t.model.checkStatus();
+    t.model.axis2SetSpeed(100.0);
+    REQUIRE(t.model
+                .setThreadingPassesSetup({ .cutDistance = 1.0,
+                                           .feedInfeed = 0.03,
+                                           .feedPerPass = 0.01,
+                                           .constantArea = false,
+                                           .compoundInfeed = false })
+                .empty());
+    const double zStart = t.model.getMultiPassRange().cutStart;
+    t.model.multiPassGo();
+    REQUIRE(t.model.multiPass().totalPasses() == 3);
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(20);
+    while (!(t.model.multiPass().state() == mgo::MultiPass::State::Cutting
+             && t.model.isAxis1MotorRunning())) {
+        REQUIRE(std::chrono::steady_clock::now() < deadline);
+        t.model.checkStatus();
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    // During the first pass, the spindle's pulses stop for a moment (over ten
+    // times the usual gap), then carry on as before: pulses were lost
+    t.gpio.setRotaryEncoderDelayMicroseconds(5'000);
+    std::this_thread::sleep_for(std::chrono::milliseconds(8));
+    t.gpio.setRotaryEncoderDelayMicroseconds(300);
+    while (t.model.multiPass().inProgress()) {
+        REQUIRE(std::chrono::steady_clock::now() < deadline);
+        t.model.checkStatus();
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    // It finished that pass, retracted and returned, then stopped there
+    REQUIRE(t.model.multiPass().state() == mgo::MultiPass::State::Idle);
+    REQUIRE(t.model.multiPass().pass() == 1);
+    REQUIRE(t.model.getWarning().find("lost pulses") != std::string::npos);
+    REQUIRE(t.model.getIsAxis2Retracted());
+    REQUIRE(t.model.getAxis1MotorPosition() == Approx(zStart).margin(0.0001));
+
+    // Enter won't start them again (nor spring passes) on this thread
+    t.model.multiPassGo();
+    REQUIRE(!t.model.multiPass().inProgress());
+    REQUIRE(!t.model.multiPassMovingToStart());
+    REQUIRE(t.model.getWarning().find("lost pulses") != std::string::npos);
+
+    // Choosing the thread again (e.g. for new work) clears it
+    t.model.changeMode(mgo::Mode::Threading);
+    REQUIRE(t.model
+                .setThreadingPassesSetup({ .cutDistance = 1.0, .feedInfeed = 0.03, .feedPerPass = 0.01 })
+                .empty());
+    // (From here, so Enter's move to the start just counts X as unretracted;
+    // then Enter starts them)
+    t.model.multiPassGo();
+    REQUIRE(t.model.getWarning().empty());
+    runUntilMoved(t);
+    REQUIRE(!t.model.getIsAxis2Retracted());
+    t.model.multiPassGo();
+    REQUIRE(t.model.getWarning().empty());
+    REQUIRE(t.model.multiPass().inProgress());
     t.model.stopAllMotors();
 }
 

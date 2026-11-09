@@ -93,6 +93,10 @@ constexpr double THREADING_START_SPEED_FRACTION = 0.8;
 
 // Below this, the spindle is regarded as stopped
 constexpr float SPINDLE_STOPPED_RPM = 30.f;
+// Why threading passes stop, or won't start, once the encoder has lost pulses
+constexpr const char* LOST_PULSES_PASSES
+    = "Encoder lost pulses: further passes wouldn't follow this thread. Choose the thread again "
+      "for new work";
 // ...once it has read below SPINDLE_STOPPED_RPM for this long
 constexpr auto SPINDLE_STOPPED_CONFIRM_TIME = std::chrono::milliseconds(300);
 
@@ -371,6 +375,11 @@ void Model::checkStatus()
 
     // (Last, once the above has dealt with any move that's ended)
     if (m_multiPass.inProgress()) {
+        if (m_mode == Mode::Threading && m_threadingPositionLost) {
+            // Every pass from now on would cut a different thread. (Once
+            // clear of the work: stopped part way, the tool would cut a ring)
+            m_multiPass.stopAfterPass(LOST_PULSES_PASSES);
+        }
         if (m_springPasses && m_multiPass.state() == MultiPass::State::Cutting) {
             // (The depth to move back to, if stopped: it may have been nudged)
             m_springPassX = getAxis2Position();
@@ -2463,6 +2472,11 @@ void Model::multiPassGo()
     }
     if (m_axis1Motor->isRunning() || m_axis2Motor->isRunning()) {
         m_warning = "Stop the motors first";
+        return;
+    }
+    if (threading && m_threadingPositionLost) {
+        // (Choosing the thread again clears it, e.g. for new work)
+        m_warning = LOST_PULSES_PASSES;
         return;
     }
     if (threading && m_springPassX) {
