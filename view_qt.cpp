@@ -1278,12 +1278,18 @@ void ViewQt::Impl::updateMultiPassData(const Model& model)
         position(2, range.feedEnd));
     if (options.feedPerPass < MultiPass::TOLERANCE) {
         misc1.text = "Repeating the same cut";
+    } else if (threading && options.constantArea) {
+        misc1.text = fmt::format(
+            "{} infeed {} first, then a constant area per pass", x, xLength(options.feedPerPass));
     } else {
         misc1.text = fmt::format(
             "{} {} {} per pass",
             x,
             threading ? "infeed" : "step-over",
             xLength(options.feedPerPass));
+    }
+    if (threading && options.compoundInfeed) {
+        misc1.text += ", compound";
     }
     if (options.pause) {
         misc1.text += ", pausing";
@@ -1342,7 +1348,7 @@ void ViewQt::Impl::updateMultiPassData(const Model& model)
                       x,
                       xLength(mp.nextFeed()))
                 : spring && !model.springPassAtStart()
-                ? pass + " done: Enter moves " + x + " back to the last depth"
+                ? pass + " done: Enter moves back to the last pass's start"
                 : spring
                 ? pass + " done: Enter for another (" + x + " can be nudged in), Space ends"
                 : pass + " done: press Enter for the next (" + x + " can be nudged)";
@@ -1352,6 +1358,9 @@ void ViewQt::Impl::updateMultiPassData(const Model& model)
             break;
         case MultiPass::State::Feeding:
             misc2.text = pass + (threading ? ": feeding in" : ": stepping over");
+            break;
+        case MultiPass::State::Positioning:
+            misc2.text = pass + ": " + z + " to the pass's start";
             break;
         case MultiPass::State::Finishing:
             misc2.text = "Finishing";

@@ -83,6 +83,21 @@ struct MultiPassPlan {
     bool retract { false };
     // Wait for continueAfterPause() before each pass after the first
     bool pause { false };
+    // Constant area: each pass removes about the same area as the first, as
+    // for a V thread (whose area goes as the square of its depth), so the
+    // passes get shallower as they go deeper. Pass n goes in to feedPerPass
+    // times the square root of n from the start, but at least feedMinimum
+    // further than the pass before (or than it was nudged to). Otherwise,
+    // each pass goes feedPerPass further
+    bool constantArea { false };
+    double feedMinimum { 0.0 };
+    // Compound (flank) infeed: each cut starts further along the cut axis by
+    // this much per mm the feed axis has gone in from feedStart (signed, e.g.
+    // tan 29.5 degrees the way the cut goes, as a topslide set over would),
+    // so only one flank of a threading tool cuts. The cut axis moves there
+    // before each cut, and returns there; the cut's end stays where it is.
+    // Zero for none. Not with feedCorrection
+    double cutShiftPerFeed { 0.0 };
     // (Experimental) For a machine which cuts a slight taper: how far the
     // feed axis follows the cut axis, as a fraction of the cut axis's
     // movement, during each cut (and back again on the return), to cancel
@@ -124,6 +139,11 @@ struct MultiPassSetup {
     // Retract the feed axis before moving to the start (when the cut axis
     // has to move to get there)
     bool retractBeforeMoveToStart { true };
+    // Threading passes only: each pass removes about the same area, and
+    // the infeed is along a flank (see MultiPassPlan::constantArea and
+    // cutShiftPerFeed)
+    bool constantArea { false };
+    bool compoundInfeed { false };
 };
 
 // What's needed to work out a MultiPassSetup's positions (in mm)
@@ -185,8 +205,13 @@ bool atMultiPassPosition(double position, double target);
 
 // How many passes a range takes with a step-over (the first a step in from
 // the feed axis's start, the last at its end; at least one), or 0 if
-// repeating until stopped (a step-over of zero)
-int multiPassCount(const MultiPassRange& range, double feedPerPass);
+// repeating until stopped (a step-over of zero). (See MultiPassPlan for
+// constantArea and feedMinimum)
+int multiPassCount(
+    const MultiPassRange& range,
+    double feedPerPass,
+    bool constantArea = false,
+    double feedMinimum = 0.0);
 
 // A series of cuts: feed in (a step from the start), cut, (retract,) return,
 // (unretract,) (pause,) and repeat until a cut has been made at the feed
@@ -210,6 +235,7 @@ public:
         Paused, // Waiting for continueAfterPause()
         Unretracting,
         Feeding,
+        Positioning, // Moving the cut axis to a pass's start (see cutShiftPerFeed)
         Finishing, // Unretracting after the last pass
         Finished
     };
@@ -257,6 +283,9 @@ public:
     // Why the multi-pass last stopped (empty if it finished, or hasn't)
     const std::string& message() const;
     const MultiPassPlan& plan() const;
+    // Where the cut axis starts the pass being made (or last made): the
+    // plan's cutStart, unless shifted (see MultiPassPlan::cutShiftPerFeed)
+    double passCutStart() const;
 
 private:
     // Whether the cut or feed axis is at a position (see cutStepSize())
@@ -266,7 +295,10 @@ private:
     // Where the next step on starts from: the feed axis's position (or, for
     // a manual feed, where it should be)
     double feedBase() const;
-    double nextFeedTarget(double from) const;
+    // Where the feed axis goes for a pass (from 1), from where it is
+    double nextFeedTarget(double from, int pass) const;
+    // Moves the cut axis to the pass's start if need be, then cuts
+    void startPass();
     void startCut();
     void startReturn();
     void afterReturn();
@@ -282,6 +314,7 @@ private:
     int m_pass { 0 };
     // The feed axis's position for the pass being made
     double m_feedTarget { 0.0 };
+    double m_passCutStart { 0.0 };
     // The cut axis's speed for cutting, while returning at full speed
     double m_cutSpeed { 0.0 };
     // (See togglePauseRequest())

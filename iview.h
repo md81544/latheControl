@@ -61,6 +61,11 @@ struct MultiPassDialogInfo {
     struct Threading {
         std::string thread;
         double depthMm { 0.0 };
+        // For the options (see MultiPassPlan::constantArea and
+        // cutShiftPerFeed): the angle a compound infeed goes in at, and
+        // the least a pass goes in with a constant area
+        double compoundAngleDeg { 29.5 };
+        double minimumInfeedMm { 0.02 };
     };
     std::optional<Threading> threading;
 };

@@ -250,6 +250,13 @@ bool keyAllowedInCurrentMode(int k, const Model& model)
             && (k == key::w || k == key::W || k == key::s || k == key::S)) {
             return true;
         }
+        // Between spring passes, Z can move too (e.g. off the end, to try the
+        // nut on): Enter moves back before the next pass. (Not between the
+        // threading passes themselves)
+        if (model.multiPass().state() == MultiPass::State::Paused && model.springPasses()
+            && (k == key::LEFT || k == key::RIGHT)) {
+            return true;
+        }
         switch (k) {
             case key::SPACE:
             case key::EQUALS:

@@ -1622,7 +1622,15 @@ private:
             m_rows[Diameter].edit->setText(QString::fromStdString(diameter));
         }
 
-        const int passes = multiPassCount(ends, m_feedPerPassMm);
+        const bool constantArea = m_info.threading && m_setup.constantArea;
+        const int passes = multiPassCount(
+            ends,
+            m_feedPerPassMm,
+            constantArea,
+            m_info.threading ? m_info.threading->minimumInfeedMm : 0.0);
+        if (m_info.threading) {
+            m_rows[StepOver].name->setText(constantArea ? "First pass infeed" : "Infeed per pass");
+        }
         m_rows[StepOver].result->setText(
             passes == 0 ? "repeats until stopped"
                         : QString::fromStdString(
@@ -1646,27 +1654,45 @@ private:
             w.source->setStyleSheet(style);
         }
 
-        const auto option = [](const char* key, const char* text, bool on) {
+        const auto option = [](const char* key, const QString& text, bool on) {
             return QString("[%1] %2: <span style='color: %3;'>%4</span>")
                 .arg(key, text, on ? "rgb(255, 255, 0)" : "rgb(190, 190, 190)", on ? "Yes" : "No");
         };
         // (Threading always retracts: the return isn't locked to the spindle)
-        m_options->setText(
-            option("P", "Pause between passes", m_setup.pause) + "&nbsp;&nbsp;&nbsp;"
+        QString options
+            = option("P", "Pause between passes", m_setup.pause) + "&nbsp;&nbsp;&nbsp;"
             + (m_info.threading ? QString("Retracts between passes")
                                 : option("R", "Retract between", m_setup.retract))
             + "<br>"
-            + option("M", "Retract before moving to the start", m_setup.retractBeforeMoveToStart));
+            + option("M", "Retract before moving to the start", m_setup.retractBeforeMoveToStart);
+        if (m_info.threading) {
+            options += "<br>" + option("A", "Constant area", m_setup.constantArea)
+                + "&nbsp;&nbsp;&nbsp;"
+                + option(
+                           "C",
+                           QString::fromStdString(fmt::format(
+                               "Compound infeed ({:g}°)", m_info.threading->compoundAngleDeg)),
+                           m_setup.compoundInfeed);
+        }
+        m_options->setText(options);
 
         if (r.error.empty()) {
+            std::string text;
+            if (m_info.threading) {
+                text = "Thread depth " + format(m_info.feed, m_info.threading->depthMm, 1) + " "
+                    + m_info.feed.unit + ". ";
+                if (m_setup.compoundInfeed) {
+                    // How far the start moves along by the last pass: it must
+                    // be at least that far off the work
+                    const double shift = std::abs(ends.feedEnd - ends.feedStart)
+                        * std::tan(m_info.threading->compoundAngleDeg * M_PI / 180.0);
+                    text += z.label + " moves up to " + format(z, shift, 1) + " " + z.unit
+                        + " along: start at least that far off the work.\n";
+                }
+            }
             m_message->setStyleSheet(MP_HINT_STYLE);
-            m_message->setText(
-                QString::fromStdString(
-                    (m_info.threading
-                         ? "Thread depth " + format(m_info.feed, m_info.threading->depthMm, 1) + " "
-                             + m_info.feed.unit + ". "
-                         : std::string())
-                    + "In the mode, Enter moves to the start; Enter again cuts"));
+            m_message->setText(QString::fromStdString(
+                text + "In the mode, Enter moves to the start; Enter again cuts"));
         } else {
             m_message->setStyleSheet(MP_ERROR_STYLE);
             m_message->setText(QString::fromStdString(r.error));
@@ -1697,6 +1723,12 @@ private:
         }
         if (qtKey == Qt::Key_R && m_info.threading) {
             return true; // (always on)
+        }
+        if ((qtKey == Qt::Key_A || qtKey == Qt::Key_C) && m_info.threading) {
+            bool& option = qtKey == Qt::Key_A ? m_setup.constantArea : m_setup.compoundInfeed;
+            option = !option;
+            refresh();
+            return true;
         }
         if (qtKey == Qt::Key_P || qtKey == Qt::Key_R || qtKey == Qt::Key_M) {
             bool& option = qtKey == Qt::Key_P ? m_setup.pause

@@ -2256,6 +2256,11 @@ MultiPassSetup Model::threadingPassesDialogSetup() const
 {
     MultiPassSetup s = defaultMultiPassSetup(m_threadingPassesSetup, multiPassPositions());
     s.retract = true;
+    if (m_threadingPassesThread.empty()) {
+        // (The first time: afterwards, as last time)
+        s.constantArea = true;
+        s.compoundInfeed = true;
+    }
     const Thread* thread = getThread();
     if (thread && threadKey(*thread, m_threadChoice.female) != m_threadingPassesThread) {
         // A different thread: in by its depth
@@ -2272,6 +2277,12 @@ std::optional<double> Model::getThreadDepthMm() const
         return std::nullopt;
     }
     return m_threadChoice.female ? thread->femaleDepth() : thread->maleDepth();
+}
+
+double Model::getCompoundInfeedAngleDeg() const
+{
+    const Thread* thread = getThread();
+    return thread ? threadFormInfo(thread->form).angle / 2.0 - 0.5 : 0.0;
 }
 
 const MultiPassSetup& Model::activeMultiPassSetup() const
@@ -2419,10 +2430,16 @@ void Model::multiPassGo()
         return;
     }
     if (m_multiPass.state() == MultiPass::State::Paused && m_springPasses
+        && (m_axis1Motor->isRunning() || m_axis2Motor->isRunning())) {
+        // (e.g. Z still moving off the end)
+        m_warning = "Stop the motors first";
+        return;
+    }
+    if (m_multiPass.state() == MultiPass::State::Paused && m_springPasses
         && !springPassAtStart()) {
-        // X has been moved out while paused (e.g. to try the nut on): these
-        // spring passes end, and it goes back to the last depth; Enter then
-        // starts them again
+        // X moved out, or Z moved along, while paused (e.g. to try the nut
+        // on): these spring passes end, and it goes back to the last pass's
+        // start and depth; Enter then starts them again
         // (With no reason: it wasn't stopped by anything going wrong)
         m_multiPass.stop("");
         springPassMoveBack();
@@ -2477,13 +2494,23 @@ void Model::multiPassGo()
     plan.pause = setup.pause;
     // (A thread's cut is locked to the spindle, so X can't follow Z)
     plan.feedCorrection = threading ? 0.0 : std::tan(taperCorrection() * DEG_TO_RAD);
+    if (threading) {
+        plan.constantArea = setup.constantArea;
+        plan.feedMinimum = m_config.readDouble("ThreadingMinimumInfeed", 0.02);
+        if (setup.compoundInfeed) {
+            // Z moves along the way the cut goes, so the leading flank cuts
+            const double direction = plan.cutEnd > plan.cutStart ? 1.0 : -1.0;
+            plan.cutShiftPerFeed
+                = direction * std::tan(getCompoundInfeedAngleDeg() * DEG_TO_RAD);
+        }
+    }
     if (const std::string error = m_multiPass.start(plan); !error.empty()) {
         m_warning = error;
         return;
     }
     m_warning = "";
     MGOLOG(fmt::format(
-        "{} started: Z {} to {}, X {} to {} by {}{}{}{} ({} passes)",
+        "{} started: Z {} to {}, X {} to {} by {}{}{}{}{}{} ({} passes)",
         threading ? "Threading passes" : "Multi-pass",
         plan.cutStart,
         plan.cutEnd,
@@ -2494,6 +2521,8 @@ void Model::multiPassGo()
         plan.pause ? ", pause" : "",
         plan.feedCorrection != 0.0 ? fmt::format(", taper correction {} deg", taperCorrection())
                                    : "",
+        plan.constantArea ? fmt::format(", constant area (at least {})", plan.feedMinimum) : "",
+        plan.cutShiftPerFeed != 0.0 ? fmt::format(", Z shift {} per X", plan.cutShiftPerFeed) : "",
         m_multiPass.totalPasses()));
 }
 
@@ -2674,7 +2703,8 @@ void Model::startSpringPasses()
     const double x = getAxis2Position();
     MultiPassPlan plan;
     plan.cut = MultiPassCut::Thread;
-    plan.cutStart = m_multiPassRange.cutStart;
+    // (Where the last pass started, which a compound infeed moves along)
+    plan.cutStart = m_springPassZ;
     plan.cutEnd = m_multiPassRange.cutEnd;
     plan.feedStart = x;
     plan.feedEnd = x;
@@ -2703,7 +2733,7 @@ bool Model::springPasses() const
 bool Model::springPassAtStart() const
 {
     if (!m_springPassX || m_axis2Retracted
-        || !atMultiPassPosition(m_axis1Motor->getPosition(), m_multiPassRange.cutStart)) {
+        || !atMultiPassPosition(m_axis1Motor->getPosition(), m_springPassZ)) {
         return false;
     }
     // X at the last pass's depth, or deeper (nudged in on purpose). Not
@@ -2715,11 +2745,10 @@ bool Model::springPassAtStart() const
 
 void Model::springPassMoveBack()
 {
-    MGOLOG(fmt::format(
-        "Spring passes: moving back to Z {}, X {}", m_multiPassRange.cutStart, *m_springPassX));
+    MGOLOG(fmt::format("Spring passes: moving back to Z {}, X {}", m_springPassZ, *m_springPassX));
     m_multiPassMovingToStart = true;
     moveToSafely(
-        m_multiPassRange.cutStart,
+        m_springPassZ,
         *m_springPassX,
         activeMultiPassSetup().retractBeforeMoveToStart,
         "to start",
@@ -2731,6 +2760,8 @@ void Model::multiPassFinished()
     if (m_multiPass.plan().cut == MultiPassCut::Thread) {
         // Spring passes can follow, at this depth
         m_springPassX = getAxis2Position();
+        // (Where Z is: a shifted start is seldom a whole number of steps)
+        m_springPassZ = m_axis1Motor->getPosition();
     }
     // If it cut from the work's end, the feature's diameter is now the one it
     // finished at. (Not if it cut part way along, which would leave the

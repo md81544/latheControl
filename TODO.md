@@ -251,11 +251,36 @@
              retracted, even while paused) goes back to the last depth
              before the next pass, rather than cutting air from there. X
              deeper (nudged in) is taken as meant
-        4. Optionally, each pass removes a constant area rather than a
-           constant depth, as CNC threading cycles do: the passes get
-           shallower as the tool goes deeper, which is gentler on the tool.
-           This could be where INFEED / SIDEFEED (below) finally get used,
-           as a compound (topslide-style) infeed
+           - **Done:** Z can move (Left/Right) while paused between spring
+             passes, e.g. off the end to try the nut on; Enter moves back
+             to the last pass's start first. (Tried in the FAKE build: the
+             arrows did nothing while paused, which wasn't expected.) Not
+             between the threading passes themselves, nor in multi-pass mode
+        4. **Done:** two options in the threading passes dialog, both on
+           the first time (then as last time). Suggested after the M8
+           thread's spring passes each took off a noticeable amount, which
+           may have been the tool and work being pushed away with both
+           flanks cutting. Tested with the mock encoder; not yet tried on
+           the machine
+           - **Constant area** (`A`): each pass removes about the same area,
+             as CNC threading cycles do, so the passes get shallower as the
+             tool goes deeper, which is gentler on the tool. What's typed is
+             the first pass's infeed; pass n goes to that times the square
+             root of n, but at least `ThreadingMinimumInfeed` (0.02 mm)
+             further than the pass before
+           - **Compound infeed** (`C`): as a topslide set over, each pass
+             starts along Z by its depth times tan(half the thread's angle
+             less half a degree): 29.5 degrees for 60 degree threads. Decided:
+             the leading flank cuts (the start moves the way the cut goes,
+             as is usual), so the start must be at least that far off the
+             work (the dialog says how far: about 0.57 of the depth, e.g.
+             0.43 mm for M8). The cut's end stays put, so it never moves
+             towards a shoulder. Z moves to each pass's start at full speed
+             after X feeds in. The pass is still locked to the spindle, so
+             the shifted start just moves the groove along. Spring passes
+             start where the last pass did, with no further shift (nudges
+             are straight in). This replaced the unused INFEED / SIDEFEED
+             constants
 
 ## Motion and timing (mostly in stepperControl)
 - [ ] Deceleration ramping. At the moment there's only acceleration, so
@@ -352,9 +377,11 @@
       the target on, rather than stepping evenly. Expected, and harmless
       (the thread is right); a lower limit, or setting the step rate from
       the target's speed, would smooth it if it's ever wanted
-- [ ] I defined some constants for a slight Z infeed when cutting threads
+- [x] I defined some constants for a slight Z infeed when cutting threads
       (see INFEED and SIDEFEED) but never used them. Maybe implement to
       simulate the use of the topslide
+    - **Done:** as the threading passes' compound infeed (see Multi-pass);
+      the constants have gone
 - [ ] A setting for adding a tiny amount of X motion to counteract a lathe
       that cuts a slight taper (taper mode works brilliantly, but this should
       be a config item applied automatically). Idea: calculate the angle

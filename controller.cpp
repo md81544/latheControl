@@ -780,7 +780,10 @@ void Controller::processKey(int t)
                             thread->name,
                             m_model->getThreadChoice().female ? "female" : "male",
                             describePitch(*thread)),
-                        .depthMm = *m_model->getThreadDepthMm()
+                        .depthMm = *m_model->getThreadDepthMm(),
+                        .compoundAngleDeg = m_model->getCompoundInfeedAngleDeg(),
+                        .minimumInfeedMm
+                        = m_model->config().readDouble("ThreadingMinimumInfeed", 0.02)
                     };
                     m_view->openMultiPassDialog(info, [this](std::optional<MultiPassSetup> setup) {
                         if (!setup) {

@@ -161,16 +161,56 @@ MultiPassSetup defaultMultiPassSetup(
     return setup;
 }
 
-int multiPassCount(const MultiPassRange& range, double feedPerPass)
+namespace {
+
+// How deep (from the feed axis's start) pass n (from 1) goes, from depth (as
+// for the pass before, or nudged), before stopping at the end. See
+// MultiPassPlan::constantArea
+double passDepth(double feedPerPass, bool constantArea, double feedMinimum, int n, double depth)
+{
+    if (!constantArea) {
+        return depth + feedPerPass;
+    }
+    return std::max(feedPerPass * std::sqrt(static_cast<double>(n)), depth + feedMinimum);
+}
+
+// The number of passes to go a distance in, after passesDone passes have gone
+// depth in (at least one in all)
+int countPasses(
+    double distance,
+    double feedPerPass,
+    bool constantArea,
+    double feedMinimum,
+    int passesDone,
+    double depth)
+{
+    if (!constantArea) {
+        // (Less the tolerance, so that rounding doesn't add a pass of nothing)
+        const double remaining = std::max(0.0, distance - depth - MultiPass::TOLERANCE);
+        return std::max(1, passesDone + static_cast<int>(std::ceil(remaining / feedPerPass)));
+    }
+    int n = passesDone;
+    // (The limit is only in case of a mistake: each pass goes in by at least
+    // feedMinimum)
+    while (depth < distance - MultiPass::TOLERANCE && n < 10'000) {
+        depth = std::min(distance, passDepth(feedPerPass, true, feedMinimum, n + 1, depth));
+        ++n;
+    }
+    return std::max(1, n);
+}
+
+} // end anonymous namespace
+
+int multiPassCount(
+    const MultiPassRange& range, double feedPerPass, bool constantArea, double feedMinimum)
 {
     if (feedPerPass < MultiPass::TOLERANCE) {
         return 0;
     }
-    const double distance = std::abs(range.feedEnd - range.feedStart);
     // (As MultiPass::totalPasses(). The first pass is a step in, so a
     // distance of nothing still takes one)
-    return std::max(
-        1, static_cast<int>(std::ceil(std::max(0.0, distance - MultiPass::TOLERANCE) / feedPerPass)));
+    return countPasses(
+        std::abs(range.feedEnd - range.feedStart), feedPerPass, constantArea, feedMinimum, 0, 0.0);
 }
 
 MultiPass::MultiPass(IMultiPassMachine& machine)
@@ -194,6 +234,12 @@ std::string MultiPass::start(const MultiPassPlan& plan)
     }
     if (plan.feedManual && plan.feedCorrection != 0.0) {
         return "Can't correct a taper with a manual feed";
+    }
+    if (plan.constantArea && plan.feedMinimum < TOLERANCE) {
+        return "A constant area needs a minimum feed per pass";
+    }
+    if (plan.cutShiftPerFeed != 0.0 && plan.feedCorrection != 0.0) {
+        return "Can't shift the cut's start and correct a taper together";
     }
     if (plan.cut == MultiPassCut::Thread) {
         if (!plan.retract) {
@@ -219,9 +265,10 @@ std::string MultiPass::start(const MultiPassPlan& plan)
     m_plan = plan;
     m_message.clear();
     m_pauseRequested = false;
+    m_passCutStart = plan.cutStart;
     // The first pass is one step in from the start (which is usually where
     // the tool touched the work, so a pass there would cut nothing)
-    const double firstTarget = nextFeedTarget(plan.feedStart);
+    const double firstTarget = nextFeedTarget(plan.feedStart, 1);
     if (plan.feedManual && !near(firstTarget, plan.feedStart)) {
         // (Paused first, for the user to feed it in)
         m_pass = 0;
@@ -304,7 +351,7 @@ void MultiPass::update()
                 return;
             }
             m_machine.setCutSpeed(m_cutSpeed);
-            if (!cutAt(m_plan.cutStart)) {
+            if (!cutAt(m_passCutStart)) {
                 abandon("The return stopped short of the start");
                 return;
             }
@@ -321,6 +368,17 @@ void MultiPass::update()
             }
             if (!feedAt(m_feedTarget)) {
                 abandon("The feed stopped short");
+                return;
+            }
+            startPass();
+            return;
+        case State::Positioning:
+            if (m_machine.cutMoving()) {
+                return;
+            }
+            m_machine.setCutSpeed(m_cutSpeed);
+            if (!cutAt(m_passCutStart)) {
+                abandon("The move to the cut's start stopped short");
                 return;
             }
             startCut();
@@ -355,11 +413,13 @@ int MultiPass::totalPasses() const
     }
     // The passes so far, and those still to go from this pass's position (so
     // a nudge while paused can change the number)
-    const double remaining = std::abs(m_plan.feedEnd - m_feedTarget);
-    // (Less the tolerance, so that rounding doesn't add a pass of nothing)
-    return std::max(
-        1,
-        m_pass + static_cast<int>(std::ceil(std::max(0.0, remaining - TOLERANCE) / m_plan.feedPerPass)));
+    return countPasses(
+        std::abs(m_plan.feedEnd - m_plan.feedStart),
+        m_plan.feedPerPass,
+        m_plan.constantArea,
+        m_plan.feedMinimum,
+        m_pass,
+        fed());
 }
 
 double MultiPass::fed() const
@@ -370,7 +430,7 @@ double MultiPass::fed() const
 double MultiPass::nextFeed() const
 {
     const double from = feedBase();
-    return std::abs(nextFeedTarget(from) - from);
+    return std::abs(nextFeedTarget(from, m_pass + 1) - from);
 }
 
 const std::string& MultiPass::message() const
@@ -415,15 +475,39 @@ double MultiPass::feedBase() const
     return m_plan.feedManual ? m_feedTarget : m_machine.feedPosition();
 }
 
-double MultiPass::nextFeedTarget(double from) const
+double MultiPass::passCutStart() const
+{
+    return m_passCutStart;
+}
+
+double MultiPass::nextFeedTarget(double from, int pass) const
 {
     const double direction = m_plan.feedEnd < m_plan.feedStart ? -1.0 : 1.0;
-    const double target = from + direction * m_plan.feedPerPass;
+    // (As deep as from is, which may have been nudged)
+    const double depth = (from - m_plan.feedStart) * direction;
+    const double target = m_plan.feedStart
+        + direction
+            * passDepth(m_plan.feedPerPass, m_plan.constantArea, m_plan.feedMinimum, pass, depth);
     // (Not past the end)
     if ((direction > 0.0 && target > m_plan.feedEnd) || (direction < 0.0 && target < m_plan.feedEnd)) {
         return m_plan.feedEnd;
     }
     return target;
+}
+
+void MultiPass::startPass()
+{
+    // (With a compound infeed, the deeper the feed axis, the further along)
+    m_passCutStart = m_plan.cutStart + m_plan.cutShiftPerFeed * fed();
+    if (cutAt(m_passCutStart)) {
+        startCut();
+        return;
+    }
+    // (Clear of the work, so at full speed, as for a return)
+    m_cutSpeed = m_machine.cutSpeed();
+    m_machine.setCutSpeed(m_machine.cutMaxSpeed());
+    m_state = State::Positioning;
+    m_machine.cutMoveTo(m_passCutStart, 0.0);
 }
 
 void MultiPass::startCut()
@@ -446,7 +530,7 @@ void MultiPass::startReturn()
     m_machine.setCutSpeed(m_machine.cutMaxSpeed());
     m_state = State::Returning;
     // (Following back, so the feed axis is where the cut started)
-    m_machine.cutMoveTo(m_plan.cutStart, m_plan.feedCorrection);
+    m_machine.cutMoveTo(m_passCutStart, m_plan.feedCorrection);
 }
 
 void MultiPass::afterReturn()
@@ -481,7 +565,7 @@ void MultiPass::startNextPass()
 {
     // On by a step from where the feed axis is now (so if it was nudged while
     // paused, that's added to the step)
-    m_feedTarget = nextFeedTarget(feedBase());
+    m_feedTarget = nextFeedTarget(feedBase(), m_pass + 1);
     ++m_pass;
     startFeed();
 }
@@ -490,12 +574,12 @@ void MultiPass::startFeed()
 {
     if (m_plan.feedManual) {
         // (The user fed it on while paused)
-        startCut();
+        startPass();
         return;
     }
     if (feedAt(m_feedTarget)) {
         // e.g. repeating the same cut
-        startCut();
+        startPass();
         return;
     }
     m_state = State::Feeding;

@@ -37,11 +37,6 @@ constexpr double DEG_TO_RAD = M_PI / 180.0;
 // What the status line shows when there's nothing else to show
 constexpr const char* DEFAULT_GENERAL_STATUS = "Tab or F1: menu";
 
-constexpr float INFEED = 0.05f; // mm
-// The large number below is tan 29.5°
-// (Cannot use std::tan in constexpr owing to side effects)
-constexpr float SIDEFEED = INFEED * 0.5657727781877700776025887010584;
-
 // "Modes" allow for special behaviour (like threading and tapering)
 enum class Mode {
     None,
@@ -364,6 +359,10 @@ public:
     MultiPassSetup threadingPassesDialogSetup() const;
     // The chosen thread's depth (male or female, as chosen), if one is chosen
     std::optional<double> getThreadDepthMm() const;
+    // The angle a compound infeed goes in at, from the cross-slide: half the
+    // chosen thread's angle, less half a degree so the trailing flank just
+    // clears (29.5 degrees for a 60 degree thread). 0 if no thread is chosen
+    double getCompoundInfeedAngleDeg() const;
     // Spring passes: once threading passes have finished, Enter takes another
     // pass at the same depth, from wherever X is (so it can be nudged in
     // first), and pauses; Enter again takes another, until stopped. If the
@@ -491,6 +490,9 @@ private:
     // Where X was for the last threading pass, once they've finished (for
     // spring passes: see springPassesAvailable())
     std::optional<double> m_springPassX;
+    // Where Z started the last threading pass (moved along by a compound
+    // infeed): where spring passes start
+    double m_springPassZ { 0.0 };
     bool m_springPasses { false };
     MultiPass m_multiPass { *this };
     bool m_multiPassMovingToStart { false };

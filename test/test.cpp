@@ -2008,6 +2008,96 @@ TEST_CASE("MultiPass: threading, each cut is a threading pass")
     REQUIRE(!machine.isRetracted());
 }
 
+TEST_CASE("MultiPass: a constant area per pass")
+{
+    // Pass n goes in to 0.2 x sqrt(n) (0.2, 0.283, 0.346, 0.4...), but at
+    // least 0.05 more each time, to 0.5 in all
+    FakeMultiPassMachine machine;
+    mgo::MultiPass mp(machine);
+    auto plan = basicPlan();
+    plan.feedEnd = 4.5;
+    plan.feedPerPass = 0.2;
+    plan.constantArea = true;
+    plan.feedMinimum = 0.05;
+    // (0.2, 0.2828, 0.3464, 0.4, then 0.45 (the minimum: 0.2 x sqrt(5) is
+    // only 0.447), and 0.5)
+    const int expected = 6;
+    REQUIRE(mgo::multiPassCount({ 0.0, -10.0, 5.0, 4.5 }, 0.2, true, 0.05) == expected);
+    REQUIRE(mp.start(plan).empty());
+    REQUIRE(mp.totalPasses() == expected);
+    machine.run(mp);
+    REQUIRE(mp.state() == mgo::MultiPass::State::Finished);
+    REQUIRE(mp.pass() == expected);
+    std::vector<std::string> feeds;
+    for (const auto& entry : machine.log) {
+        if (entry.starts_with("feed")) {
+            feeds.push_back(entry);
+        }
+    }
+    REQUIRE(feeds
+            == Log { "feed 4.8", "feed 4.71716", "feed 4.65359", "feed 4.6", "feed 4.55",
+                     "feed 4.5" });
+
+    // Without a minimum, it won't start (the passes could get ever smaller)
+    machine.m_feed = 5.0;
+    plan.feedMinimum = 0.0;
+    REQUIRE(!mp.start(plan).empty());
+}
+
+TEST_CASE("MultiPass: a constant area per pass, nudged in while paused")
+{
+    // A nudge deeper than the next pass would go: the next goes at least the
+    // minimum further
+    FakeMultiPassMachine machine;
+    mgo::MultiPass mp(machine);
+    auto plan = basicPlan();
+    plan.feedEnd = 4.5;
+    plan.feedPerPass = 0.2;
+    plan.constantArea = true;
+    plan.feedMinimum = 0.05;
+    plan.pause = true;
+    REQUIRE(mp.start(plan).empty());
+    machine.run(mp);
+    REQUIRE(mp.state() == mgo::MultiPass::State::Paused);
+    REQUIRE(machine.feedPosition() == Approx(4.8));
+    machine.m_feed = 4.7; // (0.3 in: deeper than pass 2's 0.283)
+    REQUIRE(mp.nextFeed() == Approx(0.05));
+    mp.continueAfterPause();
+    REQUIRE(machine.log.back() == "feed 4.65");
+}
+
+TEST_CASE("MultiPass: a compound infeed moves each cut's start along")
+{
+    // Z moves along by 0.5 per mm X goes in (in the cut's direction, so
+    // negative here), at full speed before each cut, and returns there. The
+    // end stays put
+    FakeMultiPassMachine machine;
+    mgo::MultiPass mp(machine);
+    auto plan = threadingPlan();
+    plan.feedEnd = 4.8;
+    plan.cutShiftPerFeed = -0.5;
+    REQUIRE(mp.start(plan).empty());
+    machine.run(mp);
+    REQUIRE(mp.state() == mgo::MultiPass::State::Finished);
+    REQUIRE(machine.log
+            == Log { "feed 4.9", "cut -0.05 at 1000", "thread -10", "retract", "cut -0.05 at 1000",
+                     "unretract", "feed 4.8", "cut -0.1 at 1000", "thread -10", "retract",
+                     "cut -0.1 at 1000", "unretract" });
+    // (The cut's speed is kept)
+    REQUIRE(machine.cutSpeed() == Approx(40.0));
+    REQUIRE(mp.passCutStart() == Approx(-0.1));
+}
+
+TEST_CASE("MultiPass: no compound infeed with a taper correction")
+{
+    FakeMultiPassMachine machine;
+    mgo::MultiPass mp(machine);
+    auto plan = basicPlan();
+    plan.cutShiftPerFeed = -0.5;
+    plan.feedCorrection = 0.01;
+    REQUIRE(!mp.start(plan).empty());
+}
+
 TEST_CASE("MultiPass: threading needs a retract, a motorised feed and no taper correction")
 {
     FakeMultiPassMachine machine;
@@ -3087,6 +3177,32 @@ TEST_CASE("Model:   spring passes after the threading passes")
     REQUIRE(t.model.multiPass().state() == mgo::MultiPass::State::Paused);
     REQUIRE(t.model.getAxis2MotorPosition() == Approx(nudged).margin(0.0001));
 
+    // Z moved along while paused (e.g. off the end): allowed between spring
+    // passes. Enter while it's moving waits; once it's stopped, Enter takes it
+    // back to the last pass's start, then Enter again cuts
+    REQUIRE(mgo::keyAllowedInCurrentMode(mgo::key::RIGHT, t.model));
+    REQUIRE(mgo::keyAllowedInCurrentMode(mgo::key::LEFT, t.model));
+    REQUIRE(!mgo::keyAllowedInCurrentMode(mgo::key::AltRight, t.model));
+    t.model.axis1GoToPosition(zStart - 0.5);
+    REQUIRE(waitFor([&t] { return t.model.isAxis1MotorRunning(); }, std::chrono::seconds(3)));
+    t.model.multiPassGo();
+    REQUIRE(t.model.getWarning() == "Stop the motors first");
+    REQUIRE(t.model.multiPass().state() == mgo::MultiPass::State::Paused);
+    runUntilMoved(t);
+    REQUIRE(t.model.getAxis1MotorPosition() == Approx(zStart - 0.5).margin(0.0001));
+    REQUIRE(!t.model.springPassAtStart());
+    t.model.multiPassGo();
+    REQUIRE(!t.model.multiPass().inProgress());
+    REQUIRE(t.model.multiPassMovingToStart());
+    runUntilMoved(t);
+    REQUIRE(t.model.getAxis1MotorPosition() == Approx(zStart).margin(0.0001));
+    REQUIRE(t.model.getAxis2MotorPosition() == Approx(nudged).margin(0.0001));
+    REQUIRE(t.model.springPassAtStart());
+    t.model.multiPassGo();
+    runThreadingPasses(t);
+    REQUIRE(t.model.multiPass().state() == mgo::MultiPass::State::Paused);
+    REQUIRE(t.model.getWarning().empty());
+
     // Space ends them; Enter takes another
     t.model.stopAllMotors();
     REQUIRE(!t.model.multiPass().inProgress());
@@ -3146,6 +3262,72 @@ TEST_CASE("Model:   spring passes after the threading passes")
                     { .cutDistance = 1.0, .feedInfeed = 0.01, .feedPerPass = 0.01 })
                 .empty());
     REQUIRE(!t.model.springPassesAvailable());
+}
+
+TEST_CASE("Model:   threading passes with a constant area and a compound infeed")
+{
+    ThreadingTestModel t(300);
+    REQUIRE(waitFor([&t] { return !t.model.isAxis1MotorRunning(); }, std::chrono::seconds(5)));
+    t.model.checkStatus();
+    t.model.axis2SetSpeed(100.0);
+    // Both on the first time
+    REQUIRE(t.model.threadingPassesDialogSetup().constantArea);
+    REQUIRE(t.model.threadingPassesDialogSetup().compoundInfeed);
+    REQUIRE(t.model.getCompoundInfeedAngleDeg() == Approx(29.5));
+    // In 0.03, the first pass 0.02: then the minimum (0.02) takes it to the
+    // end
+    REQUIRE(t.model
+                .setThreadingPassesSetup({ .cutDistance = 1.0,
+                                           .feedInfeed = 0.03,
+                                           .feedPerPass = 0.02,
+                                           .constantArea = true,
+                                           .compoundInfeed = true })
+                .empty());
+    const double zStart = t.model.getMultiPassRange().cutStart;
+    t.model.multiPassGo();
+    REQUIRE(t.model.multiPass().inProgress());
+    REQUIRE(t.model.multiPass().plan().constantArea);
+    REQUIRE(t.model.multiPass().plan().feedMinimum == Approx(0.02));
+    // (The cut goes the positive way, so Z moves along that way)
+    const double perX = std::tan(29.5 * M_PI / 180.0);
+    REQUIRE(t.model.multiPass().plan().cutShiftPerFeed == Approx(perX));
+    REQUIRE(t.model.multiPass().totalPasses() == 2);
+
+    // Where Z is as each pass starts cutting, and how far X has gone in
+    std::vector<std::pair<double, double>> starts;
+    bool wasCutting = false;
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(20);
+    while (t.model.multiPass().inProgress()) {
+        REQUIRE(std::chrono::steady_clock::now() < deadline);
+        t.model.checkStatus();
+        const bool cutting = t.model.multiPass().state() == mgo::MultiPass::State::Cutting;
+        if (cutting && !wasCutting) {
+            starts.emplace_back(t.model.getAxis1MotorPosition(), t.model.multiPass().fed());
+        }
+        wasCutting = cutting;
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    INFO(t.model.multiPass().message());
+    REQUIRE(t.model.multiPass().state() == mgo::MultiPass::State::Finished);
+    REQUIRE(starts.size() == 2);
+    REQUIRE(starts[0].second == Approx(0.02));
+    REQUIRE(starts[1].second == Approx(0.03));
+    for (const auto& [z, fed] : starts) {
+        INFO("X in " << fed << ", Z at " << z);
+        // (To the nearest step: 1 um here)
+        REQUIRE(z == Approx(zStart + fed * perX).margin(0.0006));
+    }
+    REQUIRE(t.model.getWarning().empty());
+
+    // Spring passes start where the last pass did
+    REQUIRE(t.model.springPassAtStart());
+    t.model.multiPassGo();
+    REQUIRE(t.model.springPasses());
+    REQUIRE(t.model.multiPass().plan().cutStart == Approx(starts[1].first).margin(0.0006));
+    REQUIRE(t.model.multiPass().plan().cutShiftPerFeed == 0.0);
+    runThreadingPasses(t);
+    REQUIRE(t.model.multiPass().state() == mgo::MultiPass::State::Paused);
+    t.model.stopAllMotors();
 }
 
 TEST_CASE("Model:   threading passes stop if a pass can't start")
@@ -3275,6 +3457,9 @@ TEST_CASE("Model:   nudging X while a multi-pass is paused")
     }
     REQUIRE(!mgo::keyAllowedInCurrentMode(mgo::key::AltW, model));
     REQUIRE(!mgo::keyAllowedInCurrentMode(mgo::key::a, model)); // (nor Z's)
+    // (Z only moves between spring passes, in threading mode)
+    REQUIRE(!mgo::keyAllowedInCurrentMode(mgo::key::RIGHT, model));
+    REQUIRE(!mgo::keyAllowedInCurrentMode(mgo::key::LEFT, model));
     model.stopAllMotors();
 }
 
