@@ -2988,6 +2988,166 @@ TEST_CASE("Model:   threading passes, each locked to the spindle")
     REQUIRE(t.model.threadingPassesSet());
 }
 
+namespace {
+
+// Runs a threading model's updates until its multi-pass is paused, finished
+// or stopped
+void runThreadingPasses(ThreadingTestModel& t)
+{
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(20);
+    while (t.model.multiPass().inProgress()
+           && t.model.multiPass().state() != mgo::MultiPass::State::Paused) {
+        REQUIRE(std::chrono::steady_clock::now() < deadline);
+        t.model.checkStatus();
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+}
+
+// Runs a threading model's updates until a move (e.g. to the start, or a
+// nudge) is over
+void runUntilMoved(ThreadingTestModel& t)
+{
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(20);
+    while (t.model.multiPassMovingToStart() || t.model.isMotionSequenceRunning()
+           || t.model.isAxis1MotorRunning() || t.model.isAxis2MotorRunning()) {
+        REQUIRE(std::chrono::steady_clock::now() < deadline);
+        t.model.checkStatus();
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+}
+
+} // end anonymous namespace
+
+TEST_CASE("Model:   spring passes after the threading passes")
+{
+    ThreadingTestModel t(300);
+    REQUIRE(waitFor([&t] { return !t.model.isAxis1MotorRunning(); }, std::chrono::seconds(5)));
+    t.model.checkStatus();
+    t.model.axis2SetSpeed(100.0);
+    // One pass, in 0.01
+    REQUIRE(t.model
+                .setThreadingPassesSetup(
+                    { .cutDistance = 1.0, .feedInfeed = 0.01, .feedPerPass = 0.01 })
+                .empty());
+    const double zStart = t.model.getMultiPassRange().cutStart;
+    const double xEnd = t.model.getMultiPassRange().feedEnd;
+    REQUIRE(!t.model.springPassesAvailable());
+    t.model.multiPassGo();
+    runThreadingPasses(t);
+    REQUIRE(t.model.multiPass().state() == mgo::MultiPass::State::Finished);
+    REQUIRE(t.model.springPassesAvailable());
+    REQUIRE(t.model.springPassAtStart());
+    REQUIRE(!t.model.springPasses());
+
+    // Enter takes a spring pass at the same depth, then pauses
+    t.model.multiPassGo();
+    REQUIRE(t.model.multiPass().inProgress());
+    REQUIRE(t.model.springPasses());
+    REQUIRE(t.model.multiPass().plan().cut == mgo::MultiPassCut::Thread);
+    runThreadingPasses(t);
+    REQUIRE(t.model.multiPass().state() == mgo::MultiPass::State::Paused);
+    REQUIRE(t.model.multiPass().pass() == 1);
+    REQUIRE(t.model.getAxis2MotorPosition() == Approx(xEnd).margin(0.0001));
+
+    // A fine nudge in (W) is allowed while paused, and the next pass is there
+    REQUIRE(mgo::keyAllowedInCurrentMode(mgo::key::W, t.model));
+    REQUIRE(mgo::keyAllowedInCurrentMode(mgo::key::w, t.model));
+    REQUIRE(!mgo::keyAllowedInCurrentMode(mgo::key::AltW, t.model));
+    const double intoWork = xEnd < t.model.getMultiPassRange().feedStart ? -1.0 : 1.0;
+    t.model.axis2Nudge(intoWork < 0.0 ? mgo::XDirection::Inwards : mgo::XDirection::Outwards, 0.01);
+    runUntilMoved(t);
+    const double nudged = t.model.getAxis2MotorPosition();
+    REQUIRE(nudged == Approx(xEnd + intoWork * 0.01).margin(0.0001));
+    t.model.multiPassGo();
+    runThreadingPasses(t);
+    REQUIRE(t.model.multiPass().state() == mgo::MultiPass::State::Paused);
+    REQUIRE(t.model.multiPass().pass() == 2);
+    REQUIRE(t.model.getAxis2MotorPosition() == Approx(nudged).margin(0.0001));
+    REQUIRE(t.model.getAxis1MotorPosition() == Approx(zStart).margin(0.0001));
+
+    const mgo::XDirection in = intoWork < 0.0 ? mgo::XDirection::Inwards : mgo::XDirection::Outwards;
+    const mgo::XDirection out
+        = intoWork < 0.0 ? mgo::XDirection::Outwards : mgo::XDirection::Inwards;
+
+    // X moved out while paused (e.g. to try the nut on): Enter takes it back
+    // to the last depth, rather than cutting from there; Enter again cuts
+    t.model.axis2Nudge(out, 0.05);
+    runUntilMoved(t);
+    REQUIRE(!t.model.springPassAtStart());
+    t.model.multiPassGo();
+    REQUIRE(!t.model.multiPass().inProgress());
+    REQUIRE(t.model.multiPass().message().empty()); // (not "stopped")
+    REQUIRE(t.model.multiPassMovingToStart());
+    runUntilMoved(t);
+    REQUIRE(t.model.getAxis2MotorPosition() == Approx(nudged).margin(0.0001));
+    REQUIRE(t.model.springPassAtStart());
+    t.model.multiPassGo();
+    REQUIRE(t.model.multiPass().inProgress());
+    runThreadingPasses(t);
+    REQUIRE(t.model.multiPass().state() == mgo::MultiPass::State::Paused);
+    REQUIRE(t.model.getAxis2MotorPosition() == Approx(nudged).margin(0.0001));
+
+    // Space ends them; Enter takes another
+    t.model.stopAllMotors();
+    REQUIRE(!t.model.multiPass().inProgress());
+    REQUIRE(t.model.springPassAtStart());
+    t.model.multiPassGo();
+    REQUIRE(t.model.springPasses());
+    REQUIRE(t.model.multiPass().pass() == 1);
+    t.model.stopAllMotors();
+    runUntilMoved(t);
+
+    // Stopped, X moved out without retracting: Enter goes back to the last
+    // depth first
+    t.model.axis2Nudge(out, 0.05);
+    runUntilMoved(t);
+    REQUIRE(!t.model.springPassAtStart());
+    t.model.multiPassGo();
+    REQUIRE(t.model.multiPassMovingToStart());
+    runUntilMoved(t);
+    REQUIRE(t.model.getAxis2MotorPosition() == Approx(nudged).margin(0.0001));
+
+    // Stopped, X nudged in: deeper is on purpose, so Enter cuts from there
+    t.model.axis2Nudge(in, 0.01);
+    runUntilMoved(t);
+    const double deeper = t.model.getAxis2MotorPosition();
+    REQUIRE(deeper == Approx(nudged + intoWork * 0.01).margin(0.0001));
+    REQUIRE(t.model.springPassAtStart());
+    t.model.multiPassGo();
+    INFO("Warning: " << t.model.getWarning());
+    REQUIRE(t.model.multiPass().inProgress());
+    runThreadingPasses(t);
+    REQUIRE(t.model.multiPass().state() == mgo::MultiPass::State::Paused);
+    REQUIRE(t.model.getAxis2MotorPosition() == Approx(deeper).margin(0.0001));
+    t.model.stopAllMotors();
+    runUntilMoved(t);
+
+    // Away from the start (e.g. retracted, or stopped part way): Enter moves
+    // back to the start of the cut, at the last depth, then takes a pass
+    t.model.axis2Retract();
+    runUntilMoved(t);
+    REQUIRE(!t.model.springPassAtStart());
+    t.model.multiPassGo();
+    REQUIRE(t.model.multiPassMovingToStart());
+    runUntilMoved(t);
+    REQUIRE(t.model.springPassAtStart());
+    REQUIRE(t.model.getAxis1MotorPosition() == Approx(zStart).margin(0.0001));
+    REQUIRE(t.model.getAxis2MotorPosition() == Approx(deeper).margin(0.0001));
+    t.model.multiPassGo();
+    runThreadingPasses(t);
+    REQUIRE(t.model.multiPass().state() == mgo::MultiPass::State::Paused);
+    REQUIRE(t.model.getWarning().empty());
+
+    // Setting the passes up again (or changing mode) ends spring passes
+    t.model.stopAllMotors();
+    runUntilMoved(t);
+    REQUIRE(t.model
+                .setThreadingPassesSetup(
+                    { .cutDistance = 1.0, .feedInfeed = 0.01, .feedPerPass = 0.01 })
+                .empty());
+    REQUIRE(!t.model.springPassesAvailable());
+}
+
 TEST_CASE("Model:   threading passes stop if a pass can't start")
 {
     ThreadingTestModel t(300);

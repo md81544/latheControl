@@ -1294,8 +1294,14 @@ void ViewQt::Impl::updateMultiPassData(const Model& model)
     if (model.taperCorrection() != 0.0 && !threading) {
         misc1.text += ", correcting taper";
     }
+    // (Once threading passes have finished: see Model::springPassesAvailable())
+    const bool spring = threading && model.springPasses();
+    if (spring) {
+        misc1.text = "Spring passes at the same depth, pausing after each";
+    }
 
-    const std::string pass = mp.totalPasses() == 0
+    const std::string pass = spring ? fmt::format("Spring pass {}", mp.pass())
+        : mp.totalPasses() == 0
         ? fmt::format("Pass {}", mp.pass())
         : fmt::format("Pass {} of {}", mp.pass(), mp.totalPasses());
     switch (mp.state()) {
@@ -1304,6 +1310,11 @@ void ViewQt::Impl::updateMultiPassData(const Model& model)
                 const std::string stopped = mp.message().empty() ? "" : "Stopped. ";
                 if (model.multiPassMovingToStart()) {
                     misc2.text = "Moving to the start";
+                } else if (threading && model.springPassesAvailable()) {
+                    misc2.text = stopped
+                        + (model.springPassAtStart()
+                               ? "Enter takes a spring pass (" + x + " can be nudged in first)"
+                               : "Press Enter to move back to the start of the cut");
                 } else if (model.multiPassAtStart() && !model.getIsAxis2Retracted()) {
                     misc2.text = stopped + "At the start: press Enter to start cutting";
                 } else {
@@ -1330,6 +1341,10 @@ void ViewQt::Impl::updateMultiPassData(const Model& model)
                       mp.pass() == 0 ? "" : pass + " done: ",
                       x,
                       xLength(mp.nextFeed()))
+                : spring && !model.springPassAtStart()
+                ? pass + " done: Enter moves " + x + " back to the last depth"
+                : spring
+                ? pass + " done: Enter for another (" + x + " can be nudged in), Space ends"
                 : pass + " done: press Enter for the next (" + x + " can be nudged)";
             break;
         case MultiPass::State::Unretracting:
@@ -1342,7 +1357,16 @@ void ViewQt::Impl::updateMultiPassData(const Model& model)
             misc2.text = "Finishing";
             break;
         case MultiPass::State::Finished:
-            misc2.text = model.multiPassAtStart()
+            misc2.text = threading && !model.springPassAtStart()
+                ? fmt::format(
+                      "Finished ({} passes). Enter moves back to the start of the cut",
+                      mp.pass())
+                : threading
+                ? fmt::format(
+                      "Finished ({} passes). Enter takes a spring pass ({} can be nudged in first)",
+                      mp.pass(),
+                      x)
+                : model.multiPassAtStart()
                 ? fmt::format("Finished ({} passes). Enter starts again", mp.pass())
                 : fmt::format(
                       "Finished ({} passes). Enter moves to the start, to go again", mp.pass());
@@ -1353,7 +1377,11 @@ void ViewQt::Impl::updateMultiPassData(const Model& model)
     }
     // How far X has stepped over since the first pass
     misc3.text = "";
-    if (mp.pass() > 0) {
+    if (spring) {
+        // (From where the first threading pass started)
+        misc3.text = fmt::format(
+            "{} fed in: {} in all", x, xLength(std::abs(model.getAxis2Position() - range.feedStart)));
+    } else if (mp.pass() > 0) {
         misc3.text
             = fmt::format("{} {}: {}", x, threading ? "fed in" : "stepped over", xLength(mp.fed()));
         if (mp.totalPasses() != 0) {

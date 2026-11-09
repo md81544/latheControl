@@ -236,12 +236,21 @@
            threads needed several extra passes before the nut fitted. The M8
            ones were done by leaving the threading passes, which a key in
            the passes should save (see below)
-           - **Suggested:** once the passes have finished, Enter takes a
-             spring pass at the same depth, then pauses: W/S nudge X in
-             first if wanted, and Enter takes another, until Space. (As
-             multi-pass's step-over of zero with pausing, started from
-             where X is.) Starting the whole set again would be from the
-             dialog
+           - **Done:** once the passes have finished, Enter takes a spring
+             pass at the same depth, then pauses: X can be nudged in first
+             (W/S and the fine Shift nudges; not Alt, as releasing it stops
+             everything), and Enter takes another, until Space. (As
+             multi-pass's step-over of zero with pausing, started from where
+             X is.) If the axes aren't at the start of the cut (e.g. stopped
+             part way, or retracted), Enter moves back there first, to the
+             last spring pass's depth. Starting the whole set again is from
+             the dialog. Tested with the mock encoder; not yet tried on the
+             machine
+           - **Done:** moving the tool away to try the nut on. X shallower
+             than the last pass (moved out with the keys rather than
+             retracted, even while paused) goes back to the last depth
+             before the next pass, rather than cutting air from there. X
+             deeper (nudged in) is taken as meant
         4. Optionally, each pass removes a constant area rather than a
            constant depth, as CNC threading cycles do: the passes get
            shallower as the tool goes deeper, which is gentler on the tool.

@@ -364,6 +364,19 @@ public:
     MultiPassSetup threadingPassesDialogSetup() const;
     // The chosen thread's depth (male or female, as chosen), if one is chosen
     std::optional<double> getThreadDepthMm() const;
+    // Spring passes: once threading passes have finished, Enter takes another
+    // pass at the same depth, from wherever X is (so it can be nudged in
+    // first), and pauses; Enter again takes another, until stopped. If the
+    // axes aren't at the start of the cut, Enter moves back there first, to
+    // the depth of the last pass. Until the passes are set up again
+    bool springPassesAvailable() const;
+    // Whether the multi-pass running (or last run) is spring passes
+    bool springPasses() const;
+    // Whether the axes are where a spring pass can start: Z at the cut's
+    // start, and X not retracted, at the last pass's depth or deeper (nudged
+    // in). If X is shallower (e.g. moved out to try the nut on), Enter moves
+    // it back to the last pass's depth first, even while paused
+    bool springPassAtStart() const;
     // The setup of the multi-pass that Enter runs: the threading passes' in
     // threading mode, otherwise multi-pass mode's
     const MultiPassSetup& activeMultiPassSetup() const;
@@ -475,6 +488,10 @@ private:
     // The thread m_threadingPassesSetup was for (see threadingPassesDialogSetup())
     std::string m_threadingPassesThread;
     bool m_threadingPassesSet { false };
+    // Where X was for the last threading pass, once they've finished (for
+    // spring passes: see springPassesAvailable())
+    std::optional<double> m_springPassX;
+    bool m_springPasses { false };
     MultiPass m_multiPass { *this };
     bool m_multiPassMovingToStart { false };
     // X is following Z, to correct the taper, in a multi-pass cut or return
@@ -559,6 +576,10 @@ private:
     double axis2IntoWorkSign() const;
     // Updates the current feature after a multi-pass finishes
     void multiPassFinished();
+    // Starts spring passes from where X is (see springPassesAvailable())
+    void startSpringPasses();
+    // Moves back to the start of the cut, at the last spring pass's depth
+    void springPassMoveBack();
     // X's position, or while retracted, where it will return to
     double axis2WorkPosition() const;
     // Threading
