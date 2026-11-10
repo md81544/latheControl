@@ -167,8 +167,8 @@ protected:
         QFont font(m_fontFamily);
         for (const auto& drawItem : frame) {
             if (const auto* rect = std::get_if<RectItem>(&drawItem)) {
-                painter.setPen(rect->border == Qt::transparent ? QPen(Qt::NoPen)
-                                                                : QPen(rect->border, 2));
+                painter.setPen(
+                    rect->border == Qt::transparent ? QPen(Qt::NoPen) : QPen(rect->border, 2));
                 painter.setBrush(rect->fill);
                 painter.drawRect(rect->rect);
                 continue;
@@ -183,7 +183,8 @@ protected:
             painter.drawText(
                 QRectF(
                     item.position,
-                    QSizeF(rightAlign ? item.rightAlignWidth : LOGICAL_WIDTH, item.pixelSize * 2.0)),
+                    QSizeF(
+                        rightAlign ? item.rightAlignWidth : LOGICAL_WIDTH, item.pixelSize * 2.0)),
                 (rightAlign ? Qt::AlignRight : Qt::AlignLeft) | Qt::AlignTop | Qt::TextDontClip,
                 text);
             if (!rightAlign && item.highlightIndex >= 0 && item.highlightIndex < text.size()) {
@@ -412,6 +413,7 @@ struct ViewQt::Impl {
     TextItem misc3;
     TextItem misc4;
     TextItem misc5;
+    TextItem misc6;
 
     TextItem notification;
     TextItem xRetractDirection;
@@ -482,8 +484,8 @@ void ViewQt::initialise(const Model& model)
         d.widget->activateWindow();
     }
     if (const QScreen* screen = d.widget->screen()) {
-        MGOLOG(fmt::format(
-            "Screen size is {} x {}", screen->size().width(), screen->size().height()));
+        MGOLOG(
+            fmt::format("Screen size is {} x {}", screen->size().width(), screen->size().height()));
     }
 
     const auto make = [](float x, float y, int pixelSize, QColor colour = WHITE) {
@@ -541,8 +543,9 @@ void ViewQt::initialise(const Model& model)
     d.misc3 = make(20, MISC_Y + 90, 25);
     d.misc4 = make(20, MISC_Y + 120, 25);
     d.misc5 = make(20, MISC_Y + 150, 25);
+    d.misc6 = make(20, MISC_Y + 180, 25);
 
-    d.warning = make(20, MISC_Y + 200, 20, RED);
+    d.warning = make(20, MISC_Y + 210, 20, RED);
     d.taperOrRadius = make(860, 75, 20, RED);
     d.notification = make(860, 45, 25, RED);
     d.xRetracted = make(860, 105, 25, RED);
@@ -553,7 +556,7 @@ void ViewQt::initialise(const Model& model)
     // linear scale's reading is below it)
     d.surfaceSpeed = make(550, 160, 30, QColor(209, 209, 50));
     d.axis1LinearScalePos = make(550, 205, 20, QColor(209, 209, 50));
-    d.fault = make(20, STATUS_BAR_Y - 40, 22, RED);
+    d.fault = make(20, STATUS_BAR_Y - 30, 22, RED);
 
     // (Joystick support is only available on Linux)
     d.joystick = std::make_unique<Joystick>(
@@ -596,7 +599,8 @@ void ViewQt::openThreadDialog(
 }
 
 void ViewQt::openMultiPassDialog(
-    const MultiPassDialogInfo& info, std::function<void(std::optional<MultiPassSetup>)> onDone)
+    const MultiPassDialogInfo& info,
+    std::function<void(std::optional<MultiPassSetup>)> onDone)
 {
     assert(!isDialogOpen()); // (one at a time)
     m_impl->setDimmed(true);
@@ -665,15 +669,17 @@ void ViewQt::Impl::drawMenu(std::vector<DrawItem>& frame, const Model& model) co
     const QColor shortcutColour(150, 150, 150);
     const QColor hint(140, 140, 140);
 
-    frame.push_back(RectItem { QRectF(panelX, panelY, panelWidth, panelHeight),
-                               QColor(25, 25, 25),
-                               QColor(128, 128, 128) });
+    frame.push_back(
+        RectItem { QRectF(panelX, panelY, panelWidth, panelHeight),
+                   QColor(25, 25, 25),
+                   QColor(128, 128, 128) });
 
     const auto category = menu->openCategory();
-    frame.push_back(TextItem { QPointF(panelX + margin, panelY + 12.f),
-                               26,
-                               GREEN,
-                               category ? menu->categories().at(*category) : "Menu" });
+    frame.push_back(
+        TextItem { QPointF(panelX + margin, panelY + 12.f),
+                   26,
+                   GREEN,
+                   category ? menu->categories().at(*category) : "Menu" });
 
     // Each row: its text, shortcut, and whether it can be chosen now
     struct Row {
@@ -725,8 +731,9 @@ void ViewQt::Impl::drawMenu(std::vector<DrawItem>& frame, const Model& model) co
         const Row& row = rows.at(n);
         const bool selected = n == selection;
         if (selected) {
-            frame.push_back(RectItem { QRectF(panelX + 5.f, y - 3.f, panelWidth - 10.f, lineHeight),
-                                       QColor(60, 60, 60) });
+            frame.push_back(
+                RectItem { QRectF(panelX + 5.f, y - 3.f, panelWidth - 10.f, lineHeight),
+                           QColor(60, 60, 60) });
         }
         const QColor colour = !row.available ? unavailable : selected ? WHITE : normal;
         TextItem text { QPointF(panelX + margin, y), fontSize, colour, row.text, selected };
@@ -734,45 +741,54 @@ void ViewQt::Impl::drawMenu(std::vector<DrawItem>& frame, const Model& model) co
             text.highlightIndex = row.hotkeyIndex;
         }
         frame.push_back(text);
-        frame.push_back(TextItem { QPointF(panelX + margin, y),
-                                   fontSize,
-                                   row.available ? shortcutColour : unavailable,
-                                   row.shortcut,
-                                   false,
-                                   panelWidth - 2 * margin });
+        frame.push_back(
+            TextItem { QPointF(panelX + margin, y),
+                       fontSize,
+                       row.available ? shortcutColour : unavailable,
+                       row.shortcut,
+                       false,
+                       panelWidth - 2 * margin });
         y += lineHeight;
     }
     if (first > 0) {
-        frame.push_back(TextItem { QPointF(panelX + margin, listY - 22.f),
-                                   16,
-                                   hint,
-                                   "(more above)",
-                                   false,
-                                   panelWidth - 2 * margin });
+        frame.push_back(
+            TextItem { QPointF(panelX + margin, listY - 22.f),
+                       16,
+                       hint,
+                       "(more above)",
+                       false,
+                       panelWidth - 2 * margin });
     }
     if (first + visibleRows < rows.size()) {
-        frame.push_back(TextItem { QPointF(panelX + margin, y), 16, hint, "(more below)", false,
-                                   panelWidth - 2 * margin });
+        frame.push_back(
+            TextItem { QPointF(panelX + margin, y),
+                       16,
+                       hint,
+                       "(more below)",
+                       false,
+                       panelWidth - 2 * margin });
     }
 
     // How to use it
     const float footerY = panelY + panelHeight - 90.f;
-    frame.push_back(TextItem { QPointF(panelX + margin, footerY),
-                               16,
-                               hint,
-                               "Up/Down: select   Enter/Right: choose" });
-    frame.push_back(TextItem { QPointF(panelX + margin, footerY + 20.f),
-                               16,
-                               hint,
-                               "   (or press the highlighted letter)" });
-    frame.push_back(TextItem { QPointF(panelX + margin, footerY + 40.f),
-                               16,
-                               hint,
-                               "Left/Esc: back   Tab: close menu" });
-    frame.push_back(TextItem { QPointF(panelX + margin, footerY + 60.f),
-                               16,
-                               YELLOW,
-                               "Space stops all motors. Rapids: Alt+arrow" });
+    frame.push_back(
+        TextItem {
+            QPointF(panelX + margin, footerY), 16, hint, "Up/Down: select   Enter/Right: choose" });
+    frame.push_back(
+        TextItem { QPointF(panelX + margin, footerY + 20.f),
+                   16,
+                   hint,
+                   "   (or press the highlighted letter)" });
+    frame.push_back(
+        TextItem { QPointF(panelX + margin, footerY + 40.f),
+                   16,
+                   hint,
+                   "Left/Esc: back   Tab: close menu" });
+    frame.push_back(
+        TextItem { QPointF(panelX + margin, footerY + 60.f),
+                   16,
+                   YELLOW,
+                   "Space stops all motors. Rapids: Alt+arrow" });
 }
 
 void ViewQt::Impl::drawFeature(std::vector<DrawItem>& frame, const Model& model) const
@@ -782,8 +798,9 @@ void ViewQt::Impl::drawFeature(std::vector<DrawItem>& frame, const Model& model)
     if (!model.currentFeatureEnabled() || (!diameter && !workEnd)) {
         return;
     }
-    // Below the memory slots, to the right of the mode's lines (which can
-    // reach about x = 1020)
+    // Below the memory slots, to the right of the mode's first four lines
+    // (which have to stay short to fit, about 65 characters: longer lines go
+    // further down, below the box)
     constexpr float boxX = 1010.f;
     constexpr float boxY = 380.f;
     constexpr float boxWidth = 255.f;
@@ -792,8 +809,7 @@ void ViewQt::Impl::drawFeature(std::vector<DrawItem>& frame, const Model& model)
     constexpr int fontSize = 26;
     const QColor grey(128, 128, 128);
     const QColor value(0, 192, 0);
-    frame.push_back(
-        RectItem { QRectF(boxX, boxY, boxWidth, boxHeight), QColor(20, 20, 20), grey });
+    frame.push_back(RectItem { QRectF(boxX, boxY, boxWidth, boxHeight), QColor(20, 20, 20), grey });
     frame.push_back(TextItem { QPointF(boxX + margin, boxY + 8.f), 18, grey, "Current feature" });
     const auto line = [&](float y, const std::string& label, const std::string& text) {
         frame.push_back(TextItem { QPointF(boxX + margin, y), fontSize, grey, label });
@@ -813,9 +829,10 @@ void ViewQt::Impl::drawFeature(std::vector<DrawItem>& frame, const Model& model)
     line(boxY + 36.f, "Ø", diameter ? length(2, *diameter) : "-");
     // (The work's end, as "Z 0.00 mm": not "Z end", which in the multi-pass
     // dialog is the cut's end)
-    line(boxY + 72.f,
-         "End",
-         workEnd ? model.config().read("Axis1Label", "Z") + " " + length(1, *workEnd) : "-");
+    line(
+        boxY + 72.f,
+        "End",
+        workEnd ? model.config().read("Axis1Label", "Z") + " " + length(1, *workEnd) : "-");
 }
 
 void ViewQt::Impl::drawLeaderHints(std::vector<DrawItem>& frame, const Model& model) const
@@ -849,31 +866,33 @@ void ViewQt::Impl::drawLeaderHints(std::vector<DrawItem>& frame, const Model& mo
     }
 
     const float panelHeight = 55.f + lineHeight * commands.size() + 60.f;
-    frame.push_back(RectItem { QRectF(panelX, panelY, panelWidth, panelHeight),
-                               QColor(25, 25, 25),
-                               QColor(128, 128, 128) });
+    frame.push_back(
+        RectItem { QRectF(panelX, panelY, panelWidth, panelHeight),
+                   QColor(25, 25, 25),
+                   QColor(128, 128, 128) });
     frame.push_back(TextItem { QPointF(panelX + margin, panelY + 12.f), 26, GREEN, title });
     float y = panelY + 55.f;
     for (const Command* c : commands) {
         const bool available = isAvailable(*c, model);
-        frame.push_back(TextItem { QPointF(panelX + margin, y),
-                                   fontSize,
-                                   available ? YELLOW : unavailable,
-                                   followUpKeyName(c->key) });
-        frame.push_back(TextItem { QPointF(panelX + margin + keyColumnWidth, y),
-                                   fontSize,
-                                   available ? normal : unavailable,
-                                   c->description });
+        frame.push_back(
+            TextItem { QPointF(panelX + margin, y),
+                       fontSize,
+                       available ? YELLOW : unavailable,
+                       followUpKeyName(c->key) });
+        frame.push_back(
+            TextItem { QPointF(panelX + margin + keyColumnWidth, y),
+                       fontSize,
+                       available ? normal : unavailable,
+                       c->description });
         y += lineHeight;
     }
-    frame.push_back(TextItem { QPointF(panelX + margin, y + 10.f),
-                               16,
-                               hint,
-                               "Other keys cancel.  Tab: the full menu" });
-    frame.push_back(TextItem { QPointF(panelX + margin, y + 30.f),
-                               16,
-                               YELLOW,
-                               "Space stops all motors" });
+    frame.push_back(
+        TextItem { QPointF(panelX + margin, y + 10.f),
+                   16,
+                   hint,
+                   "Other keys cancel.  Tab: the full menu" });
+    frame.push_back(
+        TextItem { QPointF(panelX + margin, y + 30.f), 16, YELLOW, "Space stops all motors" });
 }
 
 void ViewQt::close()
@@ -945,12 +964,13 @@ void ViewQt::updateDisplay(const Model& model)
     d.updateTextFromModel(model);
 
     std::vector<DrawItem> frame;
-    const auto draw = [&frame](const TextItem& item) { frame.push_back(item); };
+    const auto draw = [&frame](const TextItem& item) {
+        frame.push_back(item);
+    };
 
     if (!model.isShuttingDown()) {
         if (!model.config().readBool("DisableAxis1", false)) {
-            d.axis1Label.colour
-                = model.isAxisLocked(1) ? QColor(90, 90, 90) : QColor(0, 192, 0);
+            d.axis1Label.colour = model.isAxisLocked(1) ? QColor(90, 90, 90) : QColor(0, 192, 0);
             draw(d.axis1Label);
             draw(d.axis1Pos);
             draw(d.axis1Units);
@@ -960,8 +980,7 @@ void ViewQt::updateDisplay(const Model& model)
             draw(d.axis1LinearScalePos);
         }
         if (!model.config().readBool("DisableAxis2", false)) {
-            d.axis2Label.colour
-                = model.isAxisLocked(2) ? QColor(90, 90, 90) : QColor(0, 192, 0);
+            d.axis2Label.colour = model.isAxisLocked(2) ? QColor(90, 90, 90) : QColor(0, 192, 0);
             draw(d.axis2Label);
             draw(d.axis2Pos);
             draw(d.axis2Units);
@@ -985,8 +1004,7 @@ void ViewQt::updateDisplay(const Model& model)
         draw(d.generalStatus);
         draw(d.warning);
         draw(d.notification);
-        if (model.getMode() == Mode::Taper
-            || model.getMode() == Mode::Radius) {
+        if (model.getMode() == Mode::Taper || model.getMode() == Mode::Radius) {
             draw(d.taperOrRadius);
         }
         if (model.getRetractionDirection() == XDirection::Inwards) {
@@ -1025,6 +1043,7 @@ void ViewQt::updateDisplay(const Model& model)
         draw(d.misc3);
         draw(d.misc4);
         draw(d.misc5);
+        draw(d.misc6);
         d.fault.text = model.getFaultMessage();
         if (!d.fault.text.empty()) {
             d.fault.colour = ++d.faultIteration % 6 < 3 ? RED : YELLOW;
@@ -1066,7 +1085,8 @@ void ViewQt::Impl::updateTextFromModel(const Model& model)
     // Lengths are shown in the display units (mm or inches); values for an
     // axis which isn't a length (e.g. degrees) are shown as they are
     const auto speedDecimals = [&model](int axis) {
-        return model.isLengthAxis(axis) && model.getDisplayUnits() == DisplayUnits::Imperial ? 3 : 2;
+        return model.isLengthAxis(axis) && model.getDisplayUnits() == DisplayUnits::Imperial ? 3
+                                                                                             : 2;
     };
     axis1Units.text = model.axisUnitName(1);
     axis2Units.text = model.axisUnitName(2);
@@ -1075,9 +1095,8 @@ void ViewQt::Impl::updateTextFromModel(const Model& model)
         model.toDisplayUnits(1, model.getAxis1MotorPosition()), model.axisDecimals(1));
 
     // (When threading, Z's speed is set by the spindle's)
-    const double axis1Speed = model.getMode() == Mode::Threading
-        ? model.getThreadingZSpeed()
-        : model.getAxis1MotorSpeed();
+    const double axis1Speed = model.getMode() == Mode::Threading ? model.getThreadingZSpeed()
+                                                                 : model.getAxis1MotorSpeed();
     this->axis1Speed.text = fmt::format(
         "{:<.{}f} {}/min",
         model.toDisplayUnits(1, axis1Speed),
@@ -1136,8 +1155,8 @@ void ViewQt::Impl::updateTextFromModel(const Model& model)
         lengthUnitName(model.getDisplayUnits()));
 
     for (std::size_t n = 0; n < memoryLabel.size(); ++n) {
-        const QColor colour = model.getCurrentMemorySlot() == n ? QColor(255, 255, 255)
-                                                                : QColor(100, 100, 100);
+        const QColor colour
+            = model.getCurrentMemorySlot() == n ? QColor(255, 255, 255) : QColor(100, 100, 100);
         memoryLabel.at(n).colour = colour;
         axis1MemoryValue.at(n).colour = colour;
         axis2MemoryValue.at(n).colour = colour;
@@ -1194,6 +1213,7 @@ void ViewQt::Impl::updateTextFromModel(const Model& model)
                     "Z step: {}   X step: {}",
                     model.getAxis1MotorCurrentStep(),
                     model.getAxis2MotorCurrentStep());
+                misc6.text = "";
                 warning.text = "Press Esc to exit setup";
                 break;
             }
@@ -1204,6 +1224,7 @@ void ViewQt::Impl::updateTextFromModel(const Model& model)
                     updateThreadData(model);
                     const std::string thread = misc1.text;
                     updateMultiPassData(model);
+                    misc6.text = misc5.text;
                     misc5.text = misc4.text;
                     misc4.text = misc3.text;
                     misc3.text = misc2.text;
@@ -1213,6 +1234,7 @@ void ViewQt::Impl::updateTextFromModel(const Model& model)
                     updateThreadData(model);
                     misc4.text = "";
                     misc5.text = "";
+                    misc6.text = "";
                 }
                 // e.g. the spindle is too fast for the pitch
                 warning.text = model.getWarning();
@@ -1232,6 +1254,7 @@ void ViewQt::Impl::updateTextFromModel(const Model& model)
                 misc3.text = "";
                 misc4.text = "";
                 misc5.text = "";
+                misc6.text = "";
                 warning.text = model.getWarning();
                 if (!model.getWarning().empty()) {
                     warning.colour = ++iteration % 6 < 3 ? RED : YELLOW;
@@ -1256,7 +1279,10 @@ void ViewQt::Impl::updateMultiPassData(const Model& model)
     const std::string x = model.config().read("Axis2Label", "X");
     const auto xLength = [&model](double mm) {
         return fmt::format(
-            "{:.{}f} {}", model.toDisplayUnits(2, mm), model.axisDecimals(2), model.axisUnitName(2));
+            "{:.{}f} {}",
+            model.toDisplayUnits(2, mm),
+            model.axisDecimals(2),
+            model.axisUnitName(2));
     };
     const auto position = [&model](int axis, double mm) {
         const int decimals = model.axisDecimals(axis);
@@ -1276,122 +1302,118 @@ void ViewQt::Impl::updateMultiPassData(const Model& model)
         x,
         position(2, range.feedStart),
         position(2, range.feedEnd));
+    // The lines are, in order: what's happening, what Enter does next, how
+    // far X has gone, the options, then "Space stops". The first lines are
+    // kept short, as the current feature's box is to their right; the options
+    // line can be long, so it goes below the box.
+    std::string options1;
     if (options.feedPerPass < MultiPass::TOLERANCE) {
-        misc1.text = "Repeating the same cut";
+        options1 = "Repeating the same cut";
     } else if (threading && options.constantArea) {
-        misc1.text = fmt::format(
+        options1 = fmt::format(
             "{} infeed {} first, then a constant area per pass", x, xLength(options.feedPerPass));
     } else {
-        misc1.text = fmt::format(
+        options1 = fmt::format(
             "{} {} {} per pass",
             x,
             threading ? "infeed" : "step-over",
             xLength(options.feedPerPass));
     }
     if (threading && options.compoundInfeed) {
-        misc1.text += ", compound";
+        options1 += ", compound";
     }
     if (options.pause) {
-        misc1.text += ", pausing";
+        options1 += ", pausing";
     }
     if (options.retract && !threading) {
-        misc1.text += options.retractLastOnly
+        options1 += options.retractLastOnly
             ? fmt::format(", retracting on the last {}", model.retractLastPasses())
             : std::string(", retracting");
     }
     if (model.taperCorrection() != 0.0 && !threading) {
-        misc1.text += ", correcting taper";
+        options1 += ", correcting taper";
     }
     // (Once threading passes have finished: see Model::springPassesAvailable())
     const bool spring = threading && model.springPasses();
     if (spring) {
-        misc1.text = "Spring passes at the same depth, pausing after each";
+        options1 = "Spring passes at the same depth, pausing after each";
     }
 
     const std::string pass = spring ? fmt::format("Spring pass {}", mp.pass())
-        : mp.totalPasses() == 0
-        ? fmt::format("Pass {}", mp.pass())
-        : fmt::format("Pass {} of {}", mp.pass(), mp.totalPasses());
+        : mp.totalPasses() == 0     ? fmt::format("Pass {}", mp.pass())
+                                    : fmt::format("Pass {} of {}", mp.pass(), mp.totalPasses());
+    std::string status;
+    std::string prompt;
     switch (mp.state()) {
         case MultiPass::State::Idle:
-            {
-                const std::string stopped = mp.message().empty() ? "" : "Stopped. ";
-                if (model.multiPassMovingToStart()) {
-                    misc2.text = "Moving to the start";
-                } else if (threading && model.springPassesAvailable()) {
-                    misc2.text = stopped
-                        + (model.springPassAtStart()
-                               ? "Enter takes a spring pass (" + x + " can be nudged in first)"
-                               : "Press Enter to move back to the start of the cut");
-                } else if (model.multiPassAtStart() && !model.getIsAxis2Retracted()) {
-                    misc2.text = stopped + "At the start: press Enter to start cutting";
-                } else {
-                    misc2.text = stopped + "Press Enter to move to the start";
-                    if (options.retractBeforeMoveToStart) {
-                        misc2.text += " (" + x + " retracts first)";
-                    }
+            status = mp.message().empty() ? "" : "Stopped";
+            if (model.multiPassMovingToStart()) {
+                status = "Moving to the start";
+            } else if (threading && model.springPassesAvailable()) {
+                prompt = model.springPassAtStart()
+                    ? "Enter takes a spring pass (" + x + " can be nudged in first)"
+                    : "Press Enter to move back to the start of the cut";
+            } else if (model.multiPassAtStart() && !model.getIsAxis2Retracted()) {
+                status = status.empty() ? "At the start" : "Stopped, at the start";
+                prompt = "Press Enter to start cutting";
+            } else {
+                prompt = "Press Enter to move to the start";
+                if (options.retractBeforeMoveToStart) {
+                    prompt += " (" + x + " retracts first)";
                 }
             }
             break;
         case MultiPass::State::Cutting:
-            misc2.text = pass + (threading ? ": threading" : ": cutting");
+            status = pass + (threading ? ": threading" : ": cutting");
             break;
         case MultiPass::State::Retracting:
-            misc2.text = pass + ": retracting";
+            status = pass + ": retracting";
             break;
         case MultiPass::State::Returning:
-            misc2.text = pass + ": returning";
+            status = pass + ": returning";
             break;
         case MultiPass::State::Paused:
-            misc2.text = mp.plan().feedManual
-                ? fmt::format(
-                      "{}feed {} by {}, then press Enter",
-                      mp.pass() == 0 ? "" : pass + " done: ",
-                      x,
-                      xLength(mp.nextFeed()))
-                : spring && !model.springPassAtStart()
-                ? pass + " done: Enter moves back to the last pass's start"
-                : spring
-                ? pass + " done: Enter for another (" + x + " can be nudged in), Space ends"
-                : pass + " done: press Enter for the next (" + x + " can be nudged)";
+            status = mp.plan().feedManual && mp.pass() == 0 ? "" : pass + " done";
+            prompt = mp.plan().feedManual
+                ? fmt::format("Feed {} by {}, then press Enter", x, xLength(mp.nextFeed()))
+                : spring && !model.springPassAtStart() ? "Enter moves back to the last pass's start"
+                : spring ? "Enter for another (" + x + " can be nudged in), Space ends"
+                         : "Press Enter for the next (" + x + " can be nudged)";
             break;
         case MultiPass::State::Unretracting:
-            misc2.text = pass + ": unretracting";
+            status = pass + ": unretracting";
             break;
         case MultiPass::State::Feeding:
-            misc2.text = pass + (threading ? ": feeding in" : ": stepping over");
+            status = pass + (threading ? ": feeding in" : ": stepping over");
             break;
         case MultiPass::State::Positioning:
-            misc2.text = pass + ": " + z + " to the pass's start";
+            status = pass + ": " + z + " to the pass's start";
             break;
         case MultiPass::State::Finishing:
-            misc2.text = "Finishing";
+            status = "Finishing";
             break;
         case MultiPass::State::Finished:
-            misc2.text = threading && !model.springPassAtStart()
-                ? fmt::format(
-                      "Finished ({} passes). Enter moves back to the start of the cut",
-                      mp.pass())
-                : threading
-                ? fmt::format(
-                      "Finished ({} passes). Enter takes a spring pass ({} can be nudged in first)",
-                      mp.pass(),
-                      x)
-                : model.multiPassAtStart()
-                ? fmt::format("Finished ({} passes). Enter starts again", mp.pass())
-                : fmt::format(
-                      "Finished ({} passes). Enter moves to the start, to go again", mp.pass());
+            status = fmt::format("Finished ({} passes)", mp.pass());
+            prompt = threading && !model.springPassAtStart()
+                ? "Enter moves back to the start of the cut"
+                : threading ? "Enter takes a spring pass (" + x + " can be nudged in first)"
+                : model.multiPassAtStart() ? "Enter starts again"
+                                           : "Enter moves to the start, to go again";
             break;
     }
     if (mp.pauseRequested()) {
-        misc2.text += " (pausing after this pass; Enter cancels)";
+        prompt = "Pausing after this pass (Enter cancels)";
     }
+    misc1.text = status;
+    misc2.text = prompt;
     // How far X has stepped over since the first pass
     misc3.text = "";
     if (spring) {
         // (From where the first threading pass started)
         misc3.text = fmt::format(
-            "{} fed in: {} in all", x, xLength(std::abs(model.getAxis2Position() - range.feedStart)));
+            "{} fed in: {} in all",
+            x,
+            xLength(std::abs(model.getAxis2Position() - range.feedStart)));
     } else if (mp.pass() > 0) {
         misc3.text
             = fmt::format("{} {}: {}", x, threading ? "fed in" : "stepped over", xLength(mp.fed()));
@@ -1400,8 +1422,9 @@ void ViewQt::Impl::updateMultiPassData(const Model& model)
                 " of {}", xLength(std::abs(mp.plan().feedEnd - mp.plan().feedStart)));
         }
     }
-    misc4.text = mp.inProgress() || model.multiPassMovingToStart() ? "Space stops" : "";
-    misc5.text = "";
+    misc4.text = options1;
+    misc5.text = mp.inProgress() || model.multiPassMovingToStart() ? "Space stops" : "";
+    misc6.text = "";
 }
 
 void ViewQt::Impl::updateThreadData(const Model& model)
@@ -1424,8 +1447,8 @@ void ViewQt::Impl::updateThreadData(const Model& model)
         misc2.text = fmt::format(
             "Bore: {:.3f} mm, depth: {:.3f} mm", thread->femaleBore(), thread->femaleDepth());
     } else {
-        misc2.text = fmt::format(
-            "OD: {:.3f} mm, depth: {:.3f} mm", thread->maleOd(), thread->maleDepth());
+        misc2.text
+            = fmt::format("OD: {:.3f} mm, depth: {:.3f} mm", thread->maleOd(), thread->maleDepth());
     }
     misc3.text = fmt::format(
         "{} retracts {}",
