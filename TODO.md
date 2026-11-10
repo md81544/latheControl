@@ -989,7 +989,56 @@ change.
     - The milling machine has three linear scales (X,Y,Z), all of which interface with TouchDRO
       (an Android app which displays DRO data on a separate tablet) via a bluetooth connection.
       We need to determine how to get this data into latheControl too for linear scale functionality mentioned elsewhere in this document.
-        - Possible to eavesdrop into the bluetooth connection?
-        - Or rebuild the (DIY) bluetooth sender such that the signal goes to latheControl and
-          then is re-broadcast?
-        - I've located the circuit and "sketch" in ~/syncthing/maker/machining/touchDRO/
+    - The sender's sketch and schematic are now in `hardware/touchdro-sender/`
+      (see its README). The Nano reads the iGaging scales and writes plain
+      text from its serial port at 9600 baud, about 24 times a second:
+      `X1234;Y-567;Z89;`, in raw counts (about 100.8 per mm, so about 10 µm),
+      smoothed by the sketch
+    - **Decided approach: read the Nano's serial output over USB.** On a Nano,
+      the TX pin feeds both the HC-06 and the on-board USB-serial chip, so a
+      USB cable from the Pi should give `/dev/ttyUSB0` carrying exactly what
+      TouchDRO gets. No firmware or circuit change, and TouchDRO carries on as
+      before. Not yet tried. Things to check:
+        - Opening the port resets the Nano through DTR, so a second or two of
+          data is lost. That's harmless; it can be avoided by turning off
+          `hupcl` on the port
+        - The Nano in the box is powered through its own USB port from a
+          cheap adapter, so the Pi's USB cable would simply replace the
+          adapter and power the box. The whole box (Nano, HC-06, three scales)
+          should draw well under 100 mA, which the Pi 3B's USB can supply.
+          The catch: the scales are then powered from the Pi, so whenever the
+          Pi is off or rebooting, TouchDRO has no readings, and the scales
+          lose their position. If that matters, use a powered USB hub, or
+          keep the adapter and cut the 5 V wire in the Pi's cable
+        - First, confirm the sketch is what's on the Nano: the schematic's
+          pins don't match the sketch's (see the README). The serial monitor
+          on the Mac at 9600 baud shows this, and proves the USB route
+- [ ] Open the TouchDRO sender box and check the wiring. The schematic in
+      `hardware/touchdro-sender/` has the scale clock on D2 and the X, Y and Z
+      data on D3, D4 and D5, but the sketch has the clock on D9 and the data
+      on D7, D6 and D5. Note which pins are really used. If they match the
+      sketch, correct the schematic or note the difference in the README; if
+      they match the schematic, the sketch in the repo isn't the one on the
+      Nano. Also check how the box is powered
+    - Rejected:
+        - Listening to the Bluetooth link: the HC-06 uses classic Bluetooth
+          serial, which is one-to-one and frequency-hopping, so it can't be
+          passively sniffed. The Pi could connect to it and relay to the
+          tablet, but that's fragile and gains nothing over a wire
+        - Changing the sketch to send a second copy: only needed if the
+          stream lacks something (e.g. unsmoothed values or a checksum)
+        - Reading the scales directly from the Pi: only one device can drive
+          the scales' clock, and bit-banging the 21-bit protocol would load
+          a Pi whose cores are reserved for the motor threads
+    - What it's good for: at about 40 ms between smoothed readings it can't
+      close the loop on motion, but it can check and correct when stopped:
+      lost steps on the open-loop mill axes, re-basing after a stall (as for
+      the lathe's Z scale above), and measuring the real backlash (mill X has
+      300 steps of compensation configured)
+    - Possible design: a serial reader thread, not real-time and not on the
+      motor cores, parsing the tokens into atomics, with a reading treated as
+      stale after about 0.5 s with no update. Config keys per axis, off by
+      default: serial device, scale letter, counts per mm and sign. A common
+      "scale position" interface shared with the quadrature `LinearScale`,
+      so the lost-step and re-basing features work with either. A fake
+      source for FAKE builds and the tests
