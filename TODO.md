@@ -187,7 +187,7 @@
       pass, so every pass retracts. Ordinary multi-pass only: threading
       passes always retract. Tested in the unit and UI tests; not yet tried
       on the machine
-- [ ] Retract by a safe amount, not an arbitrary one (noticed 2026-11-10,
+- [x] Retract by a safe amount, not an arbitrary one (noticed 2026-11-10,
       testing a female thread in debug mode): X retracted a fixed 2 mm
       (hard-coded). In a bore only just big enough for the boring bar, an
       inward retract that size would move the back of the bar into the far
@@ -204,16 +204,30 @@
       always moves at least the clearance, e.g. if X is already further out
       than the start. It's usually less movement than 2 mm, too (a thread is
       seldom that deep), though deep turning passes now retract further.
-      Tested in the unit tests; not yet tried on the machine.
-    - **To test:** whether 0.25 mm clears the burr thrown up on the crests
-      of an internal thread (the test cut so far was clean). The next
-      internal thread on a real project will do; if it rubs on the return,
-      raise `MultiPassRetractClearance`, or give threading its own.
+      **Tried on the machine (2026-11-10):** an internal thread, 30 mm long
+      in a bore, with the threading passes. The retracts worked as
+      intended. The thread itself didn't come out well, but for another
+      reason: with about 40 mm of stick-out on the carbide internal
+      threading tool, the carriage visibly shifted with each cut (see the
+      rigidity item below).
+    - Whether 0.25 mm clears the burr thrown up on an internal thread's
+      crests is still open, as the test cut wasn't good enough to tell. If
+      a later one rubs on the return, raise `MultiPassRetractClearance`, or
+      give threading its own.
     - (3) Not yet: `R` and `ThreadingAutoRetract` could use the current
       feature's surface the same way when it's set (e.g. X set as a
       diameter on the bore), falling back to the fixed distance otherwise.
       The program can't know the boring bar's width, but retracting only
       just clear of the surface is the least that can hit anything.
+- [ ] Internal threading and the carriage's rigidity (2026-11-10): with
+      about 40 mm of stick-out (for a 30 mm long thread), the leverage
+      visibly shifted the carriage on each cut. For now, internal threading
+      probably isn't a good idea on this lathe. Things to try:
+    - A shorter thread, so less stick-out, with very fine cuts.
+    - A sharp HSS tool instead of the carbide insert, which needs less force.
+    - Longer term: a more powerful X stepper, so the cross-slide's gib can
+      be tightened without stalling it. (The loose gib was also suspected
+      in the M8 male thread's many spring passes, 2026-11-09.)
 - [ ] Work on a single line rather than a plane, i.e. if mem0.x == mem1.x,
       interpret it as (say) slot cutting and repeat until the user cancels.
       Could also work if only one axis is defined in config (the engine's
