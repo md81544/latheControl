@@ -3,7 +3,7 @@
 ## User interface
 
 ### Make the interface less cryptic
-- [ ] A key that brings up all the options available *now*
+- [x] A key that brings up all the options available *now*
     - **Done:** `Tab` opens a menu of every command, with its shortcut, built
       from one table of commands (commands.cpp) so it can't drift out of date.
       Commands not available at the moment (e.g. in Setup mode, or on a
@@ -23,10 +23,12 @@
     - **Done:** F1 opens the menu (which shows every shortcut) rather than a
       separate, hand-written help page
     - While the menu is open, memory slots 5 and 6 are hidden behind it
-- [ ] It must be usable without a mouse, which is awkward at the machine.
+      (this is fine, I think, although maybe if that ever was a problem
+      a dedicated button could perhaps move the menu to the left/right)
+- [x] It must be usable without a mouse, which is awkward at the machine.
       Everything works from the keyboard, and the menu from the gamepad too.
       The gamepad isn't read while a dialog is open; low priority, as it sits
-      next to the keyboard and is for the basics
+      next to the keyboard and is for the basics of machine control
 - [ ] Proper menus and dialogs, now that Qt makes them possible. This replaces
       the old "implement a proper menu/dialog (see level_designer)" and
       "move all input to the new modal dialog system" items
@@ -48,8 +50,7 @@
     - Frees the top-level letters, e.g. `T` for "choose tool" (see "Current
       tool and a tool database")
 - [ ] Make use of the keys on the right (#, Home, PgUp, PgDn, End)?
-- [ ] Remove Alt-Arrows for rapids once controller set up for mill?
-      Now that they behave more safely, maybe not
+        - Home could be used to return to the current feature's zEnd/diameter?
 - [ ] When there's a larger screen (the current one is small): touchscreen
       support, and make dialogs scale with the main display (which is scaled
       to fit the screen, whereas dialogs stay the same size, so would look
@@ -988,3 +989,6 @@ change.
     - The milling machine has three linear scales (X,Y,Z), all of which interface with TouchDRO
       (an Android app which displays DRO data on a separate tablet) via a bluetooth connection.
       We need to determine how to get this data into latheControl too for linear scale functionality mentioned elsewhere in this document.
+        - Possible to eavesdrop into the bluetooth connection?
+        - Or rebuild the (DIY) bluetooth sender such that the signal goes to latheControl and
+          then is re-broadcast?
