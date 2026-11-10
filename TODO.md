@@ -997,41 +997,59 @@ change.
       (an Android app which displays DRO data on a separate tablet) via a bluetooth connection.
       We need to determine how to get this data into latheControl too for linear scale functionality mentioned elsewhere in this document.
     - The sender's sketch and schematic are now in `hardware/touchdro-sender/`
-      (see its README). The Nano reads the iGaging scales and writes plain
+      (see its README). The Arduino reads the iGaging scales and writes plain
       text from its serial port at 9600 baud, about 24 times a second:
       `X1234;Y-567;Z89;`, in raw counts (about 100.8 per mm, so about 10 µm),
       smoothed by the sketch
-    - **Decided approach: read the Nano's serial output over USB.** On a Nano,
-      the TX pin feeds both the HC-06 and the on-board USB-serial chip, so a
-      USB cable from the Pi should give `/dev/ttyUSB0` carrying exactly what
-      TouchDRO gets. No firmware or circuit change, and TouchDRO carries on as
-      before. Not yet tried. Things to check:
-        - Opening the port resets the Nano through DTR, so a second or two of
-          data is lost. That's harmless; it can be avoided by turning off
-          `hupcl` on the port
-        - The Nano in the box is powered through its own USB port from a
-          cheap adapter, so the Pi's USB cable would simply replace the
-          adapter and power the box. The whole box (Nano, HC-06, three scales)
-          should draw well under 100 mA, which the Pi 3B's USB can supply.
-          TouchDRO then only works while the Pi is on, which doesn't matter:
-          everything at the mill draws power from one mains socket, switched
-          by a Zigbee button, so it all comes on at once. A Pi reboot would
-          still power-cycle the box and lose the scales' positions
-        - First, confirm the sketch is what's on the Nano: the schematic's
-          pins don't match the sketch's (see the README). The serial monitor
-          on the Mac at 9600 baud shows this, and proves the USB route
-- [ ] Open the TouchDRO sender box and check the wiring. The schematic in
-      `hardware/touchdro-sender/` has the scale clock on D2 and the X, Y and Z
-      data on D3, D4 and D5, but the sketch has the clock on D9 and the data
-      on D7, D6 and D5. Note which pins are really used. If they match the
-      sketch, correct the schematic or note the difference in the README; if
-      they match the schematic, the sketch in the repo isn't the one on the
-      Nano. Also check how the box is powered
+    - What the box turned out to be, on opening it (10 Nov 2026): the scales'
+      data lines go to D5, D6 and D7, which matches the sketch, not the
+      schematic. The board has no USB port and is powered on its RAW pin from
+      a mains adapter through a jack on the box, so it's almost certainly a
+      Pro Mini (or a clone), not a Nano. It must have been programmed through
+      an FTDI adapter. So reading it "over the Nano's USB port", the earlier
+      plan, isn't possible
+    - **Decided approach: listen to the Arduino's TX line with a USB-serial
+      adapter.** TX already goes to the HC-06; it can drive a second input as
+      well. Connect only the adapter's RX to the Arduino's TX, and GND to GND,
+      ideally through the Pro Mini's 6-pin FTDI header if it's fitted (TXO and
+      GND). The Pi then gets `/dev/ttyUSB0` carrying exactly what TouchDRO
+      gets. No firmware change, and TouchDRO carries on as before.
+      **Tested (10 Nov 2026)** with the old FTDI adapter (3.3 V) on the
+      workshop computer: a steady stream such as `X250383;Y-553984;Z131;`,
+      with TouchDRO still connected and working. The large values are just
+      the scales' arbitrary counter offsets; zeroing deals with them. (For
+      that test the adapter was plugged onto the whole header and powered
+      the box; the permanent connection shouldn't do that.)
+      `hardware/touchdro-sender/watch_scales.py` prints a line only when a
+      reading changes, naming the axis, which makes the stream readable.
+      Notes, and things still to check:
+        - Don't connect the adapter's VCC (the box has its own supply) or DTR
+          (DTR resets the Arduino whenever the port is opened)
+        - Logic levels: the crystal is marked "08", which suggests the
+          3.3 V/8 MHz Pro Mini, though the schematic's dividers suggest 5 V.
+          Confirm with a multimeter between VCC and GND with the box on. At
+          3.3 V, an adapter set to 3.3 V is right and the Pi is safe either way
+        - The adapter only listens, so it can't upset the HC-06
+        - The box stays on its own adapter. Everything at the mill draws power
+          from one mains socket, switched by a Zigbee button, so it all comes
+          on at once anyway
+        - Which pin is the clock. The sketch says D9; the schematic says D2
+        - X and Y look swapped. The box's X socket goes to D6 and its Y socket
+          to D7 (Z is D5), but the sketch reads X on D7 and Y on D6. So either
+          the Arduino has a slightly different sketch, or the scales or
+          TouchDRO's settings make up for it. Move the table in X with a
+          serial monitor open, to see which letter changes.
+          latheControl's config would map letters to axes anyway
+        - Wind each axis in turn with `watch_scales.py` running, to see which
+          letter it is and which way it counts
     - Rejected:
         - Listening to the Bluetooth link: the HC-06 uses classic Bluetooth
           serial, which is one-to-one and frequency-hopping, so it can't be
           passively sniffed. The Pi could connect to it and relay to the
           tablet, but that's fragile and gains nothing over a wire
+        - Wiring TX straight to the Pi's own UART (GPIO 15): possible, with a
+          divider for 5 V, but on the Pi 3B the good UART belongs to its
+          Bluetooth, and a USB adapter is less fuss
         - Changing the sketch to send a second copy: only needed if the
           stream lacks something (e.g. unsmoothed values or a checksum)
         - Reading the scales directly from the Pi: only one device can drive
