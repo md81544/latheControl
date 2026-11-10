@@ -3,6 +3,13 @@
 ## User interface
 
 ### Make the interface less cryptic
+- [ ] A modification to recent changes:
+        Keep Tab key as the menu key, but also use a tap on the meta key to do the 
+        same thing.
+        - F1 should be re-purposed to a proper "help" button which could bring up
+          a small pop-up dialog giving help in certain places. Not intended as a
+          full instruction manual, just some aides-memoire (e.g. setting up a
+          feature).
 - [x] A key that brings up all the options available *now*
     - **Done:** `Tab` opens a menu of every command, with its shortcut, built
       from one table of commands (commands.cpp) so it can't drift out of date.
