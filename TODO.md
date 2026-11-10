@@ -1006,10 +1006,10 @@ change.
           cheap adapter, so the Pi's USB cable would simply replace the
           adapter and power the box. The whole box (Nano, HC-06, three scales)
           should draw well under 100 mA, which the Pi 3B's USB can supply.
-          The catch: the scales are then powered from the Pi, so whenever the
-          Pi is off or rebooting, TouchDRO has no readings, and the scales
-          lose their position. If that matters, use a powered USB hub, or
-          keep the adapter and cut the 5 V wire in the Pi's cable
+          TouchDRO then only works while the Pi is on, which doesn't matter:
+          everything at the mill draws power from one mains socket, switched
+          by a Zigbee button, so it all comes on at once. A Pi reboot would
+          still power-cycle the box and lose the scales' positions
         - First, confirm the sketch is what's on the Nano: the schematic's
           pins don't match the sketch's (see the README). The serial monitor
           on the Mac at 9600 baud shows this, and proves the USB route
