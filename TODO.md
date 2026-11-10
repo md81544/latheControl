@@ -992,3 +992,4 @@ change.
         - Possible to eavesdrop into the bluetooth connection?
         - Or rebuild the (DIY) bluetooth sender such that the signal goes to latheControl and
           then is re-broadcast?
+        - I've located the circuit and "sketch" in ~/syncthing/maker/machining/touchDRO/
