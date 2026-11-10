@@ -174,6 +174,13 @@
     - The mill: its axis 2 (Y) has no motor yet, so a multi-pass there would
       need the engine's manual feed ("feed Y by n mm, then press Enter"),
       and the dialog and the move to the start would need to allow for it
+- [ ] Retract only on the last passes (suggested 2026-11-10): the roughing
+      passes needn't retract, as a faint spiral left by the fast return
+      doesn't matter; only the finishing ones do. That's quicker, and still
+      leaves a good finish. Probably a dialog setting, "retract on the last
+      N passes", N being 2 by default (the last pass may be a tiny one), and
+      0 for every pass. Ordinary multi-pass only: threading passes always
+      retract
 - [ ] Work on a single line rather than a plane, i.e. if mem0.x == mem1.x,
       interpret it as (say) slot cutting and repeat until the user cancels.
       Could also work if only one axis is defined in config (the engine's
@@ -273,6 +280,18 @@
              to the last pass's start first. (Tried in the FAKE build: the
              arrows did nothing while paused, which wasn't expected.) Not
              between the threading passes themselves, nor in multi-pass mode
+           - **Watch for (2026-11-10):** on the machine, Right while paused
+             between spring passes moved Z a little and stopped, twice,
+             then moved on the third press. Not seen again when cutting air,
+             nor in the FAKE build. Probably the spindle was switched off
+             (or coasting) ready to try the nut on: in threading mode, Left
+             and Right are threading moves, with Z following the spindle,
+             so Z slows down with it, and stops once it reads stopped. If it's seen
+             again, the lc.log lines (each threading move's start and end,
+             and why it stopped) will say. Possibly better anyway: plain Z
+             moves (not locked to the spindle) while paused, which would
+             also work with the spindle stopped. The next pass still lines
+             up, as each starts on a whole revolution
         4. **Done:** two options in the threading passes dialog, both on
            the first time (then as last time). Suggested after the M8
            thread's spring passes each took off a noticeable amount, which
@@ -298,6 +317,14 @@
              start where the last pass did, with no further shift (nudges
              are straight in). This replaced the unused INFEED / SIDEFEED
              constants
+           - **Tried on the machine (2026-11-10):** an M14 male thread,
+             on stock turned to 13.8 mm with a multi-pass, both options on.
+             The passes were noticeably lighter on the machine, and only the
+             leading flank cut, as expected. A great-looking thread: a
+             couple of spring passes cleaned it up, then after a test fit,
+             a nudge in and a couple more before the nut went on. The
+             flanks were clean enough not to need a needle file, which
+             they always used to
 
 ## Motion and timing (mostly in stepperControl)
 - [ ] Deceleration ramping. At the moment there's only acceleration, so
@@ -1034,14 +1061,14 @@ change.
           from one mains socket, switched by a Zigbee button, so it all comes
           on at once anyway
         - Which pin is the clock. The sketch says D9; the schematic says D2
-        - X and Y look swapped. The box's X socket goes to D6 and its Y socket
-          to D7 (Z is D5), but the sketch reads X on D7 and Y on D6. So either
-          the Arduino has a slightly different sketch, or the scales or
-          TouchDRO's settings make up for it. Move the table in X with a
-          serial monitor open, to see which letter changes.
-          latheControl's config would map letters to axes anyway
-        - Wind each axis in turn with `watch_scales.py` running, to see which
-          letter it is and which way it counts
+        - Axes and signs, checked with `watch_scales.py` (10 Nov 2026): each
+          letter is the axis it should be, so the sketch matches and the
+          box's socket labels (which suggested X and Y were swapped) are
+          probably wrong. Counts go up when the table moves right (X),
+          the table moves in towards the column (Y), and the head comes down
+          (Z). That's the opposite of the usual machine convention (tool
+          relative to the work) on all three. latheControl will need a sign
+          per scale anyway, to match its own direction for each axis
     - Rejected:
         - Listening to the Bluetooth link: the HC-06 uses classic Bluetooth
           serial, which is one-to-one and frequency-hopping, so it can't be

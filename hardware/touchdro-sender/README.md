@@ -31,9 +31,10 @@ What was found on opening the box (10 November 2026):
 - Power comes from a mains adapter, through a jack on the box, to RAW and
   GND, so the Arduino's own regulator makes its supply.
 - Each scale plugs into a USB socket on the box. The sockets' D+ lines (the
-  scales' data) go to D6 (X), D7 (Y) and D5 (Z). The sketch uses the same
-  three pins, but reads X on D7 and Y on D6, so X and Y look swapped. The
-  schematic shows D3, D4 and D5 instead.
+  scales' data) go to D5, D6 and D7, the same pins as the sketch. The
+  schematic shows D3, D4 and D5 instead. The sockets' labels suggest X and
+  Y are swapped compared with the sketch, but the readings show each letter
+  is the right axis, so the labels are probably wrong.
 - The crystal is marked "08", which suggests the 3.3 V/8 MHz kind of Pro
   Mini. The sketch works with either kind, as long as the right board was
   chosen when compiling it.
@@ -41,9 +42,6 @@ What was found on opening the box (10 November 2026):
 Not yet checked:
 
 - Which pin carries the clock. The sketch says D9; the schematic says D2.
-- Why X and Y are swapped: either the Arduino has a slightly different sketch,
-  or the scales or TouchDRO's settings make up for it. A serial monitor shows
-  which letter changes when the table moves in X.
 - The supply voltage: a multimeter between VCC and GND with the box on will
   confirm 3.3 V. The schematic's dividers only make sense at 5 V.
 
@@ -73,6 +71,10 @@ the counts to mm. The sketch smooths each reading (a 24-sample adaptive
 moving average), which steadies the display but lags a little while the table
 is moving. The readings are relative to when the scales were powered up, not
 absolute.
+
+Directions, checked on 10 November 2026: the counts go up when the table
+moves right (X), when the table moves in towards the column (Y), and when the
+head comes down (Z).
 
 ## Listening to it
 
