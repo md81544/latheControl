@@ -353,7 +353,7 @@ void MultiPass::update()
                 return;
             }
             if (passRetracts()) {
-                m_machine.retract();
+                m_machine.retract(m_plan.retractTo);
                 if (!m_machine.isRetracted()) {
                     abandon("Couldn't retract");
                     return;
@@ -583,7 +583,7 @@ void MultiPass::afterReturn()
     // so that while paused, the feed axis shows where this pass cut, and can
     // be nudged
     if (m_machine.isRetracted()) {
-        m_machine.retract(); // (i.e. unretract)
+        m_machine.unretract();
         m_state = State::Unretracting;
         return;
     }
@@ -632,7 +632,7 @@ void MultiPass::finish()
     m_pauseRequested = false;
     // Unretract, so the feed axis shows the final position
     if (m_machine.isRetracted()) {
-        m_machine.retract();
+        m_machine.unretract();
         m_state = State::Finishing;
         return;
     }

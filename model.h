@@ -146,6 +146,7 @@ public:
     void axis2SpeedIncrease();
     void axis2Nudge(XDirection direction, double nudgeAmountMm);
     void axis2FastReturn();
+    // Retracts X by Axis2RetractionDistance, or, if retracted, unretracts
     void axis2Retract();
     void axis2StorePosition();
     void axis2StorePosition(double mm);
@@ -290,6 +291,13 @@ public:
     // retract, when the multi-pass dialog says only the last ones do (at
     // least 1)
     int retractLastPasses() const;
+    // The config's MultiPassRetractClearance: how far beyond the multi-pass's
+    // start (the work's surface) X retracts to, in mm
+    double multiPassRetractClearance() const;
+    // Where X retracts to during a multi-pass, threading passes or spring
+    // passes, and before moving to their start: just clear of the work's
+    // surface at the start (see MultiPassPlan::retractTo)
+    double multiPassRetractTarget() const;
     double getAxis1MotorSpeed() const;
     // See RotaryEncoder::getSpindlePulses()
     int64_t getSpindlePulses() const;
@@ -468,6 +476,8 @@ private:
     std::optional<std::chrono::steady_clock::time_point> m_spindleLowSince;
 
     XDirection m_xRetractionDirection { XDirection::Outwards };
+    // How far X retracts (Axis2RetractionDistance), in mm
+    double m_axis2RetractionDistance { 2.0 };
     // Once the user has set the x position once then we use
     // the status bar to display the effective diameter
     bool m_xDiameterSet { false };
@@ -562,7 +572,8 @@ private:
     double feedPosition() const override;
     bool feedMoving() const override;
     void feedMoveTo(double position) override;
-    void retract() override;
+    void retract(std::optional<double> to) override;
+    void unretract() override;
     bool isRetracted() const override;
     // Moving to the multi-pass's start (see multiPassGo())
     void multiPassMoveToStart();
@@ -570,13 +581,25 @@ private:
     // work: X moves away from the work (or retracts first, if retract and Z
     // has to move) before Z moves, and towards it after. Z moves at full
     // speed. status is shown for each axis meanwhile; onDone is called once
-    // there (not if stopped)
+    // there (not if stopped). The retract is to retractTo if set (as
+    // axis2RetractTo()), or else the usual distance
     void moveToSafely(
         double zTarget,
         double xTarget,
         bool retract,
         const std::string& status,
-        std::function<void()> onDone);
+        std::function<void()> onDone,
+        std::optional<double> retractTo = std::nullopt);
+    // Whether X can retract (or unretract) now
+    bool axis2CanRetract() const;
+    // Retracts X by distance mm (in the retraction direction)
+    void axis2RetractBy(double distance);
+    // Retracts X to position (in mm, as the motor's position), or, if that's
+    // less than minimum mm further out than X is now, by minimum (so it
+    // always moves clear of the surface it's on)
+    void axis2RetractTo(double position, double minimum);
+    // Back to where X retracted from
+    void axis2Unretract();
     // +1 if X's position increases as it moves into the work (i.e. the
     // opposite way to a retract), or -1 if it decreases
     double axis2IntoWorkSign() const;

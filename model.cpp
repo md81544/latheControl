@@ -206,6 +206,19 @@ void Model::initialise()
                 "\"{}\": using outwards",
                 direction));
         }
+        // How far it retracts (in mm of X travel, not on the diameter). Not
+        // used by a multi-pass, which retracts to just clear of the work (see
+        // multiPassRetractTarget())
+        const double distance = m_config.readDouble("Axis2RetractionDistance", 2.0);
+        if (distance > 0.0) {
+            m_axis2RetractionDistance = distance;
+        } else {
+            MGOLOG(fmt::format(
+                "*** Warning *** Axis2RetractionDistance should be more than zero, not {}: "
+                "using {}",
+                distance,
+                m_axis2RetractionDistance));
+        }
     }
     {
         const std::string threadsFile = m_config.read("ThreadsFile", "threadpitches.cfg");
@@ -1351,52 +1364,83 @@ void Model::axis2FastReturn()
     m_axis2Motor->goToStep(m_axis2Memory.at(m_currentMemory));
 }
 
+bool Model::axis2CanRetract() const
+{
+    return !m_config.readBool("DisableAxis2", false) && !m_axis2Motor->isRunning()
+        && m_mode != Mode::Taper;
+}
+
 void Model::axis2Retract()
 {
-    if (m_config.readBool("DisableAxis2", false) || m_axis2Motor->isRunning()
-        || m_mode == Mode::Taper) {
+    if (m_axis2Retracted) {
+        axis2Unretract();
+    } else {
+        axis2RetractBy(m_axis2RetractionDistance);
+    }
+}
+
+namespace {
+
+// The motor only ramps up when its speed is increased, not at the start of
+// every move, so (e.g. for an unretract straight after a retract, which
+// leaves the speed unchanged) we drop the speed first to be sure it ramps.
+// (Each retract starts from rest, as X can't retract while moving)
+void setRetractSpeed(mgo::StepperMotor& motor)
+{
+    motor.setSpeed(1.0);
+    motor.setSpeed(100.0);
+}
+
+} // end anonymous namespace
+
+void Model::axis2Unretract()
+{
+    if (!m_axis2Retracted || !axis2CanRetract()) {
         return;
     }
-    // The motor only ramps up when its speed is increased, not at the start of
-    // every move, so (e.g. for an unretract straight after a retract, which
-    // leaves the speed unchanged) we drop the speed first to be sure it ramps.
-    // (Each retract starts from rest, as we return above if X is moving)
-    const auto setRetractSpeed = [this]() {
-        m_axis2Motor->setSpeed(1.0);
-        m_axis2Motor->setSpeed(100.0);
-    };
-    if (m_axis2Retracted) {
-        // Unretract
-        setRetractSpeed();
-        m_axis2Motor->goToStep(m_xOldPosition);
-        m_axis2Status = "Unretracting";
-        m_fastRetracting = true;
-        MGOLOG(fmt::format(
-            "X unretract: from step {} to {}",
-            m_axis2Motor->getCurrentStep(),
-            m_axis2Motor->getTargetStep()));
-        m_axis2RetractMoveInProgress = true;
-    } else {
-        m_xOldPosition = m_axis2Motor->getCurrentStep();
-        m_previousAxis2Speed = m_axis2Motor->getSpeed();
-        setRetractSpeed();
-        int direction = -1;
-        if (m_xRetractionDirection == XDirection::Inwards) {
-            direction = 1;
-        }
-        long stepsForRetraction = 2.0 / std::abs(m_axis2Motor->getConversionFactor());
-        if (m_config.readBool("Axis2MotorFlipDirection", false)) {
-            stepsForRetraction = -stepsForRetraction;
-        }
-        m_axis2Motor->goToStep(m_axis2Motor->getCurrentStep() + stepsForRetraction * direction);
-        m_axis2Retracted = true;
-        m_axis2Status = "Retracting";
-        MGOLOG(fmt::format(
-            "X retract: from step {} to {}",
-            m_axis2Motor->getCurrentStep(),
-            m_axis2Motor->getTargetStep()));
-        m_axis2RetractMoveInProgress = true;
+    setRetractSpeed(*m_axis2Motor);
+    m_axis2Motor->goToStep(m_xOldPosition);
+    m_axis2Status = "Unretracting";
+    m_fastRetracting = true;
+    MGOLOG(fmt::format(
+        "X unretract: from step {} to {}",
+        m_axis2Motor->getCurrentStep(),
+        m_axis2Motor->getTargetStep()));
+    m_axis2RetractMoveInProgress = true;
+}
+
+void Model::axis2RetractBy(double distance)
+{
+    if (m_axis2Retracted || !axis2CanRetract()) {
+        return;
     }
+    m_xOldPosition = m_axis2Motor->getCurrentStep();
+    m_previousAxis2Speed = m_axis2Motor->getSpeed();
+    setRetractSpeed(*m_axis2Motor);
+    int direction = -1;
+    if (m_xRetractionDirection == XDirection::Inwards) {
+        direction = 1;
+    }
+    long stepsForRetraction = std::lround(distance / std::abs(m_axis2Motor->getConversionFactor()));
+    if (m_config.readBool("Axis2MotorFlipDirection", false)) {
+        stepsForRetraction = -stepsForRetraction;
+    }
+    m_axis2Motor->goToStep(m_axis2Motor->getCurrentStep() + stepsForRetraction * direction);
+    m_axis2Retracted = true;
+    m_axis2Status = "Retracting";
+    MGOLOG(fmt::format(
+        "X retract by {} mm: from step {} to {}",
+        distance,
+        m_axis2Motor->getCurrentStep(),
+        m_axis2Motor->getTargetStep()));
+    m_axis2RetractMoveInProgress = true;
+}
+
+void Model::axis2RetractTo(double position, double minimum)
+{
+    // How far out position is from X (negative if it's further in)
+    const double out = (m_axis2Motor->getPosition() - position) * axis2IntoWorkSign();
+    axis2RetractBy(std::max(out, minimum));
 }
 
 void Model::axis2StorePosition()
@@ -2351,7 +2395,8 @@ void Model::multiPassMoveToStart()
         m_multiPassRange.feedStart,
         activeMultiPassSetup().retractBeforeMoveToStart,
         "to start",
-        [this]() { m_multiPassMovingToStart = false; });
+        [this]() { m_multiPassMovingToStart = false; },
+        multiPassRetractTarget());
 }
 
 void Model::moveToSafely(
@@ -2359,7 +2404,8 @@ void Model::moveToSafely(
     double xTarget,
     bool retract,
     const std::string& status,
-    std::function<void()> onDone)
+    std::function<void()> onDone,
+    std::optional<double> retractTo)
 {
     const bool zToMove = !atMultiPassPosition(m_axis1Motor->getPosition(), zTarget);
     const bool xToMove = !atMultiPassPosition(m_axis2Motor->getPosition(), xTarget);
@@ -2368,7 +2414,15 @@ void Model::moveToSafely(
 
     const auto zStopped = [this]() { return !m_axis1Motor->isRunning(); };
     const auto xStopped = [this]() { return !m_axis2Motor->isRunning(); };
-    const MotionSequence::Step retractStep { [this]() { axis2Retract(); }, xStopped };
+    const MotionSequence::Step retractStep { [this, retractTo]() {
+                                                if (retractTo) {
+                                                    axis2RetractTo(
+                                                        *retractTo, multiPassRetractClearance());
+                                                } else {
+                                                    axis2RetractBy(m_axis2RetractionDistance);
+                                                }
+                                            },
+                                             xStopped };
     const MotionSequence::Step zStep { [this, zTarget, status]() {
                                           m_axis1Status = status;
                                           if (m_mode == Mode::Threading) {
@@ -2508,6 +2562,7 @@ void Model::multiPassGo()
     if (!threading && setup.retract && setup.retractLastOnly) {
         plan.retractLastPasses = retractLastPasses();
     }
+    plan.retractTo = multiPassRetractTarget();
     plan.pause = setup.pause;
     // (A thread's cut is locked to the spindle, so X can't follow Z)
     plan.feedCorrection = threading ? 0.0 : std::tan(taperCorrection() * DEG_TO_RAD);
@@ -2662,10 +2717,17 @@ void Model::feedMoveTo(double position)
     m_axis2WasRunning = m_axis2Motor->isRunning();
 }
 
-void Model::retract()
+void Model::retract(std::optional<double> to)
 {
-    const bool correcting = multiPassXCorrection() != 0.0;
-    axis2Retract();
+    const double correction = multiPassXCorrection();
+    const bool correcting = correction != 0.0;
+    if (to) {
+        // (Where the work's surface is here, if X has followed Z to correct a
+        // taper)
+        axis2RetractTo(*to + correction, multiPassRetractClearance());
+    } else {
+        axis2RetractBy(m_axis2RetractionDistance);
+    }
     if (m_axis2Retracted && correcting) {
         // Rather than follow Z back while retracted, X unretracts to where
         // it would have been if it had: where the cut started (see
@@ -2673,6 +2735,12 @@ void Model::retract()
         // can lag Z a little, so it may have moved slightly less)
         m_xOldPosition = m_multiPassCutStartXStep;
     }
+    m_axis2WasRunning = m_axis2Motor->isRunning();
+}
+
+void Model::unretract()
+{
+    axis2Unretract();
     m_axis2WasRunning = m_axis2Motor->isRunning();
 }
 
@@ -2706,6 +2774,23 @@ int Model::retractLastPasses() const
     return std::max(1, static_cast<int>(m_config.readLong("MultiPassRetractLastPasses", 2)));
 }
 
+double Model::multiPassRetractClearance() const
+{
+    // (Never zero or less: a retract must move clear of the surface)
+    const double clearance = m_config.readDouble("MultiPassRetractClearance", 0.25);
+    return clearance > 0.0 ? clearance : 0.25;
+}
+
+double Model::multiPassRetractTarget() const
+{
+    // The start is where the tool touched the work (for threading, the
+    // thread's crests are there too), so just outside it is clear of all of
+    // it, however deep the passes have gone. Inside a bore, the back of a
+    // boring bar is then only the clearance nearer the far side than it was
+    // at the start
+    return m_multiPassRange.feedStart - axis2IntoWorkSign() * multiPassRetractClearance();
+}
+
 double Model::multiPassXCorrection() const
 {
     if (!m_multiPass.inProgress() || m_axis2Retracted) {
@@ -2735,6 +2820,9 @@ void Model::startSpringPasses()
     plan.feedEnd = x;
     plan.feedPerPass = 0.0;
     plan.retract = true;
+    // (Clear of the thread's crests: the threading passes' start, not where
+    // the spring passes cut)
+    plan.retractTo = multiPassRetractTarget();
     plan.pause = true;
     if (const std::string error = m_multiPass.start(plan); !error.empty()) {
         m_warning = error;
@@ -2777,7 +2865,8 @@ void Model::springPassMoveBack()
         *m_springPassX,
         activeMultiPassSetup().retractBeforeMoveToStart,
         "to start",
-        [this]() { m_multiPassMovingToStart = false; });
+        [this]() { m_multiPassMovingToStart = false; },
+        multiPassRetractTarget());
 }
 
 void Model::multiPassFinished()

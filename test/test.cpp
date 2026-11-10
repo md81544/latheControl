@@ -1338,6 +1338,73 @@ TEST_CASE("Model:   the diameter doesn't change as X retracts and unretracts")
     REQUIRE(unchanged);
 }
 
+TEST_CASE("Model:   X retracts by Axis2RetractionDistance")
+{
+    for (const auto direction : { mgo::XDirection::Outwards, mgo::XDirection::Inwards }) {
+        TestConfigReader config({ { "Axis2RetractionDistance", "0.5" } });
+        mgo::MockGpio gpio(false);
+        mgo::Model model(gpio, config);
+        model.initialise();
+        model.setRetractionDirection(direction);
+        const double intoWork = model.multiPassPositions().feedIntoWork;
+        model.axis2Retract();
+        REQUIRE(runUntilStopped(model));
+        REQUIRE(model.getIsAxis2Retracted());
+        // (Out: the opposite way to into the work)
+        REQUIRE(model.getAxis2MotorPosition() * intoWork == Approx(-0.5).margin(0.001));
+        model.axis2Retract();
+        REQUIRE(runUntilStopped(model));
+        REQUIRE(!model.getIsAxis2Retracted());
+        REQUIRE(model.getAxis2MotorPosition() == Approx(0.0).margin(0.001));
+    }
+}
+
+TEST_CASE("Model:   a multi-pass retracts to just clear of its start, e.g. in a bore")
+{
+    // Boring: X retracts inwards, and a fixed 2 mm could move the back of the
+    // boring bar into the far side of a small bore. The passes go 0.1 mm into
+    // the work in two, and each retract is to the start (where the tool
+    // touched the bore) plus MultiPassRetractClearance
+    TestConfigReader config({ { "MultiPassRetractClearance", "0.3" } });
+    mgo::MockGpio gpio(false);
+    mgo::Model model(gpio, config);
+    model.initialise();
+    model.setRetractionDirection(mgo::XDirection::Inwards);
+    model.axis1SetSpeed(200.0);
+    model.axis2SetSpeed(100.0);
+    const double intoWork = model.multiPassPositions().feedIntoWork;
+    model.changeMode(mgo::Mode::MultiPass);
+    REQUIRE(model
+                .setMultiPassSetup({ .cutDistance = 0.2,
+                                     .feedInfeed = 0.1,
+                                     .feedPerPass = 0.05,
+                                     .pause = false,
+                                     .retract = true })
+                .empty());
+    const double start = model.getMultiPassRange().feedStart;
+    REQUIRE(model.multiPass().plan().retractTo == std::nullopt); // (not started yet)
+    model.multiPassGo();
+    REQUIRE(model.getWarning().empty());
+    REQUIRE(model.multiPass().plan().retractTo.has_value());
+    REQUIRE(*model.multiPass().plan().retractTo == Approx(start - 0.3 * intoWork));
+
+    // How far out from the start X went, while retracted, on each pass
+    std::map<int, double> furthestOut;
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(20);
+    while (model.multiPass().inProgress()) {
+        REQUIRE(std::chrono::steady_clock::now() < deadline);
+        model.checkStatus();
+        const double out = (start - model.getAxis2MotorPosition()) * intoWork;
+        double& furthest = furthestOut[model.multiPass().pass()];
+        furthest = std::max(furthest, out);
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+    REQUIRE(model.multiPass().state() == mgo::MultiPass::State::Finished);
+    REQUIRE(furthestOut.at(1) == Approx(0.3).margin(0.001));
+    REQUIRE(furthestOut.at(2) == Approx(0.3).margin(0.001));
+    REQUIRE(model.getAxis2MotorPosition() == Approx(start + 0.1 * intoWork).margin(0.001));
+}
+
 TEST_CASE("Threading: auto-retract at the end of a pass")
 {
     using mgo::ThreadingStopAction;
@@ -1578,17 +1645,31 @@ public:
         m_feedTarget = feedStep == 0.0 ? position : std::round(position / feedStep) * feedStep;
     }
     double feedStepSize() const override { return feedStep; }
-    void retract() override
+    void retract(std::optional<double> to) override
     {
         if (m_retracted) {
-            log.push_back("unretract");
-            m_feedTarget = m_feed - RETRACT;
-            m_retracted = false;
+            log.push_back("retract while retracted");
+            return;
+        }
+        if (to) {
+            log.push_back(fmt::format("retract to {:.6g}", *to));
+            m_retractedBy = *to - m_feed;
         } else {
             log.push_back("retract");
-            m_feedTarget = m_feed + RETRACT;
-            m_retracted = true;
+            m_retractedBy = RETRACT;
         }
+        m_feedTarget = m_feed + m_retractedBy;
+        m_retracted = true;
+    }
+    void unretract() override
+    {
+        if (!m_retracted) {
+            log.push_back("unretract while not retracted");
+            return;
+        }
+        log.push_back("unretract");
+        m_feedTarget = m_feed - m_retractedBy;
+        m_retracted = false;
     }
     bool isRetracted() const override { return m_retracted; }
 
@@ -1625,6 +1706,8 @@ public:
     double m_feed { 5.0 };
     double m_cutSpeed { 40.0 };
     bool m_retracted { false };
+    // How far the last retract moved (relative, as following moves it too)
+    double m_retractedBy { 0.0 };
     // If set, cutThreadTo() refuses with this
     std::string threadError;
     // The feed axis's step size (0 to move anywhere)
@@ -1737,6 +1820,28 @@ TEST_CASE("MultiPass: retracting between passes")
     REQUIRE(machine.feedPosition() == Approx(4.8));
 }
 
+TEST_CASE("MultiPass: retracting to a position")
+{
+    // e.g. just clear of the work's surface at the start (5 here, with the
+    // feed going in towards 4.8, so out is up)
+    FakeMultiPassMachine machine;
+    mgo::MultiPass mp(machine);
+    auto plan = basicPlan();
+    plan.feedEnd = 4.8;
+    plan.retract = true;
+    plan.retractTo = 5.25;
+    REQUIRE(mp.start(plan).empty());
+    machine.run(mp);
+    REQUIRE(mp.state() == mgo::MultiPass::State::Finished);
+    // The same position for every pass, however deep
+    REQUIRE(machine.log
+            == Log { "feed 4.9", "cut -10 at 40", "retract to 5.25", "cut 0 at 1000",
+                     "unretract", "feed 4.8", "cut -10 at 40", "retract to 5.25",
+                     "cut 0 at 1000", "unretract" });
+    REQUIRE(!machine.isRetracted());
+    REQUIRE(machine.feedPosition() == Approx(4.8));
+}
+
 TEST_CASE("MultiPass: retracting only on the last passes")
 {
     FakeMultiPassMachine machine;
@@ -1792,7 +1897,7 @@ TEST_CASE("MultiPass: retracting only on the last passes")
     mp.stop("stopped");
     machine.finishMoves();
     if (machine.isRetracted()) {
-        machine.retract();
+        machine.unretract();
         machine.finishMoves();
     }
     machine.m_cut = 0.0;
@@ -1808,7 +1913,7 @@ TEST_CASE("MultiPass: retracting only on the last passes")
 
     // Not negative, nor when threading
     machine.finishMoves();
-    machine.retract();
+    machine.unretract();
     machine.finishMoves();
     machine.m_cut = 0.0;
     plan = basicPlan();
@@ -2188,7 +2293,7 @@ TEST_CASE("MultiPass: stopping after a pass")
 
     // Paused (or before a cut starts): at once
     machine.finishMoves();
-    machine.retract();
+    machine.unretract();
     machine.finishMoves();
     machine.m_feed = 5.0;
     auto plan = threadingPlan();
@@ -2676,7 +2781,8 @@ TEST_CASE("Model:   Enter moves to a multi-pass's start, retracting first; Enter
     REQUIRE(!model.multiPassAtStart());
 
     // The first Enter moves to the start: X retracts first, so is further
-    // out than both where it was and the start while Z moves
+    // out than both where it was and the start while Z moves (by at least
+    // MultiPassRetractClearance, 0.25 mm)
     const double intoWork = model.multiPassPositions().feedIntoWork;
     // (The moves above may have reset the speeds, as usual after a fast move)
     const double zSpeed = model.getAxis1MotorSpeed();
@@ -2688,7 +2794,8 @@ TEST_CASE("Model:   Enter moves to a multi-pass's start, retracting first; Enter
     REQUIRE(runUntilAtStart(model, [&] {
         if (model.isAxis1MotorRunning()) {
             const double x = model.getAxis2MotorPosition();
-            zMovedWithXOut = zMovedWithXOut && (x - 0.1) * intoWork < -1.0;
+            zMovedWithXOut = zMovedWithXOut && (x - 0.1) * intoWork < -0.24
+                && (x - range.feedStart) * intoWork < -0.24;
         }
     }));
     REQUIRE(zMovedWithXOut);

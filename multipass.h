@@ -46,8 +46,11 @@ public:
     virtual void feedMoveTo(double position) = 0; // (at the feed axis's speed)
 
     // Retracting the feed axis between passes (moving it while retracted
-    // counts as feedMoving()). retract() toggles: a second call unretracts
-    virtual void retract() = 0;
+    // counts as feedMoving()). If to is set, the feed axis retracts to there
+    // (see MultiPassPlan::retractTo), or else by the machine's usual amount.
+    // unretract() goes back to where it retracted from
+    virtual void retract(std::optional<double> to) = 0;
+    virtual void unretract() = 0;
     virtual bool isRetracted() const = 0;
 };
 
@@ -87,6 +90,14 @@ struct MultiPassPlan {
     // the same cut until stopped (a feedPerPass of zero) retracts every
     // pass, as there's no last pass. Not for threading
     int retractLastPasses { 0 };
+    // If retracting: where the feed axis retracts to, or nullopt for the
+    // machine's usual amount. e.g. just clear of the work's surface at the
+    // start (feedStart, plus a clearance): when boring, a fixed retract could
+    // move the back of a boring bar into the far side of a small bore, but
+    // the bar was clear of it with the tool at the start. (The machine
+    // retracts at least a little anyway, e.g. if the feed axis is already
+    // further out than this)
+    std::optional<double> retractTo;
     // Wait for continueAfterPause() before each pass after the first
     bool pause { false };
     // Constant area: each pass removes about the same area as the first, as

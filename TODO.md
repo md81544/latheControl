@@ -187,6 +187,33 @@
       pass, so every pass retracts. Ordinary multi-pass only: threading
       passes always retract. Tested in the unit and UI tests; not yet tried
       on the machine
+- [ ] Retract by a safe amount, not an arbitrary one (noticed 2026-11-10,
+      testing a female thread in debug mode): X retracted a fixed 2 mm
+      (hard-coded). In a bore only just big enough for the boring bar, an
+      inward retract that size would move the back of the bar into the far
+      side.
+    - **Done (1):** the fixed distance is `Axis2RetractionDistance` in the
+      config (2 mm unless set), for `R` and `ThreadingAutoRetract`.
+    - **Done (2):** a multi-pass, threading passes and spring passes
+      retract to the start (where the tool touched the work) plus
+      `MultiPassRetractClearance` (0.25 mm unless set), and so does the
+      retract before moving to their start. That's safe by construction:
+      the start is clear of all the work however deep the passes go (for a
+      thread, the crests are there), and in a bore, the back of the bar is
+      only the clearance nearer the far side than when you touched off. It
+      always moves at least the clearance, e.g. if X is already further out
+      than the start. It's usually less movement than 2 mm, too (a thread is
+      seldom that deep), though deep turning passes now retract further.
+      Tested in the unit tests; not yet tried on the machine.
+    - **To test:** whether 0.25 mm clears the burr thrown up on the crests
+      of an internal thread (the test cut so far was clean). The next
+      internal thread on a real project will do; if it rubs on the return,
+      raise `MultiPassRetractClearance`, or give threading its own.
+    - (3) Not yet: `R` and `ThreadingAutoRetract` could use the current
+      feature's surface the same way when it's set (e.g. X set as a
+      diameter on the bore), falling back to the fixed distance otherwise.
+      The program can't know the boring bar's width, but retracting only
+      just clear of the surface is the least that can hit anything.
 - [ ] Work on a single line rather than a plane, i.e. if mem0.x == mem1.x,
       interpret it as (say) slot cutting and repeat until the user cancels.
       Could also work if only one axis is defined in config (the engine's
