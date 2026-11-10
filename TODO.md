@@ -174,13 +174,19 @@
     - The mill: its axis 2 (Y) has no motor yet, so a multi-pass there would
       need the engine's manual feed ("feed Y by n mm, then press Enter"),
       and the dialog and the move to the start would need to allow for it
-- [ ] Retract only on the last passes (suggested 2026-11-10): the roughing
+- [x] Retract only on the last passes (suggested 2026-11-10): the roughing
       passes needn't retract, as a faint spiral left by the fast return
       doesn't matter; only the finishing ones do. That's quicker, and still
-      leaves a good finish. Probably a dialog setting, "retract on the last
-      N passes", N being 2 by default (the last pass may be a tiny one), and
-      0 for every pass. Ordinary multi-pass only: threading passes always
-      retract
+      leaves a good finish
+    - **Done:** the dialog's `R` cycles the retract through No, Every pass
+      and Last 2 passes (2 because the last pass may be a tiny one; set by
+      `MultiPassRetractLastPasses`). The engine's plan has
+      `retractLastPasses` (0 for every pass), and works out for each pass
+      whether it's one of the last ones, so a nudge while paused that
+      saves a pass is allowed for. With a step-over of zero there's no last
+      pass, so every pass retracts. Ordinary multi-pass only: threading
+      passes always retract. Tested in the unit and UI tests; not yet tried
+      on the machine
 - [ ] Work on a single line rather than a plane, i.e. if mem0.x == mem1.x,
       interpret it as (say) slot cutting and repeat until the user cancels.
       Could also work if only one axis is defined in config (the engine's

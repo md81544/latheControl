@@ -53,6 +53,9 @@ struct MultiPassDialogInfo {
     // Whether X retracts outwards (so infeeds towards the centre), as for
     // turning, or inwards (away from it), as for boring
     bool feedRetractsOutwards { true };
+    // How many passes at the end retract, when only the last ones do (see
+    // MultiPassSetup::retractLastOnly)
+    int retractLastPasses { 2 };
     // The setup to start with
     MultiPassSetup setup;
     // For threading passes (in threading mode): the thread, as shown (e.g.

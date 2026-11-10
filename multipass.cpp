@@ -235,6 +235,9 @@ std::string MultiPass::start(const MultiPassPlan& plan)
     if (plan.feedManual && plan.feedCorrection != 0.0) {
         return "Can't correct a taper with a manual feed";
     }
+    if (plan.retractLastPasses < 0) {
+        return "The number of passes to retract on can't be negative";
+    }
     if (plan.constantArea && plan.feedMinimum < TOLERANCE) {
         return "A constant area needs a minimum feed per pass";
     }
@@ -242,7 +245,7 @@ std::string MultiPass::start(const MultiPassPlan& plan)
         return "Can't shift the cut's start and correct a taper together";
     }
     if (plan.cut == MultiPassCut::Thread) {
-        if (!plan.retract) {
+        if (!plan.retract || plan.retractLastPasses != 0) {
             return "Threading needs a retract between passes";
         }
         if (plan.feedManual) {
@@ -349,7 +352,7 @@ void MultiPass::update()
                 abandon("The cut stopped short of its end");
                 return;
             }
-            if (m_plan.retract) {
+            if (passRetracts()) {
                 m_machine.retract();
                 if (!m_machine.isRetracted()) {
                     abandon("Couldn't retract");
@@ -486,6 +489,19 @@ bool MultiPass::feedAt(double target) const
 bool MultiPass::isLastPass() const
 {
     return m_plan.feedPerPass >= TOLERANCE && near(m_feedTarget, m_plan.feedEnd);
+}
+
+bool MultiPass::passRetracts() const
+{
+    if (!m_plan.retract) {
+        return false;
+    }
+    const int total = totalPasses();
+    if (m_plan.retractLastPasses == 0 || total == 0) {
+        return true;
+    }
+    // (The total is worked out afresh, as a nudge while paused may change it)
+    return m_pass > total - m_plan.retractLastPasses;
 }
 
 double MultiPass::feedBase() const

@@ -286,6 +286,10 @@ public:
     // as for taper mode) added to tapers and multi-pass cuts, to cancel out
     // a slight taper the machine cuts
     double taperCorrection() const;
+    // The config's MultiPassRetractLastPasses: how many passes at the end
+    // retract, when the multi-pass dialog says only the last ones do (at
+    // least 1)
+    int retractLastPasses() const;
     double getAxis1MotorSpeed() const;
     // See RotaryEncoder::getSpindlePulses()
     int64_t getSpindlePulses() const;

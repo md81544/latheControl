@@ -81,6 +81,12 @@ struct MultiPassPlan {
     bool feedManual { false };
     // Retract the feed axis before returning after each cut
     bool retract { false };
+    // If retracting: only on this many passes at the end (0 for every pass).
+    // The earlier, roughing passes return without retracting, which is
+    // quicker, as only the finishing passes' surface matters. Repeating
+    // the same cut until stopped (a feedPerPass of zero) retracts every
+    // pass, as there's no last pass. Not for threading
+    int retractLastPasses { 0 };
     // Wait for continueAfterPause() before each pass after the first
     bool pause { false };
     // Constant area: each pass removes about the same area as the first, as
@@ -136,6 +142,9 @@ struct MultiPassSetup {
     double feedPerPass { 0.0 };
     bool pause { false };
     bool retract { false };
+    // If retracting: only on the last few passes (how many is set in the
+    // config; see MultiPassPlan::retractLastPasses)
+    bool retractLastOnly { false };
     // Retract the feed axis before moving to the start (when the cut axis
     // has to move to get there)
     bool retractBeforeMoveToStart { true };
@@ -298,6 +307,8 @@ private:
     bool cutAt(double target) const;
     bool feedAt(double target) const;
     bool isLastPass() const;
+    // Whether the pass being made retracts before its return
+    bool passRetracts() const;
     // Where the next step on starts from: the feed axis's position (or, for
     // a manual feed, where it should be)
     double feedBase() const;

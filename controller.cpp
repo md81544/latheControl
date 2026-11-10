@@ -1166,6 +1166,7 @@ MultiPassDialogInfo Controller::multiPassDialogInfo() const
     info.positions = m_model->multiPassPositions();
     info.diameterKnown = m_model->getDiameterMm().has_value();
     info.feedRetractsOutwards = m_model->getRetractionDirection() == XDirection::Outwards;
+    info.retractLastPasses = m_model->retractLastPasses();
     return info;
 }
 

@@ -590,6 +590,36 @@ TEST_CASE("UI: multi-pass dialog, from here by distances")
     REQUIRE(!multiPassDialog(view, info).has_value());
 }
 
+TEST_CASE("UI: multi-pass dialog, R cycles the retract")
+{
+    TestModel tm;
+    mgo::ViewQt view;
+    view.initialise(tm.model);
+    // No, every pass, the last few, then no again
+    const auto withPresses = [&view](int presses) {
+        whenDialogShows([presses](QWidget* dialog) {
+            typeInto(dialog, "-7");
+            key(dialog, Qt::Key_R, presses);
+            if (presses == 2) {
+                snapshot(dialog, "multipass_retract_last");
+            }
+            key(dialog, Qt::Key_Return);
+        });
+        auto setup = multiPassDialog(view, multiPassInfo());
+        REQUIRE(setup.has_value());
+        return *setup;
+    };
+    auto setup = withPresses(1);
+    REQUIRE(setup.retract);
+    REQUIRE(!setup.retractLastOnly);
+    setup = withPresses(2);
+    REQUIRE(setup.retract);
+    REQUIRE(setup.retractLastOnly);
+    setup = withPresses(3);
+    REQUIRE(!setup.retract);
+    REQUIRE(!setup.retractLastOnly);
+}
+
 TEST_CASE("UI: multi-pass dialog, an end diameter")
 {
     TestModel tm;

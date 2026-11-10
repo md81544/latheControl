@@ -2505,6 +2505,9 @@ void Model::multiPassGo()
     plan.feedEnd = m_multiPassRange.feedEnd;
     plan.feedPerPass = std::abs(setup.feedPerPass);
     plan.retract = threading || setup.retract;
+    if (!threading && setup.retract && setup.retractLastOnly) {
+        plan.retractLastPasses = retractLastPasses();
+    }
     plan.pause = setup.pause;
     // (A thread's cut is locked to the spindle, so X can't follow Z)
     plan.feedCorrection = threading ? 0.0 : std::tan(taperCorrection() * DEG_TO_RAD);
@@ -2531,7 +2534,10 @@ void Model::multiPassGo()
         plan.feedStart,
         plan.feedEnd,
         plan.feedPerPass,
-        plan.retract ? ", retract" : "",
+        plan.retract ? (plan.retractLastPasses > 0
+                            ? fmt::format(", retract on the last {}", plan.retractLastPasses)
+                            : std::string(", retract"))
+                     : std::string(),
         plan.pause ? ", pause" : "",
         plan.feedCorrection != 0.0 ? fmt::format(", taper correction {} deg", taperCorrection())
                                    : "",
@@ -2693,6 +2699,11 @@ void Model::multiPassXFollowEnded()
 double Model::taperCorrection() const
 {
     return m_config.readDouble("TaperCorrection", 0.0);
+}
+
+int Model::retractLastPasses() const
+{
+    return std::max(1, static_cast<int>(m_config.readLong("MultiPassRetractLastPasses", 2)));
 }
 
 double Model::multiPassXCorrection() const

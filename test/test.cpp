@@ -1737,6 +1737,86 @@ TEST_CASE("MultiPass: retracting between passes")
     REQUIRE(machine.feedPosition() == Approx(4.8));
 }
 
+TEST_CASE("MultiPass: retracting only on the last passes")
+{
+    FakeMultiPassMachine machine;
+    mgo::MultiPass mp(machine);
+    auto plan = basicPlan();
+    plan.feedEnd = 4.6; // (four passes)
+    plan.retract = true;
+    plan.retractLastPasses = 2;
+    REQUIRE(mp.start(plan).empty());
+    REQUIRE(mp.totalPasses() == 4);
+    machine.run(mp);
+    REQUIRE(mp.state() == mgo::MultiPass::State::Finished);
+    // The roughing passes return without retracting; the last two retract
+    REQUIRE(machine.log
+            == Log { "feed 4.9", "cut -10 at 40", "cut 0 at 1000",
+                     "feed 4.8", "cut -10 at 40", "cut 0 at 1000",
+                     "feed 4.7", "cut -10 at 40", "retract", "cut 0 at 1000", "unretract",
+                     "feed 4.6", "cut -10 at 40", "retract", "cut 0 at 1000", "unretract" });
+    REQUIRE(!machine.isRetracted());
+    REQUIRE(machine.feedPosition() == Approx(4.6));
+
+    // Fewer passes than that: they all retract
+    machine.log.clear();
+    machine.m_feed = 5.0;
+    plan.feedEnd = 4.9;
+    plan.retractLastPasses = 3;
+    REQUIRE(mp.start(plan).empty());
+    machine.run(mp);
+    REQUIRE(machine.log
+            == Log { "feed 4.9", "cut -10 at 40", "retract", "cut 0 at 1000", "unretract" });
+
+    // A nudge in while paused can make fewer passes: the count is worked out
+    // again for each pass
+    machine.log.clear();
+    machine.m_feed = 5.0;
+    plan.feedEnd = 4.6;
+    plan.retractLastPasses = 2;
+    plan.pause = true;
+    REQUIRE(mp.start(plan).empty());
+    machine.run(mp);
+    REQUIRE(mp.state() == mgo::MultiPass::State::Paused);
+    REQUIRE(machine.log == Log { "feed 4.9", "cut -10 at 40", "cut 0 at 1000" });
+    machine.m_feed = 4.8; // (nudged in by 0.1: the next pass is at 4.7, of three)
+    mp.continueAfterPause();
+    REQUIRE(mp.totalPasses() == 3);
+    machine.run(mp);
+    REQUIRE(machine.log.at(3) == "feed 4.7");
+    REQUIRE(machine.log.at(5) == "retract");
+
+    // Repeating the same cut until stopped: there's no last pass, so every
+    // pass retracts
+    machine.log.clear();
+    mp.stop("stopped");
+    machine.finishMoves();
+    if (machine.isRetracted()) {
+        machine.retract();
+        machine.finishMoves();
+    }
+    machine.m_cut = 0.0;
+    machine.m_feed = 5.0;
+    machine.log.clear();
+    plan.feedPerPass = 0.0;
+    plan.pause = false;
+    REQUIRE(mp.start(plan).empty());
+    machine.finishMoves();
+    mp.update();
+    REQUIRE(machine.log == Log { "cut -10 at 40", "retract" });
+    mp.stop("stopped");
+
+    // Not negative, nor when threading
+    machine.finishMoves();
+    machine.retract();
+    machine.finishMoves();
+    machine.m_cut = 0.0;
+    plan = basicPlan();
+    plan.retract = true;
+    plan.retractLastPasses = -1;
+    REQUIRE(!mp.start(plan).empty());
+}
+
 TEST_CASE("MultiPass: pausing between passes")
 {
     FakeMultiPassMachine machine;
@@ -2151,6 +2231,10 @@ TEST_CASE("MultiPass: threading needs a retract, a motorised feed and no taper c
     REQUIRE(!mp.start(plan).empty());
     plan = threadingPlan();
     plan.feedCorrection = 0.01;
+    REQUIRE(!mp.start(plan).empty());
+    // (Every pass retracts)
+    plan = threadingPlan();
+    plan.retractLastPasses = 2;
     REQUIRE(!mp.start(plan).empty());
     REQUIRE(mp.state() == mgo::MultiPass::State::Idle);
     REQUIRE(machine.log.empty());

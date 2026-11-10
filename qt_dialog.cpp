@@ -1654,15 +1654,27 @@ private:
             w.source->setStyleSheet(style);
         }
 
-        const auto option = [](const char* key, const QString& text, bool on) {
-            return QString("[%1] %2: <span style='color: %3;'>%4</span>")
-                .arg(key, text, on ? "rgb(255, 255, 0)" : "rgb(190, 190, 190)", on ? "Yes" : "No");
-        };
+        // (value is what's shown for it, if not Yes or No)
+        const auto option
+            = [](const char* key, const QString& text, bool on, const QString& value = {}) {
+                  return QString("[%1] %2: <span style='color: %3;'>%4</span>")
+                      .arg(
+                          key,
+                          text,
+                          on ? "rgb(255, 255, 0)" : "rgb(190, 190, 190)",
+                          !value.isEmpty() ? value
+                              : on         ? QString("Yes")
+                                           : QString("No"));
+              };
         // (Threading always retracts: the return isn't locked to the spindle)
+        const QString retract = !m_setup.retract ? QString("No")
+            : m_setup.retractLastOnly
+            ? QString::fromStdString(fmt::format("Last {} passes", m_info.retractLastPasses))
+            : QString("Every pass");
         QString options
             = option("P", "Pause between passes", m_setup.pause) + "&nbsp;&nbsp;&nbsp;"
             + (m_info.threading ? QString("Retracts between passes")
-                                : option("R", "Retract between", m_setup.retract))
+                                : option("R", "Retract", m_setup.retract, retract))
             + "<br>"
             + option("M", "Retract before moving to the start", m_setup.retractBeforeMoveToStart);
         if (m_info.threading) {
@@ -1730,10 +1742,22 @@ private:
             refresh();
             return true;
         }
-        if (qtKey == Qt::Key_P || qtKey == Qt::Key_R || qtKey == Qt::Key_M) {
-            bool& option = qtKey == Qt::Key_P ? m_setup.pause
-                : qtKey == Qt::Key_R          ? m_setup.retract
-                                              : m_setup.retractBeforeMoveToStart;
+        if (qtKey == Qt::Key_R) {
+            // No, then every pass, then only the last few
+            if (!m_setup.retract) {
+                m_setup.retract = true;
+                m_setup.retractLastOnly = false;
+            } else if (!m_setup.retractLastOnly) {
+                m_setup.retractLastOnly = true;
+            } else {
+                m_setup.retract = false;
+                m_setup.retractLastOnly = false;
+            }
+            refresh();
+            return true;
+        }
+        if (qtKey == Qt::Key_P || qtKey == Qt::Key_M) {
+            bool& option = qtKey == Qt::Key_P ? m_setup.pause : m_setup.retractBeforeMoveToStart;
             option = !option;
             refresh();
             return true;

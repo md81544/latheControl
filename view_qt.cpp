@@ -1295,7 +1295,9 @@ void ViewQt::Impl::updateMultiPassData(const Model& model)
         misc1.text += ", pausing";
     }
     if (options.retract && !threading) {
-        misc1.text += ", retracting";
+        misc1.text += options.retractLastOnly
+            ? fmt::format(", retracting on the last {}", model.retractLastPasses())
+            : std::string(", retracting");
     }
     if (model.taperCorrection() != 0.0 && !threading) {
         misc1.text += ", correcting taper";
