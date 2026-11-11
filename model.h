@@ -84,11 +84,8 @@ enum class ThreadingStopAction {
     RetractOut,
     RetractIn
 };
-ThreadingStopAction threadingStopAction(
-    bool arrived,
-    bool retractedAtStart,
-    bool retractedNow,
-    bool spindleTurning);
+ThreadingStopAction
+threadingStopAction(bool arrived, bool retractedAtStart, bool retractedNow, bool spindleTurning);
 
 // (Privately an IMultiPassMachine: the multi-pass engine moves the axes
 // through it)
@@ -104,7 +101,7 @@ public:
 
     // This should be repeatedly called from the run loop
     void checkStatus();
-    
+
     void changeMode(Mode mode);
     // (Also cancels any motion sequence)
     void stopAllMotors();
@@ -222,7 +219,6 @@ public:
     // The mode (e.g. threading), as set by changeMode()
     Mode getMode() const;
 
-
     double getRadius() const;
     void setRadius(double radius);
 
@@ -244,7 +240,8 @@ public:
 
     std::string getWarning() const;
     // Non-empty if a motor has faulted (its driver went into alarm, e.g. after
-    // a stall), describing the fault and what to do
+    // a stall), or a limit switch has stopped the motors (or is still
+    // pressed), describing it and what to do
     std::string getFaultMessage() const;
     std::string getAxis1Status() const;
     std::string getAxis2Status() const;
@@ -336,8 +333,15 @@ public:
 
     void clearCurrentMemorySlot(Axis axis);
 
-    // Checks to see whether any limit switches have been triggered
-    bool limitSwitchTriggered() const;
+    // Limit switches (LimitSwitchPin in the config): any switch stops all the
+    // motors at once (each motor's thread watches the pin), and they refuse
+    // to move until the trip is cleared. True from then until cleared
+    bool limitSwitchTripped() const;
+    // Whether a limit switch is pressed now (false if there are none)
+    bool limitSwitchPressed() const;
+    // Lets the motors move again, e.g. off the switch. A switch still
+    // pressed won't stop them again until it has been released
+    void clearLimitSwitchTrip();
 
     void lockAxis(unsigned axisNumber);
     void unlockAxis(unsigned axisNumber);
@@ -526,6 +530,8 @@ private:
     // driver's alarm has been cleared)
     bool m_axis1Faulted { false };
     bool m_axis2Faulted { false };
+    // Whether a limit switch trip has been dealt with (see checkLimitSwitch())
+    bool m_limitTripSeen { false };
 
     // Threading: the Z move (a cut or a return) currently in progress
     bool m_threadingMoveInProgress { false };
@@ -550,6 +556,8 @@ private:
 
     // Private functions
     void checkMotorFaults();
+    // Stops everything (e.g. a multi-pass) when a limit switch trips
+    void checkLimitSwitch();
     void checkSpindleStopped(float chuckRpm);
     void checkEncoderLostPulses();
     // X is no longer known to be measured from the centre

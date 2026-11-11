@@ -80,8 +80,8 @@ public:
 
     // axes: which axes the command needs (bit 0 = axis 1, bit 1 = axis 2)
     // hotkey: optional menu hotkey (lower case), or 0
-    void add(
-        const std::string& category,
+    void
+    add(const std::string& category,
         const std::string& description,
         int key,
         int axes,
@@ -122,15 +122,9 @@ char categoryHotkey(const std::string& category)
     // Modes is M (it's likely to be the most used); the others use a letter
     // from their name not taken by another
     static const std::vector<std::pair<std::string, char>> hotkeys {
-        { "Move", 'v' },
-        { "Nudge", 'n' },
-        { "Speed", 's' },
-        { "Memory", 'e' },
-        { "Position", 'p' },
-        { "Modes", 'm' },
-        { "Feature", 'f' },
-        { "Axis locks", 'l' },
-        { "System", 'y' },
+        { "Move", 'v' },    { "Nudge", 'n' },      { "Speed", 's' },
+        { "Memory", 'e' },  { "Position", 'p' },   { "Modes", 'm' },
+        { "Feature", 'f' }, { "Axis locks", 'l' }, { "System", 'y' },
     };
     for (const auto& [name, hotkey] : hotkeys) {
         if (name == category) {
@@ -235,6 +229,23 @@ bool keyAllowedInCurrentMode(int k, const Model& model)
     // The mode means some keys are ignored, for instance in
     // threading, you cannot change the speed of the z-axis as
     // that would affect the thread pitch
+    // After a limit switch has stopped the motors, nothing else may move
+    // them until the stop is cleared (so e.g. repeated nudges into the
+    // switch can't go unnoticed): only stopping, clearing it, and keys which
+    // don't move anything
+    if (model.limitSwitchTripped()) {
+        switch (k) {
+            case key::CtrlQ:
+            case key::ESC:
+            case key::SPACE:
+            case key::clearLimitTrip:
+            case key::u:
+            case key::ASTERISK:
+                return true;
+            default:
+                return false;
+        }
+    }
     // Always allow certain keys:
     if (k == key::CtrlQ || k == key::ESC || k == key::ENTER) {
         return true;
@@ -321,10 +332,8 @@ std::vector<Command> buildCommands(const IConfigReader& config, DisplayUnits uni
     const auto axis1Free = [](const Model& m) { return !m.isAxisLocked(1); };
     const auto axis2Free = [](const Model& m) { return !m.isAxisLocked(2); };
     // Axis 1's speed is driven by the spindle when threading
-    const auto axis1SpeedAdjustable
-        = [](const Model& m) { return m.getMode() != Mode::Threading; };
-    const auto speedPresetsAllowed
-        = [](const Model& m) { return m.getMode() != Mode::Threading; };
+    const auto axis1SpeedAdjustable = [](const Model& m) { return m.getMode() != Mode::Threading; };
+    const auto speedPresetsAllowed = [](const Model& m) { return m.getMode() != Mode::Threading; };
 
     CommandListBuilder b(config);
 
@@ -366,7 +375,9 @@ std::vector<Command> buildCommands(const IConfigReader& config, DisplayUnits uni
     b.add(c, fmt::format("{} faster", a2), key::a2_EQUALS, AXIS2);
     b.add(c, fmt::format("{} slower", a2), key::a2_MINUS, AXIS2);
     const std::vector<double> axis2Defaults { 5.0, 20.0, 40.0, 80.0, 100.0 };
-    const std::vector<int> axis2PresetKeys { key::SIX, key::SEVEN, key::EIGHT, key::NINE, key::ZERO };
+    const std::vector<int> axis2PresetKeys {
+        key::SIX, key::SEVEN, key::EIGHT, key::NINE, key::ZERO
+    };
     for (int n = 0; n < 5; ++n) {
         const double presetSpeed
             = config.readDouble(fmt::format("Axis2SpeedPreset{}", n + 1), axis2Defaults.at(n));
@@ -468,7 +479,13 @@ std::vector<Command> buildCommands(const IConfigReader& config, DisplayUnits uni
                     && (!workEnd || m.getWorkEndZ());
             };
         };
-        b.add(c, "Go to its start (clear of the end)", key::featureStart, BOTH, goTo(true, true), 'g');
+        b.add(
+            c,
+            "Go to its start (clear of the end)",
+            key::featureStart,
+            BOTH,
+            goTo(true, true),
+            'g');
         b.add(
             c,
             "Go to its start (at the end exactly)",
@@ -476,7 +493,8 @@ std::vector<Command> buildCommands(const IConfigReader& config, DisplayUnits uni
             BOTH,
             goTo(true, true),
             'h');
-        b.add(c, fmt::format("{} to its Ø", a2), key::featureDiameter, BOTH, goTo(true, false), 'x');
+        b.add(
+            c, fmt::format("{} to its Ø", a2), key::featureDiameter, BOTH, goTo(true, false), 'x');
         b.add(
             c,
             fmt::format("{} to the work's end (clear of it)", a1),
@@ -504,12 +522,13 @@ std::vector<Command> buildCommands(const IConfigReader& config, DisplayUnits uni
 
     c = "Axis locks";
     b.add(c, fmt::format("Lock / unlock {}", a1), key::a1_k, AXIS1, nullptr, a1Hotkey);
-    b.add(c,
-          fmt::format("Lock / unlock {}", a2),
-          key::a2_k,
-          AXIS2,
-          nullptr,
-          a2Hotkey != a1Hotkey ? a2Hotkey : 0);
+    b.add(
+        c,
+        fmt::format("Lock / unlock {}", a2),
+        key::a2_k,
+        AXIS2,
+        nullptr,
+        a2Hotkey != a1Hotkey ? a2Hotkey : 0);
 
     c = "System";
     b.add(c, imperial ? "Show mm" : "Show inches", key::u, NONE, nullptr, 'u');
@@ -522,6 +541,13 @@ std::vector<Command> buildCommands(const IConfigReader& config, DisplayUnits uni
     const auto shutdownAvailable = [](const Model&) { return true; };
 #endif
     b.add(c, "Shut down the computer", key::ASTERISK, NONE, shutdownAvailable, 'd');
+    b.add(
+        c,
+        "Clear the limit switch stop",
+        key::clearLimitTrip,
+        NONE,
+        [](const Model& m) { return m.limitSwitchTripped(); },
+        'l');
 
     return b.take();
 }

@@ -37,8 +37,14 @@ public:
     // anywhere). An axis can only stop on a whole step, so it counts as at a
     // position if it's within half a step: e.g. a thread's depth is seldom a
     // whole number of steps
-    virtual double cutStepSize() const { return 0.0; }
-    virtual double feedStepSize() const { return 0.0; }
+    virtual double cutStepSize() const
+    {
+        return 0.0;
+    }
+    virtual double feedStepSize() const
+    {
+        return 0.0;
+    }
 
     // (Not used if the feed is manual)
     virtual double feedPosition() const = 0;
@@ -217,8 +223,8 @@ MultiPassResolved resolveMultiPass(
 //   slot, the first other slot set on that axis, or else a distance.
 // - The distances, step-over, pause and retract are as before. Retracting
 //   before moving to the start is always on.
-MultiPassSetup defaultMultiPassSetup(
-    const MultiPassSetup& previous, const MultiPassPositions& positions);
+MultiPassSetup
+defaultMultiPassSetup(const MultiPassSetup& previous, const MultiPassPositions& positions);
 
 // True if an axis is at a position (within MultiPass::TOLERANCE)
 bool atMultiPassPosition(double position, double target);

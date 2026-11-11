@@ -34,6 +34,9 @@ public:
 
 private:
     void tickBody();
+    // Opens a dialog to clear a limit switch's stop, once per stop
+    void checkLimitSwitch();
+    bool m_limitDialogShown { false };
     bool m_inTick { false };
     // Keys pressed while a motion sequence was running, to act on afterwards
     std::deque<int> m_heldKeys;

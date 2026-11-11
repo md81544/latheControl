@@ -79,7 +79,37 @@ void Controller::tickBody()
 {
     processKeyPress();
     m_model->checkStatus();
+    checkLimitSwitch();
     m_view->updateDisplay(*m_model);
+}
+
+void Controller::checkLimitSwitch()
+{
+    if (!m_model->limitSwitchTripped()) {
+        m_limitDialogShown = false;
+        return;
+    }
+    // Once per stop, and not over another dialog (the flashing message says
+    // what to do meanwhile, and the menu can clear it)
+    if (m_limitDialogShown || m_view->isDialogOpen()) {
+        return;
+    }
+    m_limitDialogShown = true;
+    m_model->setKeyMode(KeyMode::None);
+    m_heldKeys.clear();
+    std::vector<std::string> lines {
+        "A limit switch has been pressed (or its wiring is broken),",
+        "so all the motors have stopped, and won't move until it's cleared.",
+        "",
+        "Once cleared, move off the switch carefully: the program can't tell",
+        "which switch it is, so moving further into it isn't prevented.",
+        "",
+        "Enter (or Y): clear it   Esc (or N): leave it (clear it later from",
+        "the menu: System)"
+    };
+    okCancel("Limit switch: all motors stopped", std::move(lines), [this] {
+        m_model->clearLimitSwitchTrip();
+    });
 }
 
 std::string Controller::unitsSuffix(int axisNumber) const
@@ -599,9 +629,7 @@ void Controller::processKey(int t)
                         "Zeroing " + m_model->config().read("Axis1Label", "Z"),
                         false,
                         true,
-                        [this] {
-                            m_model->axis1Zero();
-                        });
+                        [this] { m_model->axis1Zero(); });
                     break;
                 }
             case key::a2_z:
@@ -610,9 +638,7 @@ void Controller::processKey(int t)
                         "Zeroing " + m_model->config().read("Axis2Label", "X"),
                         true,
                         false,
-                        [this] {
-                            m_model->axis2Zero();
-                        });
+                        [this] { m_model->axis2Zero(); });
                     break;
                 }
             case key::aAll_z:
@@ -722,7 +748,7 @@ void Controller::processKey(int t)
                               "(the log says why)",
                               "",
                               "Press a key" },
-                            [] {});
+                            [] { });
                         break;
                     }
                     // (As with all dialogs, stop all motors first)
@@ -748,20 +774,19 @@ void Controller::processKey(int t)
                     MultiPassDialogInfo info = multiPassDialogInfo();
                     info.setup
                         = defaultMultiPassSetup(m_model->getMultiPassSetup(), info.positions);
-                    m_view->openMultiPassDialog(
-                        info, [this](std::optional<MultiPassSetup> setup) {
-                            if (!setup) {
-                                return;
-                            }
-                            m_model->changeMode(Mode::MultiPass);
-                            // (The dialog only accepts a setup which can be
-                            // used, and nothing has moved since)
-                            if (const std::string error = m_model->setMultiPassSetup(*setup);
-                                !error.empty()) {
-                                m_model->changeMode(Mode::None);
-                                pressAnyKey("Multi-pass", { error, "", "Press a key", "" }, [] {});
-                            }
-                        });
+                    m_view->openMultiPassDialog(info, [this](std::optional<MultiPassSetup> setup) {
+                        if (!setup) {
+                            return;
+                        }
+                        m_model->changeMode(Mode::MultiPass);
+                        // (The dialog only accepts a setup which can be
+                        // used, and nothing has moved since)
+                        if (const std::string error = m_model->setMultiPassSetup(*setup);
+                            !error.empty()) {
+                            m_model->changeMode(Mode::None);
+                            pressAnyKey("Multi-pass", { error, "", "Press a key", "" }, [] { });
+                        }
+                    });
                     break;
                 }
             case key::threadingPasses: // a multi-pass of threading passes
@@ -794,7 +819,7 @@ void Controller::processKey(int t)
                         if (const std::string error = m_model->setThreadingPassesSetup(*setup);
                             !error.empty()) {
                             const std::vector<std::string> text { error, "", "Press a key", "" };
-                            pressAnyKey("Threading passes", text, [] {});
+                            pressAnyKey("Threading passes", text, [] { });
                         }
                     });
                     break;
@@ -1025,6 +1050,11 @@ void Controller::processKey(int t)
                     } else {
                         m_model->lockAxis(1);
                     }
+                    break;
+                }
+            case key::clearLimitTrip:
+                {
+                    m_model->clearLimitSwitchTrip();
                     break;
                 }
             case key::a2_k: // lock axis 2

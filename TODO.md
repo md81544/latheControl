@@ -681,8 +681,28 @@
     - Add a simulated alarm pin to the mock GPIO, to test all this without
       stalling the lathe
 - [ ] Support limit switches. Could have multiple switches all on one pin,
-      and when triggered simply issue a "stop all". Partially implemented
-      (see `limitSwitchTriggered()`)
+      and when triggered simply issue a "stop all"
+    - **Done (2026-11-11), not yet tried on the machine:** `LimitSwitchPin`
+      and `LimitSwitchActiveLevel` (off by default). The pin is watched in
+      each motor's thread (stepperControl's `setLimitPin()`, alongside the
+      alarm pin, with the same 2ms filter), not the 50ms run loop, so the
+      motors stop within a couple of milliseconds, and still would if the
+      UI stalled. That's one more pin read per step period, only when
+      configured. Every motor is given the same pin, so any switch stops
+      them all; the model then stops anything running (e.g. a multi-pass).
+    - Once tripped, nothing moves until the stop is cleared (a dialog opens
+      for it, or the menu: System), and only keys which don't move anything
+      work. Chosen over "let moves carry on while it's pressed" so that
+      repeated nudges into the switch can't go unnoticed. After clearing, a
+      switch still pressed doesn't trip again until released, so the axis
+      can be moved off it; with one pin, the program can't tell which way
+      that is.
+    - Active high by default, for normally-closed switches in series to
+      GND: a broken wire or unplugged socket also stops the motors.
+    - Needs stepperControl's next release (with `setLimitPin()`).
+    - **To test** on the machine, along with the enable and alarm pins:
+      that a switch stops the motors at rapid speed, the dialog, and moving
+      off the switch after clearing.
 - [ ] Consider some form of switch or sensor to prevent carriage movement
       outside specific points (or mandate position checks at start-up to do
       this in software only?)

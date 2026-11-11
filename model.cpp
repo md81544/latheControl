@@ -26,8 +26,9 @@ void configureMotorThread(
         if (motor.setCpuCore(std::stoi(core))) {
             MGOLOG(axisPrefix << " motor thread running on CPU core " << core);
         } else {
-            MGOLOG("*** Warning *** couldn't run " << axisPrefix << " motor thread on CPU core "
-                                                     << core);
+            MGOLOG(
+                "*** Warning *** couldn't run " << axisPrefix << " motor thread on CPU core "
+                                                << core);
         }
     }
     motor.setSpinWhenIdle(config.readBool("MotorThreadsSpinWhenIdle", false));
@@ -47,6 +48,21 @@ void configureAlarm(
     const auto activeLevel = level == "high" ? mgo::PinState::high : mgo::PinState::low;
     motor.setAlarmPin(std::stoi(pin), activeLevel);
     MGOLOG(axisPrefix << " monitoring driver alarm on GPIO " << pin << ", active " << level);
+}
+
+// Sets up a limit switch input on a motor, if the config file specifies one
+// ("LimitSwitchPin"). All the motors share the one pin, so any switch stops
+// them all. Without it, there are no limit switches
+void configureLimitSwitch(mgo::StepperMotor& motor, const mgo::IConfigReader& config)
+{
+    const std::string pin = config.read("LimitSwitchPin", "");
+    if (pin.empty()) {
+        return;
+    }
+    std::string level = config.read("LimitSwitchActiveLevel", "high");
+    std::transform(level.begin(), level.end(), level.begin(), ::tolower);
+    const auto activeLevel = level == "low" ? mgo::PinState::low : mgo::PinState::high;
+    motor.setLimitPin(std::stoi(pin), activeLevel);
 }
 
 std::string convertToString(double number, int decimalPlaces)
@@ -104,11 +120,8 @@ constexpr auto SPINDLE_STOPPED_CONFIRM_TIME = std::chrono::milliseconds(300);
 
 namespace mgo {
 
-ThreadingStopAction threadingStopAction(
-    bool arrived,
-    bool retractedAtStart,
-    bool retractedNow,
-    bool spindleTurning)
+ThreadingStopAction
+threadingStopAction(bool arrived, bool retractedAtStart, bool retractedNow, bool spindleTurning)
 {
     if (retractedNow != retractedAtStart) {
         // The user retracted (or unretracted) X during the move; leave it be
@@ -126,7 +139,6 @@ ThreadingStopAction threadingStopAction(
     }
     return ThreadingStopAction::None;
 }
-
 
 void Model::initialise()
 {
@@ -149,10 +161,11 @@ void Model::initialise()
         m_config.readDouble("Axis1RampingSpeed", 100.0),
         usingMockLinearScale,
         m_config.readLong("LinearScaleAxis1StepsPerMM", 200));
-    if (!m_axis1Motor->isRunningRealTimeScheduled()){
+    if (!m_axis1Motor->isRunningRealTimeScheduled()) {
         MGOLOG("*** Warning *** axis1 steppermotor thread not running real-time");
     }
     configureAlarm(*m_axis1Motor, m_config, "Axis1");
+    configureLimitSwitch(*m_axis1Motor, m_config);
     configureMotorThread(*m_axis1Motor, m_config, "Axis1");
 
     double axis2ConversionFactor = m_config.readDouble("Axis2ConversionNumerator", -1.0)
@@ -168,10 +181,18 @@ void Model::initialise()
         axis2ConversionFactor,
         maxAxis2Rpm,
         m_config.readDouble("Axis2RampingSpeed", 100.0));
-    if (!m_axis2Motor->isRunningRealTimeScheduled()){
+    if (!m_axis2Motor->isRunningRealTimeScheduled()) {
         MGOLOG("*** Warning *** axis2 steppermotor thread not running real-time");
     }
     configureAlarm(*m_axis2Motor, m_config, "Axis2");
+    configureLimitSwitch(*m_axis2Motor, m_config);
+    if (const std::string pin = m_config.read("LimitSwitchPin", ""); !pin.empty()) {
+        MGOLOG(
+            fmt::format(
+                "Limit switches on GPIO {}, active {}",
+                pin,
+                m_config.read("LimitSwitchActiveLevel", "high")));
+    }
     configureMotorThread(*m_axis2Motor, m_config, "Axis2");
 
     m_rotaryEncoder = std::make_unique<mgo::RotaryEncoder>(
@@ -187,10 +208,11 @@ void Model::initialise()
             * m_config.readDouble("RotaryEncoderGearingNumerator", 35.0)
             / m_config.readDouble("RotaryEncoderGearingDivisor", 30.0);
         if (std::abs(pulsesPerRev - std::round(pulsesPerRev)) > 0.001) {
-            MGOLOG(fmt::format(
-                "*** Warning *** {} rotary encoder pulses per spindle revolution isn't a whole "
-                "number, so threading passes won't all start at the same angle",
-                pulsesPerRev));
+            MGOLOG(
+                fmt::format(
+                    "*** Warning *** {} rotary encoder pulses per spindle revolution isn't a whole "
+                    "number, so threading passes won't all start at the same angle",
+                    pulsesPerRev));
         }
     }
 
@@ -201,10 +223,11 @@ void Model::initialise()
         if (direction == "inwards") {
             m_xRetractionDirection = XDirection::Inwards;
         } else if (direction != "outwards") {
-            MGOLOG(fmt::format(
-                "*** Warning *** Axis2RetractionDirection should be outwards or inwards, not "
-                "\"{}\": using outwards",
-                direction));
+            MGOLOG(
+                fmt::format(
+                    "*** Warning *** Axis2RetractionDirection should be outwards or inwards, not "
+                    "\"{}\": using outwards",
+                    direction));
         }
         // How far it retracts (in mm of X travel, not on the diameter). Not
         // used by a multi-pass, which retracts to just clear of the work (see
@@ -213,11 +236,12 @@ void Model::initialise()
         if (distance > 0.0) {
             m_axis2RetractionDistance = distance;
         } else {
-            MGOLOG(fmt::format(
-                "*** Warning *** Axis2RetractionDistance should be more than zero, not {}: "
-                "using {}",
-                distance,
-                m_axis2RetractionDistance));
+            MGOLOG(
+                fmt::format(
+                    "*** Warning *** Axis2RetractionDistance should be more than zero, not {}: "
+                    "using {}",
+                    distance,
+                    m_axis2RetractionDistance));
         }
     }
     {
@@ -267,9 +291,7 @@ void Model::checkStatus()
 
     float chuckRpm = m_rotaryEncoder->getRpm();
 
-    if (limitSwitchTriggered()) {
-        stopAllMotors();
-    }
+    checkLimitSwitch();
 
     checkSpindleStopped(chuckRpm);
     checkEncoderLostPulses();
@@ -359,7 +381,9 @@ void Model::checkStatus()
         if (m_axis2RetractMoveInProgress) {
             // (If this shows the target was reached, but the tool didn't move
             // that far, the motor stalled. If it stopped short, it was stopped)
-            MGOLOG(fmt::format("X retract/unretract ended at step {}", m_axis2Motor->getCurrentStep()));
+            MGOLOG(
+                fmt::format(
+                    "X retract/unretract ended at step {}", m_axis2Motor->getCurrentStep()));
             m_axis2RetractMoveInProgress = false;
         }
         if (m_fastRetracting) {
@@ -426,9 +450,10 @@ void Model::checkEncoderLostPulses()
         return;
     }
     m_encoderLostPulseEventsSeen = events;
-    MGOLOG(fmt::format(
-        "*** Rotary encoder lost pulses (none for {} us): spindle position is now wrong",
-        m_rotaryEncoder->getLastLostPulseGapMicroseconds()));
+    MGOLOG(
+        fmt::format(
+            "*** Rotary encoder lost pulses (none for {} us): spindle position is now wrong",
+            m_rotaryEncoder->getLastLostPulseGapMicroseconds()));
     if (m_mode == Mode::Threading) {
         // Every pass from now on would start at a different point of the
         // spindle's rotation from the passes before, i.e. cut a new thread
@@ -449,10 +474,11 @@ void Model::checkSpindleStopped(float chuckRpm)
     const auto now = steady_clock::now();
     if (chuckRpm >= SPINDLE_STOPPED_RPM) {
         if (m_spindleLowSince) {
-            MGOLOG(fmt::format(
-                "Spindle reading recovered ({:.0f} rpm) after {} ms",
-                chuckRpm,
-                duration_cast<milliseconds>(now - *m_spindleLowSince).count()));
+            MGOLOG(
+                fmt::format(
+                    "Spindle reading recovered ({:.0f} rpm) after {} ms",
+                    chuckRpm,
+                    duration_cast<milliseconds>(now - *m_spindleLowSince).count()));
             m_spindleLowSince.reset();
         }
         m_spindleWasRunning = true;
@@ -463,10 +489,11 @@ void Model::checkSpindleStopped(float chuckRpm)
     }
     if (!m_spindleLowSince) {
         m_spindleLowSince = now;
-        MGOLOG(fmt::format(
-            "Spindle reads {:.0f} rpm (last encoder pulse {} us ago)",
-            chuckRpm,
-            m_rotaryEncoder->microsecondsSinceLastPulse()));
+        MGOLOG(
+            fmt::format(
+                "Spindle reads {:.0f} rpm (last encoder pulse {} us ago)",
+                chuckRpm,
+                m_rotaryEncoder->microsecondsSinceLastPulse()));
         return;
     }
     if (now - *m_spindleLowSince < SPINDLE_STOPPED_CONFIRM_TIME) {
@@ -518,8 +545,8 @@ void Model::clearMotorFault(Axis axis)
     if (!faulted) {
         return;
     }
-    const std::string label = axis == Axis::Axis1 ? m_config.read("Axis1Label", "Z")
-                                                  : m_config.read("Axis2Label", "X");
+    const std::string label
+        = axis == Axis::Axis1 ? m_config.read("Axis1Label", "Z") : m_config.read("Axis2Label", "X");
     if (motor.clearFault()) {
         faulted = false;
         m_warning = "";
@@ -537,15 +564,24 @@ std::string Model::getFaultMessage() const
             message += "  ";
         }
         message += fmt::format(
-            "{} MOTOR FAULT: position lost. Clear the driver alarm, then re-zero {}",
-            label,
-            label);
+            "{} MOTOR FAULT: position lost. Clear the driver alarm, then re-zero {}", label, label);
     };
     if (m_axis1Faulted) {
         add(m_config.read("Axis1Label", "Z"));
     }
     if (m_axis2Faulted) {
         add(m_config.read("Axis2Label", "X"));
+    }
+    if (limitSwitchTripped()) {
+        if (!message.empty()) {
+            message += "  ";
+        }
+        message += "LIMIT SWITCH: all motors stopped. Clear it (menu: System), then move off it";
+    } else if (limitSwitchPressed()) {
+        if (!message.empty()) {
+            message += "  ";
+        }
+        message += "LIMIT SWITCH still pressed: move off it carefully";
     }
     return message;
 }
@@ -735,7 +771,8 @@ std::vector<MotionSequence::Step> Model::axis1MoveSteps(long step)
     }
     if (m_mode == Mode::Taper) {
         // (Plus any correction for a taper the machine cuts itself)
-        return xFollowsZSteps(step, std::tan((m_taperAngle + taperCorrection()) * DEG_TO_RAD), move);
+        return xFollowsZSteps(
+            step, std::tan((m_taperAngle + taperCorrection()) * DEG_TO_RAD), move);
     }
     if (m_mode != Mode::Radius) {
         return { { move, {} } };
@@ -758,7 +795,8 @@ Model::xFollowsZSteps(long step, double ratio, std::function<void()> move)
         = step < getAxis1MotorCurrentStep() ? ZDirection::Right : ZDirection::Left;
     // X's backlash is taken up the way it's about to move
     int xStepAdd = -1;
-    if ((direction == ZDirection::Left && ratio < 0.0) || (direction == ZDirection::Right && ratio > 0.0)) {
+    if ((direction == ZDirection::Left && ratio < 0.0)
+        || (direction == ZDirection::Right && ratio > 0.0)) {
         xStepAdd = 1;
     }
     return { takeUpZBacklashStep(direction),
@@ -804,10 +842,11 @@ void Model::threadingCheckSpeed()
         const long lag = std::abs(m_threadingTarget() - m_axis1Motor->getCurrentStep());
         if (lag > m_threadingMaxLagSteps) {
             m_axis1Motor->stop();
-            MGOLOG(fmt::format(
-                "Threading pass stopped: Z {} steps behind the spindle (at {:.0f} rpm)",
-                lag,
-                rpm));
+            MGOLOG(
+                fmt::format(
+                    "Threading pass stopped: Z {} steps behind the spindle (at {:.0f} rpm)",
+                    lag,
+                    rpm));
             setThreadingWarning(
                 fmt::format(
                     "Z couldn't keep up with the spindle ({:.0f} rpm): pass stopped. Thread at "
@@ -910,14 +949,16 @@ bool Model::axis1StartThreadingPass(long endStep)
     m_threadingMoveInProgress = true;
     m_threadingMoveTarget = endStep;
     m_threadingMoveStartedRetracted = m_axis2Retracted;
-    MGOLOG(fmt::format(
-        "Threading pass: Z from step {} to {} at {:.0f} rpm, from spindle pulse {} (now {}), X {}",
-        startStep,
-        endStep,
-        rpm,
-        startPulse,
-        now,
-        m_axis2Retracted ? "retracted" : "in"));
+    MGOLOG(
+        fmt::format(
+            "Threading pass: Z from step {} to {} at {:.0f} rpm, from spindle pulse {} (now {}), X "
+            "{}",
+            startStep,
+            endStep,
+            rpm,
+            startPulse,
+            now,
+            m_axis2Retracted ? "retracted" : "in"));
     return true;
 }
 
@@ -928,19 +969,17 @@ void Model::threadingCheckMoveEnded()
     }
     m_threadingMoveInProgress = false;
     const bool arrived = m_axis1Motor->getCurrentStep() == m_threadingMoveTarget;
-    MGOLOG(fmt::format(
-        "Threading pass {} at Z step {}",
-        arrived ? "finished" : "STOPPED SHORT",
-        m_axis1Motor->getCurrentStep()));
+    MGOLOG(
+        fmt::format(
+            "Threading pass {} at Z step {}",
+            arrived ? "finished" : "STOPPED SHORT",
+            m_axis1Motor->getCurrentStep()));
     // (A multi-pass does its own retracting)
     if (!m_config.readBool("ThreadingAutoRetract", false) || m_multiPass.inProgress()) {
         return;
     }
     const auto action = threadingStopAction(
-        arrived,
-        m_threadingMoveStartedRetracted,
-        m_axis2Retracted,
-        m_spindleWasRunning);
+        arrived, m_threadingMoveStartedRetracted, m_axis2Retracted, m_spindleWasRunning);
     if (action == ThreadingStopAction::None) {
         return;
     }
@@ -1340,9 +1379,7 @@ void Model::axis2Nudge(XDirection direction, double nudgeAmountMm)
     }
     // (A sequence, for the same reasons as a Z nudge)
     m_motionSequence.start(
-        { { [this, steps]() {
-               m_axis2Motor->goToStep(m_axis2Motor->getCurrentStep() + steps);
-           },
+        { { [this, steps]() { m_axis2Motor->goToStep(m_axis2Motor->getCurrentStep() + steps); },
             [this]() { return !m_axis2Motor->isRunning(); } } },
         [this, oldSpeed]() {
             m_axis2Motor->setSpeed(oldSpeed);
@@ -1402,10 +1439,11 @@ void Model::axis2Unretract()
     m_axis2Motor->goToStep(m_xOldPosition);
     m_axis2Status = "Unretracting";
     m_fastRetracting = true;
-    MGOLOG(fmt::format(
-        "X unretract: from step {} to {}",
-        m_axis2Motor->getCurrentStep(),
-        m_axis2Motor->getTargetStep()));
+    MGOLOG(
+        fmt::format(
+            "X unretract: from step {} to {}",
+            m_axis2Motor->getCurrentStep(),
+            m_axis2Motor->getTargetStep()));
     m_axis2RetractMoveInProgress = true;
 }
 
@@ -1428,11 +1466,12 @@ void Model::axis2RetractBy(double distance)
     m_axis2Motor->goToStep(m_axis2Motor->getCurrentStep() + stepsForRetraction * direction);
     m_axis2Retracted = true;
     m_axis2Status = "Retracting";
-    MGOLOG(fmt::format(
-        "X retract by {} mm: from step {} to {}",
-        distance,
-        m_axis2Motor->getCurrentStep(),
-        m_axis2Motor->getTargetStep()));
+    MGOLOG(
+        fmt::format(
+            "X retract by {} mm: from step {} to {}",
+            distance,
+            m_axis2Motor->getCurrentStep(),
+            m_axis2Motor->getTargetStep()));
     m_axis2RetractMoveInProgress = true;
 }
 
@@ -1630,8 +1669,8 @@ bool Model::featureGoToAllowed() const
 {
     const bool modeAllows = m_mode == Mode::None
         || (m_mode == Mode::MultiPass && !m_multiPass.inProgress() && !m_multiPassMovingToStart);
-    return currentFeatureEnabled() && modeAllows && !m_motionSequence.isRunning()
-        && !m_axis1Faulted && !m_axis2Faulted;
+    return currentFeatureEnabled() && modeAllows && !m_motionSequence.isRunning() && !m_axis1Faulted
+        && !m_axis2Faulted;
 }
 
 std::optional<double> Model::featureWorkEndTarget(bool clear) const
@@ -1872,11 +1911,12 @@ void Model::setThread(const ThreadChoice& choice)
     m_threadChoice = choice;
     setRetractionDirection(choice.female ? XDirection::Inwards : XDirection::Outwards);
     const Thread& thread = *getThread();
-    MGOLOG(fmt::format(
-        "Thread chosen: {} ({}), pitch {}",
-        thread.name,
-        choice.female ? "female" : "male",
-        describePitch(thread)));
+    MGOLOG(
+        fmt::format(
+            "Thread chosen: {} ({}), pitch {}",
+            thread.name,
+            choice.female ? "female" : "male",
+            describePitch(thread)));
 }
 
 const ThreadChoice& Model::getThreadChoice() const
@@ -2115,8 +2155,8 @@ DisplayUnits Model::getDisplayUnits() const
 
 void Model::toggleDisplayUnits()
 {
-    m_displayUnits = m_displayUnits == DisplayUnits::Metric ? DisplayUnits::Imperial
-                                                            : DisplayUnits::Metric;
+    m_displayUnits
+        = m_displayUnits == DisplayUnits::Metric ? DisplayUnits::Imperial : DisplayUnits::Metric;
 }
 
 bool Model::isLengthAxis(int axisNumber) const
@@ -2174,10 +2214,55 @@ void Model::clearCurrentMemorySlot(Axis axis)
     }
 }
 
-bool Model::limitSwitchTriggered() const
+bool Model::limitSwitchTripped() const
 {
-    // TODO monitor any limit switches - needs config option for pin
-    return false;
+    // (Not before initialise(), which makes the motors)
+    if (!m_axis1Motor || !m_axis2Motor) {
+        return false;
+    }
+    return m_axis1Motor->isLimitTripped() || m_axis2Motor->isLimitTripped();
+}
+
+bool Model::limitSwitchPressed() const
+{
+    // (Both motors are given the same pin, so either will do)
+    return m_axis1Motor && m_axis1Motor->isLimitSwitchActive();
+}
+
+void Model::clearLimitSwitchTrip()
+{
+    if (!limitSwitchTripped()) {
+        return;
+    }
+    m_axis1Motor->clearLimitTrip();
+    m_axis2Motor->clearLimitTrip();
+    m_limitTripSeen = false;
+    MGOLOG(
+        fmt::format(
+            "Limit switch stop cleared{}",
+            limitSwitchPressed() ? " (a switch is still pressed)" : ""));
+}
+
+void Model::checkLimitSwitch()
+{
+    // (The motors have already stopped themselves, within a couple of
+    // milliseconds; here we deal with the rest)
+    if (!limitSwitchTripped() || m_limitTripSeen) {
+        return;
+    }
+    m_limitTripSeen = true;
+    MGOLOG(
+        fmt::format(
+            "*** Limit switch: all motors stopped, at {} {}, {} {}",
+            m_config.read("Axis1Label", "Z"),
+            m_axis1Motor->getPosition(),
+            m_config.read("Axis2Label", "X"),
+            m_axis2Motor->getPosition()));
+    // e.g. a multi-pass, a motion sequence, or X synchronised to Z. Each motor
+    // only stops itself when it sees the switch, which an idle one may not
+    // until asked to move, so this stops them all at once too. (The position
+    // isn't lost, so the mode and current feature are kept)
+    stopAllMotors();
 }
 
 void Model::lockAxis(unsigned axisNumber)
@@ -2227,12 +2312,13 @@ std::string Model::setMultiPassSetup(const MultiPassSetup& setup)
     }
     m_multiPassSetup = setup;
     m_multiPassRange = resolved.range;
-    MGOLOG(fmt::format(
-        "Multi-pass set up: Z {} to {}, X {} to {}",
-        m_multiPassRange.cutStart,
-        m_multiPassRange.cutEnd,
-        m_multiPassRange.feedStart,
-        m_multiPassRange.feedEnd));
+    MGOLOG(
+        fmt::format(
+            "Multi-pass set up: Z {} to {}, X {} to {}",
+            m_multiPassRange.cutStart,
+            m_multiPassRange.cutEnd,
+            m_multiPassRange.feedStart,
+            m_multiPassRange.feedEnd));
     return {};
 }
 
@@ -2385,10 +2471,11 @@ bool Model::multiPassMovingToStart() const
 
 void Model::multiPassMoveToStart()
 {
-    MGOLOG(fmt::format(
-        "Multi-pass: moving to the start, Z {}, X {}",
-        m_multiPassRange.cutStart,
-        m_multiPassRange.feedStart));
+    MGOLOG(
+        fmt::format(
+            "Multi-pass: moving to the start, Z {}, X {}",
+            m_multiPassRange.cutStart,
+            m_multiPassRange.feedStart));
     m_multiPassMovingToStart = true;
     moveToSafely(
         m_multiPassRange.cutStart,
@@ -2451,8 +2538,7 @@ void Model::moveToSafely(
     // retract (only needed if Z moves), X starts by moving away anyway
     std::vector<MotionSequence::Step> steps;
     const bool retractFirst = zToMove && retract && !m_axis2Retracted;
-    const bool xAwayFromWork
-        = (xTarget - m_axis2Motor->getPosition()) * axis2IntoWorkSign() < 0.0;
+    const bool xAwayFromWork = (xTarget - m_axis2Motor->getPosition()) * axis2IntoWorkSign() < 0.0;
     const bool xFirst = xToMove && xAwayFromWork && !retractFirst;
     // (If X was already retracted, it's moved to its target even if it's
     // there, to count as unretracted)
@@ -2469,8 +2555,13 @@ void Model::moveToSafely(
     if (xLast) {
         steps.push_back(xStep);
     }
-    MGOLOG(fmt::format(
-        "Moving {}: Z {}, X {}{}", status, zTarget, xTarget, retractFirst ? " (retracting first)" : ""));
+    MGOLOG(
+        fmt::format(
+            "Moving {}: Z {}, X {}{}",
+            status,
+            zTarget,
+            xTarget,
+            retractFirst ? " (retracting first)" : ""));
     m_motionSequence.start(
         std::move(steps), [this, oldZSpeed, oldXSpeed, onDone = std::move(onDone)]() {
             if (m_mode == Mode::Threading) {
@@ -2498,8 +2589,7 @@ void Model::multiPassGo()
         m_warning = "Stop the motors first";
         return;
     }
-    if (m_multiPass.state() == MultiPass::State::Paused && m_springPasses
-        && !springPassAtStart()) {
+    if (m_multiPass.state() == MultiPass::State::Paused && m_springPasses && !springPassAtStart()) {
         // X moved out, or Z moved along, while paused (e.g. to try the nut
         // on): these spring passes end, and it goes back to the last pass's
         // start and depth; Enter then starts them again
@@ -2519,8 +2609,9 @@ void Model::multiPassGo()
         const bool wasRequested = m_multiPass.pauseRequested();
         m_multiPass.togglePauseRequest();
         if (m_multiPass.pauseRequested() != wasRequested) {
-            MGOLOG((wasRequested ? "Multi-pass: pause request cancelled"
-                                 : "Multi-pass: pause requested"));
+            MGOLOG(
+                (wasRequested ? "Multi-pass: pause request cancelled"
+                              : "Multi-pass: pause requested"));
         }
         return;
     }
@@ -2572,8 +2663,7 @@ void Model::multiPassGo()
         if (setup.compoundInfeed) {
             // Z moves along the way the cut goes, so the leading flank cuts
             const double direction = plan.cutEnd > plan.cutStart ? 1.0 : -1.0;
-            plan.cutShiftPerFeed
-                = direction * std::tan(getCompoundInfeedAngleDeg() * DEG_TO_RAD);
+            plan.cutShiftPerFeed = direction * std::tan(getCompoundInfeedAngleDeg() * DEG_TO_RAD);
         }
     }
     if (const std::string error = m_multiPass.start(plan); !error.empty()) {
@@ -2581,24 +2671,26 @@ void Model::multiPassGo()
         return;
     }
     m_warning = "";
-    MGOLOG(fmt::format(
-        "{} started: Z {} to {}, X {} to {} by {}{}{}{}{}{} ({} passes)",
-        threading ? "Threading passes" : "Multi-pass",
-        plan.cutStart,
-        plan.cutEnd,
-        plan.feedStart,
-        plan.feedEnd,
-        plan.feedPerPass,
-        plan.retract ? (plan.retractLastPasses > 0
-                            ? fmt::format(", retract on the last {}", plan.retractLastPasses)
-                            : std::string(", retract"))
-                     : std::string(),
-        plan.pause ? ", pause" : "",
-        plan.feedCorrection != 0.0 ? fmt::format(", taper correction {} deg", taperCorrection())
-                                   : "",
-        plan.constantArea ? fmt::format(", constant area (at least {})", plan.feedMinimum) : "",
-        plan.cutShiftPerFeed != 0.0 ? fmt::format(", Z shift {} per X", plan.cutShiftPerFeed) : "",
-        m_multiPass.totalPasses()));
+    MGOLOG(
+        fmt::format(
+            "{} started: Z {} to {}, X {} to {} by {}{}{}{}{}{} ({} passes)",
+            threading ? "Threading passes" : "Multi-pass",
+            plan.cutStart,
+            plan.cutEnd,
+            plan.feedStart,
+            plan.feedEnd,
+            plan.feedPerPass,
+            plan.retract ? (plan.retractLastPasses > 0
+                                ? fmt::format(", retract on the last {}", plan.retractLastPasses)
+                                : std::string(", retract"))
+                         : std::string(),
+            plan.pause ? ", pause" : "",
+            plan.feedCorrection != 0.0 ? fmt::format(", taper correction {} deg", taperCorrection())
+                                       : "",
+            plan.constantArea ? fmt::format(", constant area (at least {})", plan.feedMinimum) : "",
+            plan.cutShiftPerFeed != 0.0 ? fmt::format(", Z shift {} per X", plan.cutShiftPerFeed)
+                                        : "",
+            m_multiPass.totalPasses()));
 }
 
 const MultiPass& Model::multiPass() const
@@ -2755,10 +2847,11 @@ void Model::multiPassXFollowEnded()
         || m_axis2Motor->getCurrentStep() == m_multiPassCutStartXStep) {
         return;
     }
-    MGOLOG(fmt::format(
-        "Multi-pass: X ended the return at step {}, not {}: moving there",
-        m_axis2Motor->getCurrentStep(),
-        m_multiPassCutStartXStep));
+    MGOLOG(
+        fmt::format(
+            "Multi-pass: X ended the return at step {}, not {}: moving there",
+            m_axis2Motor->getCurrentStep(),
+            m_multiPassCutStartXStep));
     m_axis2Motor->goToStep(m_multiPassCutStartXStep);
     m_multiPassXSettling = true;
     m_axis2WasRunning = true;

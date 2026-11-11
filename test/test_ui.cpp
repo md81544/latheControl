@@ -24,12 +24,12 @@
 #include <cmath>
 #include <cstdlib>
 #include <functional>
-#include <sstream>
 #include <map>
 #include <optional>
+#include <sstream>
 #include <string_view>
-#include <vector>
 #include <thread>
+#include <vector>
 
 namespace {
 
@@ -307,8 +307,8 @@ TEST_CASE("UI: numeric dialog, with an option hotkey")
         QTest::keyClick(input, Qt::Key_X); // not an option, so ignored
         QTest::keyClick(input, Qt::Key_Return);
     });
-    const auto rc = getInput(view, 
-        mgo::Input::Type::Numeric, "Position", { "[&D] set as diameter" }, "1.5");
+    const auto rc
+        = getInput(view, mgo::Input::Type::Numeric, "Position", { "[&D] set as diameter" }, "1.5");
     REQUIRE(!rc.cancelled);
     REQUIRE(rc.number == Approx(5.2));
     REQUIRE(rc.optionsSelected == std::set<char> { 'd' });
@@ -342,7 +342,8 @@ TEST_CASE("UI: list picker")
         QTest::keyClick(input, Qt::Key_Up);
         QTest::keyClick(input, Qt::Key_Return);
     });
-    const auto rc = getInput(view, 
+    const auto rc = getInput(
+        view,
         mgo::Input::Type::ListPicker,
         "Pick one",
         {},
@@ -364,8 +365,7 @@ TEST_CASE("UI: text dialog needs Alt for option hotkeys")
         QTest::keyClick(input, Qt::Key_X, Qt::AltModifier);
         QTest::keyClick(input, Qt::Key_Return);
     });
-    const auto rc
-        = getInput(view, mgo::Input::Type::Text, "Name", { "[&X] an option" }, "default");
+    const auto rc = getInput(view, mgo::Input::Type::Text, "Name", { "[&X] an option" }, "default");
     REQUIRE(!rc.cancelled);
     REQUIRE(rc.text == "hex");
     REQUIRE(rc.optionsSelected == std::set<char> { 'x' });
@@ -792,8 +792,9 @@ TEST_CASE("UI: thread dialog")
     TestModel tm;
     mgo::ViewQt view;
     view.initialise(tm.model);
-    std::istringstream in("[Metric | ISO]\nM6, 6, 1\nM8, 8, 1.25\n"
-                          "[Whitworth | Whitworth]\n3/8\" BSW, 3/8\", 16 tpi\n");
+    std::istringstream in(
+        "[Metric | ISO]\nM6, 6, 1\nM8, 8, 1.25\n"
+        "[Whitworth | Whitworth]\n3/8\" BSW, 3/8\", 16 tpi\n");
     std::vector<std::string> errors;
     const auto threads = mgo::readThreads(in, errors);
     REQUIRE(errors.empty());
@@ -1008,8 +1009,8 @@ TEST_CASE("UI: multi-pass through the controller")
     tm.model.axis2StorePosition(0.02);
     tm.model.selectPreviousMemorySlot();
 
-    // The menu's Modes, Multi-pass: as the tool's at Mem 1, the dialog starts there, ending at Mem 2.
-    // Down to the step-over (past Z's and X's ends), and type it
+    // The menu's Modes, Multi-pass: as the tool's at Mem 1, the dialog starts there, ending at
+    // Mem 2. Down to the step-over (past Z's and X's ends), and type it
     whenDialogShows([](QWidget* dialog) {
         for (int n = 0; n < 3; ++n) {
             QTest::keyClick(inputWidget(dialog), Qt::Key_Down);
@@ -1066,6 +1067,48 @@ TEST_CASE("UI: the controller carries on while a dialog is open")
     QTimer::singleShot(2'000, [w] { w->close(); });
     controller.run();
     REQUIRE(faultWhileOpen.find("Z MOTOR FAULT") != std::string::npos);
+}
+
+namespace {
+
+// With limit switches wired (to a pin the mock GPIO can set; active high, so
+// it starts low: not pressed)
+constexpr int LIMIT_PIN = 22;
+struct LimitTestModel {
+    MapConfigReader config { { { "LimitSwitchPin", "22" } } };
+    mgo::MockGpio gpio { false };
+    bool released { (gpio.setInputPinLevel(LIMIT_PIN, mgo::PinState::low), true) };
+    mgo::Model model { gpio, config };
+};
+
+} // end anonymous namespace
+
+TEST_CASE("UI: a limit switch opens a dialog to clear its stop")
+{
+    for (const bool clear : { true, false }) {
+        LimitTestModel tm;
+        mgo::Controller controller(&tm.model);
+        QWidget* w = mainWindow();
+        REQUIRE(w);
+
+        int dialogsShown = 0;
+        bool trippedWhileOpen = false;
+        whenDialogShows([&](QWidget* dialog) {
+            ++dialogsShown;
+            trippedWhileOpen = tm.model.limitSwitchTripped();
+            QTest::keyClick(inputWidget(dialog), clear ? Qt::Key_Return : Qt::Key_Escape);
+        });
+        QTimer::singleShot(150, [&] { tm.gpio.setInputPinLevel(LIMIT_PIN, mgo::PinState::high); });
+        QTimer::singleShot(1'500, [w] { w->close(); });
+        controller.run();
+        INFO("Cleared: " << clear);
+        // Once only, even if left tripped
+        REQUIRE(dialogsShown == 1);
+        REQUIRE(trippedWhileOpen);
+        REQUIRE(tm.model.limitSwitchTripped() == !clear);
+        // (Still pressed, either way)
+        REQUIRE(!tm.model.getFaultMessage().empty());
+    }
 }
 
 TEST_CASE("UI: closing the window while a dialog is open cancels it, and quits")
@@ -1247,11 +1290,12 @@ TEST_CASE("UI: the current feature is shown")
     // In multi-pass mode, whose lines run alongside it
     tm.model.changeMode(mgo::Mode::MultiPass);
     REQUIRE(tm.model
-                .setMultiPassSetup({ .startFeature = true,
-                                     .cutDistance = -20.0,
-                                     .feedInfeed = 0.5,
-                                     .feedPerPass = 0.1,
-                                     .retract = true })
+                .setMultiPassSetup(
+                    { .startFeature = true,
+                      .cutDistance = -20.0,
+                      .feedInfeed = 0.5,
+                      .feedPerPass = 0.1,
+                      .retract = true })
                 .empty());
     tm.model.axis2GoToPosition(9.0);
     tm.model.axis2Wait();

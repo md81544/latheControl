@@ -174,6 +174,7 @@ constexpr int featureDiameter = 7011; // X to the feature's diameter
 constexpr int featureEnd = 7012; // Z to the work's end, clear of it
 constexpr int featureEndExact = 7013; // Z to the work's end exactly
 constexpr int threadingPasses = 7014; // threading passes (a multi-pass, in threading mode)
+constexpr int clearLimitTrip = 7015; // clear a limit switch's stop
 
 // Joystick specific "keys"
 // Note some joystick commands just return regular keycodes.

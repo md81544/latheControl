@@ -83,8 +83,8 @@ MultiPassResolved resolveMultiPass(
         range.cutEnd = *cut;
     } else {
         // (From the work's end, if starting from the feature)
-        range.cutEnd = (setup.startFeature ? *positions.featureWorkEnd : range.cutStart)
-            + setup.cutDistance;
+        range.cutEnd
+            = (setup.startFeature ? *positions.featureWorkEnd : range.cutStart) + setup.cutDistance;
     }
 
     if (setup.feedEndMemory) {
@@ -113,8 +113,8 @@ MultiPassResolved resolveMultiPass(
     return r;
 }
 
-MultiPassSetup defaultMultiPassSetup(
-    const MultiPassSetup& previous, const MultiPassPositions& positions)
+MultiPassSetup
+defaultMultiPassSetup(const MultiPassSetup& previous, const MultiPassPositions& positions)
 {
     MultiPassSetup setup = previous;
     setup.retractBeforeMoveToStart = true;
@@ -202,7 +202,10 @@ int countPasses(
 } // end anonymous namespace
 
 int multiPassCount(
-    const MultiPassRange& range, double feedPerPass, bool constantArea, double feedMinimum)
+    const MultiPassRange& range,
+    double feedPerPass,
+    bool constantArea,
+    double feedMinimum)
 {
     if (feedPerPass < MultiPass::TOLERANCE) {
         return 0;
@@ -261,8 +264,7 @@ std::string MultiPass::start(const MultiPassPlan& plan)
     if (!plan.feedManual && m_machine.isRetracted()) {
         return "Unretract first";
     }
-    if (!cutAt(plan.cutStart)
-        || (!plan.feedManual && !feedAt(plan.feedStart))) {
+    if (!cutAt(plan.cutStart) || (!plan.feedManual && !feedAt(plan.feedStart))) {
         return "Go to the start position first";
     }
     m_plan = plan;
@@ -524,7 +526,8 @@ double MultiPass::nextFeedTarget(double from, int pass) const
         + direction
             * passDepth(m_plan.feedPerPass, m_plan.constantArea, m_plan.feedMinimum, pass, depth);
     // (Not past the end)
-    if ((direction > 0.0 && target > m_plan.feedEnd) || (direction < 0.0 && target < m_plan.feedEnd)) {
+    if ((direction > 0.0 && target > m_plan.feedEnd)
+        || (direction < 0.0 && target < m_plan.feedEnd)) {
         return m_plan.feedEnd;
     }
     return target;
