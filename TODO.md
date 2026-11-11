@@ -228,6 +228,38 @@
     - Longer term: a more powerful X stepper, so the cross-slide's gib can
       be tightened without stalling it. (The loose gib was also suspected
       in the M8 male thread's many spring passes, 2026-11-09.)
+    - [ ] Lock the cross-slide physically during each cut (2026-11-11), as
+      you would by hand. Probably the cross-slide that moved, not the
+      saddle: its gib was loosened so the small X stepper wouldn't stall,
+      and the flex shows most with the tool stuck out far from the slide's
+      centre. **First:** check with a dial indicator on the bed which part
+      moves (cross-slide against saddle, or saddle against bed), then take
+      a cut with X locked by hand, unlocking it at each pause, to see if
+      the thread improves. Only build this if it does. The design agreed:
+      - A multi-pass dialog option, `L` (free in the dialogs; `L` outside
+        them is Last Position, which is why the axis lock is `K`). Every
+        pass, not "last N": every internal threading pass flexed.
+      - The software lock stands for the physical one. Starting with the
+        option on locks X in software. Before any X move (feed in, retract,
+        unretract, the move to the start, spring passes) the engine waits,
+        showing "Unlock X", until X is unlocked with `XK`; before each cut
+        it waits, showing "Lock X", for `Enter` (or `XK`). So per pass:
+        cut, unlock, retract, return, unretract, feed in, lock, cut.
+      - Why `XK`, not `Enter`, to confirm the unlock: forgetting to lock
+        only costs rigidity, but forgetting to unlock stalls X's open-loop
+        stepper against the lock without anything noticing, so X loses its
+        position and every later pass is wrong. `Enter` gets pressed out of
+        habit during a multi-pass; `XK` is deliberate.
+      - While locked, the existing lock already refuses the X keys and
+        nudges. The pause option adds nothing, as it pauses anyway.
+      - In any case, the model should refuse to move X automatically while
+        it's locked in software. At the moment only the controller checks
+        locks (for keys), so a multi-pass, its move to the start and spring
+        passes all move a locked X. A multi-pass started with X locked and
+        the option off should say "Unlock X first".
+      - In the engine: two waiting states, and a `feedLocked()` query on
+        `IMultiPassMachine`, which fit the non-blocking `update()` loop and
+        can be tested with the fake machine.
 - [ ] Work on a single line rather than a plane, i.e. if mem0.x == mem1.x,
       interpret it as (say) slot cutting and repeat until the user cancels.
       Could also work if only one axis is defined in config (the engine's
