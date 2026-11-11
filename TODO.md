@@ -56,6 +56,16 @@
       `cmd::threading`, so they don't suggest a key that no longer exists
     - Frees the top-level letters, e.g. `T` for "choose tool" (see "Current
       tool and a tool database")
+- [ ] **Turn `ThreadingAutoRetract` on and off from the menu** (2026-11-11).
+      Testing threading with the cross-slide locked by hand meant editing
+      lc.cfg between tests, as auto-retract is only read from the config.
+      A menu-only toggle (no shortcut, as it's rarely changed), perhaps
+      under Modes or Threading, starting from the config's value at
+      start-up and not saved back. Show its state in the menu text (e.g.
+      "Auto-retract after a threading pass: on"), and somewhere on screen
+      in threading mode, so it's not forgotten. (With X locked in software,
+      the auto-retract is now refused with "Unlock X first", so it does no
+      harm, but turning it off avoids the warning)
 - [ ] Make use of the keys on the right (#, Home, PgUp, PgDn, End)?
         - Home could be used to return to the current feature's zEnd/diameter?
 - [ ] When there's a larger screen (the current one is small): touchscreen
@@ -302,6 +312,17 @@
         locks (for keys), so a multi-pass, its move to the start and spring
         passes all move a locked X. A multi-pass started with X locked and
         the option off should say "Unlock X first".
+        **Done (2026-11-11), not yet tried on the machine:** the model now
+        refuses every move of a locked axis, whatever asks (keys, rapids,
+        memory and fast returns, go to previous, repeat last move,
+        retracts including ThreadingAutoRetract, the feature go-tos, and
+        multi-pass and threading passes, starting or continuing), showing
+        "Unlock X first". The controller's own checks went, so a refused
+        key now says why instead of doing nothing. In a taper or radius,
+        Z is refused while X is locked, as X follows it. An axis can't be
+        locked while it's moving or a multi-pass is cutting (it can while
+        paused), so the engine never finds its axis locked mid-move; that's
+        also why it needed no new waiting states for this.
       - In the engine: two waiting states, and a `feedLocked()` query on
         `IMultiPassMachine`, which fit the non-blocking `update()` loop and
         can be tested with the fake machine.

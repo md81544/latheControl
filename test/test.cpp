@@ -1058,6 +1058,167 @@ TEST_CASE("Model:   a limit switch stops a multi-pass")
     REQUIRE(!model.isAxis2MotorRunning());
 }
 
+TEST_CASE("Model:   a locked axis isn't moved by anything")
+{
+    mgo::MockConfigReader config;
+    mgo::MockGpio gpio(false);
+    mgo::Model model(gpio, config);
+    model.initialise();
+    model.setAxis1MotorSpeed(100.0);
+    model.setAxis2MotorSpeed(100.0);
+    model.axis1StorePosition(1.0);
+    model.axis2StorePosition(1.0);
+    const auto stillAt = [&](double z, double x) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        model.checkStatus();
+        return !model.isAxis1MotorRunning() && !model.isAxis2MotorRunning()
+            && model.getAxis1MotorPosition() == Approx(z) && model.getAxis2Position() == Approx(x);
+    };
+
+    model.lockAxis(2);
+    REQUIRE(model.isAxisLocked(2));
+    model.axis2GoToPosition(0.5);
+    REQUIRE(model.getWarning() == "Unlock X first");
+    model.axis2GoToCurrentMemory();
+    model.axis2Retract();
+    model.axis2Rapid(mgo::XDirection::Inwards);
+    model.axis2Move(mgo::XDirection::Outwards);
+    model.axis2Nudge(mgo::XDirection::Inwards, 0.1);
+    model.axis2FastReturn();
+    REQUIRE(stillAt(0.0, 0.0));
+    REQUIRE(!model.getIsAxis2Retracted());
+    // Z isn't locked, so moves
+    model.axis1GoToPosition(0.5);
+    model.axis1Wait();
+    REQUIRE(model.getAxis1MotorPosition() == Approx(0.5));
+    // Unlocking clears the warning, and X moves again
+    model.unlockAxis(2);
+    REQUIRE(model.getWarning().empty());
+    model.axis2GoToPosition(0.5);
+    model.axis2Wait();
+    REQUIRE(model.getAxis2Position() == Approx(0.5));
+
+    model.lockAxis(1);
+    model.axis1GoToCurrentMemory();
+    REQUIRE(model.getWarning() == "Unlock Z first");
+    model.axis1Rapid(mgo::ZDirection::Left);
+    model.axis1Move(mgo::ZDirection::Right);
+    model.axis1Nudge(mgo::ZDirection::Left, 0.1);
+    model.axis1FastReturn();
+    model.repeatLastRelativeMove(mgo::Axis::Axis1);
+    REQUIRE(stillAt(0.5, 0.5));
+    model.unlockAxis(1);
+}
+
+TEST_CASE("Model:   in a taper, Z doesn't move while X is locked")
+{
+    mgo::MockConfigReader config;
+    mgo::MockGpio gpio(false);
+    mgo::Model model(gpio, config);
+    model.initialise();
+    model.setTaperAngle(-45.0);
+    model.changeMode(mgo::Mode::Taper);
+    model.lockAxis(2);
+    model.axis1GoToPosition(-0.5);
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    model.checkStatus();
+    REQUIRE(!model.isAxis1MotorRunning());
+    REQUIRE(model.getAxis1MotorPosition() == 0.0);
+    REQUIRE(model.getWarning() == "Unlock X first");
+}
+
+TEST_CASE("Model:   an axis can't be locked while it's moving")
+{
+    mgo::MockConfigReader config;
+    mgo::MockGpio gpio(false);
+    mgo::Model model(gpio, config);
+    model.initialise();
+    model.setAxis2MotorSpeed(10.0);
+    model.axis2GoToPosition(50.0);
+    REQUIRE(waitFor([&] { return model.isAxis2MotorRunning(); }));
+    model.lockAxis(2);
+    REQUIRE(!model.isAxisLocked(2));
+    REQUIRE(model.getWarning() == "Stop X before locking it");
+    // (Z can be: it isn't moving)
+    model.lockAxis(1);
+    REQUIRE(model.isAxisLocked(1));
+    // The warning stays while X moves, and goes once it has stopped
+    model.checkStatus();
+    REQUIRE(model.getWarning() == "Stop X before locking it");
+    model.stopAllMotors();
+    model.checkStatus();
+    REQUIRE(model.getWarning().empty());
+    model.lockAxis(2);
+    REQUIRE(model.isAxisLocked(2));
+}
+
+TEST_CASE("Model:   a multi-pass doesn't start or continue while an axis is locked")
+{
+    mgo::MockConfigReader config;
+    mgo::MockGpio gpio(false);
+    mgo::Model model(gpio, config);
+    model.initialise();
+    model.axis1SetSpeed(200.0);
+    model.axis2SetSpeed(100.0);
+    model.axis1StorePosition(0.0);
+    model.axis2StorePosition(0.0);
+    model.selectNextMemorySlot();
+    model.axis1StorePosition(0.2);
+    model.axis2StorePosition(0.05);
+    model.selectPreviousMemorySlot();
+    model.changeMode(mgo::Mode::MultiPass);
+    REQUIRE(model
+                .setMultiPassSetup(
+                    { .startMemory = 0,
+                      .cutEndMemory = 1,
+                      .feedEndMemory = 1,
+                      .feedPerPass = 0.01,
+                      .pause = true,
+                      .retract = true })
+                .empty());
+
+    // Not started with X locked
+    model.lockAxis(2);
+    model.multiPassGo();
+    REQUIRE(!model.multiPass().inProgress());
+    REQUIRE(model.getWarning() == "Unlock X first");
+    model.lockAxis(1);
+    model.multiPassGo();
+    REQUIRE(model.getWarning() == "Unlock Z and X first");
+    model.unlockAxis(1);
+    model.unlockAxis(2);
+    REQUIRE(model.getWarning().empty());
+
+    model.multiPassGo();
+    REQUIRE(model.multiPass().inProgress());
+    // Not locked during a pass
+    model.lockAxis(2);
+    REQUIRE(!model.isAxisLocked(2));
+    model.unlockAxis(2);
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+    while (model.multiPass().state() != mgo::MultiPass::State::Paused) {
+        REQUIRE(std::chrono::steady_clock::now() < deadline);
+        model.checkStatus();
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    // Locked while paused, it doesn't carry on
+    const int pass = model.multiPass().pass();
+    model.lockAxis(2);
+    REQUIRE(model.isAxisLocked(2));
+    model.multiPassGo();
+    model.checkStatus();
+    REQUIRE(model.multiPass().state() == mgo::MultiPass::State::Paused);
+    REQUIRE(model.getWarning() == "Unlock X first");
+    // Unlocked, it does
+    model.unlockAxis(2);
+    model.multiPassGo();
+    REQUIRE(waitFor([&] {
+        model.checkStatus();
+        return model.multiPass().pass() > pass;
+    }));
+    model.stopAllMotors();
+}
+
 TEST_CASE("Commands: shortcut text")
 {
     mgo::MockConfigReader lathe; // defaults: leader keys z and x

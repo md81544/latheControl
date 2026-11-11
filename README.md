@@ -86,6 +86,8 @@ To move to an **absolute position**, press leader + `G` (for "go to") - for exam
 
 **Retraction** - `R` retracts the X axis by `Axis2RetractionDistance` in lc.cfg (2 mm unless set; of X travel, not on the diameter). Press again to unretract. Retraction can be inwards for boring operations, see "Special functions" below. When boring a small hole, check that the back of the boring bar has room for it. A multi-pass (and threading passes) retracts differently: just clear of where it started, see below.
 
+**Locking an axis** - `ZK` or `XK` locks the axis in software, or unlocks it again; locked, its label is grey. Use it when the axis is locked physically (e.g. the cross-slide's lock), so that nothing tries to drive the stepper against the lock: X's open-loop stepper would lose its position without anything noticing. Nothing moves a locked axis: not the keys, memory returns, fast returns, retracts (including `ThreadingAutoRetract`), the current feature's go-tos, or a multi-pass. Each is refused, with a message to unlock it first. In a taper or radius, X follows Z, so Z doesn't move while X is locked either. An axis can't be locked while it's moving, or while a multi-pass is cutting; one that's paused can be, and doesn't carry on until it's unlocked.
+
 **Fast return** - pressing `Z` then `F` will rapidly return the Z axis to the current memory slot (`X` then `F` for the X axis; `\` then `F` for both).
 
 **Last Position** This is **EXPERIMENTAL** - press `L` to return the Z axis (only) to its last position. This works with multiple positions, so if you go from 0.0mm to, say, 5.0mm then 7.0mm, pressing `L` once will return to 5.0mm, and pressing it again will return to 0.0mm. If there are no positions in the stack then pressing `L` does nothing.

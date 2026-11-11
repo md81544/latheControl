@@ -266,50 +266,32 @@ void Controller::processKey(int t)
             // Nudge in X axis
             case key::W:
                 {
-                    if (m_model->isAxisLocked(2)) {
-                        break;
-                    }
                     m_model->axis2Nudge(XDirection::Inwards, 0.01);
                     break;
                 }
             case key::w:
                 {
-                    if (m_model->isAxisLocked(2)) {
-                        break;
-                    }
                     m_model->axis2Nudge(XDirection::Inwards, 0.05);
                     break;
                 }
             case key::AltW:
                 {
-                    if (m_model->isAxisLocked(2)) {
-                        break;
-                    }
                     m_model->axis2Nudge(XDirection::Inwards, 0.1);
                     break;
                 }
             // Nudge out X axis
             case key::S:
                 {
-                    if (m_model->isAxisLocked(2)) {
-                        break;
-                    }
                     m_model->axis2Nudge(XDirection::Outwards, 0.01);
                     break;
                 }
             case key::s:
                 {
-                    if (m_model->isAxisLocked(2)) {
-                        break;
-                    }
                     m_model->axis2Nudge(XDirection::Outwards, 0.05);
                     break;
                 }
             case key::AltS:
                 {
-                    if (m_model->isAxisLocked(2)) {
-                        break;
-                    }
                     m_model->axis2Nudge(XDirection::Outwards, 0.1);
                     break;
                 }
@@ -377,33 +359,21 @@ void Controller::processKey(int t)
                 }
             case key::UP:
                 {
-                    if (m_model->isAxisLocked(2)) {
-                        break;
-                    }
                     m_model->axis2Move(XDirection::Inwards);
                     break;
                 }
             case key::DOWN:
                 {
-                    if (m_model->isAxisLocked(2)) {
-                        break;
-                    }
                     m_model->axis2Move(XDirection::Outwards);
                     break;
                 }
             case key::LEFT:
                 {
-                    if (m_model->isAxisLocked(1)) {
-                        break;
-                    }
                     m_model->axis1Move(ZDirection::Left);
                     break;
                 }
             case key::RIGHT:
                 {
-                    if (m_model->isAxisLocked(1)) {
-                        break;
-                    }
                     m_model->axis1Move(ZDirection::Right);
                     break;
                 }
@@ -432,9 +402,6 @@ void Controller::processKey(int t)
             // accidental triggering of both with the stick
             case key::js_rapid_up:
                 {
-                    if (m_model->isAxisLocked(2)) {
-                        break;
-                    }
                     if (!m_model->isAxis1MotorRunning()) {
                         m_model->axis2Rapid(XDirection::Inwards);
                     }
@@ -442,9 +409,6 @@ void Controller::processKey(int t)
                 }
             case key::js_rapid_down:
                 {
-                    if (m_model->isAxisLocked(2)) {
-                        break;
-                    }
                     if (!m_model->isAxis1MotorRunning()) {
                         m_model->axis2Rapid(XDirection::Outwards);
                     }
@@ -452,9 +416,6 @@ void Controller::processKey(int t)
                 }
             case key::js_rapid_left:
                 {
-                    if (m_model->isAxisLocked(1)) {
-                        break;
-                    }
                     if (!m_model->isAxis2MotorRunning()) {
                         m_model->axis1Rapid(ZDirection::Left);
                     }
@@ -462,9 +423,6 @@ void Controller::processKey(int t)
                 }
             case key::js_rapid_right:
                 {
-                    if (m_model->isAxisLocked(1)) {
-                        break;
-                    }
                     if (!m_model->isAxis2MotorRunning()) {
                         m_model->axis1Rapid(ZDirection::Right);
                     }
@@ -475,9 +433,6 @@ void Controller::processKey(int t)
             // accidental triggering of both with the stick
             case key::js_up:
                 {
-                    if (m_model->isAxisLocked(2)) {
-                        break;
-                    }
                     if (!m_model->isAxis1MotorRunning()) {
                         m_model->axis2Move(XDirection::Inwards);
                     }
@@ -485,9 +440,6 @@ void Controller::processKey(int t)
                 }
             case key::js_down:
                 {
-                    if (m_model->isAxisLocked(2)) {
-                        break;
-                    }
                     if (!m_model->isAxis1MotorRunning()) {
                         m_model->axis2Move(XDirection::Outwards);
                     }
@@ -495,9 +447,6 @@ void Controller::processKey(int t)
                 }
             case key::js_left:
                 {
-                    if (m_model->isAxisLocked(1)) {
-                        break;
-                    }
                     if (!m_model->isAxis2MotorRunning()) {
                         m_model->axis1Move(ZDirection::Left);
                     }
@@ -505,9 +454,6 @@ void Controller::processKey(int t)
                 }
             case key::js_right:
                 {
-                    if (m_model->isAxisLocked(1)) {
-                        break;
-                    }
                     if (!m_model->isAxis2MotorRunning()) {
                         m_model->axis1Move(ZDirection::Right);
                     }
@@ -516,49 +462,31 @@ void Controller::processKey(int t)
 
             case key::a:
                 {
-                    if (m_model->isAxisLocked(1)) {
-                        break;
-                    }
                     m_model->axis1Nudge(ZDirection::Left, 0.05);
                     break;
                 }
             case key::A:
                 {
-                    if (m_model->isAxisLocked(1)) {
-                        break;
-                    }
                     m_model->axis1Nudge(ZDirection::Left, 0.01);
                     break;
                 }
             case key::AltA:
                 {
-                    if (m_model->isAxisLocked(1)) {
-                        break;
-                    }
                     m_model->axis1Nudge(ZDirection::Left, 0.1);
                     break;
                 }
             case key::d:
                 {
-                    if (m_model->isAxisLocked(1)) {
-                        break;
-                    }
                     m_model->axis1Nudge(ZDirection::Right, 0.05);
                     break;
                 }
             case key::D:
                 {
-                    if (m_model->isAxisLocked(1)) {
-                        break;
-                    }
                     m_model->axis1Nudge(ZDirection::Right, 0.01);
                     break;
                 }
             case key::AltD:
                 {
-                    if (m_model->isAxisLocked(1)) {
-                        break;
-                    }
                     m_model->axis1Nudge(ZDirection::Right, 0.1);
                     break;
                 }

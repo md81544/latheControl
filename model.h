@@ -343,6 +343,12 @@ public:
     // pressed won't stop them again until it has been released
     void clearLimitSwitchTrip();
 
+    // A locked axis isn't moved by anything: keys, memory returns, retracts
+    // (ThreadingAutoRetract too), or a multi-pass. Each such move is refused,
+    // with a warning to unlock it first. In a taper or radius, X follows Z, so
+    // Z's moves are refused while X is locked too. An axis can't be locked
+    // while it's moving, or while a multi-pass runs (it can when paused), so
+    // nothing already under way finds its axis locked part way through
     void lockAxis(unsigned axisNumber);
     void unlockAxis(unsigned axisNumber);
     bool isAxisLocked(unsigned axisNumber) const;
@@ -523,6 +529,11 @@ private:
     bool m_multiPassXSettling { false };
 
     std::set<unsigned> m_axisLocks;
+    // The last warning about a lock, which unlocking clears if still shown
+    std::string m_lockWarning;
+    // The axis lockAxis() last refused to lock while it was moving, so that
+    // checkStatus() can clear the warning once it's stopped
+    std::optional<unsigned> m_lockRefusedAxis;
 
     // Set when a motor's driver goes into alarm (see StepperMotor::setAlarmPin()).
     // The position is then lost, so these stay set until the axis is re-zeroed
@@ -583,6 +594,17 @@ private:
     void retract(std::optional<double> to) override;
     void unretract() override;
     bool isRetracted() const override;
+    // Axis locks (see lockAxis()): true if a move of axis 1 and/or axis 2 is
+    // refused because one of them is locked, in which case the warning says
+    // which to unlock
+    bool moveRefused(bool axis1, bool axis2);
+    // Whether lockAxis() would refuse, as something is moving the axis
+    bool lockRefused(unsigned axisNumber) const;
+    // Clears lockAxis()'s warning once the axis has stopped
+    void checkLockRefusal();
+    // A move of axis 1, which X follows in a taper or radius
+    bool axis1MoveRefused();
+    bool axis2MoveRefused();
     // Moving to the multi-pass's start (see multiPassGo())
     void multiPassMoveToStart();
     // Moves both axes to a position without dragging the tool through the
