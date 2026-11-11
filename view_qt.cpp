@@ -135,6 +135,9 @@ public:
     std::vector<DrawItem> frame;
     // Dims the display (while a dialog is shown on top of it)
     bool dimmed { false };
+    // The menu (owned by the controller), if any. While it's open, Up and
+    // Down auto-repeat (to move through it quickly)
+    const Menu* menu { nullptr };
 
     // Queue a key code from another source (the joystick)
     void pushKey(int k)
@@ -219,11 +222,18 @@ protected:
         if (qtKey == Qt::Key_AltGr) {
             m_altGrHeld = true;
         }
-        if (event->isAutoRepeat() || isModifierKey(qtKey)) {
+        if (isModifierKey(qtKey)) {
+            return;
+        }
+        // Otherwise held keys don't repeat: holding an arrow key must not
+        // keep jogging the motors
+        const bool menuRepeat = event->isAutoRepeat() && menu && menu->isOpen()
+            && (qtKey == Qt::Key_Up || qtKey == Qt::Key_Down) && !altPressed(event);
+        if (event->isAutoRepeat() && !menuRepeat) {
             return;
         }
         // Ignore the same key pressed again within 100ms (as the SFML version did)
-        if (qtKey == m_lastQtKey && m_lastKeyTime.elapsed() < 100) {
+        if (!menuRepeat && qtKey == m_lastQtKey && m_lastKeyTime.elapsed() < 100) {
             return;
         }
         m_lastQtKey = qtKey;
@@ -470,6 +480,7 @@ void ViewQt::initialise(const Model& model)
     }
     d.fontFamily = QFontDatabase::applicationFontFamilies(fontId).at(0);
     d.widget = std::make_unique<DisplayWidget>(d.fontFamily);
+    d.widget->menu = d.menu;
 
 #ifdef FAKE
     // run in a window in "fake" mode for manual testing
@@ -650,6 +661,9 @@ void ViewQt::Impl::dialogClosed()
 void ViewQt::setMenu(const Menu* menu)
 {
     m_impl->menu = menu;
+    if (m_impl->widget) {
+        m_impl->widget->menu = menu;
+    }
 }
 
 namespace {

@@ -8,6 +8,7 @@
 #include "configreader.h"
 #include "controller.h"
 #include "keycodes.h"
+#include "menu.h"
 #include "model.h"
 #include "stepperControl/mockgpio.h"
 #include "tapers.h"
@@ -289,6 +290,35 @@ TEST_CASE("UI: auto-repeated keys are ignored")
     QKeyEvent release(QEvent::KeyRelease, Qt::Key_Up, Qt::AltModifier, QString(), true);
     QApplication::sendEvent(w, &release);
     // In particular, an auto-repeat release must not stop a rapid
+    REQUIRE(nextKey(view) == mgo::key::None);
+}
+
+TEST_CASE("UI: Up and Down auto-repeat while the menu is open")
+{
+    TestModel tm;
+    mgo::Menu menu({ { "Cat", "One", mgo::key::a }, { "Cat", "Two", mgo::key::b } });
+    mgo::ViewQt view;
+    view.setMenu(&menu);
+    view.initialise(tm.model);
+    QWidget* w = mainWindow();
+    REQUIRE(w);
+
+    const auto repeat = [w](int qtKey, Qt::KeyboardModifiers modifiers = Qt::NoModifier) {
+        QKeyEvent press(QEvent::KeyPress, qtKey, modifiers, QString(), true);
+        QApplication::sendEvent(w, &press);
+    };
+    // Closed, held arrows mustn't keep jogging
+    repeat(Qt::Key_Down);
+    REQUIRE(nextKey(view) == mgo::key::None);
+
+    menu.open();
+    repeat(Qt::Key_Down);
+    repeat(Qt::Key_Down);
+    repeat(Qt::Key_Up);
+    REQUIRE(allKeys(view) == Keys { mgo::key::DOWN, mgo::key::DOWN, mgo::key::UP });
+    // Only Up and Down, and not rapids
+    repeat(Qt::Key_Right);
+    repeat(Qt::Key_Down, Qt::AltModifier);
     REQUIRE(nextKey(view) == mgo::key::None);
 }
 
