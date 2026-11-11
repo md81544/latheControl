@@ -222,14 +222,28 @@
 - [ ] Internal threading and the carriage's rigidity (2026-11-10): with
       about 40 mm of stick-out (for a 30 mm long thread), the leverage
       visibly shifted the carriage on each cut. For now, internal threading
-      probably isn't a good idea on this lathe. Things to try:
+      probably isn't a good idea on this lathe.
+      **Found (2026-11-11):** it's the whole saddle rocking on the bed, not
+      the cross-slide. A DTI on the saddle's rear face showed about 0.2 mm
+      of movement from pushing by hand. The saddle's gibs can't be
+      tightened further: any tighter and Z's stepper stalls on fast moves
+      and when threading. So this is a limit of the hardware, parked for
+      now. Operations with a lot of leverage (long stick-out, internal
+      threads) need very sharp tools and as little stick-out as possible.
+      Things to try:
     - A shorter thread, so less stick-out, with very fine cuts.
     - A sharp HSS tool instead of the carbide insert, which needs less force.
-    - Longer term: a more powerful X stepper, so the cross-slide's gib can
-      be tightened without stalling it. (The loose gib was also suspected
-      in the M8 male thread's many spring passes, 2026-11-09.)
-    - [ ] Lock the cross-slide physically during each cut (2026-11-11), as
-      you would by hand. Probably the cross-slide that moved, not the
+    - Longer term: more powerful steppers, so the gibs can be tightened
+      without stalling them. For the saddle that means Z (the rocking
+      found above); X's gib is loose for the same reason. (A loose gib
+      was also suspected in the M8 male thread's many spring passes,
+      2026-11-09: the saddle's rocking may have been the cause there too.)
+    - [ ] ~~Lock the cross-slide physically during each cut~~ **Parked
+      (2026-11-11):** the DTI test showed it's the saddle rocking, which an
+      X lock wouldn't help (and Z can't be locked, as it moves during the
+      cut). Kept for reference, in case a stiffer saddle ever makes the
+      cross-slide the weak point. The original idea: lock it as you would
+      by hand. Thought to be the cross-slide that moved, not the
       saddle: its gib was loosened so the small X stepper wouldn't stall,
       and the flex shows most with the tool stuck out far from the slide's
       centre. **First:** check with a dial indicator on the bed which part
