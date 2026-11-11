@@ -3026,6 +3026,10 @@ TEST_CASE("Model:   stopping a multi-pass")
     mgo::Model model(gpio, config);
     model.initialise();
     model.axis1SetSpeed(20.0);
+    // (X slow, so its first feed, of 0.01 mm, takes long enough (0.6 s) to
+    // still be moving when checked below, even if this thread isn't run for
+    // a few ms, as happens on a busy Linux desktop)
+    model.axis2SetSpeed(1.0);
     model.axis1StorePosition(0.0);
     model.axis2StorePosition(0.0);
     model.selectNextMemorySlot();
@@ -3052,8 +3056,10 @@ TEST_CASE("Model:   stopping a multi-pass")
     REQUIRE(!model.isAxis1MotorRunning());
     REQUIRE(!model.isAxis2MotorRunning());
 
-    // As does leaving the mode part way
+    // As does leaving the mode part way. (Back to the start first, so Enter
+    // starts the passes rather than moving there: X stopped part way in)
     model.axis1GoToPosition(0.0);
+    model.axis2GoToPosition(0.0);
     REQUIRE(runUntilStopped(model));
     model.multiPassGo();
     REQUIRE(model.multiPass().inProgress());

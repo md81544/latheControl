@@ -1052,21 +1052,32 @@ change.
       setting in lc_mill.cfg (the milling machine currently only has a stepper
       on its X axis)
     - lc_rt.cfg is redundant and should be removed.
-- [ ] **Unit tests which fail now and then** (2026-11-11). On neutron
-      (8 cores, load average about 3), 1 to 3 tests fail on every run of
-      `unit_test`. Which ones varies, but they're the timing-dependent
-      threading and multi-pass tests, which run the mock encoder and the motor
-      threads in real time (and were written on m4pro, where they pass):
-      mostly "threading passes stop if a pass can't start" (waiting 5 s for
-      the encoder's speed to pass 1,000 rpm), and sometimes "spring passes
-      after the threading passes" and "stopping a multi-pass". Unchanged main
-      fails the same way, so it's not a recent change. Find out why (e.g. the
-      mock encoder's thread being starved, or a wait that's too tight for a
-      slower or busier machine), and make them reliable, perhaps by driving
-      the mock encoder by steps rather than in real time. (Separately, the
-      debug build on neutron had been configured with FAKE=OFF, and the
-      Makefile doesn't reconfigure an existing tree, so `make test` wouldn't
-      build until it was reconfigured by hand.)
+- [x] **Unit tests which fail now and then** (2026-11-11). On neutron
+      (Linux, 8 cores, a busy KDE desktop), 1 to 3 tests failed on every run
+      of `unit_test`, mostly "threading passes stop if a pass can't start"
+      (waiting 5 s for the encoder's speed to pass 1,000 rpm), and sometimes
+      "spring passes after the threading passes" and "stopping a multi-pass".
+      Unchanged main failed the same way. They pass on m4pro (macOS).
+    - **Why:** Linux's timing, in two ways. A sleep overshoots by its timer
+      slack (50 us by default): a 50 us sleep took 114 us on average, and
+      300 us took 397 us. And on a busy desktop a thread waking from a
+      sleep can wait about 3 ms (a scheduler time slice) before it runs.
+      The mock encoder slept between pulses and gave each pulse the time it
+      was sent as its tick, so its spindle ran up to half as fast as asked
+      (never reaching 1,000 rpm), and a late wake-up looked like a gap in
+      the pulses, i.e. lost pulses, which stopped threading passes
+    - **Fixed** in stepperControl's `MockGpio` (needs a release, v1.5.1):
+      each pulse is due a delay after the one before was due, and is given
+      that time as its tick, however late the thread sends it, as pigpio's
+      callbacks pass each edge's sampled time. A late pulse is followed at
+      once by any others due, so the average speed is the one asked for.
+      "Stopping a multi-pass" checked that X was still moving just after
+      starting a 0.01 mm feed, which a few ms' delay could miss: X is now
+      slow enough there for the feed to take 0.6 s (and X goes back to the
+      start with Z afterwards, as it's now stopped part way in)
+    - (Separately, the debug build on neutron had been configured with
+      FAKE=OFF, and the Makefile doesn't reconfigure an existing tree, so
+      `make test` wouldn't build until it was reconfigured by hand)
 - [ ] Lots of refactoring still needed, as this grew a bit organically
 - [ ] (undecided) Replace all "Axis1..." and "Axis2..." references with an array, to
       allow for future expansion. Might be difficult owing to the axes'
