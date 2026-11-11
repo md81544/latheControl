@@ -1603,6 +1603,36 @@ TEST_CASE("Commands: wording follows the display units")
     REQUIRE(find(imperial, mgo::key::u)->description == "Show mm");
 }
 
+TEST_CASE("Commands: threading auto-retract's state is in its wording")
+{
+    mgo::MockConfigReader config;
+    const auto description = [&](bool on) {
+        for (const auto& c : mgo::buildCommands(config, mgo::DisplayUnits::Metric, on)) {
+            if (c.key == mgo::key::toggleThreadingAutoRetract) {
+                return c.description;
+            }
+        }
+        return std::string();
+    };
+    REQUIRE(description(true) == "Auto-retract is ON (threading)");
+    REQUIRE(description(false) == "Auto-retract is OFF (threading)");
+    // Menu only: it's rarely changed
+    REQUIRE(mgo::shortcutText(mgo::key::toggleThreadingAutoRetract, config).empty());
+}
+
+TEST_CASE("Model:   threading auto-retract starts as the config says, and toggles")
+{
+    mgo::MockGpio gpio(false);
+    mgo::MockConfigReader off;
+    mgo::Model model(gpio, off);
+    REQUIRE(!model.threadingAutoRetract());
+    model.toggleThreadingAutoRetract();
+    REQUIRE(model.threadingAutoRetract());
+    TestConfigReader on({ { "ThreadingAutoRetract", "true" } });
+    mgo::Model model2(gpio, on);
+    REQUIRE(model2.threadingAutoRetract());
+}
+
 TEST_CASE("Model:   zeroing or setting X clears the diameter")
 {
     mgo::MockConfigReader config;
@@ -1869,7 +1899,7 @@ TEST_CASE("Sequence: cancelling")
     int secondRan = 0;
     int ends = 0;
     mgo::MotionSequence seq;
-    seq.start({ { [] { }, [] { return false; } }, { [&] { ++secondRan; }, {} } }, [&] { ++ends; });
+    seq.start({ { [] {}, [] { return false; } }, { [&] { ++secondRan; }, {} } }, [&] { ++ends; });
     seq.cancel();
     REQUIRE(!seq.isRunning());
     REQUIRE(ends == 1); // (onEnd is called when cancelled, too)
@@ -1880,15 +1910,15 @@ TEST_CASE("Sequence: cancelling")
 
     // Starting another sequence cancels the one running
     int firstEnds = 0;
-    seq.start({ { [] { }, [] { return false; } } }, [&] { ++firstEnds; });
-    seq.start({ { [] { }, [] { return false; } } }, [&] { ++ends; });
+    seq.start({ { [] {}, [] { return false; } } }, [&] { ++firstEnds; });
+    seq.start({ { [] {}, [] { return false; } } }, [&] { ++ends; });
     REQUIRE(firstEnds == 1);
     REQUIRE(seq.isRunning());
 
     // A step's action can cancel its own sequence (e.g. by stopping all motors)
     bool stepDone = false;
     seq.start(
-        { { [] { }, [&] { return stepDone; } },
+        { { [] {}, [&] { return stepDone; } },
           { [&] { seq.cancel(); }, {} },
           { [&] { ++secondRan; }, {} } });
     stepDone = true;

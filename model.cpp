@@ -976,7 +976,7 @@ void Model::threadingCheckMoveEnded()
             arrived ? "finished" : "STOPPED SHORT",
             m_axis1Motor->getCurrentStep()));
     // (A multi-pass does its own retracting)
-    if (!m_config.readBool("ThreadingAutoRetract", false) || m_multiPass.inProgress()) {
+    if (!m_threadingAutoRetract || m_multiPass.inProgress()) {
         return;
     }
     const auto action = threadingStopAction(
@@ -2221,6 +2221,17 @@ void Model::toggleDisplayUnits()
 {
     m_displayUnits
         = m_displayUnits == DisplayUnits::Metric ? DisplayUnits::Imperial : DisplayUnits::Metric;
+}
+
+bool Model::threadingAutoRetract() const
+{
+    return m_threadingAutoRetract;
+}
+
+void Model::toggleThreadingAutoRetract()
+{
+    m_threadingAutoRetract = !m_threadingAutoRetract;
+    MGOLOG(fmt::format("Threading auto-retract {}", m_threadingAutoRetract ? "on" : "off"));
 }
 
 bool Model::isLengthAxis(int axisNumber) const

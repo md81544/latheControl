@@ -45,6 +45,9 @@ private:
     Model* m_model; // non-owning
     Menu m_menu; // (declared before m_view, which refers to it, so outlives it)
     std::unique_ptr<IView> m_view;
+    // Builds the menu again, for wording which follows the model's state
+    // (the display units, and whether threading auto-retract is on)
+    void rebuildMenu();
     // Acts on a key code (whether from a key press or chosen from the menu)
     void processKey(int key);
     // e.g. " (mm)" or " (in)": the units an axis's values are typed in

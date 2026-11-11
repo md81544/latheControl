@@ -56,7 +56,7 @@
       `cmd::threading`, so they don't suggest a key that no longer exists
     - Frees the top-level letters, e.g. `T` for "choose tool" (see "Current
       tool and a tool database")
-- [ ] **Turn `ThreadingAutoRetract` on and off from the menu** (2026-11-11).
+- [x] **Turn `ThreadingAutoRetract` on and off from the menu** (2026-11-11).
       Testing threading with the cross-slide locked by hand meant editing
       lc.cfg between tests, as auto-retract is only read from the config.
       A menu-only toggle (no shortcut, as it's rarely changed), perhaps
@@ -66,6 +66,17 @@
       in threading mode, so it's not forgotten. (With X locked in software,
       the auto-retract is now refused with "Unlock X first", so it does no
       harm, but turning it off avoids the warning)
+    - **Done** (2026-11-11), in the mock build: Modes, "Auto-retract is ON
+      (threading)", or OFF (hotkey `A`, no shortcut). "Auto-retract after a
+      threading pass: on" didn't fit the menu, and both it and "Turn
+      auto-retract off" could be read as the state or as what choosing it
+      does; "is ON" can only be the state. `A` (or Right) toggles it and
+      leaves the menu open, so its new wording shows the state; `Enter`
+      closes the menu, leaving it as it is. It can be
+      changed at any time, even during threading passes (which don't use
+      it) or a limit switch stop, as it moves nothing. The threading
+      display's third line says "X retracts outwards; auto-retract on". Not
+      yet tried on the machine
 - [ ] Make use of the keys on the right (#, Home, PgUp, PgDn, End)?
         - Home could be used to return to the current feature's zEnd/diameter?
 - [ ] When there's a larger screen (the current one is small): touchscreen
@@ -1041,6 +1052,21 @@ change.
       setting in lc_mill.cfg (the milling machine currently only has a stepper
       on its X axis)
     - lc_rt.cfg is redundant and should be removed.
+- [ ] **Unit tests which fail now and then** (2026-11-11). On neutron
+      (8 cores, load average about 3), 1 to 3 tests fail on every run of
+      `unit_test`. Which ones varies, but they're the timing-dependent
+      threading and multi-pass tests, which run the mock encoder and the motor
+      threads in real time (and were written on m4pro, where they pass):
+      mostly "threading passes stop if a pass can't start" (waiting 5 s for
+      the encoder's speed to pass 1,000 rpm), and sometimes "spring passes
+      after the threading passes" and "stopping a multi-pass". Unchanged main
+      fails the same way, so it's not a recent change. Find out why (e.g. the
+      mock encoder's thread being starved, or a wait that's too tight for a
+      slower or busier machine), and make them reliable, perhaps by driving
+      the mock encoder by steps rather than in real time. (Separately, the
+      debug build on neutron had been configured with FAKE=OFF, and the
+      Makefile doesn't reconfigure an existing tree, so `make test` wouldn't
+      build until it was reconfigured by hand.)
 - [ ] Lots of refactoring still needed, as this grew a bit organically
 - [ ] (undecided) Replace all "Axis1..." and "Axis2..." references with an array, to
       allow for future expansion. Might be difficult owing to the axes'

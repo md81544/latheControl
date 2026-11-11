@@ -14,13 +14,21 @@ namespace mgo {
 
 Controller::Controller(Model* model)
     : m_model(model)
-    , m_menu(buildCommands(model->config()))
+    , m_menu(
+          buildCommands(model->config(), model->getDisplayUnits(), model->threadingAutoRetract()))
 {
     m_view = std::make_unique<ViewQt>();
     m_view->setMenu(&m_menu);
     m_view->initialise(*m_model);
     m_view->updateDisplay(*m_model); // get the UI running before we start the motor threads
     m_model->initialise();
+}
+
+void Controller::rebuildMenu()
+{
+    // (Keeping its place, as it may be open: e.g. after a toggle: see Command::isToggle)
+    m_menu.setCommands(buildCommands(
+        m_model->config(), m_model->getDisplayUnits(), m_model->threadingAutoRetract()));
 }
 
 void Controller::run()
@@ -952,7 +960,14 @@ void Controller::processKey(int t)
                 {
                     m_model->toggleDisplayUnits();
                     // The menu's wording (e.g. nudge amounts) follows the units
-                    m_menu = Menu(buildCommands(m_model->config(), m_model->getDisplayUnits()));
+                    rebuildMenu();
+                    break;
+                }
+            case key::toggleThreadingAutoRetract:
+                {
+                    m_model->toggleThreadingAutoRetract();
+                    // (The menu shows whether it's on)
+                    rebuildMenu();
                     break;
                 }
             case key::ESC: // return to normal mode

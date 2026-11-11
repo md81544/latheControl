@@ -24,6 +24,10 @@ struct Command {
     // Optional: a letter (lower case) which chooses this command when its
     // category is open in the menu. 0 if none
     char hotkey { 0 };
+    // A setting turned on and off, whose description says how it's set now.
+    // Its hotkey (or Right) toggles it, and the menu stays open so the new
+    // state can be seen; Enter closes the menu, leaving it as it is
+    bool isToggle { false };
 };
 
 // The letter (lower case) which opens a menu category, or 0 if none
@@ -33,9 +37,12 @@ char categoryHotkey(const std::string& category);
 // config (e.g. axis names, and speed preset values). Commands for an axis
 // disabled in the config are left out.
 // units: the display units, used in commands' descriptions (e.g. nudge amounts)
+// threadingAutoRetract: whether it's on, as the menu shows (see
+// Model::threadingAutoRetract())
 std::vector<Command> buildCommands(
     const IConfigReader& config,
-    DisplayUnits units = DisplayUnits::Metric);
+    DisplayUnits units = DisplayUnits::Metric,
+    bool threadingAutoRetract = false);
 
 // Whether a key is allowed in the current mode (e.g. only motion keys in
 // Setup mode; no X motion while X is retracted). Used by the controller to

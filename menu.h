@@ -22,6 +22,10 @@ class Model;
 class Menu {
 public:
     explicit Menu(std::vector<Command> commands);
+    // Replaces the commands (e.g. reworded, after a setting has changed),
+    // keeping the menu where it was: open or not, the category, and the
+    // selection. The categories must be the same
+    void setCommands(std::vector<Command> commands);
 
     // What the controller should do with a key press while the menu is open
     struct Action {

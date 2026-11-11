@@ -86,7 +86,8 @@ public:
         int key,
         int axes,
         std::function<bool(const Model&)> available = nullptr,
-        char hotkey = 0)
+        char hotkey = 0,
+        bool isToggle = false)
     {
         if (((axes & 1) && !m_axis1Enabled) || ((axes & 2) && !m_axis2Enabled)) {
             return;
@@ -96,6 +97,7 @@ public:
             c.available = std::move(available);
         }
         c.hotkey = hotkey;
+        c.isToggle = isToggle;
         m_commands.push_back(std::move(c));
     }
 
@@ -147,6 +149,7 @@ bool menuOnly(int k)
         case key::f2o:
         case key::f2m:
         case key::threadingPasses:
+        case key::toggleThreadingAutoRetract:
         case key::clearFeature:
         case key::featureStart:
         case key::featureStartExact:
@@ -241,6 +244,7 @@ bool keyAllowedInCurrentMode(int k, const Model& model)
             case key::clearLimitTrip:
             case key::u:
             case key::ASTERISK:
+            case key::toggleThreadingAutoRetract:
                 return true;
             default:
                 return false;
@@ -284,6 +288,7 @@ bool keyAllowedInCurrentMode(int k, const Model& model)
             case key::ZERO:
             case key::u:
             case key::U:
+            case key::toggleThreadingAutoRetract:
                 return true;
             default:
                 return false;
@@ -307,7 +312,8 @@ bool isAvailable(const Command& command, const Model& model)
     return keyAllowedInCurrentMode(command.key, model) && command.available(model);
 }
 
-std::vector<Command> buildCommands(const IConfigReader& config, DisplayUnits units)
+std::vector<Command>
+buildCommands(const IConfigReader& config, DisplayUnits units, bool threadingAutoRetract)
 {
     const std::string a1 = config.read("Axis1Label", "Z");
     const std::string a2 = config.read("Axis2Label", "X");
@@ -440,9 +446,23 @@ std::vector<Command> buildCommands(const IConfigReader& config, DisplayUnits uni
         BOTH,
         [](const Model& m) { return m.getMode() == Mode::Threading; },
         'n');
+    // (Rarely changed, so no shortcut. It moves nothing, so can be changed
+    // at any time.) Worded as a statement of how it's set now ("is ON"),
+    // which can't be mistaken for what choosing it does, as "Turn
+    // auto-retract off" could be. A toggles it and the menu stays open, so
+    // the new wording shows which way it's now set; Enter closes the menu.
+    // The threading display shows it too
     b.add(
         c,
-        "Start / continue / pause multi-pass",
+        fmt::format("Auto-retract is {} (threading)", threadingAutoRetract ? "ON" : "OFF"),
+        key::toggleThreadingAutoRetract,
+        BOTH,
+        nullptr,
+        'a',
+        true);
+    b.add(
+        c,
+        "Go / pause the passes",
         key::ENTER,
         BOTH,
         [](const Model& m) {

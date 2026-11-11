@@ -3,6 +3,7 @@
 #include "iview.h"
 
 #include <memory>
+#include <string>
 
 namespace mgo {
 
@@ -29,8 +30,8 @@ public:
         std::function<void(const Input::Return&)> onDone,
         std::string_view defaultEntry = "",
         std::optional<std::vector<std::string>> listItems = std::nullopt) override;
-    void openTaperDialog(
-        double currentAngle, std::function<void(std::optional<double>)> onDone) override;
+    void openTaperDialog(double currentAngle, std::function<void(std::optional<double>)> onDone)
+        override;
     void openThreadDialog(
         const ThreadTable& threads,
         ThreadChoice current,
@@ -42,6 +43,13 @@ public:
     void cancelDialog() override;
     void updateDisplay(const Model&) override;
     void setMenu(const Menu* menu) override;
+
+    // Whether a menu row (a command's description, with its hotkey added in
+    // brackets if it isn't in the description, and its shortcut on the right)
+    // fits across the menu without the two overlapping. For the tests, as the
+    // font is only known once initialised
+    bool
+    menuRowFits(const std::string& description, char hotkey, const std::string& shortcut) const;
 
 private:
     struct Impl;

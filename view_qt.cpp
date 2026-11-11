@@ -16,6 +16,7 @@
 #include <QEventLoop>
 #include <QFile>
 #include <QFontDatabase>
+#include <QFontMetricsF>
 #include <QKeyEvent>
 #include <QPainter>
 #include <QPointer>
@@ -651,18 +652,59 @@ void ViewQt::setMenu(const Menu* menu)
     m_impl->menu = menu;
 }
 
+namespace {
+
+// The menu panel's width, the margin inside it, and its rows' font size
+constexpr float MENU_PANEL_WIDTH = 480.f;
+constexpr float MENU_MARGIN = 15.f;
+constexpr int MENU_FONT_SIZE = 20;
+
+// A menu row's text, and the index of its hotkey's character (or -1 if it has
+// none). The hotkey is its first appearance in the text; if it isn't in the
+// text, it's added in brackets at the end
+std::pair<std::string, int> menuRowText(std::string text, char hotkey)
+{
+    int index = -1;
+    if (hotkey) {
+        const auto it = std::find_if(text.begin(), text.end(), [hotkey](char ch) {
+            return std::tolower(static_cast<unsigned char>(ch)) == hotkey;
+        });
+        if (it != text.end()) {
+            index = static_cast<int>(it - text.begin());
+        } else {
+            text += fmt::format(" ({})", static_cast<char>(std::toupper(hotkey)));
+            index = static_cast<int>(text.size()) - 2;
+        }
+    }
+    return { std::move(text), index };
+}
+
+} // end anonymous namespace
+
+bool ViewQt::menuRowFits(const std::string& description, char hotkey, const std::string& shortcut)
+    const
+{
+    QFont font(m_impl->fontFamily);
+    font.setPixelSize(MENU_FONT_SIZE);
+    const QFontMetricsF metrics(font);
+    const QString text = QString::fromStdString(menuRowText(description, hotkey).first);
+    // (At least a space between the text and its shortcut)
+    const QString row = shortcut.empty() ? text : text + " " + QString::fromStdString(shortcut);
+    return metrics.horizontalAdvance(row) <= MENU_PANEL_WIDTH - 2 * MENU_MARGIN;
+}
+
 void ViewQt::Impl::drawMenu(std::vector<DrawItem>& frame, const Model& model) const
 {
     // A panel down the right-hand side, so the position read-outs stay
     // visible. It stops short of the motor fault line, so that's never hidden
     constexpr float panelX = 790.f;
     constexpr float panelY = 10.f;
-    constexpr float panelWidth = 480.f;
+    constexpr float panelWidth = MENU_PANEL_WIDTH;
     constexpr float panelHeight = 590.f;
-    constexpr float margin = 15.f;
+    constexpr float margin = MENU_MARGIN;
     constexpr float listY = panelY + 55.f;
     constexpr float lineHeight = 30.f;
-    constexpr int fontSize = 20;
+    constexpr int fontSize = MENU_FONT_SIZE;
     constexpr std::size_t visibleRows = 14;
     const QColor normal(200, 200, 200);
     const QColor unavailable(90, 90, 90);
@@ -688,23 +730,11 @@ void ViewQt::Impl::drawMenu(std::vector<DrawItem>& frame, const Model& model) co
         bool available;
         int hotkeyIndex; // the character to highlight as the hotkey, or -1
     };
-    // Highlights the hotkey's first appearance in the text; if it isn't in
-    // the text, it's added in brackets at the end
-    const auto makeRow = [](std::string text, std::string shortcut, bool available, char hotkey) {
-        int index = -1;
-        if (hotkey) {
-            const auto it = std::find_if(text.begin(), text.end(), [hotkey](char ch) {
-                return std::tolower(static_cast<unsigned char>(ch)) == hotkey;
-            });
-            if (it != text.end()) {
-                index = static_cast<int>(it - text.begin());
-            } else {
-                text += fmt::format(" ({})", static_cast<char>(std::toupper(hotkey)));
-                index = static_cast<int>(text.size()) - 2;
-            }
-        }
-        return Row { std::move(text), std::move(shortcut), available, index };
-    };
+    const auto makeRow
+        = [](const std::string& text, std::string shortcut, bool available, char hotkey) {
+              auto [rowText, index] = menuRowText(text, hotkey);
+              return Row { std::move(rowText), std::move(shortcut), available, index };
+          };
     std::vector<Row> rows;
     if (category) {
         for (const Command* c : menu->currentCommands()) {
@@ -964,9 +994,7 @@ void ViewQt::updateDisplay(const Model& model)
     d.updateTextFromModel(model);
 
     std::vector<DrawItem> frame;
-    const auto draw = [&frame](const TextItem& item) {
-        frame.push_back(item);
-    };
+    const auto draw = [&frame](const TextItem& item) { frame.push_back(item); };
 
     if (!model.isShuttingDown()) {
         if (!model.config().readBool("DisableAxis1", false)) {
@@ -1450,10 +1478,13 @@ void ViewQt::Impl::updateThreadData(const Model& model)
         misc2.text
             = fmt::format("OD: {:.3f} mm, depth: {:.3f} mm", thread->maleOd(), thread->maleDepth());
     }
+    // (Whether it retracts by itself at the end of each pass, too: it's easily
+    // forgotten, having been turned off from the menu)
     misc3.text = fmt::format(
-        "{} retracts {}",
+        "{} retracts {}; auto-retract {}",
         model.config().read("Axis2Label", "X"),
-        model.getRetractionDirection() == XDirection::Inwards ? "inwards" : "outwards");
+        model.getRetractionDirection() == XDirection::Inwards ? "inwards" : "outwards",
+        model.threadingAutoRetract() ? "on" : "off");
 }
 
 } // namespace mgo

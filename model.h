@@ -94,6 +94,7 @@ public:
     Model(IGpio& gpio, mgo::IConfigReader& config)
         : m_gpio(gpio)
         , m_config(config)
+        , m_threadingAutoRetract(config.readBool("ThreadingAutoRetract", false))
     {
     }
 
@@ -379,6 +380,12 @@ public:
     // defaultMultiPassSetup(), from last time's, but if the thread has
     // changed since, the infeed is the new thread's depth
     MultiPassSetup threadingPassesDialogSetup() const;
+    // Threading: whether X retracts at the end of a cut, and comes back in at
+    // the end of the return (not during threading passes, which do their own
+    // retracting). Starts as ThreadingAutoRetract in the config, and is turned
+    // on and off from the menu, without being saved back to the config
+    bool threadingAutoRetract() const;
+    void toggleThreadingAutoRetract();
     // The chosen thread's depth (male or female, as chosen), if one is chosen
     std::optional<double> getThreadDepthMm() const;
     // The angle a compound infeed goes in at, from the cross-slide: half the
@@ -544,6 +551,8 @@ private:
     // Whether a limit switch trip has been dealt with (see checkLimitSwitch())
     bool m_limitTripSeen { false };
 
+    // See threadingAutoRetract()
+    bool m_threadingAutoRetract;
     // Threading: the Z move (a cut or a return) currently in progress
     bool m_threadingMoveInProgress { false };
     long m_threadingMoveTarget { 0 };

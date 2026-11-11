@@ -551,6 +551,63 @@ void snapshot(QWidget* dialog, const std::string& name)
 
 } // end anonymous namespace
 
+TEST_CASE("UI: every menu row fits, without overlapping its shortcut")
+{
+    TestModel tm;
+    mgo::ViewQt view;
+    view.initialise(tm.model);
+    // (The descriptions depend on the config, the units and the auto-retract)
+    for (const char* file : { "lc.cfg", "lc_mill.cfg", "lc_rt.cfg" }) {
+        const mgo::ConfigReader config(file);
+        for (const auto units : { mgo::DisplayUnits::Metric, mgo::DisplayUnits::Imperial }) {
+            for (const bool autoRetract : { false, true }) {
+                for (const auto& c : mgo::buildCommands(config, units, autoRetract)) {
+                    INFO(file << ": " << c.description);
+                    CHECK(view.menuRowFits(
+                        c.description, c.hotkey, mgo::shortcutText(c.key, config)));
+                }
+            }
+        }
+    }
+}
+
+TEST_CASE("UI: threading auto-retract is turned on and off from the menu")
+{
+    // It starts as the config says, and Tab, M (Modes), A toggles it
+    MapConfigReader config { { { "ThreadingAutoRetract", "true" } } };
+    mgo::MockGpio gpio { false };
+    mgo::Model model { gpio, config };
+    mgo::Controller controller(&model);
+    QWidget* w = mainWindow();
+    REQUIRE(w);
+    REQUIRE(model.threadingAutoRetract());
+    // The menu stays open, so its wording shows the new state
+    press(w, controller, Qt::Key_Tab);
+    press(w, controller, Qt::Key_M);
+    for (const bool expected : { false, true }) {
+        press(w, controller, Qt::Key_A);
+        REQUIRE(controller.isMenuOpen());
+        REQUIRE(model.threadingAutoRetract() == expected);
+    }
+    // Enter, with it highlighted (as A left it), closes the menu, and leaves
+    // it as it is
+    press(w, controller, Qt::Key_Return);
+    REQUIRE(!controller.isMenuOpen());
+    REQUIRE(model.threadingAutoRetract());
+    // Right toggles it too (as the gamepad's D-pad does), and the menu stays
+    // open in Modes: another of its hotkeys chooses that command
+    press(w, controller, Qt::Key_Tab);
+    press(w, controller, Qt::Key_M);
+    press(w, controller, Qt::Key_A);
+    REQUIRE(!model.threadingAutoRetract());
+    press(w, controller, Qt::Key_Right);
+    REQUIRE(model.threadingAutoRetract());
+    REQUIRE(controller.isMenuOpen());
+    press(w, controller, Qt::Key_H);
+    REQUIRE(!controller.isMenuOpen());
+    REQUIRE(model.getMode() == mgo::Mode::Taper);
+}
+
 TEST_CASE("UI: multi-pass dialog, from here by distances")
 {
     TestModel tm;

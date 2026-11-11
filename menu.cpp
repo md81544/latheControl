@@ -51,10 +51,19 @@ Menu::Menu(std::vector<Command> commands)
     : m_commands(std::move(commands))
 {
     for (const auto& c : m_commands) {
-        if (std::find(m_categories.begin(), m_categories.end(), c.category)
-            == m_categories.end()) {
+        if (std::find(m_categories.begin(), m_categories.end(), c.category) == m_categories.end()) {
             m_categories.push_back(c.category);
         }
+    }
+}
+
+void Menu::setCommands(std::vector<Command> commands)
+{
+    m_commands = std::move(commands);
+    // (In case a category has fewer commands than before)
+    const std::size_t size = listSize();
+    if (m_selection >= size) {
+        m_selection = size > 0 ? size - 1 : 0;
     }
 }
 
@@ -117,8 +126,18 @@ Menu::Action Menu::handleKey(int k, const Model& model, bool fromJoystick)
             return {};
         }
         const auto commands = currentCommands();
-        if (m_selection < commands.size() && isAvailable(*commands.at(m_selection), model)) {
+        // On a toggle, Enter is done with the menu, leaving the setting as
+        // it is (its hotkey or Right toggles it). From the gamepad too, whose
+        // D-pad right toggles it
+        if (m_selection < commands.size() && commands.at(m_selection)->isToggle
+            && k == key::ENTER) {
             close();
+            return {};
+        }
+        if (m_selection < commands.size() && isAvailable(*commands.at(m_selection), model)) {
+            if (!commands.at(m_selection)->isToggle) {
+                close();
+            }
             return { Action::Type::Command, commands.at(m_selection)->key };
         }
         return {}; // not available at the moment
@@ -147,7 +166,9 @@ Menu::Action Menu::handleHotkey(char c, const Model& model)
         if (commands.at(n)->hotkey == c) {
             m_selection = n;
             if (isAvailable(*commands.at(n), model)) {
-                close();
+                if (!commands.at(n)->isToggle) {
+                    close();
+                }
                 return { Action::Type::Command, commands.at(n)->key };
             }
             break; // (not available at the moment; left highlighted)
