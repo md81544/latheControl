@@ -238,6 +238,37 @@
       found above); X's gib is loose for the same reason. (A loose gib
       was also suspected in the M8 male thread's many spring passes,
       2026-11-09: the saddle's rocking may have been the cause there too.)
+    - [ ] Cut the far wall of the bore with the spindle in reverse
+      (2026-11-11). The idea: the saddle seems to rock more when the
+      infeed is towards +X. An ordinary internal thread is cut on the near
+      wall with a rake-up tool, feeding in towards +X, so the radial
+      cutting force pushes the tool towards the back. A right-hand thread
+      can also be cut on the far wall with a rake-up tool that points to
+      the back (a mirror-image tool), with the spindle reversed and Z
+      feeding away from the chuck (+Z). Handedness depends only on the
+      spindle direction and the Z feed direction, so this is still a
+      right-hand thread. The infeed is then towards −X, and the radial
+      force pushes the tool towards the operator, so the saddle is loaded
+      in the same directions as for external threading, which has worked
+      well. (Turning an ordinary bar upside down to reach the far wall,
+      with the spindle forward, also works, but then the cutting force
+      pushes the tool up and tries to lift the saddle, so that's not worth
+      trying.) Reverse is fine on this lathe: the chuck is bolted to a
+      flange, and the VFD gives the same power both ways.
+      **First:** with a DTI on the saddle, push the tool tip by hand
+      towards +X and then towards −X with about the same force. Only go
+      further if pushing towards +X (as in this setup) moves the saddle
+      clearly less. If both are about the same, the rocking more likely
+      comes from the bar's stick-out in Z, and this won't help.
+      **Then:** grind a mirror-image internal threading tool in HSS, with
+      the side clearance on the side that now leads into the cut (+Z), and
+      try a cut. Things to check in the program, none of which have been
+      checked yet: the multi-pass engine running passes towards +Z, −X
+      infeed (and +X retract) for an internal thread, the index sync with
+      the spindle in reverse, and reversing the flank infeed's Z offset.
+      With a blind bore each pass starts at the bottom and runs out at the
+      mouth, so the relief groove has to be long enough for Z to
+      accelerate in.
     - [ ] ~~Lock the cross-slide physically during each cut~~ **Parked
       (2026-11-11):** the DTI test showed it's the saddle rocking, which an
       X lock wouldn't help (and Z can't be locked, as it moves during the
