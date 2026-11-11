@@ -32,7 +32,7 @@ set(STEPPERCONTROL_GIT_REPOSITORY "https://github.com/md81544/stepperControl.git
 	CACHE STRING "Git repository to fetch stepperControl from")
 FetchContent_Declare(stepperControl
 	GIT_REPOSITORY ${STEPPERCONTROL_GIT_REPOSITORY}
-	GIT_TAG        v1.5.0
+	GIT_TAG        v1.5.1
 	GIT_SHALLOW    TRUE
 )
 # FAKE builds use MockGpio, so don't need pigpio
