@@ -1150,8 +1150,8 @@ change.
         - **Decision: knurling's spindle counts as turning down to 5 rpm**
           (threading's limit is 30), as on the lathe, Z's 1000 mm/min limits
           a 45° knurl on a 10 mm bar to about 25 rpm. The dialog refuses a
-          lead Z couldn't follow even at 5 rpm. The rpm shown isn't rounded
-          to 10 in this mode
+          lead Z couldn't follow even at 5 rpm. The rpm shown (in any mode)
+          isn't rounded down to a multiple of 10 below 50 rpm
         - **To check on the machine:**
             - Z starts each pass from rest straight to full speed (follow
               mode doesn't ramp), and for a long lead that's far faster than
@@ -1176,9 +1176,19 @@ change.
           least 70° on a 10 mm bar (80° on 20 mm): long thin diamonds, not a
           normal knurl. The supplier had set Pr.2 (minimum frequency) and C2
           (Pr.902, terminal 2 bias frequency) to 5 Hz; lowering Pr.2 to 2 Hz
-          as a test made no visible difference, and it was put back. The
-          decision is to leave the VFD's parameters as the supplier set them.
-          Two ways forward, not yet chosen:
+          as a test made no visible difference, and it was put back.
+        - **Solved the same day: both settings lowered to 1 Hz.** Each one
+          alone holds the floor at 5 Hz: C2 is the frequency the pot gives
+          fully down (0 V), and Pr.2 clamps the output to at least its
+          value. Lowering both to 1 Hz brought the floor right down (at the
+          old ratio of about 14 rpm per Hz, about 14 rpm: enough for 45° up
+          to about 18 mm). On the D700's panel, the C parameters are in a
+          "C" menu of their own, not in the numbered list. The supplier's
+          5 Hz may have been to protect the motor (little torque, and little
+          cooling, at a few Hz under V/F control), so the spindle shouldn't
+          be left running slowly under load. The two other ideas below were
+          considered first, and may still be useful (e.g. for bigger bars,
+          or more torque):
             - **A "back gear" (hardware):** a second pair of pulleys on the
               motor's toothed belt, giving a lower range. The floor drops in
               proportion: 3:1 gives about 23 rpm (enough for 45° on 10 mm),

@@ -1161,9 +1161,10 @@ void ViewQt::Impl::updateTextFromModel(const Model& model)
         speedDecimals(2),
         model.axisUnitName(2));
     float rpmValue = model.getRotaryEncoderRpm();
-    // (Not when knurling, whose spindle turns at only a few rpm)
-    if (rpmValue > 0.f && model.getMode() != Mode::Knurling) {
-        // Round to nearest 10 to keep display more constant
+    // Rounded down to a multiple of 10, to keep the display steady, except
+    // below 50 rpm (e.g. knurling, at 10-30 rpm), where that would lose too
+    // much
+    if (rpmValue >= 50.f) {
         rpmValue = static_cast<int>(rpmValue / 10.f) * 10.f;
     }
     rpm.text = fmt::format("{: >7}", static_cast<int>(rpmValue));
