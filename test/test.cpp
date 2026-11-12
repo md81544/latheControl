@@ -1297,7 +1297,10 @@ TEST_CASE("Menu: navigation, choosing, and keys passed through")
     REQUIRE(menu.openCategory() == 0u);
     REQUIRE(menu.handleKey(mgo::key::DOWN, model).type == Type::None);
     REQUIRE(menu.selection() == 1);
-    REQUIRE(menu.handleKey(mgo::key::DOWN, model).type == Type::None); // already at the end
+    // Down from the bottom goes round to the top, and Up from the top to the bottom
+    REQUIRE(menu.handleKey(mgo::key::DOWN, model).type == Type::None);
+    REQUIRE(menu.selection() == 0);
+    REQUIRE(menu.handleKey(mgo::key::UP, model).type == Type::None);
     REQUIRE(menu.selection() == 1);
     const auto chosen = menu.handleKey(mgo::key::ENTER, model);
     REQUIRE(chosen.type == Type::Command);
@@ -1899,7 +1902,7 @@ TEST_CASE("Sequence: cancelling")
     int secondRan = 0;
     int ends = 0;
     mgo::MotionSequence seq;
-    seq.start({ { [] {}, [] { return false; } }, { [&] { ++secondRan; }, {} } }, [&] { ++ends; });
+    seq.start({ { [] { }, [] { return false; } }, { [&] { ++secondRan; }, {} } }, [&] { ++ends; });
     seq.cancel();
     REQUIRE(!seq.isRunning());
     REQUIRE(ends == 1); // (onEnd is called when cancelled, too)
@@ -1910,15 +1913,15 @@ TEST_CASE("Sequence: cancelling")
 
     // Starting another sequence cancels the one running
     int firstEnds = 0;
-    seq.start({ { [] {}, [] { return false; } } }, [&] { ++firstEnds; });
-    seq.start({ { [] {}, [] { return false; } } }, [&] { ++ends; });
+    seq.start({ { [] { }, [] { return false; } } }, [&] { ++firstEnds; });
+    seq.start({ { [] { }, [] { return false; } } }, [&] { ++ends; });
     REQUIRE(firstEnds == 1);
     REQUIRE(seq.isRunning());
 
     // A step's action can cancel its own sequence (e.g. by stopping all motors)
     bool stepDone = false;
     seq.start(
-        { { [] {}, [&] { return stepDone; } },
+        { { [] { }, [&] { return stepDone; } },
           { [&] { seq.cancel(); }, {} },
           { [&] { ++secondRan; }, {} } });
     stepDone = true;

@@ -93,15 +93,17 @@ Menu::Action Menu::handleKey(int k, const Model& model, bool fromJoystick)
         close();
         return {};
     }
+    // Up from the top item goes round to the bottom, and Down from the
+    // bottom to the top
     if (isUp(k, fromJoystick)) {
-        if (m_selection > 0) {
-            --m_selection;
+        if (const std::size_t size = listSize(); size > 0) {
+            m_selection = m_selection > 0 ? m_selection - 1 : size - 1;
         }
         return {};
     }
     if (isDown(k, fromJoystick)) {
-        if (m_selection + 1 < listSize()) {
-            ++m_selection;
+        if (const std::size_t size = listSize(); size > 0) {
+            m_selection = m_selection + 1 < size ? m_selection + 1 : 0;
         }
         return {};
     }
