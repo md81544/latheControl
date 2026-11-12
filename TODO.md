@@ -2,6 +2,10 @@
 
 ## User interface
 
+### Investigate Sound Output
+- [ ] Could be useful for warnings and prompts.
+    - To test; whether the existing monitor's HDMI output would work
+
 ### Make the interface less cryptic
 - [ ] A modification to recent changes:
         Keep Tab key as the menu key, but also use a tap on the meta key to do the 
