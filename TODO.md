@@ -1168,6 +1168,58 @@ change.
           taking the Ø from the current feature rather than X; multi-start
           threading (the engine supports it now, but the threading passes
           dialog doesn't offer it)
+        - **First hurdle on the machine (2026-11-12): the spindle won't go
+          slow enough.** The VFD (Mitsubishi FR-D700-SC, set up by the
+          package's supplier, with an external pot box) won't go below about
+          70 rpm, so the mode refuses as "too fast". At 70 rpm, the lead can
+          be at most 800 ÷ 70 ≈ 11.4 mm, which needs a helix angle of at
+          least 70° on a 10 mm bar (80° on 20 mm): long thin diamonds, not a
+          normal knurl. The supplier had set Pr.2 (minimum frequency) and C2
+          (Pr.902, terminal 2 bias frequency) to 5 Hz; lowering Pr.2 to 2 Hz
+          as a test made no visible difference, and it was put back. The
+          decision is to leave the VFD's parameters as the supplier set them.
+          Two ways forward, not yet chosen:
+            - **A "back gear" (hardware):** a second pair of pulleys on the
+              motor's toothed belt, giving a lower range. The floor drops in
+              proportion: 3:1 gives about 23 rpm (enough for 45° on 10 mm),
+              5:1 about 14 rpm (18 mm), 7:1 about 10 rpm (25 mm). The torque
+              goes up by the same ratio. The encoder is driven from the
+              spindle, so its gearing in the config doesn't change with the
+              belt. No code change needed
+            - **A hand-turned spindle (software):** passes already follow the
+              spindle's position, not its speed. In stepperControl's follow
+              mode, Z stops when the spindle stops, and goes back along the
+              groove if it's turned back (its target is clamped between the
+              cut's start and end). Starting from rest by hand would also
+              avoid Z having to jump to full speed. It would need, as a
+              knurling dialog option:
+                - no minimum spindle speed: a pass starts with the chuck
+                  still, and waits for it to be turned to the start angle
+                - Z's follow speed at its maximum (it's set from the
+                  measured speed now, which would be about zero)
+                - "forwards" fixed as the spindle's normal direction, rather
+                  than taken from the encoder as each pass starts (rocking
+                  the chuck back first would give that cut the wrong hand)
+                - no stop when the spindle stops (normal when hand-turning;
+                  Z only moves when the chuck does, and Space still stops)
+                - no lost-pulse check: a pause in turning, then carrying on
+                  at the same speed, looks exactly like lost pulses. Log
+                  them instead (core pinning fixed the original cause)
+                - a tighter limit on how far Z may lag (a quarter of a
+                  revolution is 8 mm of Z at 45° on 10 mm), with a "turn
+                  slower" warning as it gets near
+                - prompts: "Turn the chuck forwards", "waiting for start
+                  3's angle"
+                - On the machine: a crank on the spindle's outboard end, and
+                  the VFD off at the mains. At hand speeds, Z would move in
+                  bursts of one encoder pulse (about 0.04 mm at 45° on 10
+                  mm), which is probably fine but may sound rough
+            - **Either way, there's a lot of turning:** waiting for each
+              start's angle takes about as long as the cut. A whole knurl
+              (31 starts, there and back, about 6 passes) is very roughly 350
+              revolutions, 15-20 minutes at 20 rpm. Cutting whichever start's
+              angle comes round next, rather than in order, would save much
+              of the waiting, powered or by hand
 - [x] Add ability to add new thread pitches without recompilation. Move the
       definitions in threadpitches.h into separate config file (threadpitches.cfg)
       which is loaded at program start.
