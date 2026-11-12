@@ -59,6 +59,11 @@ public:
 
 private:
     std::size_t listSize() const;
+    // Moves the selection up (-1) or down (+1), skipping commands which can't
+    // be used at the moment
+    void moveSelection(int direction, const Model& model);
+    // Shows a category's commands, selecting the first which can be used
+    void showCategory(std::size_t category, const Model& model);
     Action handleHotkey(char letter, const Model& model);
 
     std::vector<Command> m_commands;

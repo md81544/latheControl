@@ -1343,6 +1343,55 @@ TEST_CASE("Menu: navigation, choosing, and keys passed through")
     REQUIRE(!menu.isOpen());
 }
 
+TEST_CASE("Menu: the selection skips commands which can't be used")
+{
+    mgo::MockConfigReader config;
+    mgo::MockGpio gpio(false);
+    mgo::Model model(gpio, config);
+    model.initialise();
+    const auto unlocked = [](const mgo::Model& m) { return !m.isAxisLocked(1); };
+    std::vector<mgo::Command> commands {
+        { "Cat", "one", mgo::key::a1_z, unlocked },
+        { "Cat", "two", mgo::key::a2_z },
+        { "Cat", "three", mgo::key::LEFT, unlocked },
+        { "Cat", "four", mgo::key::RIGHT },
+    };
+    mgo::Menu menu(commands);
+    model.lockAxis(1);
+
+    // Opening the category starts on the first command that can be used
+    menu.open();
+    menu.handleKey(mgo::key::ENTER, model);
+    REQUIRE(menu.selection() == 1);
+    // Down skips "three", and goes round past "one"
+    menu.handleKey(mgo::key::DOWN, model);
+    REQUIRE(menu.selection() == 3);
+    menu.handleKey(mgo::key::DOWN, model);
+    REQUIRE(menu.selection() == 1);
+    menu.handleKey(mgo::key::UP, model);
+    REQUIRE(menu.selection() == 3);
+
+    // Once they can be used, they aren't skipped
+    model.unlockAxis(1);
+    menu.handleKey(mgo::key::UP, model);
+    REQUIRE(menu.selection() == 2);
+
+    // With none that can be used, the selection stays put
+    std::vector<mgo::Command> greyed {
+        { "Cat", "one", mgo::key::a1_z, unlocked },
+        { "Cat", "two", mgo::key::LEFT, unlocked },
+    };
+    mgo::Menu greyedMenu(greyed);
+    model.lockAxis(1);
+    greyedMenu.open();
+    greyedMenu.handleKey(mgo::key::ENTER, model);
+    REQUIRE(greyedMenu.selection() == 0);
+    greyedMenu.handleKey(mgo::key::DOWN, model);
+    REQUIRE(greyedMenu.selection() == 0);
+    greyedMenu.handleKey(mgo::key::UP, model);
+    REQUIRE(greyedMenu.selection() == 0);
+}
+
 TEST_CASE("Commands: keys allowed in the current mode")
 {
     mgo::MockConfigReader config;

@@ -93,18 +93,12 @@ Menu::Action Menu::handleKey(int k, const Model& model, bool fromJoystick)
         close();
         return {};
     }
-    // Up from the top item goes round to the bottom, and Down from the
-    // bottom to the top
     if (isUp(k, fromJoystick)) {
-        if (const std::size_t size = listSize(); size > 0) {
-            m_selection = m_selection > 0 ? m_selection - 1 : size - 1;
-        }
+        moveSelection(-1, model);
         return {};
     }
     if (isDown(k, fromJoystick)) {
-        if (const std::size_t size = listSize(); size > 0) {
-            m_selection = m_selection + 1 < size ? m_selection + 1 : 0;
-        }
+        moveSelection(1, model);
         return {};
     }
     if (const char c = letter(k); c && !fromJoystick) {
@@ -122,8 +116,7 @@ Menu::Action Menu::handleKey(int k, const Model& model, bool fromJoystick)
     if (isChoose(k, fromJoystick)) {
         if (!m_openCategory) {
             if (!m_categories.empty()) {
-                m_openCategory = m_selection;
-                m_selection = 0;
+                showCategory(m_selection, model);
             }
             return {};
         }
@@ -156,8 +149,7 @@ Menu::Action Menu::handleHotkey(char c, const Model& model)
     if (!m_openCategory) {
         for (std::size_t n = 0; n < m_categories.size(); ++n) {
             if (categoryHotkey(m_categories.at(n)) == c) {
-                m_openCategory = n;
-                m_selection = 0;
+                showCategory(n, model);
                 break;
             }
         }
@@ -177,6 +169,34 @@ Menu::Action Menu::handleHotkey(char c, const Model& model)
         }
     }
     return {};
+}
+
+void Menu::moveSelection(int direction, const Model& model)
+{
+    // Up from the top item goes round to the bottom, and Down from the
+    // bottom to the top. Commands which can't be used at the moment (greyed
+    // out) are skipped; if none can, the selection stays where it is
+    const std::size_t size = listSize();
+    const auto commands = currentCommands();
+    std::size_t n = m_selection;
+    for (std::size_t tried = 0; tried < size; ++tried) {
+        n = direction > 0 ? (n + 1) % size : (n + size - 1) % size;
+        if (!m_openCategory || isAvailable(*commands.at(n), model)) {
+            m_selection = n;
+            return;
+        }
+    }
+}
+
+void Menu::showCategory(std::size_t category, const Model& model)
+{
+    m_openCategory = category;
+    // Start on the first command that can be used at the moment, if any
+    const auto commands = currentCommands();
+    const auto it = std::find_if(commands.begin(), commands.end(), [&model](const Command* c) {
+        return isAvailable(*c, model);
+    });
+    m_selection = it != commands.end() ? static_cast<std::size_t>(it - commands.begin()) : 0;
 }
 
 const std::vector<std::string>& Menu::categories() const
