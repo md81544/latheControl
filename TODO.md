@@ -1238,9 +1238,31 @@ change.
               fault wasn't noted before it was reset; the D700 keeps its
               last eight faults (MODE to the fault history, with the
               frequency, current and voltage at the fault), so it can still
-              be looked up. Probably overcurrent/stall prevention or motor
-              overload, at about 2 Hz under the cut's load. Only "Stopped"
-              was shown, with no reason
+              be looked up. Only "Stopped" was shown, with no reason.
+              **The fault history showed E.THM** (motor overload, shown as
+              "E.rHn" in seven segments): the drive's thermal model of the
+              motor, not a real fault. For a standard self-cooled motor
+              (Pr.71), the model allows less and less current as the
+              frequency drops, as the motor's fan barely turns. In V/F
+              control at about 2 Hz, the motor also draws a lot of
+              magnetising current even when idling (torque boost, Pr.0), and
+              much of a knurling run is waiting for start angles. About 20
+              minutes of low-speed testing came before that run. Things to
+              check: that Pr.9 matches the rated current on the motor's
+              plate. Not to do: set Pr.71 to a constant-torque motor (only
+              for a motor with a separately powered fan), or raise Pr.9
+              above the plate
+        - **Where it stands (2026-11-12): undecided.** Running the motor
+          at 1-2 Hz trips its overload protection, so the user may set Pr.2
+          and C2 back to 5 Hz (about 70 rpm), which limits knurls to steep
+          helix angles (about 70° on 10 mm, more on bigger bars). The back
+          gear looks impractical for about 10 rpm: a single stage of about
+          7:1 needs a very large pulley on the spindle. (Two smaller stages
+          through a countershaft would avoid that, but it's more work
+          still.) Hand-turning the spindle (above) needs no motor at all,
+          so it has none of these problems. Cutting the starts in whichever
+          order their angles come round would shorten each run (so less
+          heat), but isn't worth doing until the way forward is chosen
             - **Second run (40 starts): a pass waited for ever.** Its start
               angle was set more than a revolution *behind* the spindle
               ("from spindle pulse 1839425 (now 1840261)"), which only
