@@ -1052,6 +1052,9 @@ change.
       setting in lc_mill.cfg (the milling machine currently only has a stepper
       on its X axis)
     - lc_rt.cfg is redundant and should be removed.
+    - As part of this change, maybe the config file should have an "axis[n]Capabilities"
+      config item, to allow the program to determine which features are available for
+      an axis (e.g. retract, or, in the case of a rotary table, gear cutting and so on.
 - [x] **Unit tests which fail now and then** (2026-11-11). On neutron
       (Linux, 8 cores, a busy KDE desktop), 1 to 3 tests failed on every run
       of `unit_test`, mostly "threading passes stop if a pass can't start"
