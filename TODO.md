@@ -1230,6 +1230,37 @@ change.
               revolutions, 15-20 minutes at 20 rpm. Cutting whichever start's
               angle comes round next, rather than in order, would save much
               of the waiting, powered or by hand
+        - **First knurls on the machine (2026-11-12):** Ø 22.7, Z 14.8 mm,
+          at 70° (the spindle still wasn't slow enough for 45°), about 27-30
+          rpm (about 2 Hz). 22 cuts each time went well, then:
+            - **First run (71 starts): the VFD tripped mid-cut.** The
+              encoder's pulses stopped, so the passes were stopped. The
+              fault wasn't noted before it was reset; the D700 keeps its
+              last eight faults (MODE to the fault history, with the
+              frequency, current and voltage at the fault), so it can still
+              be looked up. Probably overcurrent/stall prevention or motor
+              overload, at about 2 Hz under the cut's load. Only "Stopped"
+              was shown, with no reason
+            - **Second run (40 starts): a pass waited for ever.** Its start
+              angle was set more than a revolution *behind* the spindle
+              ("from spindle pulse 1839425 (now 1840261)"), which only
+              happens if the spindle was taken to be turning backwards. The
+              direction came from the encoder's latest edge: a stray edge on
+              its B channel flips that for a few milliseconds, until the next
+              A edge, and the jerky spindle at 2 Hz (with the encoder belted
+              at 35:100) makes stray edges likely. One pass in 22 started
+              in such a window. (Threading passes had the same flaw, though
+              it's much less likely at their speeds.) The counting itself
+              isn't affected: each A edge sets the direction again first
+            - **Fixed:** a pass now takes the spindle's direction from how
+              far its count has moved over the last tenth of a second or so
+              (sampled on each update), and refuses to start if it can't
+              tell. Every pass of a run must turn the same way as the first
+              (or it would cut the other hand). A pass waiting for its start
+              angle is stopped, with a warning, if the spindle turns three
+              revolutions away from it, so nothing can hang silently. And
+              when the spindle stopping stops a multi-pass (or any motor),
+              the warning says so. Not yet tried on the machine
 - [x] Add ability to add new thread pitches without recompilation. Move the
       definitions in threadpitches.h into separate config file (threadpitches.cfg)
       which is loaded at program start.

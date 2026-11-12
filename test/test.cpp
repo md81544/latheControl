@@ -3595,9 +3595,12 @@ namespace {
 // A model whose mock spindle turns, with 700 encoder pulses per revolution
 // (as on the lathe), set up for threading at 1mm pitch: 1000 Z steps per rev
 struct ThreadingTestModel {
+    // (spindleNormal false: the spindle turns the other way, so its pulse
+    // count goes down)
     explicit ThreadingTestModel(
         long pulseDelayMicroseconds,
-        std::map<std::string, std::string> extraConfig = {})
+        std::map<std::string, std::string> extraConfig = {},
+        bool spindleNormal = true)
         : config([&] {
             extraConfig["RotaryEncoderGearingDivisor"] = "100"; // (35:100)
             return extraConfig;
@@ -3606,7 +3609,7 @@ struct ThreadingTestModel {
               false,
               [&] {
                   mgo::MockGpioOptions options;
-                  options.rotaryDirectionNormal = true;
+                  options.rotaryDirectionNormal = spindleNormal;
                   options.rotaryEncoderDelayMicroseconds = pulseDelayMicroseconds;
                   return options;
               }())
@@ -3622,7 +3625,9 @@ struct ThreadingTestModel {
         // (The spindle's speed is known once it's done a revolution)
         REQUIRE(waitFor(
             [this] { return model.getRotaryEncoderRpm() > 30.f; }, std::chrono::seconds(5)));
-        model.checkStatus();
+        // (As the controller's ticks would: a pass needs to know which way the
+        // spindle has been turning)
+        runFor(std::chrono::milliseconds(150));
     }
     // How far a pulse is from a whole revolution of the encoder's count
     static int64_t pulsesFromWholeRev(int64_t pulses)
@@ -3727,6 +3732,66 @@ TEST_CASE("Threading: every pass starts at the same spindle angle")
         REQUIRE(t.model.getAxis1MotorCurrentStep() == end);
         t.model.checkStatus();
     }
+}
+
+TEST_CASE("Threading: a pass follows a spindle turning the other way")
+{
+    // (Its pulse count goes down: the pass must wait for the count to come
+    // down to its start, not up)
+    ThreadingTestModel t(300, {}, false);
+    REQUIRE(t.model.getSpindlePulses() < 0);
+    for (const long end : { 1'000L, 0L }) {
+        t.startPass(end);
+        const int64_t started = t.pulsesWhenZStarts();
+        INFO("Pass to " << end << " started at pulse " << started);
+        REQUIRE(ThreadingTestModel::pulsesFromWholeRev(started) <= 5);
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        while (t.model.isAxis1MotorRunning()) {
+            REQUIRE(std::chrono::steady_clock::now() < deadline);
+            t.runFor(std::chrono::milliseconds(20));
+        }
+        REQUIRE(t.model.getAxis1MotorCurrentStep() == end);
+        REQUIRE(t.model.getWarning().empty());
+    }
+}
+
+TEST_CASE("Threading: a pass waits until it's known which way the spindle is turning")
+{
+    // Which way comes from how far the spindle's count has moved over the
+    // last tenth of a second or so (not from the encoder's latest edge, which
+    // a stray edge can flip): without that, a pass won't start
+    TestConfigReader config({ { "RotaryEncoderGearingDivisor", "100" } });
+    mgo::MockGpio gpio(false, [] {
+        mgo::MockGpioOptions options;
+        options.rotaryDirectionNormal = true;
+        options.rotaryEncoderDelayMicroseconds = 300;
+        return options;
+    }());
+    mgo::Model model(gpio, config);
+    model.initialise();
+    std::istringstream threads("[Test | ISO]\nM6, 6, 1\n");
+    std::vector<std::string> errors;
+    model.setThreads(mgo::readThreads(threads, errors));
+    model.setThread({ 0, 0, false });
+    model.changeMode(mgo::Mode::Threading);
+    REQUIRE(
+        waitFor([&model] { return model.getRotaryEncoderRpm() > 30.f; }, std::chrono::seconds(5)));
+    // (The model's first look at the spindle)
+    model.checkStatus();
+    const long start = model.getAxis1MotorCurrentStep();
+    model.axis1GoToStep(1'000);
+    // (Z's backlash is taken up first, by a step. Well within the tenth of a
+    // second, so the pass can't yet start)
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(50);
+    while (model.isMotionSequenceRunning() && std::chrono::steady_clock::now() < deadline) {
+        model.checkStatus();
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    REQUIRE(!model.isMotionSequenceRunning());
+    REQUIRE(waitFor([&model] { return !model.isAxis1MotorRunning(); }, std::chrono::seconds(1)));
+    REQUIRE(std::abs(model.getAxis1MotorCurrentStep() - start) <= 1);
+    INFO(model.getWarning());
+    REQUIRE(model.getWarning().find("which way") != std::string::npos);
 }
 
 TEST_CASE("Threading: Z's backlash is taken up before a pass reverses")

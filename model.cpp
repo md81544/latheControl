@@ -124,6 +124,16 @@ std::string lostPulsesPasses(mgo::Mode mode)
         : "Encoder lost pulses: further passes wouldn't follow this thread. Choose the thread "
           "again for new work";
 }
+// How far back spindleTurningSign() looks (at least), how far its count must
+// have moved to tell, and how long the samples are kept
+constexpr auto SPINDLE_DIRECTION_WINDOW = std::chrono::milliseconds(80);
+constexpr int64_t SPINDLE_DIRECTION_MIN_PULSES = 3;
+constexpr auto SPINDLE_SAMPLES_KEPT = std::chrono::milliseconds(500);
+// A pass waiting for its start angle is stopped if the spindle turns this
+// many revolutions away from it (e.g. it's turning the other way): it would
+// otherwise wait for ever. (The start is never more than two revolutions
+// ahead)
+constexpr double PASS_WRONG_WAY_REVOLUTIONS = 3.0;
 // ...once it has read below the minimum (see Model::minimumSpindleRpm()) for
 // this long
 constexpr auto SPINDLE_STOPPED_CONFIRM_TIME = std::chrono::milliseconds(300);
@@ -314,6 +324,7 @@ void Model::checkStatus()
     checkLimitSwitch();
     checkLockRefusal();
 
+    recordSpindleSample();
     checkSpindleStopped(chuckRpm);
     checkEncoderLostPulses();
 
@@ -486,6 +497,32 @@ void Model::checkEncoderLostPulses()
     }
 }
 
+void Model::recordSpindleSample()
+{
+    const auto now = std::chrono::steady_clock::now();
+    m_spindleSamples.push_back({ now, m_rotaryEncoder->getSpindlePulses() });
+    while (now - m_spindleSamples.front().time > SPINDLE_SAMPLES_KEPT) {
+        m_spindleSamples.pop_front();
+    }
+}
+
+std::optional<int> Model::spindleTurningSign() const
+{
+    const auto now = std::chrono::steady_clock::now();
+    const int64_t pulses = m_rotaryEncoder->getSpindlePulses();
+    // (From the newest sample that's old enough)
+    for (auto it = m_spindleSamples.rbegin(); it != m_spindleSamples.rend(); ++it) {
+        if (now - it->time >= SPINDLE_DIRECTION_WINDOW) {
+            const int64_t moved = pulses - it->pulses;
+            if (std::abs(moved) < SPINDLE_DIRECTION_MIN_PULSES) {
+                return std::nullopt;
+            }
+            return moved > 0 ? 1 : -1;
+        }
+    }
+    return std::nullopt;
+}
+
 void Model::checkSpindleStopped(float chuckRpm)
 {
     // If the chuck has stopped, we stop X/Z motors as a safety feature, just
@@ -528,7 +565,14 @@ void Model::checkSpindleStopped(float chuckRpm)
     m_spindleWasRunning = false;
 #ifndef FAKE
     MGOLOG("Spindle stopped: stopping all motors");
+    // (Saying so, if it stopped anything: otherwise, e.g. a multi-pass just
+    // shows that it stopped)
+    const bool stoppingSomething = m_multiPass.inProgress() || m_multiPassMovingToStart
+        || m_axis1Motor->isRunning() || m_axis2Motor->isRunning();
     stopAllMotors();
+    if (stoppingSomething) {
+        m_warning = "The spindle stopped, so all motors were stopped";
+    }
 #endif
 }
 
@@ -650,6 +694,7 @@ void Model::changeMode(Mode mode)
     m_threadingPassesSet = false;
     m_springPassX.reset();
     m_springPasses = false;
+    m_passesSpindleSign.reset();
     // (Set up afresh on entering the mode)
     m_knurlLeadMm = 0.0;
     setThreadingWarning("", false);
@@ -898,6 +943,26 @@ void Model::threadingCheckSpeed()
         m_threadingZSpeed = speed;
     }
     if (m_axis1Motor->isFollowing() && m_threadingTarget) {
+        // If the spindle has turned well away from the pass's start angle,
+        // rather than towards it (e.g. it's turning the other way), the pass
+        // would wait for ever
+        const double towardsStart = (m_rotaryEncoder->getSpindlePosition() - m_threadingStartPulse)
+            * m_threadingSpindleSign;
+        if (towardsStart
+            < -PASS_WRONG_WAY_REVOLUTIONS * m_rotaryEncoder->getPulsesPerSpindleRev()) {
+            m_axis1Motor->stop();
+            MGOLOG(
+                fmt::format(
+                    "Pass stopped: the spindle turned {:.0f} pulses away from its start (pulse "
+                    "{:.0f})",
+                    -towardsStart,
+                    m_threadingStartPulse));
+            setThreadingWarning(
+                "The spindle turned away from the pass's start: pass stopped. Is it turning the "
+                "right way?",
+                true);
+            return;
+        }
         // If Z has fallen well behind (the spindle has sped up beyond what it
         // can follow), this pass is cutting a different thread: stop it
         const long lag = std::abs(m_threadingTarget() - m_axis1Motor->getCurrentStep());
@@ -946,6 +1011,15 @@ Model::ThreadingPassError Model::threadingPassError() const
     if (pitch * rpm > startLimit) {
         return { spindleTooFast(m_mode, startLimit / pitch), false };
     }
+    const auto turning = spindleTurningSign();
+    if (!turning) {
+        // (Sticky, or it would be cleared before it's seen)
+        return { "Can't yet tell which way the spindle is turning: try again", true };
+    }
+    if (m_multiPass.inProgress() && m_passesSpindleSign && *m_passesSpindleSign != *turning) {
+        // (This pass would cut the other hand)
+        return { "The spindle is turning the other way from the earlier passes", true };
+    }
     return {};
 }
 
@@ -973,8 +1047,11 @@ bool Model::axis1StartThreadingPass(long endStep, double revolutionOffset)
     // next one, at least an eighth of a revolution away (so it can't have
     // passed by the time the motor thread first looks)
     const int64_t pulsesPerRev = m_rotaryEncoder->getPulsesPerSpindleRev();
-    const int spindleSign
-        = m_rotaryEncoder->getRotationDirection() == RotationDirection::normal ? 1 : -1;
+    // (Known: see threadingPassError())
+    const int spindleSign = *spindleTurningSign();
+    if (m_multiPass.inProgress()) {
+        m_passesSpindleSign = spindleSign;
+    }
     const int64_t margin = pulsesPerRev / 8;
     const int64_t now = m_rotaryEncoder->getSpindlePulses();
     int64_t startPulse;
@@ -1000,6 +1077,8 @@ bool Model::axis1StartThreadingPass(long endStep, double revolutionOffset)
         return startStep + zSign * std::lround(pulses * stepsPerPulse);
     };
     m_threadingMaxLagSteps = std::max(1L, std::lround(stepsPerRev / 4.0));
+    m_threadingStartPulse = static_cast<double>(startPulse);
+    m_threadingSpindleSign = spindleSign;
     // Z's speed only limits how fast it can follow: twice what it needs now
     // leaves room for the spindle speeding up
     m_axis1Motor->setSpeed(std::min(maxSpeed, 2.0 * nominalSpeed));
@@ -1012,13 +1091,15 @@ bool Model::axis1StartThreadingPass(long endStep, double revolutionOffset)
     m_threadingMoveStartedRetracted = m_axis2Retracted;
     MGOLOG(
         fmt::format(
-            "{} pass: Z from step {} to {} at {:.0f} rpm, from spindle pulse {} (now {}), X {}",
+            "{} pass: Z from step {} to {} at {:.0f} rpm, from spindle pulse {} (now {}, "
+            "turning {}), X {}",
             m_mode == Mode::Knurling ? "Knurling" : "Threading",
             startStep,
             endStep,
             rpm,
             startPulse,
             now,
+            spindleSign > 0 ? "+" : "-",
             m_axis2Retracted ? "retracted" : "in"));
     return true;
 }
@@ -2965,6 +3046,8 @@ void Model::multiPassGo()
             plan.cutShiftPerFeed = direction * std::tan(getCompoundInfeedAngleDeg() * DEG_TO_RAD);
         }
     }
+    // (Its first pass sets which way the spindle must turn for the rest)
+    m_passesSpindleSign.reset();
     if (const std::string error = m_multiPass.start(plan); !error.empty()) {
         m_warning = error;
         return;

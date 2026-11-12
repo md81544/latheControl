@@ -11,6 +11,7 @@
 
 #include <chrono>
 #include <cmath> // IWYU pragma: keep (need for M_PI)
+#include <deque>
 #include <functional>
 #include <limits>
 #include <memory>
@@ -599,6 +600,20 @@ private:
     std::function<long()> m_threadingTarget;
     // How far Z may fall behind that before the pass is stopped
     long m_threadingMaxLagSteps { 0 };
+    // The pulse a pass starts at, and which way the spindle turns for it
+    // (+1 if its pulse count goes up), for threadingCheckSpeed()'s watchdog
+    double m_threadingStartPulse { 0.0 };
+    int m_threadingSpindleSign { 1 };
+    // Recent readings of the spindle's pulse count, one per checkStatus()
+    // (see spindleTurningSign())
+    struct SpindleSample {
+        std::chrono::steady_clock::time_point time;
+        int64_t pulses;
+    };
+    std::deque<SpindleSample> m_spindleSamples;
+    // Which way the spindle turned for the first pass of the multi-pass
+    // running (see threadingPassError()), once it's started
+    std::optional<int> m_passesSpindleSign;
     // The speed Z moves at when threading (pitch x spindle speed), for display
     double m_threadingZSpeed { 0.0 };
     // For logging the end of a retract or unretract
@@ -617,6 +632,13 @@ private:
     // Stops everything (e.g. a multi-pass) when a limit switch trips
     void checkLimitSwitch();
     void checkSpindleStopped(float chuckRpm);
+    void recordSpindleSample();
+    // Which way the spindle is turning (+1 if its pulse count is going up, -1
+    // if down), from how far its count has moved over the last tenth of a
+    // second or so, or nullopt if it hasn't moved far enough to tell. (Not
+    // from the encoder's direction, which is only that of its latest edge: at
+    // low speeds, a stray edge can flip it for a few milliseconds)
+    std::optional<int> spindleTurningSign() const;
     void checkEncoderLostPulses();
     // X is no longer known to be measured from the centre
     void clearDiameter();
