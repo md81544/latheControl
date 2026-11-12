@@ -27,12 +27,14 @@ public:
     virtual void setCutSpeed(double speed) = 0;
     virtual double cutMaxSpeed() const = 0;
     // A threading pass (for MultiPassCut::Thread): the cut axis follows the
-    // spindle to position, at the thread's pitch per revolution, starting at
-    // the same angle of the spindle's rotation as every other pass (so each
-    // pass cuts the same thread). Returns an empty string if it started, or
-    // else why not (e.g. the spindle isn't turning). If it's stopped part
-    // way (e.g. the cut axis couldn't keep up), it ends short of position
-    virtual std::string cutThreadTo(double position) = 0;
+    // spindle to position, at the thread's pitch (or lead) per revolution,
+    // starting at the same angle of the spindle's rotation as every other
+    // pass (so each pass cuts the same thread), plus revolutionOffset of a
+    // revolution (from 0 to 1: see MultiPassPlan::starts). Returns an empty
+    // string if it started, or else why not (e.g. the spindle isn't
+    // turning). If it's stopped part way (e.g. the cut axis couldn't keep
+    // up), it ends short of position
+    virtual std::string cutThreadTo(double position, double revolutionOffset) = 0;
     // The size of a step of each axis's motor (in mm; 0 if it can move
     // anywhere). An axis can only stop on a whole step, so it counts as at a
     // position if it's within half a step: e.g. a thread's depth is seldom a
@@ -67,6 +69,7 @@ enum class MultiPassCut {
     // A threading pass, locked to the spindle (see
     // IMultiPassMachine::cutThreadTo()). Needs a retract: the return isn't
     // locked to the spindle, so would drag the tool across the thread
+    // (unless the return is a cut too: see MultiPassPlan::cutBack)
     Thread
 };
 
@@ -126,6 +129,19 @@ struct MultiPassPlan {
     // movement, during each cut (and back again on the return), to cancel
     // it out. e.g. tan(angle). Zero for none. Not with a manual feed
     double feedCorrection { 0.0 };
+    // Threading only: how many starts each pass cuts, one after the other at
+    // the same depth, each starting 1/starts of a revolution of the spindle
+    // further round than the one before (as for a multi-start thread, or
+    // the grooves of a cut knurl). The feed axis moves on once every start
+    // has been cut
+    int starts { 1 };
+    // Threading only: the return is a threading pass too, with the tool
+    // still in, so it cuts a helix of the opposite hand, with the spindle
+    // still turning the same way (e.g. a cut knurl's second set of
+    // grooves). The tool must have room to start at the cut's end, e.g. a
+    // relief groove. Each start is cut there and back before the next. Not
+    // with a retract
+    bool cutBack { false };
 };
 
 // Where a multi-pass's start and end positions come from, as chosen in its
@@ -170,6 +186,11 @@ struct MultiPassSetup {
     // cutShiftPerFeed)
     bool constantArea { false };
     bool compoundInfeed { false };
+    // Cut knurling only: how many grooves of each hand (see
+    // MultiPassPlan::starts; 0 until chosen), and their angle to the cut
+    // axis on the work's surface, in degrees (see knurlLeadMm())
+    int knurlStarts { 0 };
+    double knurlHelixAngleDeg { 45.0 };
 };
 
 // What's needed to work out a MultiPassSetup's positions (in mm)
@@ -226,6 +247,17 @@ MultiPassResolved resolveMultiPass(
 MultiPassSetup
 defaultMultiPassSetup(const MultiPassSetup& previous, const MultiPassPositions& positions);
 
+// Cut knurling: the lead of the grooves (how far the cut axis moves per
+// revolution of the spindle, for each start), for a work diameter and a helix
+// angle (the grooves' angle to the cut axis, in degrees): pi x diameter /
+// tan(angle). For 45 degrees, that's the work's circumference, so the cut
+// axis has to move fast, and the spindle turn slowly
+double knurlLeadMm(double diameterMm, double helixAngleDeg);
+
+// Cut knurling: how many starts give grooves about pitchMm apart round the
+// work (at least one)
+int knurlStartsForPitch(double diameterMm, double pitchMm);
+
 // True if an axis is at a position (within MultiPass::TOLERANCE)
 bool atMultiPassPosition(double position, double target);
 
@@ -242,7 +274,9 @@ int multiPassCount(
 // A series of cuts: feed in (a step from the start), cut, (retract,) return,
 // (unretract,) (pause,) and repeat until a cut has been made at the feed
 // axis's end position. (With a step-over of zero, there's no feeding in:
-// the same cut is repeated, at the start, until stopped.)
+// the same cut is repeated, at the start, until stopped.) With several starts
+// (see MultiPassPlan::starts), each pass cuts every start before feeding in,
+// and with a cut back, the return is a cut instead.
 // While paused, a motorised feed axis may be moved (e.g. nudged): the next
 // pass then feeds on from where it is.
 // Non-blocking: call update() regularly (e.g. on each tick), and it starts
@@ -256,6 +290,7 @@ public:
     enum class State {
         Idle, // Not started (or stopped)
         Cutting,
+        CuttingBack, // (See MultiPassPlan::cutBack)
         Retracting,
         Returning,
         Paused, // Waiting for continueAfterPause()
@@ -306,6 +341,9 @@ public:
     // The number of passes in all, or 0 if repeating until stopped. (May
     // change if the feed axis is moved while paused)
     int totalPasses() const;
+    // Which of the plan's starts is being cut (from 1; see
+    // MultiPassPlan::starts)
+    int startNumber() const;
     // How far the feed axis has been fed in from the start (for the pass
     // being made, or about to be)
     double fed() const;
@@ -326,6 +364,9 @@ private:
     bool isLastPass() const;
     // Whether the pass being made retracts before its return
     bool passRetracts() const;
+    // How far round from the first start the start being cut begins, as a
+    // fraction of a revolution
+    double revolutionOffset() const;
     // Where the next step on starts from: the feed axis's position (or, for
     // a manual feed, where it should be)
     double feedBase() const;
@@ -334,8 +375,11 @@ private:
     // Moves the cut axis to the pass's start if need be, then cuts
     void startPass();
     void startCut();
+    void startCutBack();
     void startReturn();
     void afterReturn();
+    // The next start at this depth, if there is one, or else the next pass
+    void readyForNextCut();
     void readyForNextPass();
     void startNextPass();
     void startFeed();
@@ -346,6 +390,8 @@ private:
     MultiPassPlan m_plan;
     State m_state { State::Idle };
     int m_pass { 0 };
+    // The start being cut (from 0)
+    int m_start { 0 };
     // The feed axis's position for the pass being made
     double m_feedTarget { 0.0 };
     double m_passCutStart { 0.0 };

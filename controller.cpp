@@ -345,7 +345,8 @@ void Controller::processKey(int t)
                 }
             case key::ENTER:
                 if (m_model->getMode() == Mode::MultiPass
-                    || (m_model->getMode() == Mode::Threading && m_model->threadingPassesSet())) {
+                    || (m_model->getMode() == Mode::Threading && m_model->threadingPassesSet())
+                    || m_model->getMode() == Mode::Knurling) {
                     // Starts the multi-pass, or continues it after a pause
                     m_model->multiPassGo();
                     break;
@@ -756,6 +757,48 @@ void Controller::processKey(int t)
                             !error.empty()) {
                             const std::vector<std::string> text { error, "", "Press a key", "" };
                             pressAnyKey("Threading passes", text, [] { });
+                        }
+                    });
+                    break;
+                }
+            case key::f2k: // cut knurling mode
+                {
+                    if (m_model->config().readBool("DisableAxis2", false)) {
+                        break;
+                    }
+                    // As with all dialogs, stop all motors first
+                    m_model->stopAllMotors();
+                    if (!m_model->getDiameterMm()) {
+                        const std::string x = m_model->config().read("Axis2Label", "X");
+                        pressAnyKey(
+                            "Cut knurling",
+                            { "Set " + x + " as a diameter first (with the tool on the work's",
+                              "surface): the knurl's lead depends on the diameter",
+                              "",
+                              "Press a key",
+                              "" },
+                            [] { });
+                        break;
+                    }
+                    MultiPassDialogInfo info = multiPassDialogInfo();
+                    info.setup = m_model->knurlingDialogSetup();
+                    info.knurling = MultiPassDialogInfo::Knurling {
+                        .maxCutSpeed = m_model->spindlePassSpeedLimit(),
+                        .minimumSpindleRpm = Model::KNURLING_MIN_SPINDLE_RPM,
+                        .minimumInfeedMm
+                        = m_model->config().readDouble("ThreadingMinimumInfeed", 0.02)
+                    };
+                    m_view->openMultiPassDialog(info, [this](std::optional<MultiPassSetup> setup) {
+                        if (!setup) {
+                            return;
+                        }
+                        m_model->changeMode(Mode::Knurling);
+                        // (The dialog only accepts a setup which can be
+                        // used, and nothing has moved since)
+                        if (const std::string error = m_model->setKnurlingSetup(*setup);
+                            !error.empty()) {
+                            m_model->changeMode(Mode::None);
+                            pressAnyKey("Cut knurling", { error, "", "Press a key", "" }, [] { });
                         }
                     });
                     break;

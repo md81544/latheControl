@@ -24,6 +24,16 @@ std::string slotName(std::size_t slot)
 
 } // end anonymous namespace
 
+double knurlLeadMm(double diameterMm, double helixAngleDeg)
+{
+    return M_PI * diameterMm / std::tan(helixAngleDeg * M_PI / 180.0);
+}
+
+int knurlStartsForPitch(double diameterMm, double pitchMm)
+{
+    return std::max(1, static_cast<int>(std::lround(M_PI * diameterMm / pitchMm)));
+}
+
 bool atMultiPassPosition(double position, double target)
 {
     return near(position, target);
@@ -247,8 +257,18 @@ std::string MultiPass::start(const MultiPassPlan& plan)
     if (plan.cutShiftPerFeed != 0.0 && plan.feedCorrection != 0.0) {
         return "Can't shift the cut's start and correct a taper together";
     }
+    if (plan.starts < 1) {
+        return "There must be at least one start";
+    }
+    if (plan.cut != MultiPassCut::Thread && (plan.starts != 1 || plan.cutBack)) {
+        return "Only threading passes can have several starts, or cut back";
+    }
     if (plan.cut == MultiPassCut::Thread) {
-        if (!plan.retract || plan.retractLastPasses != 0) {
+        // (Cutting back, the tool stays in: both ways are cuts)
+        if (plan.cutBack && plan.retract) {
+            return "Can't retract when cutting back";
+        }
+        if (!plan.cutBack && (!plan.retract || plan.retractLastPasses != 0)) {
             return "Threading needs a retract between passes";
         }
         if (plan.feedManual) {
@@ -272,6 +292,7 @@ std::string MultiPass::start(const MultiPassPlan& plan)
     m_pauseRequested = false;
     m_stopAfterPassReason.clear();
     m_passCutStart = plan.cutStart;
+    m_start = 0;
     // The first pass is one step in from the start (which is usually where
     // the tool touched the work, so a pass there would cut nothing)
     const double firstTarget = nextFeedTarget(plan.feedStart, 1);
@@ -324,6 +345,7 @@ void MultiPass::stopAfterPass(const std::string& reason)
 {
     switch (m_state) {
         case State::Cutting:
+        case State::CuttingBack:
         case State::Retracting:
         case State::Returning:
             // (See afterReturn())
@@ -354,6 +376,10 @@ void MultiPass::update()
                 abandon("The cut stopped short of its end");
                 return;
             }
+            if (m_plan.cutBack) {
+                startCutBack();
+                return;
+            }
             if (passRetracts()) {
                 m_machine.retract(m_plan.retractTo);
                 if (!m_machine.isRetracted()) {
@@ -364,6 +390,16 @@ void MultiPass::update()
                 return;
             }
             startReturn();
+            return;
+        case State::CuttingBack:
+            if (m_machine.cutMoving()) {
+                return;
+            }
+            if (!cutAt(m_passCutStart)) {
+                abandon("The cut back stopped short of the start");
+                return;
+            }
+            afterReturn();
             return;
         case State::Retracting:
             if (!feedMoving) {
@@ -383,7 +419,7 @@ void MultiPass::update()
             return;
         case State::Unretracting:
             if (!feedMoving) {
-                readyForNextPass();
+                readyForNextCut();
             }
             return;
         case State::Feeding:
@@ -428,6 +464,11 @@ bool MultiPass::inProgress() const
 int MultiPass::pass() const
 {
     return m_pass;
+}
+
+int MultiPass::startNumber() const
+{
+    return m_start + 1;
 }
 
 int MultiPass::totalPasses() const
@@ -517,6 +558,11 @@ double MultiPass::passCutStart() const
     return m_passCutStart;
 }
 
+double MultiPass::revolutionOffset() const
+{
+    return static_cast<double>(m_start) / static_cast<double>(m_plan.starts);
+}
+
 double MultiPass::nextFeedTarget(double from, int pass) const
 {
     const double direction = m_plan.feedEnd < m_plan.feedStart ? -1.0 : 1.0;
@@ -552,12 +598,23 @@ void MultiPass::startCut()
 {
     m_state = State::Cutting;
     if (m_plan.cut == MultiPassCut::Thread) {
-        if (std::string error = m_machine.cutThreadTo(m_plan.cutEnd); !error.empty()) {
+        if (std::string error = m_machine.cutThreadTo(m_plan.cutEnd, revolutionOffset());
+            !error.empty()) {
             abandon(error);
         }
         return;
     }
     m_machine.cutMoveTo(m_plan.cutEnd, m_plan.feedCorrection);
+}
+
+void MultiPass::startCutBack()
+{
+    // (At the same start: the cut back's groove crosses the cut's)
+    m_state = State::CuttingBack;
+    if (std::string error = m_machine.cutThreadTo(m_passCutStart, revolutionOffset());
+        !error.empty()) {
+        abandon(error);
+    }
 }
 
 void MultiPass::startReturn()
@@ -578,7 +635,7 @@ void MultiPass::afterReturn()
         abandon(m_stopAfterPassReason);
         return;
     }
-    if (isLastPass()) {
+    if (m_start + 1 >= m_plan.starts && isLastPass()) {
         finish();
         return;
     }
@@ -588,6 +645,18 @@ void MultiPass::afterReturn()
     if (m_machine.isRetracted()) {
         m_machine.unretract();
         m_state = State::Unretracting;
+        return;
+    }
+    readyForNextCut();
+}
+
+void MultiPass::readyForNextCut()
+{
+    if (m_start + 1 < m_plan.starts) {
+        // The next start, at the same depth (with no pause: a pause is
+        // between passes)
+        ++m_start;
+        startPass();
         return;
     }
     readyForNextPass();
@@ -610,6 +679,7 @@ void MultiPass::startNextPass()
     // paused, that's added to the step)
     m_feedTarget = nextFeedTarget(feedBase(), m_pass + 1);
     ++m_pass;
+    m_start = 0;
     startFeed();
 }
 

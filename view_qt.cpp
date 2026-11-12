@@ -456,6 +456,8 @@ struct ViewQt::Impl {
     void updateTextFromModel(const Model& model);
     void updateThreadData(const Model& model);
     void updateMultiPassData(const Model& model);
+    // The knurl, on one line (e.g. its starts and lead)
+    std::string knurlDescription(const Model& model) const;
 };
 
 ViewQt::ViewQt()
@@ -1136,9 +1138,11 @@ void ViewQt::Impl::updateTextFromModel(const Model& model)
     axis1Pos.text = formatMotorPosition(
         model.toDisplayUnits(1, model.getAxis1MotorPosition()), model.axisDecimals(1));
 
-    // (When threading, Z's speed is set by the spindle's)
-    const double axis1Speed = model.getMode() == Mode::Threading ? model.getThreadingZSpeed()
-                                                                 : model.getAxis1MotorSpeed();
+    // (When threading or knurling, Z's speed is set by the spindle's)
+    const double axis1Speed
+        = model.getMode() == Mode::Threading || model.getMode() == Mode::Knurling
+        ? model.getThreadingZSpeed()
+        : model.getAxis1MotorSpeed();
     this->axis1Speed.text = fmt::format(
         "{:<.{}f} {}/min",
         model.toDisplayUnits(1, axis1Speed),
@@ -1157,7 +1161,8 @@ void ViewQt::Impl::updateTextFromModel(const Model& model)
         speedDecimals(2),
         model.axisUnitName(2));
     float rpmValue = model.getRotaryEncoderRpm();
-    if (rpmValue > 0.f) {
+    // (Not when knurling, whose spindle turns at only a few rpm)
+    if (rpmValue > 0.f && model.getMode() != Mode::Knurling) {
         // Round to nearest 10 to keep display more constant
         rpmValue = static_cast<int>(rpmValue / 10.f) * 10.f;
     }
@@ -1229,6 +1234,9 @@ void ViewQt::Impl::updateTextFromModel(const Model& model)
         case Mode::MultiPass:
             notification.text = "MULTI-PASS";
             break;
+        case Mode::Knurling:
+            notification.text = "KNURLING";
+            break;
         default:
             notification.text = "";
     }
@@ -1285,6 +1293,23 @@ void ViewQt::Impl::updateTextFromModel(const Model& model)
                 }
                 break;
             }
+        case Mode::Knurling:
+            {
+                // The knurl on the first line, then the passes
+                updateMultiPassData(model);
+                misc6.text = misc5.text;
+                misc5.text = misc4.text;
+                misc4.text = misc3.text;
+                misc3.text = misc2.text;
+                misc2.text = misc1.text;
+                misc1.text = knurlDescription(model);
+                // e.g. the spindle is too fast for the lead
+                warning.text = model.getWarning();
+                if (!model.getWarning().empty()) {
+                    warning.colour = ++iteration % 6 < 3 ? RED : YELLOW;
+                }
+                break;
+            }
         // (The taper angle or radius is shown by taperOrRadius)
         case Mode::Taper:
         case Mode::Radius:
@@ -1314,8 +1339,10 @@ void ViewQt::Impl::updateMultiPassData(const Model& model)
 {
     const MultiPass& mp = model.multiPass();
     const MultiPassSetup& options = model.activeMultiPassSetup();
-    // (Threading passes feed in, rather than step over)
+    // (Threading and knurling passes feed in, rather than step over)
     const bool threading = model.getMode() == Mode::Threading;
+    const bool knurling = model.getMode() == Mode::Knurling;
+    const bool feedsIn = threading || knurling;
     const MultiPassRange& range = model.getMultiPassRange();
     const std::string z = model.config().read("Axis1Label", "Z");
     const std::string x = model.config().read("Axis2Label", "X");
@@ -1351,15 +1378,12 @@ void ViewQt::Impl::updateMultiPassData(const Model& model)
     std::string options1;
     if (options.feedPerPass < MultiPass::TOLERANCE) {
         options1 = "Repeating the same cut";
-    } else if (threading && options.constantArea) {
+    } else if (feedsIn && options.constantArea) {
         options1 = fmt::format(
             "{} infeed {} first, then a constant area per pass", x, xLength(options.feedPerPass));
     } else {
         options1 = fmt::format(
-            "{} {} {} per pass",
-            x,
-            threading ? "infeed" : "step-over",
-            xLength(options.feedPerPass));
+            "{} {} {} per pass", x, feedsIn ? "infeed" : "step-over", xLength(options.feedPerPass));
     }
     if (threading && options.compoundInfeed) {
         options1 += ", compound";
@@ -1367,12 +1391,12 @@ void ViewQt::Impl::updateMultiPassData(const Model& model)
     if (options.pause) {
         options1 += ", pausing";
     }
-    if (options.retract && !threading) {
+    if (options.retract && !feedsIn) {
         options1 += options.retractLastOnly
             ? fmt::format(", retracting on the last {}", model.retractLastPasses())
             : std::string(", retracting");
     }
-    if (model.taperCorrection() != 0.0 && !threading) {
+    if (model.taperCorrection() != 0.0 && !feedsIn) {
         options1 += ", correcting taper";
     }
     // (Once threading passes have finished: see Model::springPassesAvailable())
@@ -1406,7 +1430,19 @@ void ViewQt::Impl::updateMultiPassData(const Model& model)
             }
             break;
         case MultiPass::State::Cutting:
-            status = pass + (threading ? ": threading" : ": cutting");
+            status = pass
+                + (knurling        ? fmt::format(
+                                         ": knurling, start {} of {}", mp.startNumber(), mp.plan().starts)
+                       : threading ? ": threading"
+                                   : ": cutting");
+            break;
+        case MultiPass::State::CuttingBack:
+            status = pass
+                + fmt::format(
+                         ": {}, start {} of {}, back",
+                         knurling ? "knurling" : "threading",
+                         mp.startNumber(),
+                         mp.plan().starts);
             break;
         case MultiPass::State::Retracting:
             status = pass + ": retracting";
@@ -1426,7 +1462,7 @@ void ViewQt::Impl::updateMultiPassData(const Model& model)
             status = pass + ": unretracting";
             break;
         case MultiPass::State::Feeding:
-            status = pass + (threading ? ": feeding in" : ": stepping over");
+            status = pass + (feedsIn ? ": feeding in" : ": stepping over");
             break;
         case MultiPass::State::Positioning:
             status = pass + ": " + z + " to the pass's start";
@@ -1458,7 +1494,7 @@ void ViewQt::Impl::updateMultiPassData(const Model& model)
             xLength(std::abs(model.getAxis2Position() - range.feedStart)));
     } else if (mp.pass() > 0) {
         misc3.text
-            = fmt::format("{} {}: {}", x, threading ? "fed in" : "stepped over", xLength(mp.fed()));
+            = fmt::format("{} {}: {}", x, feedsIn ? "fed in" : "stepped over", xLength(mp.fed()));
         if (mp.totalPasses() != 0) {
             misc3.text += fmt::format(
                 " of {}", xLength(std::abs(mp.plan().feedEnd - mp.plan().feedStart)));
@@ -1467,6 +1503,23 @@ void ViewQt::Impl::updateMultiPassData(const Model& model)
     misc4.text = options1;
     misc5.text = mp.inProgress() || model.multiPassMovingToStart() ? "Space stops" : "";
     misc6.text = "";
+}
+
+std::string ViewQt::Impl::knurlDescription(const Model& model) const
+{
+    const MultiPassSetup& setup = model.getKnurlingSetup();
+    const auto lead = model.getKnurlLeadMm();
+    if (!lead) {
+        return "Knurling isn't set up";
+    }
+    return fmt::format(
+        "Knurl: {} starts at {:g}°, lead {:.{}f} {}: spindle at most {:.0f} rpm",
+        setup.knurlStarts,
+        setup.knurlHelixAngleDeg,
+        model.toDisplayUnits(1, *lead),
+        model.axisDecimals(1),
+        model.axisUnitName(1),
+        model.spindlePassSpeedLimit() / *lead);
 }
 
 void ViewQt::Impl::updateThreadData(const Model& model)

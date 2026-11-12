@@ -94,6 +94,8 @@ std::string translate_mode(mgo::Mode mode)
             return "Radius";
         case mgo::Mode::MultiPass:
             return "MultiPass";
+        case mgo::Mode::Knurling:
+            return "Knurling";
         default:
             // As this function is just used for debugging there's
             // no need for an assert here.
@@ -109,12 +111,30 @@ constexpr double THREADING_START_SPEED_FRACTION = 0.8;
 
 // Below this, the spindle is regarded as stopped
 constexpr float SPINDLE_STOPPED_RPM = 30.f;
-// Why threading passes stop, or won't start, once the encoder has lost pulses
-constexpr const char* LOST_PULSES_PASSES
-    = "Encoder lost pulses: further passes wouldn't follow this thread. Choose the thread again "
-      "for new work";
-// ...once it has read below SPINDLE_STOPPED_RPM for this long
+// The knurling dialog's first suggestion for the number of starts: grooves
+// about this far apart round the work, in mm (a medium knurl)
+constexpr double KNURLING_DEFAULT_PITCH_MM = 1.0;
+// Why threading (or knurling) passes stop, or won't start, once the encoder
+// has lost pulses
+std::string lostPulsesPasses(mgo::Mode mode)
+{
+    return mode == mgo::Mode::Knurling
+        ? "Encoder lost pulses: further passes wouldn't follow this knurl. Choose cut knurling "
+          "again for new work"
+        : "Encoder lost pulses: further passes wouldn't follow this thread. Choose the thread "
+          "again for new work";
+}
+// ...once it has read below the minimum (see Model::minimumSpindleRpm()) for
+// this long
 constexpr auto SPINDLE_STOPPED_CONFIRM_TIME = std::chrono::milliseconds(300);
+
+// The warning when the spindle is too fast to start a pass locked to it
+std::string spindleTooFast(mgo::Mode mode, double maxRpm)
+{
+    return mode == mgo::Mode::Knurling
+        ? fmt::format("Spindle too fast for this knurl: knurl at {:.0f} rpm or less", maxRpm)
+        : fmt::format("Spindle too fast for this pitch: thread at {:.0f} rpm or less", maxRpm);
+}
 
 } // anonymous namepace
 
@@ -313,7 +333,7 @@ void Model::checkStatus()
         return;
     }
 
-    if (m_mode == Mode::Threading) {
+    if (spindleSynchronised()) {
         threadingCheckSpeed();
         threadingCheckMoveEnded();
     }
@@ -413,10 +433,10 @@ void Model::checkStatus()
 
     // (Last, once the above has dealt with any move that's ended)
     if (m_multiPass.inProgress()) {
-        if (m_mode == Mode::Threading && m_threadingPositionLost) {
+        if (spindleSynchronised() && m_threadingPositionLost) {
             // Every pass from now on would cut a different thread. (Once
             // clear of the work: stopped part way, the tool would cut a ring)
-            m_multiPass.stopAfterPass(LOST_PULSES_PASSES);
+            m_multiPass.stopAfterPass(lostPulsesPasses(m_mode));
         }
         if (m_springPasses && m_multiPass.state() == MultiPass::State::Cutting) {
             // (The depth to move back to, if stopped: it may have been nudged)
@@ -427,7 +447,7 @@ void Model::checkStatus()
             // It stopped, rather than finished. (If a threading pass stopped
             // short, e.g. Z couldn't keep up with the spindle, its warning
             // says why)
-            const std::string reason = m_mode == Mode::Threading && m_threadingWarningSticky
+            const std::string reason = spindleSynchronised() && m_threadingWarningSticky
                 ? m_threadingWarning
                 : m_multiPass.message();
             MGOLOG("Multi-pass stopped: " << reason);
@@ -440,6 +460,10 @@ void Model::checkStatus()
         if (!m_multiPass.inProgress() && m_mode == Mode::Threading) {
             // (A threading multi-pass's returns turn it on)
             m_axis1Motor->enableRamping(false);
+        }
+        if (!m_multiPass.inProgress() && m_mode == Mode::Knurling) {
+            // (Its passes turn it off)
+            m_axis1Motor->enableRamping(true);
         }
     }
 }
@@ -455,7 +479,7 @@ void Model::checkEncoderLostPulses()
         fmt::format(
             "*** Rotary encoder lost pulses (none for {} us): spindle position is now wrong",
             m_rotaryEncoder->getLastLostPulseGapMicroseconds()));
-    if (m_mode == Mode::Threading) {
+    if (spindleSynchronised()) {
         // Every pass from now on would start at a different point of the
         // spindle's rotation from the passes before, i.e. cut a new thread
         m_threadingPositionLost = true;
@@ -473,7 +497,7 @@ void Model::checkSpindleStopped(float chuckRpm)
     // longer than this to stop anyway
     using namespace std::chrono;
     const auto now = steady_clock::now();
-    if (chuckRpm >= SPINDLE_STOPPED_RPM) {
+    if (chuckRpm >= minimumSpindleRpm()) {
         if (m_spindleLowSince) {
             MGOLOG(
                 fmt::format(
@@ -615,7 +639,7 @@ void Model::changeMode(Mode mode)
     if (m_mode == Mode::Taper && mode != Mode::Taper) {
         m_axis2Motor->setSpeed(m_taperPreviousXSpeed);
     }
-    if (m_mode == Mode::Threading && mode != Mode::Threading) {
+    if (spindleSynchronised() && mode != m_mode) {
         // Z's speed was set for threading passes: back to something sane
         m_axis1Motor->setSpeed(m_config.readDouble("Axis1SpeedPreset2", 40.0));
     }
@@ -626,6 +650,8 @@ void Model::changeMode(Mode mode)
     m_threadingPassesSet = false;
     m_springPassX.reset();
     m_springPasses = false;
+    // (Set up afresh on entering the mode)
+    m_knurlLeadMm = 0.0;
     setThreadingWarning("", false);
     m_mode = mode;
     m_input = "";
@@ -669,6 +695,10 @@ void Model::stopAllMotors()
         // (In case a threading multi-pass was stopped during a return, which
         // turns it on)
         m_axis1Motor->enableRamping(false);
+    }
+    if (m_mode == Mode::Knurling) {
+        // (In case a pass was stopped, which turns it off)
+        m_axis1Motor->enableRamping(true);
     }
     m_axis1Status = "stopped";
     m_axis2Status = "stopped";
@@ -745,31 +775,36 @@ void Model::synchroniseXForRadius()
     );
 }
 
+std::vector<MotionSequence::Step> Model::threadingPassSteps(long step, double revolutionOffset)
+{
+    const auto move
+        = [this, step, revolutionOffset]() { axis1StartThreadingPass(step, revolutionOffset); };
+    if (step == getAxis1MotorCurrentStep()) {
+        return { { move, {} } };
+    }
+    // A threading pass follows the spindle from the moment it starts, so Z's
+    // backlash must be taken up first. Otherwise, when Z reverses, the
+    // spindle moves on while Z takes it up: Z starts late, and (if the
+    // backlash is more than half the pitch) falls so far behind that the
+    // pass is stopped
+    // (At a set speed: Z's speed is whatever the last pass needed)
+    auto takeUp = takeUpZBacklashStep(
+        step < getAxis1MotorCurrentStep() ? ZDirection::Right : ZDirection::Left);
+    takeUp.action = [this, action = std::move(takeUp.action)]() {
+        m_axis1Motor->setSpeed(m_axis1Motor->getMaxRpm() / 10.0);
+        action();
+    };
+    return { std::move(takeUp), { move, {} } };
+}
+
 std::vector<MotionSequence::Step> Model::axis1MoveSteps(long step)
 {
-    const auto move = [this, step]() {
-        if (m_mode == Mode::Threading) {
-            axis1StartThreadingPass(step);
-        } else {
-            m_axis1Motor->goToStep(step);
-        }
-    };
+    if (m_mode == Mode::Threading) {
+        return threadingPassSteps(step, 0.0);
+    }
+    const auto move = [this, step]() { m_axis1Motor->goToStep(step); };
     const ZDirection direction
         = step < getAxis1MotorCurrentStep() ? ZDirection::Right : ZDirection::Left;
-    if (m_mode == Mode::Threading && step != getAxis1MotorCurrentStep()) {
-        // A threading pass follows the spindle from the moment it starts, so
-        // Z's backlash must be taken up first. Otherwise, when Z reverses, the
-        // spindle moves on while Z takes it up: Z starts late, and (if the
-        // backlash is more than half the pitch) falls so far behind that the
-        // pass is stopped
-        // (At a set speed: Z's speed is whatever the last pass needed)
-        auto takeUp = takeUpZBacklashStep(direction);
-        takeUp.action = [this, action = std::move(takeUp.action)]() {
-            m_axis1Motor->setSpeed(m_axis1Motor->getMaxRpm() / 10.0);
-            action();
-        };
-        return { std::move(takeUp), { move, {} } };
-    }
     if (m_mode == Mode::Taper) {
         // (Plus any correction for a taper the machine cuts itself)
         return xFollowsZSteps(
@@ -816,6 +851,30 @@ double Model::threadingMaxZSpeed() const
         * std::abs(m_axis1Motor->getConversionFactor());
 }
 
+double Model::spindlePassSpeedLimit() const
+{
+    return threadingMaxZSpeed() * THREADING_START_SPEED_FRACTION;
+}
+
+float Model::minimumSpindleRpm() const
+{
+    return m_mode == Mode::Knurling ? KNURLING_MIN_SPINDLE_RPM : SPINDLE_STOPPED_RPM;
+}
+
+bool Model::spindleSynchronised() const
+{
+    return m_mode == Mode::Threading || m_mode == Mode::Knurling;
+}
+
+std::optional<double> Model::spindleLeadMm() const
+{
+    if (m_mode == Mode::Knurling) {
+        return getKnurlLeadMm();
+    }
+    const Thread* thread = getThread();
+    return thread ? std::optional(thread->pitchMm) : std::nullopt;
+}
+
 void Model::setThreadingWarning(const std::string& warning, bool sticky)
 {
     m_threadingWarning = warning;
@@ -827,14 +886,15 @@ void Model::threadingCheckSpeed()
     // Z follows the spindle's position (see axis1StartThreadingPass()), so the
     // spindle's speed doesn't set Z's: it's only used here for warnings, and
     // to show the speed Z moves at
-    if (!getThread()) {
+    const auto lead = spindleLeadMm();
+    if (!lead) {
         return;
     }
-    const double pitch = getThread()->pitchMm;
+    const double pitch = *lead;
     const float rpm = m_rotaryEncoder->getRpm();
     const double speed = pitch * rpm;
-    const double startLimit = threadingMaxZSpeed() * THREADING_START_SPEED_FRACTION;
-    if (rpm >= SPINDLE_STOPPED_RPM) {
+    const double startLimit = spindlePassSpeedLimit();
+    if (rpm >= minimumSpindleRpm()) {
         m_threadingZSpeed = speed;
     }
     if (m_axis1Motor->isFollowing() && m_threadingTarget) {
@@ -850,9 +910,10 @@ void Model::threadingCheckSpeed()
                     rpm));
             setThreadingWarning(
                 fmt::format(
-                    "Z couldn't keep up with the spindle ({:.0f} rpm): pass stopped. Thread at "
+                    "Z couldn't keep up with the spindle ({:.0f} rpm): pass stopped. {} at "
                     "{:.0f} rpm or less",
                     rpm,
+                    m_mode == Mode::Knurling ? "Knurl" : "Thread",
                     startLimit / pitch),
                 true);
         }
@@ -860,11 +921,7 @@ void Model::threadingCheckSpeed()
     }
     if (!m_threadingWarningSticky) {
         if (!m_axis1Motor->isRunning() && speed > startLimit) {
-            setThreadingWarning(
-                fmt::format(
-                    "Spindle too fast for this pitch: thread at {:.0f} rpm or less",
-                    startLimit / pitch),
-                false);
+            setThreadingWarning(spindleTooFast(m_mode, startLimit / pitch), false);
         } else {
             setThreadingWarning("", false);
         }
@@ -873,32 +930,33 @@ void Model::threadingCheckSpeed()
 
 Model::ThreadingPassError Model::threadingPassError() const
 {
-    if (!getThread()) {
-        return { "Choose a thread first", true };
+    const auto lead = spindleLeadMm();
+    if (!lead) {
+        return { m_mode == Mode::Knurling ? "Set up the knurling first" : "Choose a thread first",
+                 true };
     }
-    const double pitch = getThread()->pitchMm;
+    const double pitch = *lead;
     const float rpm = m_rotaryEncoder->getRpm();
-    if (rpm < SPINDLE_STOPPED_RPM) {
-        return { "Start the spindle before threading", true };
+    if (rpm < minimumSpindleRpm()) {
+        return { m_mode == Mode::Knurling ? "Start the spindle before knurling"
+                                          : "Start the spindle before threading",
+                 true };
     }
-    const double startLimit = threadingMaxZSpeed() * THREADING_START_SPEED_FRACTION;
+    const double startLimit = spindlePassSpeedLimit();
     if (pitch * rpm > startLimit) {
-        return { fmt::format(
-                     "Spindle too fast for this pitch: thread at {:.0f} rpm or less",
-                     startLimit / pitch),
-                 false };
+        return { spindleTooFast(m_mode, startLimit / pitch), false };
     }
     return {};
 }
 
-bool Model::axis1StartThreadingPass(long endStep)
+bool Model::axis1StartThreadingPass(long endStep, double revolutionOffset)
 {
     if (const auto error = threadingPassError(); !error.message.empty()) {
         MGOLOG("Threading pass not started: " << error.message);
         setThreadingWarning(error.message, error.sticky);
         return false;
     }
-    const double pitch = getThread()->pitchMm;
+    const double pitch = *spindleLeadMm();
     const float rpm = m_rotaryEncoder->getRpm();
     const double nominalSpeed = pitch * rpm;
     const double maxSpeed = threadingMaxZSpeed();
@@ -927,6 +985,8 @@ bool Model::axis1StartThreadingPass(long endStep)
         const int64_t from = now - margin;
         startPulse = (from / pulsesPerRev - (from % pulsesPerRev < 0 ? 1 : 0)) * pulsesPerRev;
     }
+    // (Further round, in the way the spindle turns, so it's still ahead)
+    startPulse += spindleSign * std::lround(revolutionOffset * static_cast<double>(pulsesPerRev));
     const double stepsPerRev = pitch / std::abs(m_axis1Motor->getConversionFactor());
     const double stepsPerPulse = stepsPerRev / static_cast<double>(pulsesPerRev);
     const int zSign = endStep > startStep ? 1 : -1;
@@ -952,8 +1012,8 @@ bool Model::axis1StartThreadingPass(long endStep)
     m_threadingMoveStartedRetracted = m_axis2Retracted;
     MGOLOG(
         fmt::format(
-            "Threading pass: Z from step {} to {} at {:.0f} rpm, from spindle pulse {} (now {}), X "
-            "{}",
+            "{} pass: Z from step {} to {} at {:.0f} rpm, from spindle pulse {} (now {}), X {}",
+            m_mode == Mode::Knurling ? "Knurling" : "Threading",
             startStep,
             endStep,
             rpm,
@@ -1931,9 +1991,11 @@ void Model::setInputString(const std::string& str)
 
 std::string Model::getWarning() const
 {
-    if (m_warning.empty() && m_mode == Mode::Threading) {
+    if (m_warning.empty() && spindleSynchronised()) {
         if (m_threadingPositionLost) {
-            return "Encoder lost pulses: further passes won't follow this thread";
+            return m_mode == Mode::Knurling
+                ? "Encoder lost pulses: further passes won't follow this knurl"
+                : "Encoder lost pulses: further passes won't follow this thread";
         }
         return m_threadingWarning;
     }
@@ -2565,9 +2627,91 @@ double Model::getCompoundInfeedAngleDeg() const
     return thread ? threadFormInfo(thread->form).angle / 2.0 - 0.5 : 0.0;
 }
 
+std::string Model::setKnurlingSetup(const MultiPassSetup& setup)
+{
+    if (m_mode != Mode::Knurling) {
+        return "Knurling passes are only in knurling mode";
+    }
+    if (!m_xDiameterSet) {
+        return "Set " + m_config.read("Axis2Label", "X")
+            + " as a diameter first: the knurl's lead depends on it";
+    }
+    if (setup.knurlStarts < 1) {
+        return "There must be at least one start";
+    }
+    if (setup.knurlHelixAngleDeg <= 0.0 || setup.knurlHelixAngleDeg >= 90.0) {
+        return "The helix angle must be between 0 and 90 degrees";
+    }
+    MultiPassSetup s = setup;
+    // (Both ways are cuts, with the tool in)
+    s.retract = false;
+    const MultiPassResolved resolved = resolveMultiPass(
+        s,
+        multiPassPositions(),
+        m_config.read("Axis1Label", "Z"),
+        m_config.read("Axis2Label", "X"));
+    if (!resolved.error.empty()) {
+        return resolved.error;
+    }
+    // (The helix angle is on the work's surface, where the tool starts)
+    const double diameter = 2.0 * std::abs(resolved.range.feedStart);
+    if (diameter < MultiPass::TOLERANCE) {
+        return "The start is on the centre line";
+    }
+    m_knurlingSetup = s;
+    m_multiPassRange = resolved.range;
+    m_knurlLeadMm = knurlLeadMm(diameter, s.knurlHelixAngleDeg);
+    MGOLOG(
+        fmt::format(
+            "Knurling set up: Z {} to {}, X {} to {} by {}, diameter {}, {} starts at {} deg, lead "
+            "{}",
+            m_multiPassRange.cutStart,
+            m_multiPassRange.cutEnd,
+            m_multiPassRange.feedStart,
+            m_multiPassRange.feedEnd,
+            s.feedPerPass,
+            diameter,
+            s.knurlStarts,
+            s.knurlHelixAngleDeg,
+            m_knurlLeadMm));
+    return {};
+}
+
+const MultiPassSetup& Model::getKnurlingSetup() const
+{
+    return m_knurlingSetup;
+}
+
+MultiPassSetup Model::knurlingDialogSetup() const
+{
+    MultiPassSetup s = defaultMultiPassSetup(m_knurlingSetup, multiPassPositions());
+    s.retract = false;
+    if (s.knurlStarts < 1) {
+        // (The first time: afterwards, as last time)
+        const auto diameter = getDiameterMm();
+        s.knurlStarts = diameter ? knurlStartsForPitch(*diameter, KNURLING_DEFAULT_PITCH_MM) : 1;
+        // (As for threading)
+        s.constantArea = true;
+    }
+    return s;
+}
+
+std::optional<double> Model::getKnurlLeadMm() const
+{
+    return m_mode == Mode::Knurling && m_knurlLeadMm > 0.0 ? std::optional(m_knurlLeadMm)
+                                                           : std::nullopt;
+}
+
 const MultiPassSetup& Model::activeMultiPassSetup() const
 {
-    return m_mode == Mode::Threading ? m_threadingPassesSetup : m_multiPassSetup;
+    switch (m_mode) {
+        case Mode::Threading:
+            return m_threadingPassesSetup;
+        case Mode::Knurling:
+            return m_knurlingSetup;
+        default:
+            return m_multiPassSetup;
+    }
 }
 
 MultiPassPositions Model::multiPassPositions() const
@@ -2721,7 +2865,8 @@ void Model::moveToSafely(
 void Model::multiPassGo()
 {
     const bool threading = m_mode == Mode::Threading && m_threadingPassesSet;
-    if ((m_mode != Mode::MultiPass && !threading) || m_multiPassMovingToStart) {
+    const bool knurling = m_mode == Mode::Knurling && getKnurlLeadMm().has_value();
+    if ((m_mode != Mode::MultiPass && !threading && !knurling) || m_multiPassMovingToStart) {
         return;
     }
     // (Every branch below may move both axes, except asking for a pause
@@ -2765,9 +2910,9 @@ void Model::multiPassGo()
         m_warning = "Stop the motors first";
         return;
     }
-    if (threading && m_threadingPositionLost) {
+    if ((threading || knurling) && m_threadingPositionLost) {
         // (Choosing the thread again clears it, e.g. for new work)
-        m_warning = LOST_PULSES_PASSES;
+        m_warning = lostPulsesPasses(m_mode);
         return;
     }
     if (threading && m_springPassX) {
@@ -2789,20 +2934,28 @@ void Model::multiPassGo()
     m_springPasses = false;
     const MultiPassSetup& setup = activeMultiPassSetup();
     MultiPassPlan plan;
-    plan.cut = threading ? MultiPassCut::Thread : MultiPassCut::Feed;
+    plan.cut = threading || knurling ? MultiPassCut::Thread : MultiPassCut::Feed;
     plan.cutStart = m_multiPassRange.cutStart;
     plan.cutEnd = m_multiPassRange.cutEnd;
     plan.feedStart = m_multiPassRange.feedStart;
     plan.feedEnd = m_multiPassRange.feedEnd;
     plan.feedPerPass = std::abs(setup.feedPerPass);
-    plan.retract = threading || setup.retract;
-    if (!threading && setup.retract && setup.retractLastOnly) {
+    // (Knurling cuts back, with the tool in)
+    plan.retract = threading || (setup.retract && !knurling);
+    if (!threading && !knurling && setup.retract && setup.retractLastOnly) {
         plan.retractLastPasses = retractLastPasses();
     }
     plan.retractTo = multiPassRetractTarget();
     plan.pause = setup.pause;
     // (A thread's cut is locked to the spindle, so X can't follow Z)
-    plan.feedCorrection = threading ? 0.0 : std::tan(taperCorrection() * DEG_TO_RAD);
+    plan.feedCorrection = threading || knurling ? 0.0 : std::tan(taperCorrection() * DEG_TO_RAD);
+    if (knurling) {
+        // Each start there (one hand) and back (the other)
+        plan.starts = setup.knurlStarts;
+        plan.cutBack = true;
+        plan.constantArea = setup.constantArea;
+        plan.feedMinimum = m_config.readDouble("ThreadingMinimumInfeed", 0.02);
+    }
     if (threading) {
         plan.constantArea = setup.constantArea;
         plan.feedMinimum = m_config.readDouble("ThreadingMinimumInfeed", 0.02);
@@ -2819,8 +2972,10 @@ void Model::multiPassGo()
     m_warning = "";
     MGOLOG(
         fmt::format(
-            "{} started: Z {} to {}, X {} to {} by {}{}{}{}{}{} ({} passes)",
-            threading ? "Threading passes" : "Multi-pass",
+            "{} started: Z {} to {}, X {} to {} by {}{}{}{}{}{}{} ({} passes)",
+            threading      ? "Threading passes"
+                : knurling ? "Knurling passes"
+                           : "Multi-pass",
             plan.cutStart,
             plan.cutEnd,
             plan.feedStart,
@@ -2836,6 +2991,9 @@ void Model::multiPassGo()
             plan.constantArea ? fmt::format(", constant area (at least {})", plan.feedMinimum) : "",
             plan.cutShiftPerFeed != 0.0 ? fmt::format(", Z shift {} per X", plan.cutShiftPerFeed)
                                         : "",
+            knurling
+                ? fmt::format(", {} starts there and back, lead {}", plan.starts, m_knurlLeadMm)
+                : "",
             m_multiPass.totalPasses()));
 }
 
@@ -2859,7 +3017,7 @@ bool Model::cutMoving() const
 void Model::cutMoveTo(double position, double feedFollows)
 {
     m_axis1Status = "multi-pass";
-    if (m_mode == Mode::Threading) {
+    if (spindleSynchronised()) {
         // A threading multi-pass's return (retracted, so not locked to the
         // spindle). Z doesn't ramp while threading, but this is at full
         // speed, so it does here. (cutThreadTo() turns it off again)
@@ -2913,22 +3071,24 @@ double Model::feedStepSize() const
     return std::abs(m_axis2Motor->getConversionFactor());
 }
 
-std::string Model::cutThreadTo(double position)
+std::string Model::cutThreadTo(double position, double revolutionOffset)
 {
-    if (m_mode != Mode::Threading) {
-        return "Threading passes are only in threading mode";
+    if (!spindleSynchronised()) {
+        return "Threading passes are only in threading or knurling mode";
     }
     if (const auto error = threadingPassError(); !error.message.empty()) {
         setThreadingWarning(error.message, error.sticky);
         return error.message;
     }
-    m_axis1Status = "threading";
-    // (Z mustn't ramp while it follows the spindle: the return turned it on)
+    m_axis1Status = m_mode == Mode::Knurling ? "knurling" : "threading";
+    // (Z mustn't ramp while it follows the spindle: the return turned it on,
+    // and in knurling mode, it's on but for the passes)
     m_axis1Motor->enableRamping(false);
     // As a threading pass by hand: Z's backlash is taken up first if it
     // reverses (it does, after the return), then the pass waits for the
-    // spindle's next whole revolution
-    auto steps = axis1MoveSteps(std::lround(position / m_axis1Motor->getConversionFactor()));
+    // spindle's next whole revolution (plus the offset)
+    auto steps = threadingPassSteps(
+        std::lround(position / m_axis1Motor->getConversionFactor()), revolutionOffset);
     steps.back().action = [this, move = std::move(steps.back().action)]() {
         move();
         // (So a pass that's over by the next update is still seen to have
@@ -3110,7 +3270,7 @@ void Model::springPassMoveBack()
 
 void Model::multiPassFinished()
 {
-    if (m_multiPass.plan().cut == MultiPassCut::Thread) {
+    if (m_multiPass.plan().cut == MultiPassCut::Thread && m_mode == Mode::Threading) {
         // Spring passes can follow, at this depth
         m_springPassX = getAxis2Position();
         // (Where Z is: a shifted start is seldom a whole number of steps)

@@ -26,7 +26,7 @@ enum class Type {
 
 // Return type of getInput()
 struct Return {
-    bool cancelled {true};
+    bool cancelled { true };
     std::string text;
     double number;
     std::set<char> optionsSelected;
@@ -71,6 +71,17 @@ struct MultiPassDialogInfo {
         double minimumInfeedMm { 0.02 };
     };
     std::optional<Threading> threading;
+    // For cut knurling (see Model::setKnurlingSetup()): the setup's number
+    // of starts and helix angle are then chosen too, and it never retracts
+    struct Knurling {
+        // The fastest the cut axis may move in a pass (mm/min), and the
+        // slowest the spindle may turn (rpm), which together limit the lead
+        double maxCutSpeed { 0.0 };
+        double minimumSpindleRpm { 5.0 };
+        // The least a pass goes in with a constant area
+        double minimumInfeedMm { 0.02 };
+    };
+    std::optional<Knurling> knurling;
 };
 
 class IView {
@@ -101,13 +112,12 @@ public:
         std::vector<std::string> additionalText,
         std::function<void(const Input::Return&)> onDone,
         std::string_view defaultEntry = "",
-        std::optional<std::vector<std::string>> listItems = std::nullopt
-    ) = 0;
+        std::optional<std::vector<std::string>> listItems = std::nullopt) = 0;
     // The taper mode dialog (also without waiting): onDone gets the taper
     // angle chosen (negative if the piece gets wider towards the chuck), or
     // nullopt if cancelled
-    virtual void openTaperDialog(
-        double currentAngle, std::function<void(std::optional<double>)> onDone) = 0;
+    virtual void
+    openTaperDialog(double currentAngle, std::function<void(std::optional<double>)> onDone) = 0;
     // The thread dialog: onDone gets the thread chosen (see ThreadChoice), or
     // nullopt if cancelled. threads must outlive the dialog, and not be empty
     virtual void openThreadDialog(

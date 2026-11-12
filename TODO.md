@@ -1128,6 +1128,42 @@ change.
     - **Passes:** each start probably needs several passes in X to reach full
       depth, so this fits the generic multi-pass engine: for each pass
       depth, cut every start (or every start to full depth in turn)
+    - **Started (2026-11-12), in the mock build only:** knurling mode (Modes,
+      "Cut knurling", `K`). It uses the multi-pass dialog (start, Z end, X
+      infeed as the depth, infeed per pass, constant area), plus the number of
+      starts and the helix angle. The lead comes from the diameter at the
+      start, so X must have been set as a diameter. The cuts are threading
+      passes at the knurl's lead. The multi-pass engine gained two general
+      options: `starts` (each pass cuts every start, 1/N of a turn apart,
+      before feeding in) and `cutBack` (the return is a cut too).
+        - **Decision: each start there and back, rather than all of one hand
+          and then all of the other.** With the tool still in, the return to
+          the start cuts the opposite hand, so there's no retract and no
+          non-cutting return at all. Every cut back starts at the Z end, at
+          the same spindle angle each pass, so the passes line up. The cost
+          is that the Z end always needs a relief groove (or to run off the
+          work)
+        - **Decision: knurling's spindle counts as turning down to 5 rpm**
+          (threading's limit is 30), as on the lathe, Z's 1000 mm/min limits
+          a 45° knurl on a 10 mm bar to about 25 rpm. The dialog refuses a
+          lead Z couldn't follow even at 5 rpm. The rpm shown isn't rounded
+          to 10 in this mode
+        - **To check on the machine:**
+            - Z starts each pass from rest straight to full speed (follow
+              mode doesn't ramp), and for a long lead that's far faster than
+              threading has ever asked for. The HSS57 may stall. If it does,
+              each cut may need a run-up (start further off the work, with
+              Z's speed ramped up to the spindle's before the tool reaches
+              it), which stepperControl's follow mode doesn't do yet
+            - Whether the spindle runs smoothly with useful torque at 5-25
+              rpm, and whether the encoder's rpm and lost-pulse checks behave
+              at those speeds
+            - How the tool's flanks cope with cutting both ways
+        - **Not done yet:** choosing the starts from a target pitch (fine,
+          medium, coarse: the first suggestion is just about 1 mm apart);
+          taking the Ø from the current feature rather than X; multi-start
+          threading (the engine supports it now, but the threading passes
+          dialog doesn't offer it)
 - [x] Add ability to add new thread pitches without recompilation. Move the
       definitions in threadpitches.h into separate config file (threadpitches.cfg)
       which is loaded at program start.

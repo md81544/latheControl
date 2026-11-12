@@ -8,17 +8,17 @@
 
 #include <QCoreApplication>
 #include <QDialog>
-#include <QGridLayout>
-#include <QPainter>
-#include <QSignalBlocker>
 #include <QFrame>
+#include <QGridLayout>
 #include <QHBoxLayout>
 #include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QPainter>
 #include <QPixmap>
 #include <QRegularExpressionValidator>
+#include <QSignalBlocker>
 #include <QVBoxLayout>
 
 #include <algorithm>
@@ -652,10 +652,10 @@ private:
     void refresh()
     {
         m_diagram->setTaper(enteredAngle(), m_toolMovesIn);
-        m_direction->setText(
-            QString("[I] Tool moves <span style='color: rgb(255, 255, 0);'>%1</span> "
-                    "as it approaches the chuck")
-                .arg(m_toolMovesIn ? "in" : "out"));
+        m_direction->setText(QString(
+                                 "[I] Tool moves <span style='color: rgb(255, 255, 0);'>%1</span> "
+                                 "as it approaches the chuck")
+                                 .arg(m_toolMovesIn ? "in" : "out"));
     }
 
     // Returns true if the key press has been dealt with
@@ -812,9 +812,8 @@ protected:
             Qt::AlignCenter,
             QString::fromStdString("pitch " + describePitch(*m_thread)));
         const double diameter = m_female ? m_thread->femaleBore() : m_thread->maleOd();
-        QString diameterText = QString("%1 %2 mm")
-                                   .arg(m_female ? "bore" : "OD")
-                                   .arg(diameter, 0, 'f', 3);
+        QString diameterText
+            = QString("%1 %2 mm").arg(m_female ? "bore" : "OD").arg(diameter, 0, 'f', 3);
         if (m_thread->inchDiameter) {
             diameterText += QString(" (%1\")").arg(diameter / 25.4, 0, 'f', 4);
         }
@@ -858,7 +857,10 @@ private:
 class ThreadDialog final : public QDialog {
 public:
     ThreadDialog(
-        QWidget* parent, const QString& fontFamily, const ThreadTable& threads, ThreadChoice current)
+        QWidget* parent,
+        const QString& fontFamily,
+        const ThreadTable& threads,
+        ThreadChoice current)
         : QDialog(parent, Qt::Dialog | Qt::FramelessWindowHint)
         , m_threads(threads)
         , m_choice(current)
@@ -990,8 +992,9 @@ private:
         m_list->setCurrentRow(static_cast<int>(category));
         boldRow(static_cast<int>(category));
         m_heading->setText("Type of thread");
-        m_hint->setText("Up/Down: choose a type   Right/Enter: its sizes   M: male / female\n"
-                        "Esc: cancel");
+        m_hint->setText(
+            "Up/Down: choose a type   Right/Enter: its sizes   M: male / female\n"
+            "Esc: cancel");
         refresh();
     }
 
@@ -1007,8 +1010,9 @@ private:
         m_list->setCurrentRow(row);
         boldRow(row);
         m_heading->setText(QString::fromStdString(m_threads.at(category).name));
-        m_hint->setText("Up/Down: choose a size   Left: other types   M: male / female\n"
-                        "Enter: OK   Esc: cancel");
+        m_hint->setText(
+            "Up/Down: choose a size   Left: other types   M: male / female\n"
+            "Enter: OK   Esc: cancel");
         refresh();
     }
 
@@ -1038,18 +1042,19 @@ private:
         if (thread) {
             const ThreadFormInfo& form = threadFormInfo(thread->form);
             m_figures->setText(
-                QString::fromStdString(fmt::format(
-                    "{}: {} form ({} deg), pitch {}\n"
-                    "Male: turn to {:.3f} mm, cut {:.3f} deep\n"
-                    "Female: bore to {:.3f} mm, cut {:.3f} deep",
-                    thread->name,
-                    form.name,
-                    form.angle,
-                    describePitch(*thread),
-                    thread->maleOd(),
-                    thread->maleDepth(),
-                    thread->femaleBore(),
-                    thread->femaleDepth())));
+                QString::fromStdString(
+                    fmt::format(
+                        "{}: {} form ({} deg), pitch {}\n"
+                        "Male: turn to {:.3f} mm, cut {:.3f} deep\n"
+                        "Female: bore to {:.3f} mm, cut {:.3f} deep",
+                        thread->name,
+                        form.name,
+                        form.angle,
+                        describePitch(*thread),
+                        thread->maleOd(),
+                        thread->maleDepth(),
+                        thread->femaleBore(),
+                        thread->femaleDepth())));
         } else {
             m_figures->setText("");
         }
@@ -1163,7 +1168,8 @@ public:
         auto* title = new QLabel(
             m_info.threading
                 ? QString::fromStdString("Threading passes: " + m_info.threading->thread)
-                : QString("Multi-pass"),
+                : m_info.knurling ? QString("Cut knurling")
+                                  : QString("Multi-pass"),
             box);
         title->setFont(titleFont);
         title->setStyleSheet(PROMPT_STYLE);
@@ -1179,7 +1185,9 @@ public:
                                                z + " end",
                                                x + " end",
                                                x + " end Ø",
-                                               m_info.threading ? "Infeed per pass" : "Step-over" };
+                                               vGrooves() ? "Infeed per pass" : "Step-over",
+                                               "Starts",
+                                               "Helix angle (°)" };
         for (int r = 0; r < ROW_COUNT; ++r) {
             Row& row = m_rows[r];
             row.name = addLabel(box, grid, r, 0, names[r], m_labelFont);
@@ -1193,10 +1201,12 @@ public:
                 row.edit->setFixedWidth(120);
                 // Only the cut axis's distance can be negative: the infeed's
                 // direction is set by the retraction direction
-                row.edit->setValidator(new QRegularExpressionValidator(
-                    QRegularExpression(
-                        r == CutEnd ? R"(^-?[0-9]{0,4}(\.[0-9]*)?$)" : R"(^[0-9]{0,4}(\.[0-9]*)?$)"),
-                    row.edit));
+                const char* pattern = r == CutEnd ? R"(^-?[0-9]{0,4}(\.[0-9]*)?$)"
+                    : r == Starts                 ? R"(^[0-9]{0,3}$)"
+                    : r == HelixAngle             ? R"(^[0-9]{0,2}(\.[0-9]*)?$)"
+                                                  : R"(^[0-9]{0,4}(\.[0-9]*)?$)";
+                row.edit->setValidator(
+                    new QRegularExpressionValidator(QRegularExpression(pattern), row.edit));
                 row.edit->installEventFilter(this);
                 grid->addWidget(row.edit, r, 2);
             }
@@ -1235,15 +1245,16 @@ public:
         m_feedPerPassMm = m_setup.feedPerPass;
         m_cutDistanceTyped = m_setup.cutDistance != 0.0;
         setValue(
-            m_rows[CutEnd].edit,
-            m_cutDistanceMm * m_info.cut.displayPerMm,
-            m_info.cut.decimals);
-        setValue(
-            m_rows[FeedEnd].edit, m_infeedMm * m_info.feed.displayPerMm, m_info.feed.decimals);
+            m_rows[CutEnd].edit, m_cutDistanceMm * m_info.cut.displayPerMm, m_info.cut.decimals);
+        setValue(m_rows[FeedEnd].edit, m_infeedMm * m_info.feed.displayPerMm, m_info.feed.decimals);
         setValue(
             m_rows[StepOver].edit,
             m_feedPerPassMm * m_info.feed.displayPerMm,
             m_info.feed.decimals + 1);
+        m_knurlStarts = m_setup.knurlStarts;
+        m_knurlHelixAngleDeg = m_setup.knurlHelixAngleDeg;
+        setValue(m_rows[Starts].edit, m_knurlStarts, 0);
+        setValue(m_rows[HelixAngle].edit, m_knurlHelixAngleDeg, 1);
 
         QObject::connect(m_rows[CutEnd].edit, &QLineEdit::textEdited, this, [this] {
             const auto v = typed(m_rows[CutEnd].edit);
@@ -1256,17 +1267,26 @@ public:
             m_diameterError.clear();
             refresh();
         });
-        QObject::connect(m_rows[Diameter].edit, &QLineEdit::textEdited, this, [this] {
-            diameterTyped();
-        });
+        QObject::connect(
+            m_rows[Diameter].edit, &QLineEdit::textEdited, this, [this] { diameterTyped(); });
         QObject::connect(m_rows[StepOver].edit, &QLineEdit::textEdited, this, [this] {
-            m_feedPerPassMm
-                = typed(m_rows[StepOver].edit).value_or(0.0) / m_info.feed.displayPerMm;
+            m_feedPerPassMm = typed(m_rows[StepOver].edit).value_or(0.0) / m_info.feed.displayPerMm;
+            refresh();
+        });
+        QObject::connect(m_rows[Starts].edit, &QLineEdit::textEdited, this, [this] {
+            m_knurlStarts = static_cast<int>(typed(m_rows[Starts].edit).value_or(0.0));
+            refresh();
+        });
+        QObject::connect(m_rows[HelixAngle].edit, &QLineEdit::textEdited, this, [this] {
+            m_knurlHelixAngleDeg = typed(m_rows[HelixAngle].edit).value_or(0.0);
             refresh();
         });
 
-        if (!m_info.diameterKnown) {
-            const Row& row = m_rows[Diameter];
+        for (int r = 0; r < ROW_COUNT; ++r) {
+            if (rowShown(r)) {
+                continue;
+            }
+            const Row& row = m_rows[r];
             for (QWidget* w : { static_cast<QWidget*>(row.name),
                                 static_cast<QWidget*>(row.source),
                                 static_cast<QWidget*>(row.fixed),
@@ -1312,7 +1332,17 @@ protected:
     }
 
 private:
-    enum RowId { Start, CutEnd, FeedEnd, Diameter, StepOver, ROW_COUNT };
+    // (Starts and HelixAngle are for knurling only)
+    enum RowId {
+        Start,
+        CutEnd,
+        FeedEnd,
+        Diameter,
+        StepOver,
+        Starts,
+        HelixAngle,
+        ROW_COUNT
+    };
 
     // (Among the start's choices, which are otherwise memory slots, or
     // nullopt for here) The current feature
@@ -1378,20 +1408,74 @@ private:
         s.cutDistance = m_cutDistanceMm;
         s.feedInfeed = m_infeedMm;
         s.feedPerPass = m_feedPerPassMm;
+        s.knurlStarts = m_knurlStarts;
+        s.knurlHelixAngleDeg = m_knurlHelixAngleDeg;
         return s;
+    }
+
+    // Whether the passes cut V grooves (threading or knurling), so feed in
+    // rather than step over, and can have a constant area
+    bool vGrooves() const
+    {
+        return m_info.threading || m_info.knurling;
+    }
+
+    // Knurling: the work's diameter at the start (where the helix angle is
+    // measured), if known
+    std::optional<double> knurlDiameter() const
+    {
+        const auto start = feedStart();
+        return start ? std::optional(2.0 * std::abs(*start)) : std::nullopt;
+    }
+
+    // Knurling: the grooves' lead, if the diameter and angle are usable
+    std::optional<double> knurlLead() const
+    {
+        const auto diameter = knurlDiameter();
+        if (!diameter || *diameter < MultiPass::TOLERANCE || m_knurlHelixAngleDeg <= 0.0
+            || m_knurlHelixAngleDeg >= 90.0) {
+            return std::nullopt;
+        }
+        return knurlLeadMm(*diameter, m_knurlHelixAngleDeg);
+    }
+
+    // Knurling: why the knurl itself can't be cut (empty if it can)
+    std::string knurlError() const
+    {
+        if (m_knurlStarts < 1) {
+            return "Type the number of starts (grooves of each hand)";
+        }
+        if (m_knurlHelixAngleDeg <= 0.0 || m_knurlHelixAngleDeg >= 90.0) {
+            return "The helix angle must be between 0 and 90°";
+        }
+        const auto lead = knurlLead();
+        if (!lead) {
+            return "The start is on the centre line";
+        }
+        if (m_info.knurling->maxCutSpeed / *lead < m_info.knurling->minimumSpindleRpm) {
+            return fmt::format(
+                "The lead's too long for {} to follow even at {:g} rpm: make the helix angle "
+                "larger",
+                m_info.cut.label,
+                m_info.knurling->minimumSpindleRpm);
+        }
+        return {};
     }
 
     // The setup's positions, or why it can't be used
     MultiPassResolved resolved() const
     {
-        MultiPassResolved r
-            = resolveMultiPass(currentSetup(), m_info.positions, m_info.cut.label, m_info.feed.label);
+        MultiPassResolved r = resolveMultiPass(
+            currentSetup(), m_info.positions, m_info.cut.label, m_info.feed.label);
         if (!m_setup.cutEndMemory && !m_cutDistanceTyped) {
             r.error = "Type how far " + m_info.cut.label + " moves from the "
                 + (m_setup.startFeature ? "work's end" : "start") + " (+ or -)";
         }
         if (r.error.empty() && !m_diameterError.empty()) {
             r.error = m_diameterError;
+        }
+        if (r.error.empty() && m_info.knurling) {
+            r.error = knurlError();
         }
         return r;
     }
@@ -1494,9 +1578,8 @@ private:
             const auto swapped = [&](std::optional<std::size_t>& end,
                                      const std::vector<std::optional<double>>& memory) {
                 if (end == m_setup.startMemory) {
-                    end = oldStart && *oldStart < memory.size() && memory[*oldStart]
-                        ? oldStart
-                        : std::nullopt;
+                    end = oldStart && *oldStart < memory.size() && memory[*oldStart] ? oldStart
+                                                                                     : std::nullopt;
                 }
             };
             swapped(m_setup.cutEndMemory, p.cutMemory);
@@ -1509,6 +1592,9 @@ private:
 
     bool rowShown(int row) const
     {
+        if (row == Starts || row == HelixAngle) {
+            return m_info.knurling.has_value();
+        }
         return row != Diameter || m_info.diameterKnown;
     }
 
@@ -1560,10 +1646,11 @@ private:
         // (Positions can only be shown once they're known: an error may mean
         // they aren't)
         const bool startKnown = (!m_setup.startMemory && !m_setup.startFeature)
-            || resolveMultiPass(MultiPassSetup { .startMemory = m_setup.startMemory,
-                                                 .startFeature = m_setup.startFeature,
-                                                 .cutDistance = 1.0 },
-                                m_info.positions)
+            || resolveMultiPass(
+                   MultiPassSetup { .startMemory = m_setup.startMemory,
+                                    .startFeature = m_setup.startFeature,
+                                    .cutDistance = 1.0 },
+                   m_info.positions)
                    .error.empty();
         const MultiPassRange ends = resolveMultiPass(
                                         [&] {
@@ -1580,12 +1667,13 @@ private:
         m_rows[Start].source->setText(
             QString::fromStdString(chooser(slotName(m_startChoice, "Here"))));
         m_rows[Start].result->setText(
-            startKnown ? QString::fromStdString(fmt::format(
-                             "{} {}   {} {}",
-                             z.label,
-                             format(z, ends.cutStart),
-                             x.label,
-                             format(x, ends.feedStart)))
+            startKnown ? QString::fromStdString(
+                             fmt::format(
+                                 "{} {}   {} {}",
+                                 z.label,
+                                 format(z, ends.cutStart),
+                                 x.label,
+                                 format(x, ends.feedStart)))
                        : "");
 
         m_rows[CutEnd].source->setText(
@@ -1607,8 +1695,8 @@ private:
             QString::fromStdString(chooser(slotName(m_setup.feedEndMemory, "Infeed"))));
         m_rows[FeedEnd].fixed->setText(
             startKnown && m_setup.feedEndMemory
-                ? QString::fromStdString(format(
-                      x, (ends.feedEnd - ends.feedStart) * m_info.positions.feedIntoWork))
+                ? QString::fromStdString(
+                      format(x, (ends.feedEnd - ends.feedStart) * m_info.positions.feedIntoWork))
                 : "");
         m_rows[FeedEnd].result->setText(
             startKnown ? QString::fromStdString("to " + x.label + " " + format(x, ends.feedEnd))
@@ -1622,19 +1710,37 @@ private:
             m_rows[Diameter].edit->setText(QString::fromStdString(diameter));
         }
 
-        const bool constantArea = m_info.threading && m_setup.constantArea;
+        const bool constantArea = vGrooves() && m_setup.constantArea;
         const int passes = multiPassCount(
             ends,
             m_feedPerPassMm,
             constantArea,
-            m_info.threading ? m_info.threading->minimumInfeedMm : 0.0);
-        if (m_info.threading) {
+            m_info.threading      ? m_info.threading->minimumInfeedMm
+                : m_info.knurling ? m_info.knurling->minimumInfeedMm
+                                  : 0.0);
+        if (vGrooves()) {
             m_rows[StepOver].name->setText(constantArea ? "First pass infeed" : "Infeed per pass");
         }
         m_rows[StepOver].result->setText(
             passes == 0 ? "repeats until stopped"
                         : QString::fromStdString(
                               fmt::format("{} pass{}", passes, passes == 1 ? "" : "es")));
+        if (m_info.knurling) {
+            // How far apart the grooves of each hand are, round the work, and
+            // how far Z moves per revolution
+            const auto diameter = knurlDiameter();
+            m_rows[Starts].result->setText(
+                diameter && m_knurlStarts > 0
+                    ? QString::fromStdString(
+                          "grooves " + format(m_info.feed, M_PI * *diameter / m_knurlStarts) + " "
+                          + m_info.feed.unit + " apart round Ø " + format(m_info.feed, *diameter))
+                    : "");
+            const auto lead = knurlLead();
+            m_rows[HelixAngle].result->setText(
+                lead
+                    ? QString::fromStdString("lead " + format(z, *lead) + " " + z.unit + " per rev")
+                    : "");
+        }
 
         // Which of each row's entry box and fixed value is shown, and which
         // row is current
@@ -1671,20 +1777,23 @@ private:
             : m_setup.retractLastOnly
             ? QString::fromStdString(fmt::format("Last {} passes", m_info.retractLastPasses))
             : QString("Every pass");
-        QString options
-            = option("P", "Pause between passes", m_setup.pause) + "&nbsp;&nbsp;&nbsp;"
-            + (m_info.threading ? QString("Retracts between passes")
-                                : option("R", "Retract", m_setup.retract, retract))
+        QString options = option("P", "Pause between passes", m_setup.pause) + "&nbsp;&nbsp;&nbsp;"
+            + (m_info.threading      ? QString("Retracts between passes")
+                   : m_info.knurling ? QString("Never retracts (cuts back)")
+                                     : option("R", "Retract", m_setup.retract, retract))
             + "<br>"
             + option("M", "Retract before moving to the start", m_setup.retractBeforeMoveToStart);
         if (m_info.threading) {
             options += "<br>" + option("A", "Constant area", m_setup.constantArea)
                 + "&nbsp;&nbsp;&nbsp;"
-                + option(
-                           "C",
-                           QString::fromStdString(fmt::format(
-                               "Compound infeed ({:g}°)", m_info.threading->compoundAngleDeg)),
-                           m_setup.compoundInfeed);
+                + option("C",
+                         QString::fromStdString(
+                             fmt::format(
+                                 "Compound infeed ({:g}°)", m_info.threading->compoundAngleDeg)),
+                         m_setup.compoundInfeed);
+        }
+        if (m_info.knurling) {
+            options += "<br>" + option("A", "Constant area", m_setup.constantArea);
         }
         m_options->setText(options);
 
@@ -1702,9 +1811,18 @@ private:
                         + " along: start at least that far off the work.\n";
                 }
             }
+            if (const auto lead = knurlLead(); m_info.knurling && lead) {
+                // (The lead is per start, so is the same however many there are)
+                text += fmt::format(
+                    "Spindle at most {:.0f} rpm. Each start is cut there and back:\nthe {} end "
+                    "needs a relief groove for the cut back to start in.\n",
+                    m_info.knurling->maxCutSpeed / *lead,
+                    z.label);
+            }
             m_message->setStyleSheet(MP_HINT_STYLE);
-            m_message->setText(QString::fromStdString(
-                text + "In the mode, Enter moves to the start; Enter again cuts"));
+            m_message->setText(
+                QString::fromStdString(
+                    text + "In the mode, Enter moves to the start; Enter again cuts"));
         } else {
             m_message->setStyleSheet(MP_ERROR_STYLE);
             m_message->setText(QString::fromStdString(r.error));
@@ -1733,10 +1851,10 @@ private:
             cycleSource(qtKey == Qt::Key_Left ? -1 : 1);
             return true;
         }
-        if (qtKey == Qt::Key_R && m_info.threading) {
-            return true; // (always on)
+        if (qtKey == Qt::Key_R && vGrooves()) {
+            return true; // (always on for threading, and off for knurling)
         }
-        if ((qtKey == Qt::Key_A || qtKey == Qt::Key_C) && m_info.threading) {
+        if ((qtKey == Qt::Key_A && vGrooves()) || (qtKey == Qt::Key_C && m_info.threading)) {
             bool& option = qtKey == Qt::Key_A ? m_setup.constantArea : m_setup.compoundInfeed;
             option = !option;
             refresh();
@@ -1794,6 +1912,9 @@ private:
     bool m_cutDistanceTyped { false };
     double m_infeedMm { 0.0 };
     double m_feedPerPassMm { 0.0 };
+    // (Knurling only)
+    int m_knurlStarts { 0 };
+    double m_knurlHelixAngleDeg { 0.0 };
     // Why the diameter typed can't be used
     std::string m_diameterError;
     Row m_rows[ROW_COUNT];

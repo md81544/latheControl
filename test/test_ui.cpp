@@ -736,6 +736,91 @@ TEST_CASE("UI: multi-pass dialog, an end diameter")
     REQUIRE(!multiPassDialog(view, multiPassInfo()).has_value());
 }
 
+TEST_CASE("UI: knurling dialog")
+{
+    TestModel tm;
+    mgo::ViewQt view;
+    view.initialise(tm.model);
+    auto info = multiPassInfo();
+    info.knurling = mgo::MultiPassDialogInfo::Knurling { .maxCutSpeed = 800.0,
+                                                         .minimumSpindleRpm = 5.0,
+                                                         .minimumInfeedMm = 0.02 };
+    info.setup.knurlStarts = 63;
+    info.setup.knurlHelixAngleDeg = 45.0;
+
+    whenDialogShows([](QWidget* dialog) {
+        typeInto(dialog, "-7");
+        key(dialog, Qt::Key_Down);
+        typeInto(dialog, "0.3"); // (X's infeed: the knurl's depth)
+        key(dialog, Qt::Key_Down, 2); // (past X's end diameter)
+        typeInto(dialog, "0.05");
+        key(dialog, Qt::Key_Down);
+        typeInto(dialog, "40"); // (starts)
+        key(dialog, Qt::Key_Down);
+        // At 10 degrees, Ø 20's lead is 356 mm, which Z could only follow
+        // below 5 rpm: Enter does nothing
+        typeInto(dialog, "10");
+        key(dialog, Qt::Key_Return);
+        REQUIRE(dialog->isVisible());
+        // (Back to the angle, to type it again)
+        key(dialog, Qt::Key_Up);
+        key(dialog, Qt::Key_Down);
+        typeInto(dialog, "30");
+        key(dialog, Qt::Key_R); // (does nothing: knurling never retracts)
+        key(dialog, Qt::Key_A); // (constant area)
+        snapshot(dialog, "knurling");
+        key(dialog, Qt::Key_Return);
+    });
+    const auto setup = multiPassDialog(view, info);
+    REQUIRE(setup.has_value());
+    REQUIRE(setup->cutDistance == Approx(-7.0));
+    REQUIRE(setup->feedInfeed == Approx(0.3));
+    REQUIRE(setup->feedPerPass == Approx(0.05));
+    REQUIRE(setup->knurlStarts == 40);
+    REQUIRE(setup->knurlHelixAngleDeg == Approx(30.0));
+    REQUIRE(!setup->retract);
+    REQUIRE(setup->constantArea);
+}
+
+TEST_CASE("UI: knurling through the controller")
+{
+    TestModel tm;
+    mgo::Controller controller(&tm.model);
+    QWidget* w = mainWindow();
+    REQUIRE(w);
+
+    // Without X set as a diameter, it says so, and stays out of the mode
+    whenDialogShows([](QWidget* dialog) { QTest::keyClick(inputWidget(dialog), Qt::Key_Return); });
+    press(w, controller, Qt::Key_Tab);
+    press(w, controller, Qt::Key_M);
+    press(w, controller, Qt::Key_K);
+    REQUIRE(waitForDialogToClose());
+    REQUIRE(tm.model.getMode() == mgo::Mode::None);
+
+    // On Ø 10, by distances. (The starts suggested give grooves about 1 mm
+    // apart: 31)
+    tm.model.setAxis2Position(5.0);
+    tm.model.diameterIsSet();
+    whenDialogShows([](QWidget* dialog) {
+        typeInto(dialog, "-7");
+        key(dialog, Qt::Key_Down);
+        typeInto(dialog, "0.3");
+        key(dialog, Qt::Key_Down, 2);
+        typeInto(dialog, "0.05");
+        QTest::keyClick(inputWidget(dialog), Qt::Key_Return);
+    });
+    press(w, controller, Qt::Key_Tab);
+    press(w, controller, Qt::Key_M);
+    press(w, controller, Qt::Key_K);
+    REQUIRE(waitForDialogToClose());
+    REQUIRE(tm.model.getMode() == mgo::Mode::Knurling);
+    REQUIRE(tm.model.getKnurlingSetup().knurlStarts == 31);
+    REQUIRE(tm.model.getKnurlLeadMm() == Approx(M_PI * 10.0));
+    REQUIRE(tm.model.getMultiPassRange().cutEnd == Approx(-7.0));
+    controller.tick();
+    snapshot(w, "knurling_mode");
+}
+
 TEST_CASE("UI: multi-pass dialog, memory slots either way round")
 {
     TestModel tm;

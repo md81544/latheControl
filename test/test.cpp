@@ -23,6 +23,7 @@
 #include <sstream>
 #include <string>
 #include <thread>
+#include <tuple>
 #include <vector>
 
 #define CATCH_CONFIG_MAIN
@@ -2063,13 +2064,16 @@ public:
     {
         return 1'000.0;
     }
-    std::string cutThreadTo(double position) override
+    std::string cutThreadTo(double position, double revolutionOffset) override
     {
         if (!threadError.empty()) {
             log.push_back("thread refused");
             return threadError;
         }
         log.push_back(fmt::format("thread {:.6g}", position));
+        if (revolutionOffset != 0.0) {
+            log.back() += fmt::format(" +{:.6g} rev", revolutionOffset);
+        }
         m_cutTarget = position;
         m_cutFollows = 0.0;
         return {};
@@ -2916,6 +2920,165 @@ TEST_CASE("MultiPass: threading, repeating the last pass with a step-over of zer
                  "retract",
                  "cut 0 at 1000",
                  "unretract" });
+}
+
+TEST_CASE("MultiPass: several starts, each cut before feeding in")
+{
+    // e.g. a three-start thread: every start is cut at each depth, each a
+    // third of a revolution further round
+    FakeMultiPassMachine machine;
+    mgo::MultiPass mp(machine);
+    auto plan = threadingPlan();
+    plan.feedEnd = 4.9;
+    plan.starts = 3;
+    REQUIRE(mp.start(plan).empty());
+    REQUIRE(mp.totalPasses() == 1);
+    REQUIRE(mp.startNumber() == 1);
+    machine.run(mp);
+    REQUIRE(mp.state() == mgo::MultiPass::State::Finished);
+    REQUIRE(
+        machine.log
+        == Log { "feed 4.9",
+                 "thread -10",
+                 "retract",
+                 "cut 0 at 1000",
+                 "unretract",
+                 "thread -10 +0.333333 rev",
+                 "retract",
+                 "cut 0 at 1000",
+                 "unretract",
+                 "thread -10 +0.666667 rev",
+                 "retract",
+                 "cut 0 at 1000",
+                 "unretract" });
+}
+
+TEST_CASE("MultiPass: knurling, each start cut there and back")
+{
+    // Both ways are threading passes with the tool in (the way back cuts the
+    // other hand), so there's no retract and no return
+    FakeMultiPassMachine machine;
+    mgo::MultiPass mp(machine);
+    auto plan = basicPlan();
+    plan.cut = mgo::MultiPassCut::Thread;
+    plan.feedEnd = 4.8;
+    plan.starts = 2;
+    plan.cutBack = true;
+    REQUIRE(mp.start(plan).empty());
+    REQUIRE(mp.totalPasses() == 2);
+    machine.run(mp);
+    REQUIRE(mp.state() == mgo::MultiPass::State::Finished);
+    REQUIRE(
+        machine.log
+        == Log { "feed 4.9",
+                 "thread -10",
+                 "thread 0",
+                 "thread -10 +0.5 rev",
+                 "thread 0 +0.5 rev",
+                 "feed 4.8",
+                 "thread -10",
+                 "thread 0",
+                 "thread -10 +0.5 rev",
+                 "thread 0 +0.5 rev" });
+    REQUIRE(machine.cutPosition() == Approx(0.0));
+    REQUIRE(!machine.isRetracted());
+}
+
+TEST_CASE("MultiPass: knurling, a pause is between passes, not starts")
+{
+    FakeMultiPassMachine machine;
+    mgo::MultiPass mp(machine);
+    auto plan = basicPlan();
+    plan.cut = mgo::MultiPassCut::Thread;
+    plan.feedEnd = 4.8;
+    plan.starts = 2;
+    plan.cutBack = true;
+    plan.pause = true;
+    REQUIRE(mp.start(plan).empty());
+    machine.run(mp);
+    REQUIRE(mp.state() == mgo::MultiPass::State::Paused);
+    REQUIRE(mp.pass() == 1);
+    REQUIRE(machine.log.size() == 5); // (the feed, then both starts there and back)
+    mp.continueAfterPause();
+    REQUIRE(mp.startNumber() == 1);
+    machine.run(mp);
+    REQUIRE(mp.state() == mgo::MultiPass::State::Finished);
+}
+
+TEST_CASE("MultiPass: knurling stopped after a pass ends once back at the start")
+{
+    FakeMultiPassMachine machine;
+    mgo::MultiPass mp(machine);
+    auto plan = basicPlan();
+    plan.cut = mgo::MultiPassCut::Thread;
+    plan.starts = 2;
+    plan.cutBack = true;
+    REQUIRE(mp.start(plan).empty());
+    machine.finishMoves();
+    mp.update(); // (fed in: the cut starts)
+    machine.finishMoves();
+    mp.update(); // (the cut back starts)
+    REQUIRE(mp.state() == mgo::MultiPass::State::CuttingBack);
+    mp.stopAfterPass("swarf");
+    REQUIRE(mp.inProgress());
+    machine.finishMoves();
+    mp.update();
+    REQUIRE(!mp.inProgress());
+    REQUIRE(mp.message() == "swarf");
+    REQUIRE(machine.cutPosition() == Approx(0.0));
+    // (Not the second start)
+    REQUIRE(machine.log == Log { "feed 4.9", "thread -10", "thread 0" });
+}
+
+TEST_CASE("MultiPass: knurling stops if a cut back stops short")
+{
+    FakeMultiPassMachine machine;
+    mgo::MultiPass mp(machine);
+    auto plan = basicPlan();
+    plan.cut = mgo::MultiPassCut::Thread;
+    plan.cutBack = true;
+    REQUIRE(mp.start(plan).empty());
+    machine.finishMoves();
+    mp.update();
+    machine.finishMoves();
+    mp.update();
+    REQUIRE(mp.state() == mgo::MultiPass::State::CuttingBack);
+    machine.finishMoves(-4.0);
+    mp.update();
+    REQUIRE(!mp.inProgress());
+    REQUIRE(!mp.message().empty());
+}
+
+TEST_CASE("MultiPass: several starts and cutting back need threading, and no retract")
+{
+    FakeMultiPassMachine machine;
+    mgo::MultiPass mp(machine);
+    auto plan = basicPlan();
+    plan.starts = 2;
+    REQUIRE(!mp.start(plan).empty());
+    plan.starts = 1;
+    plan.cutBack = true;
+    REQUIRE(!mp.start(plan).empty());
+    plan = threadingPlan();
+    plan.starts = 0;
+    REQUIRE(!mp.start(plan).empty());
+    plan.starts = 1;
+    plan.cutBack = true;
+    // (Threading plans retract; cutting back, the tool stays in)
+    REQUIRE(!mp.start(plan).empty());
+    plan.retract = false;
+    REQUIRE(mp.start(plan).empty());
+}
+
+TEST_CASE("Knurling: the lead, and starts to suit a pitch")
+{
+    // At 45 degrees, the lead is the circumference
+    REQUIRE(mgo::knurlLeadMm(10.0, 45.0) == Approx(M_PI * 10.0));
+    // Steeper (further from the axis), it's shorter
+    REQUIRE(mgo::knurlLeadMm(10.0, 60.0) == Approx(M_PI * 10.0 / std::sqrt(3.0)));
+    // 31.4 mm round: about 31 grooves 1 mm apart
+    REQUIRE(mgo::knurlStartsForPitch(10.0, 1.0) == 31);
+    REQUIRE(mgo::knurlStartsForPitch(0.1, 1.0) == 1);
 }
 
 TEST_CASE("Model:   a multi-pass from Mem 1 to Mem 2")
@@ -4296,6 +4459,153 @@ TEST_CASE("Model:   nudging X while a multi-pass is paused")
     REQUIRE(!mgo::keyAllowedInCurrentMode(mgo::key::RIGHT, model));
     REQUIRE(!mgo::keyAllowedInCurrentMode(mgo::key::LEFT, model));
     model.stopAllMotors();
+}
+
+TEST_CASE("Model:   knurling is set up only in knurling mode, with a diameter")
+{
+    ThreadingTestModel t(300);
+    const mgo::MultiPassSetup setup { .cutDistance = 1.0,
+                                      .feedInfeed = 0.02,
+                                      .feedPerPass = 0.01,
+                                      .knurlStarts = 2,
+                                      .knurlHelixAngleDeg = 80.0 };
+    REQUIRE(!t.model.setKnurlingSetup(setup).empty());
+    t.model.changeMode(mgo::Mode::Knurling);
+    // (X isn't measured from the centre yet)
+    REQUIRE(!t.model.setKnurlingSetup(setup).empty());
+    REQUIRE(!t.model.getKnurlLeadMm());
+    t.model.setAxis2Position(1.0);
+    t.model.diameterIsSet();
+    // The first time, the dialog suggests grooves about 1 mm apart (Ø 2:
+    // 6.28 mm round)
+    REQUIRE(t.model.knurlingDialogSetup().knurlStarts == 6);
+    REQUIRE(!t.model.knurlingDialogSetup().retract);
+    auto bad = setup;
+    bad.knurlStarts = 0;
+    REQUIRE(!t.model.setKnurlingSetup(bad).empty());
+    bad = setup;
+    bad.knurlHelixAngleDeg = 90.0;
+    REQUIRE(!t.model.setKnurlingSetup(bad).empty());
+    REQUIRE(t.model.setKnurlingSetup(setup).empty());
+    REQUIRE(t.model.getKnurlLeadMm() == Approx(mgo::knurlLeadMm(2.0, 80.0)));
+    REQUIRE(t.model.activeMultiPassSetup().knurlStarts == 2);
+    // Afterwards, as last time
+    REQUIRE(t.model.knurlingDialogSetup().knurlStarts == 2);
+    // Leaving the mode clears it
+    t.model.changeMode(mgo::Mode::None);
+    REQUIRE(!t.model.getKnurlLeadMm());
+}
+
+TEST_CASE("Model:   knurling passes, each start there and back, locked to the spindle")
+{
+    ThreadingTestModel t(300);
+    REQUIRE(waitFor([&t] { return !t.model.isAxis1MotorRunning(); }, std::chrono::seconds(5)));
+    t.model.checkStatus();
+    t.model.changeMode(mgo::Mode::Knurling);
+    t.model.axis2SetSpeed(100.0);
+    t.model.setAxis2Position(1.0);
+    t.model.diameterIsSet();
+    // Ø 2 at 80 degrees: a lead of 1.108 mm. Z 1 mm, X in 0.02 by 0.01: two
+    // passes of two starts
+    REQUIRE(t.model
+                .setKnurlingSetup(
+                    { .cutDistance = 1.0,
+                      .feedInfeed = 0.02,
+                      .feedPerPass = 0.01,
+                      .knurlStarts = 2,
+                      .knurlHelixAngleDeg = 80.0 })
+                .empty());
+    const double lead = *t.model.getKnurlLeadMm();
+    REQUIRE(lead == Approx(1.108).epsilon(0.001));
+    const double stepsPerPulse = lead * 1'000.0 / 700.0;
+    const double zStart = t.model.getMultiPassRange().cutStart;
+    const double xEnd = t.model.getMultiPassRange().feedEnd;
+    t.model.multiPassGo();
+    REQUIRE(t.model.getWarning().empty());
+    REQUIRE(t.model.multiPass().inProgress());
+    REQUIRE(t.model.multiPass().plan().cutBack);
+    REQUIRE(!t.model.multiPass().plan().retract);
+    REQUIRE(t.model.multiPass().plan().starts == 2);
+    REQUIRE(t.model.multiPass().totalPasses() == 2);
+
+    // Where each cut started (as in the threading passes' test, from Z's
+    // steps during the cut), by pass, start and way. Each start is half a
+    // revolution (350 pulses) on from a whole revolution
+    const long startStep = t.model.getAxis1MotorCurrentStep();
+    std::map<std::tuple<int, int, bool>, int64_t> cutStarts;
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
+    while (t.model.multiPass().inProgress()) {
+        REQUIRE(std::chrono::steady_clock::now() < deadline);
+        t.model.checkStatus();
+        const auto state = t.model.multiPass().state();
+        const bool back = state == mgo::MultiPass::State::CuttingBack;
+        if (state != mgo::MultiPass::State::Cutting && !back) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            continue;
+        }
+        const auto key
+            = std::make_tuple(t.model.multiPass().pass(), t.model.multiPass().startNumber(), back);
+        const int64_t pulses = t.model.getSpindlePulses();
+        // (Back from the end, 1000 steps from the start)
+        const long fromStart = std::abs(t.model.getAxis1MotorCurrentStep() - startStep);
+        const long steps = back ? 1'000 - fromStart : fromStart;
+        if (steps > 50 && steps < 950 && !cutStarts.contains(key)) {
+            cutStarts[key] = pulses - std::lround(static_cast<double>(steps) / stepsPerPulse);
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    INFO(t.model.multiPass().message());
+    INFO(t.model.getWarning());
+    REQUIRE(t.model.multiPass().state() == mgo::MultiPass::State::Finished);
+    REQUIRE(cutStarts.size() == 8);
+    for (const auto& [key, pulses] : cutStarts) {
+        const auto& [pass, start, back] = key;
+        INFO(
+            "Pass " << pass << ", start " << start << (back ? " back" : " there")
+                    << " started at pulse " << pulses);
+        const int64_t offset = (start - 1) * 350;
+        REQUIRE(ThreadingTestModel::pulsesFromWholeRev(pulses - offset) <= 10);
+    }
+    REQUIRE(t.model.getAxis1MotorPosition() == Approx(zStart).margin(0.0001));
+    REQUIRE(t.model.getAxis2MotorPosition() == Approx(xEnd).margin(0.0001));
+    REQUIRE(!t.model.getIsAxis2Retracted());
+    REQUIRE(t.model.getWarning().empty());
+    REQUIRE(t.model.getMode() == mgo::Mode::Knurling);
+}
+
+TEST_CASE("Model:   knurling's spindle may turn slower than threading's")
+{
+    ThreadingTestModel t(300);
+    // About 20 rpm: too slow for threading, but not for knurling. (The mock
+    // spindle slows at once, which looks like lost pulses, so this is before
+    // choosing the mode, which clears that)
+    t.gpio.setRotaryEncoderDelayMicroseconds(4'000);
+    REQUIRE(
+        waitFor([&t] { return t.model.getRotaryEncoderRpm() < 25.f; }, std::chrono::seconds(5)));
+    t.model.checkStatus();
+    t.model.changeMode(mgo::Mode::Knurling);
+    REQUIRE(t.model.minimumSpindleRpm() == Approx(mgo::Model::KNURLING_MIN_SPINDLE_RPM));
+    t.model.setAxis2Position(5.0);
+    t.model.diameterIsSet();
+    // Ø 10 at 45 degrees: a lead of 31.4 mm, so the spindle may turn at up to
+    // 800 / 31.4, about 25 rpm
+    REQUIRE(t.model
+                .setKnurlingSetup(
+                    { .cutDistance = 1.0,
+                      .feedInfeed = 0.02,
+                      .feedPerPass = 0.01,
+                      .knurlStarts = 30,
+                      .knurlHelixAngleDeg = 45.0 })
+                .empty());
+    REQUIRE(
+        t.model.spindlePassSpeedLimit() / *t.model.getKnurlLeadMm() == Approx(25.5).margin(0.1));
+    t.model.multiPassGo();
+    INFO(t.model.getWarning());
+    REQUIRE(t.model.multiPass().inProgress());
+    REQUIRE(t.model.getWarning().empty());
+    t.model.stopAllMotors();
+    t.model.changeMode(mgo::Mode::Threading);
+    REQUIRE(t.model.minimumSpindleRpm() == Approx(30.f));
 }
 
 TEST_CASE("Model:   leaving threading mode resets Z's speed")

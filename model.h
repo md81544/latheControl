@@ -44,7 +44,8 @@ enum class Mode {
     Threading,
     Taper,
     Radius,
-    MultiPass
+    MultiPass,
+    Knurling // Cut knurling (see Model::setKnurlingSetup())
 };
 
 // "Key Modes" allow for two-key actions, a bit like vim.
@@ -91,6 +92,11 @@ threadingStopAction(bool arrived, bool retractedAtStart, bool retractedNow, bool
 // through it)
 class Model : private IMultiPassMachine {
 public:
+    // Below this, the spindle counts as stopped when knurling (see
+    // minimumSpindleRpm()). At 5 rpm, the lathe's encoder still gives a
+    // pulse every 17 ms or so
+    static constexpr float KNURLING_MIN_SPINDLE_RPM = 5.f;
+
     Model(IGpio& gpio, mgo::IConfigReader& config)
         : m_gpio(gpio)
         , m_config(config)
@@ -299,7 +305,8 @@ public:
     double getAxis1MotorSpeed() const;
     // See RotaryEncoder::getSpindlePulses()
     int64_t getSpindlePulses() const;
-    // When threading: the speed Z moves at (pitch x the spindle's speed)
+    // When threading or knurling: the speed Z moves at (pitch or lead x the
+    // spindle's speed)
     double getThreadingZSpeed() const;
     double getAxis2MotorSpeed() const;
     double getAxis1MotorCurrentStep() const;
@@ -405,8 +412,32 @@ public:
     // in). If X is shallower (e.g. moved out to try the nut on), Enter moves
     // it back to the last pass's depth first, even while paused
     bool springPassAtStart() const;
+    // Cut knurling (knurling mode): a multi-pass whose cuts are threading
+    // passes at the knurl's lead, several starts per pass, each cut there
+    // (one hand) and back (the other hand: see MultiPassPlan::cutBack), with
+    // no retract. Set up as for setMultiPassSetup(), on entering the mode.
+    // Needs X measured from the centre: the work's diameter at the start
+    // sets the lead (see knurlLeadMm())
+    std::string setKnurlingSetup(const MultiPassSetup& setup);
+    const MultiPassSetup& getKnurlingSetup() const;
+    // The setup the knurling dialog starts with: as for
+    // defaultMultiPassSetup(), from last time's, with a number of starts to
+    // suit the diameter if none has been chosen yet
+    MultiPassSetup knurlingDialogSetup() const;
+    // The knurl's lead (in mm per revolution), once set up in knurling mode
+    std::optional<double> getKnurlLeadMm() const;
+    // The fastest Z may need to move at the start of a pass locked to the
+    // spindle (threading or knurling), in mm/min, leaving a margin for the
+    // spindle speeding up. The spindle may turn at up to this divided by the
+    // pitch or lead
+    double spindlePassSpeedLimit() const;
+    // The slowest the spindle may turn for a pass locked to it, in rpm. Below
+    // this, it counts as stopped. Lower for knurling, whose long lead needs
+    // a very slow spindle
+    float minimumSpindleRpm() const;
     // The setup of the multi-pass that Enter runs: the threading passes' in
-    // threading mode, otherwise multi-pass mode's
+    // threading mode, the knurling's in knurling mode, otherwise multi-pass
+    // mode's
     const MultiPassSetup& activeMultiPassSetup() const;
     // Enter, in multi-pass mode, or threading mode once threading passes are
     // set up. If the axes aren't at the start, moves them there
@@ -422,8 +453,12 @@ public:
     const MultiPass& multiPass() const;
 
 private:
+    // The steps for a threading pass to a step (see axis1StartThreadingPass()):
+    // taking up Z's backlash, if it's to move, then the pass
+    std::vector<MotionSequence::Step> threadingPassSteps(long step, double revolutionOffset);
     // The steps to move Z to a step: just the move, or, for a taper or
     // radius, taking up both axes' backlash, then synchronising X and moving.
+    // (In threading mode, a threading pass)
     // (The last step's done is left empty, so the sequence ends once Z starts)
     std::vector<MotionSequence::Step> axis1MoveSteps(long step);
     // The steps to move Z to a step with X following it, moving ratio times
@@ -525,6 +560,9 @@ private:
     // infeed): where spring passes start
     double m_springPassZ { 0.0 };
     bool m_springPasses { false };
+    MultiPassSetup m_knurlingSetup;
+    // (See getKnurlLeadMm(): 0 until set up)
+    double m_knurlLeadMm { 0.0 };
     MultiPass m_multiPass { *this };
     bool m_multiPassMovingToStart { false };
     // X is following Z, to correct the taper, in a multi-pass cut or return
@@ -593,8 +631,8 @@ private:
     double cutSpeed() const override;
     void setCutSpeed(double speed) override;
     double cutMaxSpeed() const override;
-    // (Only in threading mode, with a thread chosen)
-    std::string cutThreadTo(double position) override;
+    // (Only in threading mode, with a thread chosen, or in knurling mode)
+    std::string cutThreadTo(double position, double revolutionOffset) override;
     double cutStepSize() const override;
     double feedStepSize() const override;
     double feedPosition() const override;
@@ -651,9 +689,16 @@ private:
     // X's position, or while retracted, where it will return to
     double axis2WorkPosition() const;
     // Threading
-    // Starts a threading pass: Z follows the spindle to endStep. Returns false
-    // if it couldn't start (with a warning)
-    bool axis1StartThreadingPass(long endStep);
+    // Whether passes are locked to the spindle: threading or knurling mode
+    bool spindleSynchronised() const;
+    // How far Z moves per revolution of the spindle in a pass: the thread's
+    // pitch, or the knurl's lead (nullopt if neither is set)
+    std::optional<double> spindleLeadMm() const;
+    // Starts a threading pass: Z follows the spindle to endStep, starting
+    // revolutionOffset of a revolution after the usual angle (see
+    // MultiPassPlan::starts). Returns false if it couldn't start (with a
+    // warning)
+    bool axis1StartThreadingPass(long endStep, double revolutionOffset = 0.0);
     // Why a threading pass can't start now (empty if it can). sticky is
     // whether its warning should stay (see setThreadingWarning())
     struct ThreadingPassError {
