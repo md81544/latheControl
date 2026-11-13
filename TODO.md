@@ -485,7 +485,7 @@
              a nudge in and a couple more before the nut went on. The
              flanks were clean enough not to need a needle file, which
              they always used to
-- [ ] **Radius mode: a radius on the work's end, as passes of short tapers.**
+- [x] **Radius mode: a radius on the work's end, as passes of short tapers.**
       Replaces the old experimental radius mode, which synchronised X to
       Z's absolute position with Pythagoras, needed both axes zeroed on the
       radius's apex, and left the passes to the user (cut, return, nudge,
@@ -549,11 +549,13 @@
     - **Tried on the machine (2026-11-13):** a 5 mm radius on aluminium
       turned to about 15.8 mm, at 0.1 or 0.2 mm per pass. The result was
       very good and usable straight off the machine. There was slight
-      banding, which a lick of emery cloth would take out. It's not yet
-      known whether that's from Z's stops at each taper's end or from the
-      tapers themselves (the ±0.005 mm chords); a finer tolerance on the
-      last pass would tell them apart. X kept up: there was no sign of it
-      cutting deep near the end face. The full ball end hasn't been tried
+      banding, which a lick of emery cloth would take out. It's most
+      likely the tapers' flat facets (the ±0.005 mm chords) rather than
+      Z's stops at each taper's end; a finer tolerance on the last pass
+      would confirm it, but the finish is good enough not to bother. X
+      kept up, with no sign of it cutting deep near the end face. The
+      full ball end hasn't been tried. Considered done; inside radii and
+      concave fillets would be new items
 
 ## Motion and timing (mostly in steppermotor.cpp)
 - [ ] Deceleration ramping. At the moment there's only acceleration, so
