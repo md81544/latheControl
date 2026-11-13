@@ -326,7 +326,8 @@ void Model::checkStatus()
     checkSpindleStopped(chuckRpm);
     checkEncoderLostPulses();
     if (m_axis1Scale) {
-        m_axis1Scale->update(m_axis1Motor->getPosition(), m_axis1Motor->isRunning());
+        m_axis1Scale->update(
+            m_axis1Motor->getPosition(), m_axis1Motor->isRunning(), m_axis1Motor->getSpeed());
     }
 
     if (const auto diameter = getDiameterMm()) {

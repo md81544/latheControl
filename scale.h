@@ -60,8 +60,13 @@ public:
     // Watches for the motor stopping and the reading settling, lines the
     // scale up if it needs to be, and logs the difference each time it
     // settles (so lc.log shows how long settling takes, and how the
-    // difference changes from move to move)
-    void update(double motorMm, bool motorRunning, Clock::time_point now = Clock::now());
+    // difference changes from move to move). The motor's speed (in mm/min)
+    // is only for the log, as the scale may misread at speed
+    void update(
+        double motorMm,
+        bool motorRunning,
+        double motorSpeed,
+        Clock::time_point now = Clock::now());
     // Line the scale up with the motor again, once the reading has settled
     // (e.g. after zeroing the axis, as the motor's position has changed)
     void realign();
@@ -96,6 +101,8 @@ private:
     double m_offsetMm { 0.0 };
     // Where the motor was when it started its last move (if seen)
     std::optional<double> m_moveStartMm;
+    // The fastest the motor was set to go during that move
+    double m_moveTopSpeed { 0.0 };
     Clock::time_point m_stoppedAt;
     Clock::time_point m_lastChangeAt;
     int32_t m_lastCounts { 0 };

@@ -1647,13 +1647,40 @@ change.
       reading keeps jittering, so it never jumps), the sketch could send
       the raw readings as well; that's the only way to remove the smoothing
       for lc while TouchDRO keeps it
-    - **Still to check on the mill:** whether that 10-20 µm is a steady
-      offset (the two were lined up or zeroed at different moments, within a
-      count), grows with distance (TouchDRO's counts per inch differ from
-      ours), or comes and goes (the reading flickering, and each display
-      rounding). Then, from lc.log: how long readings take to settle (which
-      sets `Axis1ScaleSettleMs`), and whether they jitter. Also check the
-      lathe's Z scale's sign
+    - **Tried on the mill again (13 Nov 2026), with the 1500 ms settle
+      time.** Every move settled 2.05-2.65 s after stopping, so the reading
+      kept changing for 0.5-1.1 s after the motor stopped, which fits the
+      sender's one-second window. None hit the 3 s limit.
+        - **Counts per inch:** after zeroing both and moving 100 mm, TouchDRO
+          read 100.04 and lc's scale 99.88 (motor 100.00). TouchDRO's adapter
+          profile (exported to a .tdap file; the newer app has no way to see
+          it otherwise) has 2556 counts per inch for X, Y and Z, set by the
+          user with a DTI long ago, against our nominal 2560: 0.16%, which is
+          exactly the gap. lc.log's 10,068 counts for the motor's 100 mm is
+          about 2557. So the scale and the 2 mm leadscrew agree to about
+          0.05%, and lc_mill.cfg now uses 2556 (100.6299 per mm)
+        - **The scale jumps.** Three times the difference suddenly grew, each
+          time with the scale saying the table had gone *further* than the
+          motor (lost steps would do the opposite): by about 509 counts, about
+          1025 (allowing for the 2556/2560 error; this was a move of exactly
+          90.0000 mm by the motor, which the scale and TouchDRO read as
+          100.07), and about 1080 (a stretch with several stops). 512 counts
+          is 0.2" (5.08 mm), thought to be the pitch of these capacitive
+          scales' pattern (not confirmed), so the scale's electronics most likely
+          lost whole pitches. TouchDRO agreeing with the scale proves nothing,
+          as it reads the same stream. Not yet known: whether the scale or
+          the motor was right (check with a DTI on the table at zero: long
+          moves, back to zero, and see which one is still there), and what
+          triggers it (speed? interference from the stepper's wiring?). The
+          settle line in lc.log now gives the move's top speed, to help
+    - **This matters for stages 3 and 4:** a scale jump looks exactly like
+      5 mm of lost steps, and "correcting" it would drive the table 5 mm
+      the wrong way. So a large difference must stop and warn, never be
+      corrected, and one close to a multiple of 512 counts (on these
+      scales) can be reported as a likely scale jump. Better still, find
+      the cause and stop the jumps
+    - **Still to check:** the DTI test above; whether lc and TouchDRO now
+      agree at rest to within a count; the lathe's Z scale's sign
     - Idea, from the above: a "measure backlash" command (System menu),
       which reverses
       the axis, sees how far it turns before the scale moves, and suggests

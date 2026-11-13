@@ -635,7 +635,7 @@ struct AxisScaleTest {
     void update(double motorMm, bool running, int afterMs = 50)
     {
         now += std::chrono::milliseconds(afterMs);
-        axisScale->update(motorMm, running, now);
+        axisScale->update(motorMm, running, 100.0, now);
     }
     // Updates every 50ms for a while, with the motor stopped at motorMm
     void rest(double motorMm, int forMs)

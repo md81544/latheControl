@@ -4,6 +4,9 @@
 
 #include <fmt/format.h>
 
+#include <algorithm>
+#include <cmath>
+
 namespace mgo {
 
 AxisScale::AxisScale(std::unique_ptr<IScale> scale, Settings settings)
@@ -12,7 +15,7 @@ AxisScale::AxisScale(std::unique_ptr<IScale> scale, Settings settings)
 {
 }
 
-void AxisScale::update(double motorMm, bool motorRunning, Clock::time_point now)
+void AxisScale::update(double motorMm, bool motorRunning, double motorSpeed, Clock::time_point now)
 {
     const std::optional<int32_t> counts = m_scale->readCounts();
     if (!counts) {
@@ -41,7 +44,9 @@ void AxisScale::update(double motorMm, bool motorRunning, Clock::time_point now)
     if (motorRunning) {
         if (m_state != State::Moving) {
             m_moveStartMm = motorMm;
+            m_moveTopSpeed = 0.0;
         }
+        m_moveTopSpeed = std::max(m_moveTopSpeed, std::abs(motorSpeed));
         m_state = State::Moving;
         return;
     }
@@ -84,7 +89,10 @@ void AxisScale::update(double motorMm, bool motorRunning, Clock::time_point now)
             m_settings.axisLabel,
             steady ? "settled" : "still changing",
             seconds,
-            m_moveStartMm ? fmt::format(" after a move of {:+.4f} mm", motorMm - *m_moveStartMm)
+            m_moveStartMm ? fmt::format(
+                                " after a move of {:+.4f} mm at up to {:.0f} mm/min",
+                                motorMm - *m_moveStartMm,
+                                m_moveTopSpeed)
                           : "",
             scaleMm,
             motorMm,
