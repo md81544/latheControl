@@ -77,5 +77,18 @@ QDialog* openMultiPassDialog(
     const MultiPassDialogInfo& info,
     std::function<void(std::optional<MultiPassSetup>)> onDone);
 
+// The gear cutting dialog: the gear's module and number of teeth, where the
+// cut starts (where the cut axis is now, or a memory slot) and ends (a
+// distance from the start, or a memory slot), the depth (the whole depth for
+// the module, unless typed) and the depth per pass, showing the blank's
+// diameter, the angle per tooth and which cutter to use. Gives onDone the
+// setup chosen, or nullopt if cancelled. It can only be accepted with a
+// setup which resolveGearCut() accepts
+QDialog* openGearDialog(
+    QWidget* parent,
+    const QString& fontFamily,
+    const GearDialogInfo& info,
+    std::function<void(std::optional<GearSetup>)> onDone);
+
 } // end namespace dialog
 } // end namespace mgo

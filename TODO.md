@@ -1059,6 +1059,44 @@ change.
     - As part of this change, maybe the config file should have an "axis[n]Capabilities"
       config item, to allow the program to determine which features are available for
       an axis (e.g. retract, or, in the case of a rotary table, gear cutting and so on.
+    - **Done (2026-11-13), in the mock build only:** gear cutting mode (Modes,
+      "Gear cutting", `C`), on with `GearCutting = true` (lc_mill.cfg), and
+      only if axis 2 is in degrees. lc_rt.cfg is removed, and the mill's
+      rotary table is now labelled A (it stands vertically, turning about X;
+      its leader key is still `c`, as `a` is X's nudge). The dialog takes the
+      module and teeth (showing the blank Ø, the angle per tooth and the
+      cutter number), X's start and end, the depth (2.157 × module, as ERT
+      used, unless typed) and the depth per pass. It runs on the multi-pass
+      engine, which gained an index axis (`MultiPassPlan::indexPerStart`):
+      the teeth are its starts, and A turns on by a tooth before each.
+        - **Decision: every tooth at one depth, then feed in.** The depth
+          (Y or Z on the mill) has no motor, so it's fed by hand, once per
+          turn of the blank. Taking each tooth to full depth first would need
+          winding the depth in and back out for every tooth
+        - **Decision: automated only.** ERT's "take the cut by hand" (and
+          its `b` to step back a tooth) isn't offered: X has a motor. The
+          return is back through the slot at full speed, as the depth can't
+          retract
+        - **Decision: A only ever turns forwards.** Each pass carries on
+          round rather than going back, so the table's backlash stays taken
+          up the same way. For the first tooth, A backs off 1° and comes
+          forwards (as ERT took up the backlash at the start). At the end, A
+          turns on to the first tooth again, and its position is put back to
+          where it started (e.g. 0°); memory slots are left as they are, as
+          whole turns don't move them on the table
+        - **To check on the machine:** that A's backlash compensation
+          (`Axis2BacklashCompensationSteps`) and the 1° back-off land the
+          first tooth where the others are; whether A indexes well at
+          full speed (`Axis2MaxMotorRpm`, ramped), with the blank on; whether dragging the cutter back
+          through the slot marks it (if so, a "return at cutting speed"
+          option, or a pause to wind the depth out, may help)
+        - Stopped and started again (e.g. stopped while A turns), X goes
+          to the start first and only then A turns forwards to the next
+          tooth, so the teeth stay evenly spaced. They're kept until the
+          number of teeth changes, or A is zeroed or set
+        - Not done yet: stepping back a tooth (re-cutting one), a pause
+          between teeth as a dialog option (`Enter` during a pass does it
+          once), and moving stepperControl into this repo (next)
 - [x] **Unit tests which fail now and then** (2026-11-11). On neutron
       (Linux, 8 cores, a busy KDE desktop), 1 to 3 tests failed on every run
       of `unit_test`, mostly "threading passes stop if a pass can't start"
@@ -1364,6 +1402,9 @@ change.
         - using the rotary table (mill) to turn a set amount, then take a cut along the x axis, 
           and repeat. The user could be prompted to feed the Y axis a set amount per full
           revolution of the C axis. This would allow, for example, a hexagonal shape to be cut.
+          **Partly done** as gear cutting mode (the table turns 360° ÷ teeth
+          between cuts, and the depth is fed by hand once per turn); the Y
+          feed per revolution, e.g. for a hexagon, isn't
         - etc
        It should also have functionality to allow calling functions to:
         - Pause between each pass (with a message, e.g. "move y n units" - the mill, for

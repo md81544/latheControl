@@ -177,6 +177,7 @@ constexpr int threadingPasses = 7014; // threading passes (a multi-pass, in thre
 constexpr int clearLimitTrip = 7015; // clear a limit switch's stop
 constexpr int toggleThreadingAutoRetract = 7016; // threading: auto-retract on / off
 constexpr int f2k = 7017; // cut knurling mode
+constexpr int f2g = 7018; // gear cutting mode
 
 // Joystick specific "keys"
 // Note some joystick commands just return regular keycodes.

@@ -697,6 +697,7 @@ void Model::changeMode(Mode mode)
     m_passesSpindleSign.reset();
     // (Set up afresh on entering the mode)
     m_knurlLeadMm = 0.0;
+    m_gearSet = false;
     setThreadingWarning("", false);
     m_mode = mode;
     m_input = "";
@@ -1493,6 +1494,8 @@ void Model::axis2Zero()
         changeMode(Mode::None);
     }
     m_axis2Motor->zeroPosition();
+    // (Gear cutting's teeth are now wherever axis 2 is when it starts)
+    m_gearToothOrigin.reset();
     // Zeroing will invalidate any memorised X positions, so we clear them
     for (auto& m : m_axis2Memory) {
         m = AXIS2_UNSET;
@@ -2226,6 +2229,8 @@ void Model::setAxis1Position(double mm)
 void Model::setAxis2Position(double mm)
 {
     m_axis2Motor->setPosition(mm);
+    // (Gear cutting's teeth are now wherever axis 2 is when it starts)
+    m_gearToothOrigin.reset();
     // The position is known again, so a motor fault can be cleared
     clearMotorFault(Axis::Axis2);
     // A new position isn't necessarily measured from the centre: if it was
@@ -2783,6 +2788,92 @@ std::optional<double> Model::getKnurlLeadMm() const
                                                            : std::nullopt;
 }
 
+std::string Model::gearCuttingUnavailable() const
+{
+    if (!m_config.readBool("GearCutting", false)) {
+        return "Gear cutting isn't turned on (GearCutting in the config file)";
+    }
+    if (m_config.readBool("DisableAxis1", false) || m_config.readBool("DisableAxis2", false)) {
+        return "Gear cutting needs both axes";
+    }
+    // (Its indexes are fractions of 360)
+    if (m_config.read("Axis2DisplayUnits", "mm") != "deg") {
+        return "Gear cutting needs " + m_config.read("Axis2Label", "X")
+            + " to be a rotary table (Axis2DisplayUnits = deg)";
+    }
+    return {};
+}
+
+std::string Model::setGearSetup(const GearSetup& setup)
+{
+    if (m_mode != Mode::GearCutting) {
+        return "Gear cutting is only in gear cutting mode";
+    }
+    if (const std::string error = gearCuttingUnavailable(); !error.empty()) {
+        return error;
+    }
+    const GearCutResolved resolved
+        = resolveGearCut(setup, multiPassPositions(), m_config.read("Axis1Label", "Z"));
+    if (!resolved.error.empty()) {
+        return resolved.error;
+    }
+    if (setup.teeth != m_gearSetup.teeth) {
+        // A different gear: its first tooth is wherever axis 2 is then
+        m_gearToothOrigin.reset();
+    }
+    m_gearSetup = setup;
+    // (The depth is fed by hand, so is just a distance)
+    m_multiPassRange = { .cutStart = resolved.cutStart,
+                         .cutEnd = resolved.cutEnd,
+                         .feedStart = 0.0,
+                         .feedEnd = setup.depth };
+    m_gearSet = true;
+    MGOLOG(
+        fmt::format(
+            "Gear cutting set up: module {}, {} teeth, axis 1 {} to {}, depth {} by {}",
+            setup.module,
+            setup.teeth,
+            resolved.cutStart,
+            resolved.cutEnd,
+            setup.depth,
+            setup.depthPerPass));
+    return {};
+}
+
+const GearSetup& Model::getGearSetup() const
+{
+    return m_gearSetup;
+}
+
+bool Model::gearCuttingSet() const
+{
+    return m_mode == Mode::GearCutting && m_gearSet;
+}
+
+double Model::gearStartTooth() const
+{
+    const double a = m_axis2Motor->getPosition();
+    if (!m_gearToothOrigin || m_gearSetup.teeth < 1) {
+        return a;
+    }
+    // The next tooth forwards (so the table's backlash stays taken up), or
+    // this one, if it's within half a step of it
+    const double pitch = 360.0 / m_gearSetup.teeth;
+    const double slack = indexStepSize() / 2.0 + MultiPass::TOLERANCE;
+    return *m_gearToothOrigin + std::ceil((a - *m_gearToothOrigin - slack) / pitch) * pitch;
+}
+
+bool Model::gearAOnTooth() const
+{
+    return std::abs(m_axis2Motor->getPosition() - gearStartTooth())
+        < indexStepSize() / 2.0 + MultiPass::TOLERANCE;
+}
+
+GearSetup Model::gearDialogSetup() const
+{
+    return defaultGearSetup(m_gearSetup, multiPassPositions());
+}
+
 const MultiPassSetup& Model::activeMultiPassSetup() const
 {
     switch (m_mode) {
@@ -2826,6 +2917,10 @@ double Model::axis2IntoWorkSign() const
 
 bool Model::multiPassAtStart() const
 {
+    if (m_mode == Mode::GearCutting) {
+        return atMultiPassPosition(m_axis1Motor->getPosition(), m_multiPassRange.cutStart)
+            && gearAOnTooth();
+    }
     return atMultiPassPosition(m_axis1Motor->getPosition(), m_multiPassRange.cutStart)
         && atMultiPassPosition(m_axis2Motor->getPosition(), m_multiPassRange.feedStart);
 }
@@ -2843,6 +2938,42 @@ void Model::multiPassMoveToStart()
             m_multiPassRange.cutStart,
             m_multiPassRange.feedStart));
     m_multiPassMovingToStart = true;
+    if (m_mode == Mode::GearCutting) {
+        // Axis 1 to the start (clear of the blank), and only then axis 2 on
+        // to the next tooth, if it isn't on one (e.g. stopped while turning)
+        const double tooth = gearStartTooth();
+        const double oldSpeed = m_axis1Motor->getSpeed();
+        std::vector<MotionSequence::Step> steps;
+        steps.push_back(
+            { [this]() {
+                 m_axis1Status = "to start";
+                 m_axis1Motor->setSpeed(m_axis1Motor->getMaxRpm());
+                 m_axis1Motor->goToPosition(m_multiPassRange.cutStart);
+             },
+              [this]() { return !m_axis1Motor->isRunning(); } });
+        if (!gearAOnTooth()) {
+            steps.push_back(
+                { [this, tooth]() {
+                     m_axis2Status = "to tooth";
+                     // (At full speed, as when indexing)
+                     m_axis2Motor->setSpeed(m_axis2Motor->getMaxRpm());
+                     m_axis2Motor->goToPosition(tooth);
+                 },
+                  [this]() { return !m_axis2Motor->isRunning(); } });
+        }
+        MGOLOG(
+            fmt::format(
+                "Gear cutting: moving to the start, axis 1 to {}, axis 2 to {}",
+                m_multiPassRange.cutStart,
+                tooth));
+        m_motionSequence.start(std::move(steps), [this, oldSpeed]() {
+            m_axis1Motor->setSpeed(oldSpeed);
+            m_multiPassMovingToStart = false;
+            axis1SaveBreadcrumbPosition();
+            axis2SaveBreadcrumbPosition();
+        });
+        return;
+    }
     moveToSafely(
         m_multiPassRange.cutStart,
         m_multiPassRange.feedStart,
@@ -2947,7 +3078,9 @@ void Model::multiPassGo()
 {
     const bool threading = m_mode == Mode::Threading && m_threadingPassesSet;
     const bool knurling = m_mode == Mode::Knurling && getKnurlLeadMm().has_value();
-    if ((m_mode != Mode::MultiPass && !threading && !knurling) || m_multiPassMovingToStart) {
+    const bool gear = gearCuttingSet();
+    if ((m_mode != Mode::MultiPass && !threading && !knurling && !gear)
+        || m_multiPassMovingToStart) {
         return;
     }
     // (Every branch below may move both axes, except asking for a pause
@@ -3046,6 +3179,20 @@ void Model::multiPassGo()
             plan.cutShiftPerFeed = direction * std::tan(getCompoundInfeedAngleDeg() * DEG_TO_RAD);
         }
     }
+    if (gear) {
+        // Each start is a tooth, cut along axis 1, with axis 2 turned on by a
+        // tooth before each. The depth is fed in by hand before each pass
+        // (once round the blank), so there's no retract
+        plan.feedPerPass = m_gearSetup.depthPerPass;
+        plan.feedManual = true;
+        plan.retract = false;
+        plan.pause = false;
+        plan.feedCorrection = 0.0;
+        plan.starts = m_gearSetup.teeth;
+        plan.indexPerStart = 360.0 / m_gearSetup.teeth;
+        // (On the tooth: see multiPassAtStart())
+        plan.indexStart = gearStartTooth();
+    }
     // (Its first pass sets which way the spindle must turn for the rest)
     m_passesSpindleSign.reset();
     if (const std::string error = m_multiPass.start(plan); !error.empty()) {
@@ -3053,11 +3200,16 @@ void Model::multiPassGo()
         return;
     }
     m_warning = "";
+    if (gear && !m_gearToothOrigin) {
+        // (The teeth stay here: see setGearSetup())
+        m_gearToothOrigin = plan.indexStart;
+    }
     MGOLOG(
         fmt::format(
             "{} started: Z {} to {}, X {} to {} by {}{}{}{}{}{}{} ({} passes)",
             threading      ? "Threading passes"
                 : knurling ? "Knurling passes"
+                : gear     ? "Gear cutting"
                            : "Multi-pass",
             plan.cutStart,
             plan.cutEnd,
@@ -3076,7 +3228,12 @@ void Model::multiPassGo()
                                         : "",
             knurling
                 ? fmt::format(", {} starts there and back, lead {}", plan.starts, m_knurlLeadMm)
-                : "",
+                : gear ? fmt::format(
+                             ", {} teeth, indexing {} from {}",
+                             plan.starts,
+                             plan.indexPerStart,
+                             plan.indexStart)
+                       : "",
             m_multiPass.totalPasses()));
 }
 
@@ -3287,6 +3444,82 @@ bool Model::isRetracted() const
     return m_axis2Retracted;
 }
 
+double Model::indexPosition() const
+{
+    return m_axis2Motor->getPosition();
+}
+
+bool Model::indexMoving() const
+{
+    // (Including backing off first)
+    return m_axis2WasRunning || m_motionSequence.isRunning();
+}
+
+void Model::indexMoveTo(double position)
+{
+    m_axis2Status = "indexing";
+    // Forwards is towards larger positions, which may be fewer steps
+    const double conversion = m_axis2Motor->getConversionFactor();
+    const long forwards = conversion > 0.0 ? 1 : -1;
+    const long target = std::lround(position / conversion);
+    const long current = m_axis2Motor->getCurrentStep();
+    MGOLOG(fmt::format("Indexing to {} (step {})", position, target));
+    // (At full speed, as for a return: the cutter is clear of the blank. A
+    // set speed would do, but isn't kept: a fast move resets it, between
+    // runs)
+    m_axis2Motor->setSpeed(m_axis2Motor->getMaxRpm());
+    if ((target - current) * forwards > 0) {
+        m_axis2Motor->goToStep(target);
+        // (So a move that's over by the next update is still seen to have ended)
+        m_axis2WasRunning = m_axis2Motor->isRunning();
+        return;
+    }
+    // Already there (the first tooth), or (never, in gear cutting) behind:
+    // back off and come forwards to it, so the table's backlash is taken up
+    // the same way as for every other tooth, however it last moved (which
+    // includes any backlash compensation). A degree is plenty: it only has
+    // to be more than a step, as the motor takes up the backlash it's set to
+    const long backOff = std::max(1L, std::lround(1.0 / std::abs(conversion)));
+    const auto stopped = [this]() { return !m_axis2Motor->isRunning(); };
+    m_motionSequence.start(
+        { { [this, target, backOff, forwards]() {
+               m_axis2Motor->goToStep(target - forwards * backOff);
+           },
+            stopped },
+          { [this, target]() { m_axis2Motor->goToStep(target); }, stopped } });
+}
+
+double Model::indexStepSize() const
+{
+    return std::abs(m_axis2Motor->getConversionFactor());
+}
+
+void Model::gearCuttingFinished()
+{
+    // (Whole turns only: it ends a whole number of turns from the start, but
+    // within a step of it)
+    const double turns
+        = std::round((m_axis2Motor->getPosition() - m_multiPass.plan().indexStart) / 360.0);
+    if (turns == 0.0) {
+        return;
+    }
+    const long shift = std::lround(turns * 360.0 / m_axis2Motor->getConversionFactor());
+    const long step = m_axis2Motor->getCurrentStep() - shift;
+    // (The motor's backlash is unchanged: it's still taken up forwards.) The
+    // memory slots are left as they are: whole turns don't change where on
+    // the table a slot is, and a slot stored before the passes is then
+    // that position again, not whole turns behind
+    m_axis2Motor->setPosition(m_axis2Motor->getPosition(step));
+    // (Going back to them would take whole turns)
+    axis2ClearBreadcrumbs();
+    MGOLOG(
+        fmt::format(
+            "Gear cutting finished: {} {} turn(s), so its position is back to {}",
+            m_config.read("Axis2Label", "X"),
+            turns,
+            m_axis2Motor->getPosition()));
+}
+
 void Model::startSpringPasses()
 {
     // The same cut, repeated at X's position (where the last pass was, or
@@ -3353,6 +3586,10 @@ void Model::springPassMoveBack()
 
 void Model::multiPassFinished()
 {
+    if (m_multiPass.indexes()) {
+        gearCuttingFinished();
+        return;
+    }
     if (m_multiPass.plan().cut == MultiPassCut::Thread && m_mode == Mode::Threading) {
         // Spring passes can follow, at this depth
         m_springPassX = getAxis2Position();

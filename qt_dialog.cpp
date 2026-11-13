@@ -1924,6 +1924,447 @@ private:
     QLabel* m_message { nullptr };
 };
 
+class GearDialog final : public QDialog {
+public:
+    GearDialog(QWidget* parent, const QString& fontFamily, const GearDialogInfo& info)
+        : QDialog(parent, Qt::Dialog | Qt::FramelessWindowHint)
+        , m_info(info)
+        , m_setup(info.setup)
+        // (Following the module, unless it's been changed from that)
+        , m_depthTyped(
+              std::abs(info.setup.depth - gearWholeDepthMm(info.setup.module))
+              > MultiPass::TOLERANCE)
+    {
+        setModal(true);
+        setFocusPolicy(Qt::StrongFocus);
+        QFont titleFont(fontFamily);
+        titleFont.setPixelSize(MP_TITLE_FONT_SIZE);
+        QFont labelFont(fontFamily);
+        labelFont.setPixelSize(MP_LABEL_FONT_SIZE);
+        QFont valueFont(fontFamily);
+        valueFont.setPixelSize(MP_VALUE_FONT_SIZE);
+        QFont hintFont(fontFamily);
+        hintFont.setPixelSize(MP_HINT_FONT_SIZE);
+
+        auto* outer = new QVBoxLayout(this);
+        outer->setContentsMargins(0, 0, 0, 0);
+        auto* box = new QFrame(this);
+        box->setObjectName("box");
+        box->setStyleSheet(BOX_STYLE);
+        outer->addWidget(box);
+        auto* layout = new QVBoxLayout(box);
+        layout->setContentsMargins(16, 12, 16, 12);
+        layout->setSpacing(10);
+
+        auto* title = new QLabel("Gear cutting", box);
+        title->setFont(titleFont);
+        title->setStyleSheet(PROMPT_STYLE);
+        layout->addWidget(title);
+
+        auto* grid = new QGridLayout();
+        grid->setHorizontalSpacing(12);
+        grid->setVerticalSpacing(8);
+        layout->addLayout(grid);
+        const std::string& x = m_info.cut.label;
+        const std::string names[ROW_COUNT]
+            = { "Module", "Teeth", x + " start", x + " end", "Depth", "Depth per pass" };
+        for (int r = 0; r < ROW_COUNT; ++r) {
+            Row& row = m_rows[r];
+            row.name = addLabel(box, grid, r, 0, names[r], labelFont);
+            row.source = addLabel(box, grid, r, 1, "", labelFont);
+            row.fixed = addLabel(box, grid, r, 2, "", valueFont);
+            row.result = addLabel(box, grid, r, 3, "", valueFont);
+            if (r != CutStart) {
+                row.edit = new QLineEdit(box);
+                row.edit->setFont(valueFont);
+                row.edit->setStyleSheet(MP_EDIT_STYLE);
+                row.edit->setFixedWidth(120);
+                // (Only the cut's distance can be negative)
+                const char* pattern = r == CutEnd ? R"(^-?[0-9]{0,4}(\.[0-9]*)?$)"
+                    : r == Teeth                  ? R"(^[0-9]{0,3}$)"
+                                                  : R"(^[0-9]{0,2}(\.[0-9]*)?$)";
+                row.edit->setValidator(
+                    new QRegularExpressionValidator(QRegularExpression(pattern), row.edit));
+                row.edit->installEventFilter(this);
+                grid->addWidget(row.edit, r, 2);
+            }
+        }
+        grid->setColumnStretch(3, 1);
+
+        m_message = new QLabel(box);
+        m_message->setFont(labelFont);
+        layout->addWidget(m_message);
+
+        auto* hint = new QLabel(
+            QString::fromStdString(
+                "Up/Down: line   Left/Right: where from   Enter: OK   Esc: cancel\n"
+                "Start and end "
+                + x + " clear of the blank: " + m_info.indexLabel
+                + " turns there. The depth is fed by hand."),
+            box);
+        hint->setFont(hintFont);
+        hint->setStyleSheet(MP_HINT_STYLE);
+        layout->addWidget(hint);
+
+        // The values to start with
+        const auto setValue = [](QLineEdit* edit, double value, int decimals) {
+            if (value != 0.0) {
+                edit->setText(QString::number(value, 'f', decimals));
+            }
+        };
+        m_cutDistanceTyped = m_setup.cutDistance != 0.0;
+        setValue(m_rows[Module].edit, m_setup.module, 2);
+        setValue(m_rows[Teeth].edit, m_setup.teeth, 0);
+        setValue(
+            m_rows[CutEnd].edit,
+            m_setup.cutDistance * m_info.cut.displayPerMm,
+            m_info.cut.decimals);
+        setValue(m_rows[Depth].edit, m_setup.depth * m_info.cut.displayPerMm, 3);
+        setValue(m_rows[DepthPerPass].edit, m_setup.depthPerPass * m_info.cut.displayPerMm, 3);
+
+        QObject::connect(m_rows[Module].edit, &QLineEdit::textEdited, this, [this] {
+            m_setup.module = typed(m_rows[Module].edit).value_or(0.0);
+            if (!m_depthTyped) {
+                m_setup.depth = gearWholeDepthMm(m_setup.module);
+                m_rows[Depth].edit->setText(
+                    QString::number(m_setup.depth * m_info.cut.displayPerMm, 'f', 3));
+            }
+            refresh();
+        });
+        QObject::connect(m_rows[Teeth].edit, &QLineEdit::textEdited, this, [this] {
+            m_setup.teeth = static_cast<int>(typed(m_rows[Teeth].edit).value_or(0.0));
+            refresh();
+        });
+        QObject::connect(m_rows[CutEnd].edit, &QLineEdit::textEdited, this, [this] {
+            const auto v = typed(m_rows[CutEnd].edit);
+            m_cutDistanceTyped = v.has_value();
+            m_setup.cutDistance = v.value_or(0.0) / m_info.cut.displayPerMm;
+            refresh();
+        });
+        QObject::connect(m_rows[Depth].edit, &QLineEdit::textEdited, this, [this] {
+            m_setup.depth = typed(m_rows[Depth].edit).value_or(0.0) / m_info.cut.displayPerMm;
+            m_depthTyped = true;
+            refresh();
+        });
+        QObject::connect(m_rows[DepthPerPass].edit, &QLineEdit::textEdited, this, [this] {
+            m_setup.depthPerPass
+                = typed(m_rows[DepthPerPass].edit).value_or(0.0) / m_info.cut.displayPerMm;
+            refresh();
+        });
+
+        refresh();
+        // (Start where something needs typing, if anything does)
+        setCurrentRow(m_setup.teeth < 1 ? Teeth : CutStart);
+        adjustSize();
+        if (parent) {
+            const QPoint centre = parent->mapToGlobal(parent->rect().center());
+            move(centre - rect().center());
+        }
+    }
+
+    std::optional<GearSetup> chosenSetup() const
+    {
+        if (result() != QDialog::Accepted) {
+            return std::nullopt;
+        }
+        return m_setup;
+    }
+
+protected:
+    bool eventFilter(QObject* watched, QEvent* event) override
+    {
+        if (event->type() == QEvent::KeyPress && handleKey(static_cast<QKeyEvent*>(event))) {
+            return true;
+        }
+        return QDialog::eventFilter(watched, event);
+    }
+
+    void keyPressEvent(QKeyEvent* event) override
+    {
+        if (!handleKey(event)) {
+            QDialog::keyPressEvent(event);
+        }
+    }
+
+private:
+    enum RowId {
+        Module,
+        Teeth,
+        CutStart,
+        CutEnd,
+        Depth,
+        DepthPerPass,
+        ROW_COUNT
+    };
+
+    struct Row {
+        QLabel* name { nullptr };
+        // Where the position comes from, e.g. "Here" or "Mem 2"
+        QLabel* source { nullptr };
+        // The value typed in, or shown in its place (a position from a slot)
+        QLineEdit* edit { nullptr };
+        QLabel* fixed { nullptr };
+        // What it comes to
+        QLabel* result { nullptr };
+    };
+
+    static QLabel* addLabel(
+        QWidget* parent,
+        QGridLayout* grid,
+        int row,
+        int column,
+        const std::string& text,
+        const QFont& font)
+    {
+        auto* label = new QLabel(QString::fromStdString(text), parent);
+        label->setFont(font);
+        label->setStyleSheet(MP_LABEL_STYLE);
+        grid->addWidget(label, row, column);
+        return label;
+    }
+
+    static std::optional<double> typed(const QLineEdit* edit)
+    {
+        bool ok = false;
+        const double v = edit->text().toDouble(&ok);
+        return ok ? std::optional<double>(v) : std::nullopt;
+    }
+
+    // A length on the cut axis, in its display units
+    std::string format(double mm, int extraDecimals = 0) const
+    {
+        const int decimals = m_info.cut.decimals + extraDecimals;
+        double value = mm * m_info.cut.displayPerMm;
+        // (Not "-0.00")
+        if (std::abs(value) < 0.5 * std::pow(10.0, -decimals)) {
+            value = 0.0;
+        }
+        return fmt::format("{:.{}f}", value, decimals);
+    }
+
+    static std::string slotName(std::optional<std::size_t> slot, const char* none)
+    {
+        return slot ? "Mem " + std::to_string(*slot + 1) : none;
+    }
+
+    GearCutResolved resolved() const
+    {
+        GearCutResolved r = resolveGearCut(m_setup, m_info.positions, m_info.cut.label);
+        if (r.error.empty() && !m_setup.cutEndMemory && !m_cutDistanceTyped) {
+            r.error = "Type how far " + m_info.cut.label + " moves from the start (+ or -)";
+        }
+        return r;
+    }
+
+    // The memory slots set on the cut axis, after nullopt (here, or a distance)
+    std::vector<std::optional<std::size_t>> sourceChoices(int row) const
+    {
+        std::vector<std::optional<std::size_t>> choices { std::nullopt };
+        const auto& memory = m_info.positions.cutMemory;
+        for (std::size_t slot = 0; slot < memory.size(); ++slot) {
+            if (memory[slot] && !(row == CutEnd && m_setup.cutStartMemory == slot)) {
+                choices.push_back(slot);
+            }
+        }
+        return choices;
+    }
+
+    std::optional<std::size_t>* sourceOf(int row)
+    {
+        return row == CutStart ? &m_setup.cutStartMemory
+            : row == CutEnd    ? &m_setup.cutEndMemory
+                               : nullptr;
+    }
+
+    void cycleSource(int direction)
+    {
+        std::optional<std::size_t>* source = sourceOf(m_current);
+        if (!source) {
+            return;
+        }
+        const auto choices = sourceChoices(m_current);
+        const auto it = std::find(choices.begin(), choices.end(), *source);
+        const int n = static_cast<int>(choices.size());
+        const int index = it == choices.end() ? 0 : static_cast<int>(it - choices.begin());
+        const std::optional<std::size_t> oldStart = m_setup.cutStartMemory;
+        *source = choices.at(((index + direction) % n + n) % n);
+        if (m_current == CutStart && m_setup.cutStartMemory
+            && m_setup.cutEndMemory == m_setup.cutStartMemory) {
+            // The start and end have been swapped (the cut can't end where it
+            // starts): the end is the old start, or else a distance
+            m_setup.cutEndMemory = oldStart;
+        }
+        refresh();
+        setCurrentRow(m_current); // (the entry box may have appeared or gone)
+    }
+
+    // Whether a row's value is typed in (rather than coming from a memory)
+    bool rowTyped(int row) const
+    {
+        switch (row) {
+            case CutStart:
+                return false;
+            case CutEnd:
+                return !m_setup.cutEndMemory;
+            default:
+                return true;
+        }
+    }
+
+    void setCurrentRow(int row)
+    {
+        m_current = row;
+        QLineEdit* edit = m_rows[row].edit;
+        if (edit && rowTyped(row)) {
+            edit->setFocus();
+            edit->selectAll(); // (so typing replaces it)
+        } else {
+            setFocus();
+        }
+        refresh();
+    }
+
+    void refresh()
+    {
+        const GearCutResolved r = resolved();
+        const std::string& x = m_info.cut.label;
+        // (Each position is shown once it can be worked out)
+        const auto memory = [this](std::optional<std::size_t> slot) -> std::optional<double> {
+            const auto& m = m_info.positions.cutMemory;
+            return slot && *slot < m.size() ? m[*slot] : std::nullopt;
+        };
+        const std::optional<double> start = m_setup.cutStartMemory
+            ? memory(m_setup.cutStartMemory)
+            : std::optional(m_info.positions.cutHere);
+        std::optional<double> end;
+        if (m_setup.cutEndMemory) {
+            end = memory(m_setup.cutEndMemory);
+        } else if (start && m_cutDistanceTyped) {
+            end = *start + m_setup.cutDistance;
+        }
+
+        const auto chooser = [](const std::string& text) { return "< " + text + " >"; };
+        m_rows[CutStart].source->setText(
+            QString::fromStdString(chooser(slotName(m_setup.cutStartMemory, "Here"))));
+        m_rows[CutStart].result->setText(
+            start ? QString::fromStdString(x + " " + format(*start)) : "");
+        m_rows[CutEnd].source->setText(
+            QString::fromStdString(chooser(slotName(m_setup.cutEndMemory, "Distance"))));
+        m_rows[CutEnd].fixed->setText(
+            start && end && m_setup.cutEndMemory ? QString::fromStdString(format(*end - *start))
+                                                 : "");
+        m_rows[CutEnd].result->setText(
+            end ? QString::fromStdString("to " + x + " " + format(*end)) : "");
+
+        const bool gearKnown = m_setup.module > 0.0 && m_setup.teeth > 0;
+        m_rows[Module].result->setText(
+            gearKnown ? QString::fromStdString(
+                            "blank Ø " + format(gearBlankDiameterMm(m_setup.module, m_setup.teeth))
+                            + " " + m_info.cut.unit)
+                      : "");
+        const int cutter = gearCutterNumber(m_setup.teeth);
+        m_rows[Teeth].result->setText(
+            m_setup.teeth > 0 ? QString::fromStdString(
+                                    fmt::format("{:.2f}° each", 360.0 / m_setup.teeth)
+                                    + (cutter == 0 ? std::string(", too few for a cutter")
+                                                   : fmt::format(", cutter No. {}", cutter)))
+                              : "");
+        m_rows[Depth].result->setText(
+            m_setup.module > 0.0
+                ? QString::fromStdString(
+                      m_depthTyped ? "whole depth " + format(gearWholeDepthMm(m_setup.module), 1)
+                                   : std::string("whole depth"))
+                : "");
+        const int passes = gearPassCount(m_setup);
+        m_rows[DepthPerPass].result->setText(
+            passes > 0
+                ? QString::fromStdString(
+                      fmt::format("{} pass{}, each once round", passes, passes == 1 ? "" : "es"))
+                : "");
+
+        for (int row = 0; row < ROW_COUNT; ++row) {
+            Row& w = m_rows[row];
+            const bool typedRow = rowTyped(row);
+            if (w.edit) {
+                w.edit->setVisible(typedRow);
+                w.edit->setStyleSheet(row == m_current ? MP_EDIT_CURRENT_STYLE : MP_EDIT_STYLE);
+            }
+            w.fixed->setVisible(!typedRow);
+            const char* style = row == m_current ? MP_CURRENT_STYLE : MP_LABEL_STYLE;
+            w.name->setStyleSheet(style);
+            w.source->setStyleSheet(style);
+        }
+
+        if (r.error.empty()) {
+            m_message->setStyleSheet(MP_HINT_STYLE);
+            m_message->setText(
+                QString::fromStdString(
+                    "In the mode, Enter moves " + x
+                    + " to the start; Enter again starts,\n"
+                      "with the first tooth where "
+                    + m_info.indexLabel + " is then"));
+        } else {
+            m_message->setStyleSheet(MP_ERROR_STYLE);
+            m_message->setText(QString::fromStdString(r.error));
+        }
+    }
+
+    // Returns true if the key press has been dealt with
+    bool handleKey(QKeyEvent* event)
+    {
+        const int qtKey = event->key();
+        if (qtKey == Qt::Key_Escape) {
+            reject();
+            return true;
+        }
+        if (qtKey == Qt::Key_Return || qtKey == Qt::Key_Enter) {
+            if (resolved().error.empty()) {
+                accept();
+            }
+            return true; // (not accepted unless it can be used)
+        }
+        if (qtKey == Qt::Key_Up || qtKey == Qt::Key_Down) {
+            const int row = m_current + (qtKey == Qt::Key_Up ? -1 : 1);
+            if (row >= 0 && row < ROW_COUNT) {
+                setCurrentRow(row);
+            }
+            return true;
+        }
+        if ((qtKey == Qt::Key_Left || qtKey == Qt::Key_Right) && sourceOf(m_current)) {
+            cycleSource(qtKey == Qt::Key_Left ? -1 : 1);
+            return true;
+        }
+        const QString text = event->text();
+        const bool numeric = text.size() == 1
+            && (text.at(0).isDigit() || text.at(0) == '.'
+                || (text.at(0) == '-' && m_current == CutEnd));
+        if (numeric && m_current == CutEnd && !rowTyped(m_current)) {
+            // Typing a number where a memory slot was chosen: a distance instead
+            m_setup.cutEndMemory = std::nullopt;
+            setCurrentRow(m_current);
+            QLineEdit* edit = m_rows[m_current].edit;
+            edit->clear();
+            QKeyEvent copy(QEvent::KeyPress, qtKey, event->modifiers(), text);
+            QCoreApplication::sendEvent(edit, &copy);
+            return true;
+        }
+        if (text.size() == 1 && text.at(0).isLetter()) {
+            return true; // (letters do nothing)
+        }
+        return false;
+    }
+
+    GearDialogInfo m_info;
+    GearSetup m_setup;
+    // Whether the depth has been typed, rather than following the module
+    bool m_depthTyped { false };
+    // Whether a distance for the cut has been typed (it has no default)
+    bool m_cutDistanceTyped { false };
+    Row m_rows[ROW_COUNT];
+    int m_current { Module };
+    QLabel* m_message { nullptr };
+};
+
 } // end anonymous namespace
 
 QDialog* openMultiPassDialog(
@@ -1933,6 +2374,21 @@ QDialog* openMultiPassDialog(
     std::function<void(std::optional<MultiPassSetup>)> onDone)
 {
     auto* dlg = new MultiPassDialog(parent, fontFamily, info);
+    dlg->setAttribute(Qt::WA_DeleteOnClose);
+    QObject::connect(dlg, &QDialog::finished, dlg, [dlg, onDone = std::move(onDone)](int) {
+        onDone(dlg->chosenSetup());
+    });
+    dlg->open();
+    return dlg;
+}
+
+QDialog* openGearDialog(
+    QWidget* parent,
+    const QString& fontFamily,
+    const GearDialogInfo& info,
+    std::function<void(std::optional<GearSetup>)> onDone)
+{
+    auto* dlg = new GearDialog(parent, fontFamily, info);
     dlg->setAttribute(Qt::WA_DeleteOnClose);
     QObject::connect(dlg, &QDialog::finished, dlg, [dlg, onDone = std::move(onDone)](int) {
         onDone(dlg->chosenSetup());

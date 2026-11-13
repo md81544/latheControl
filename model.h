@@ -1,6 +1,7 @@
 #pragma once
 
 #include "configreader.h"
+#include "gearcutting.h"
 #include "linearscale.h"
 #include "motionsequence.h"
 #include "multipass.h"
@@ -46,7 +47,8 @@ enum class Mode {
     Taper,
     Radius,
     MultiPass,
-    Knurling // Cut knurling (see Model::setKnurlingSetup())
+    Knurling, // Cut knurling (see Model::setKnurlingSetup())
+    GearCutting // (See Model::setGearSetup())
 };
 
 // "Key Modes" allow for two-key actions, a bit like vim.
@@ -427,6 +429,31 @@ public:
     MultiPassSetup knurlingDialogSetup() const;
     // The knurl's lead (in mm per revolution), once set up in knurling mode
     std::optional<double> getKnurlLeadMm() const;
+    // Gear cutting (gear cutting mode; see gearcutting.h): a multi-pass along
+    // axis 1 (X on the mill), indexed by axis 2 (a rotary table), whose
+    // starts are the teeth, with the depth fed in by hand before each pass
+    // (each pass goes once round the blank). Set up on entering the mode.
+    // Needs axis 2 to be a rotary table (in degrees), and GearCutting in the
+    // config. Each cut starts with axis 1 at the start and axis 2 where the
+    // tooth is; the first tooth is where axis 2 is when Enter starts the
+    // passes. When they finish, axis 2 has gone a whole number of turns, and
+    // its position is put back to where it started (e.g. 0°). (Its memory
+    // slots aren't changed: they're still the same places on the table.)
+    // Once the passes have started, the teeth stay where they are until the
+    // number of teeth changes, or axis 2 is zeroed or set: if they're
+    // stopped (e.g. part way through turning axis 2) and started again,
+    // moving to the start also turns axis 2 forwards to the next tooth
+    std::string setGearSetup(const GearSetup& setup);
+    const GearSetup& getGearSetup() const;
+    // Whether gear cutting has been set up (in gear cutting mode)
+    bool gearCuttingSet() const;
+    // The setup the gear dialog starts with (see defaultGearSetup())
+    GearSetup gearDialogSetup() const;
+    // Why gear cutting can't be used with this config (empty if it can)
+    std::string gearCuttingUnavailable() const;
+    // Whether axis 2 is where gear cutting would start (on a tooth, if
+    // they've been started before: see setGearSetup())
+    bool gearAOnTooth() const;
     // The fastest Z may need to move at the start of a pass locked to the
     // spindle (threading or knurling), in mm/min, leaving a margin for the
     // spindle speeding up. The spindle may turn at up to this divided by the
@@ -564,6 +591,13 @@ private:
     MultiPassSetup m_knurlingSetup;
     // (See getKnurlLeadMm(): 0 until set up)
     double m_knurlLeadMm { 0.0 };
+    GearSetup m_gearSetup;
+    bool m_gearSet { false };
+    // Where axis 2 was for the first tooth, once gear cutting has started
+    // (see setGearSetup())
+    std::optional<double> m_gearToothOrigin;
+    // Where axis 2 goes for the first tooth of the next run of passes
+    double gearStartTooth() const;
     MultiPass m_multiPass { *this };
     bool m_multiPassMovingToStart { false };
     // X is following Z, to correct the taper, in a multi-pass cut or return
@@ -663,6 +697,14 @@ private:
     void retract(std::optional<double> to) override;
     void unretract() override;
     bool isRetracted() const override;
+    // The index axis is axis 2 (only when gear cutting)
+    double indexPosition() const override;
+    bool indexMoving() const override;
+    void indexMoveTo(double position) override;
+    double indexStepSize() const override;
+    // Gear cutting has finished: axis 2's position goes back to where the
+    // passes started, a whole number of turns ago (see setGearSetup())
+    void gearCuttingFinished();
     // Axis locks (see lockAxis()): true if a move of axis 1 and/or axis 2 is
     // refused because one of them is locked, in which case the warning says
     // which to unlock

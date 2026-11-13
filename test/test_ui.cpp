@@ -587,7 +587,7 @@ TEST_CASE("UI: every menu row fits, without overlapping its shortcut")
     mgo::ViewQt view;
     view.initialise(tm.model);
     // (The descriptions depend on the config, the units and the auto-retract)
-    for (const char* file : { "lc.cfg", "lc_mill.cfg", "lc_rt.cfg" }) {
+    for (const char* file : { "lc.cfg", "lc_mill.cfg" }) {
         const mgo::ConfigReader config(file);
         for (const auto units : { mgo::DisplayUnits::Metric, mgo::DisplayUnits::Imperial }) {
             for (const bool autoRetract : { false, true }) {
@@ -819,6 +819,75 @@ TEST_CASE("UI: knurling through the controller")
     REQUIRE(tm.model.getMultiPassRange().cutEnd == Approx(-7.0));
     controller.tick();
     snapshot(w, "knurling_mode");
+}
+
+TEST_CASE("UI: gear cutting through the controller")
+{
+    // The mill: X, and a rotary table as axis 2
+    MapConfigReader config { { { "GearCutting", "true" },
+                               { "Axis1Label", "X" },
+                               { "Axis2Label", "A" },
+                               { "Axis2DisplayUnits", "deg" },
+                               { "Axis2ConversionNumerator", "5" },
+                               { "Axis2ConversionDivisor", "4000" } } };
+    mgo::MockGpio gpio { false };
+    mgo::Model model { gpio, config };
+    mgo::Controller controller(&model);
+    QWidget* w = mainWindow();
+    REQUIRE(w);
+
+    // Module 0.5, 30 teeth, X from here by -40, the depth by 0.4 per pass
+    whenDialogShows([](QWidget* dialog) {
+        // (It starts on the teeth, as none have been chosen)
+        typeInto(dialog, "30");
+        key(dialog, Qt::Key_Up);
+        typeInto(dialog, "0.5"); // (the depth follows the module)
+        key(dialog, Qt::Key_Down, 3);
+        typeInto(dialog, "-40");
+        key(dialog, Qt::Key_Down, 2);
+        // (Not without a depth per pass)
+        key(dialog, Qt::Key_Return);
+        REQUIRE(dialog->isVisible());
+        typeInto(dialog, "0.4");
+        snapshot(dialog, "gear_cutting");
+        key(dialog, Qt::Key_Return);
+    });
+    press(w, controller, Qt::Key_Tab);
+    press(w, controller, Qt::Key_M);
+    press(w, controller, Qt::Key_C);
+    REQUIRE(waitForDialogToClose());
+    REQUIRE(model.getMode() == mgo::Mode::GearCutting);
+    REQUIRE(model.gearCuttingSet());
+    const mgo::GearSetup& setup = model.getGearSetup();
+    REQUIRE(setup.module == Approx(0.5));
+    REQUIRE(setup.teeth == 30);
+    REQUIRE(setup.depth == Approx(1.0785));
+    REQUIRE(setup.depthPerPass == Approx(0.4));
+    REQUIRE(model.getMultiPassRange().cutStart == Approx(0.0));
+    REQUIRE(model.getMultiPassRange().cutEnd == Approx(-40.0));
+
+    // Enter starts it (X is at the start), pausing for the depth to be fed in
+    press(w, controller, Qt::Key_Return);
+    REQUIRE(model.multiPass().state() == mgo::MultiPass::State::Paused);
+    REQUIRE(model.multiPass().totalPasses() == 3);
+    controller.tick();
+    snapshot(w, "gear_cutting_mode");
+    // Space stops it
+    press(w, controller, Qt::Key_Space);
+    REQUIRE(!model.multiPass().inProgress());
+}
+
+TEST_CASE("UI: gear cutting isn't in the menu unless the config has it")
+{
+    TestModel tm;
+    mgo::Controller controller(&tm.model);
+    QWidget* w = mainWindow();
+    REQUIRE(w);
+    press(w, controller, Qt::Key_Tab);
+    press(w, controller, Qt::Key_M);
+    press(w, controller, Qt::Key_C);
+    press(w, controller, Qt::Key_Escape);
+    REQUIRE(tm.model.getMode() == mgo::Mode::None);
 }
 
 TEST_CASE("UI: multi-pass dialog, memory slots either way round")

@@ -346,7 +346,7 @@ void Controller::processKey(int t)
             case key::ENTER:
                 if (m_model->getMode() == Mode::MultiPass
                     || (m_model->getMode() == Mode::Threading && m_model->threadingPassesSet())
-                    || m_model->getMode() == Mode::Knurling) {
+                    || m_model->getMode() == Mode::Knurling || m_model->gearCuttingSet()) {
                     // Starts the multi-pass, or continues it after a pause
                     m_model->multiPassGo();
                     break;
@@ -799,6 +799,35 @@ void Controller::processKey(int t)
                             !error.empty()) {
                             m_model->changeMode(Mode::None);
                             pressAnyKey("Cut knurling", { error, "", "Press a key", "" }, [] { });
+                        }
+                    });
+                    break;
+                }
+            case key::f2g: // gear cutting mode
+                {
+                    // As with all dialogs, stop all motors first
+                    m_model->stopAllMotors();
+                    if (const std::string error = m_model->gearCuttingUnavailable();
+                        !error.empty()) {
+                        pressAnyKey("Gear cutting", { error, "", "Press a key", "" }, [] { });
+                        break;
+                    }
+                    const MultiPassDialogInfo mp = multiPassDialogInfo();
+                    GearDialogInfo info { .cut = mp.cut,
+                                          .indexLabel = mp.feed.label,
+                                          .positions = mp.positions,
+                                          .setup = m_model->gearDialogSetup() };
+                    m_view->openGearDialog(info, [this](std::optional<GearSetup> setup) {
+                        if (!setup) {
+                            return;
+                        }
+                        m_model->changeMode(Mode::GearCutting);
+                        // (The dialog only accepts a setup which can be
+                        // used, and nothing has moved since)
+                        if (const std::string error = m_model->setGearSetup(*setup);
+                            !error.empty()) {
+                            m_model->changeMode(Mode::None);
+                            pressAnyKey("Gear cutting", { error, "", "Press a key", "" }, [] { });
                         }
                     });
                     break;

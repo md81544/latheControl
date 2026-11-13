@@ -60,6 +60,28 @@ public:
     virtual void retract(std::optional<double> to) = 0;
     virtual void unretract() = 0;
     virtual bool isRetracted() const = 0;
+
+    // The index axis (e.g. a rotary table, in degrees), which turns the work
+    // between cuts (see MultiPassPlan::indexPerStart). Only used if the plan
+    // indexes
+    virtual double indexPosition() const
+    {
+        return 0.0;
+    }
+    virtual bool indexMoving() const
+    {
+        return false;
+    }
+    // Moves the index axis to position, ending with a move the same way as
+    // every other index (forwards, i.e. towards larger positions), even if
+    // it's there already, so its backlash is taken up the same way for every
+    // cut: if it isn't forwards of where the axis is (e.g. the first start),
+    // the axis backs off a little and comes forwards to it
+    virtual void indexMoveTo(double /*position*/) { }
+    virtual double indexStepSize() const
+    {
+        return 0.0;
+    }
 };
 
 // What each cut is
@@ -142,6 +164,18 @@ struct MultiPassPlan {
     // relief groove. Each start is cut there and back before the next. Not
     // with a retract
     bool cutBack { false };
+    // Indexing (e.g. gear cutting, with the starts as the teeth): if not
+    // zero, each start is a position of the index axis rather than of the
+    // spindle, this much further on (forwards) than the one before. Before
+    // each start's cut, the index axis moves there. It only ever moves
+    // forwards: with starts × indexPerStart one turn (e.g. 360 / starts
+    // degrees), each pass goes once round, and the next pass carries on
+    // round, rather than going back. After the last pass it moves on once
+    // more, so it ends a whole number of turns from where it started. Not
+    // for threading, nor with a retract
+    double indexPerStart { 0.0 };
+    // (If indexing) Where the index axis is for the first start
+    double indexStart { 0.0 };
 };
 
 // Where a multi-pass's start and end positions come from, as chosen in its
@@ -297,7 +331,8 @@ public:
         Unretracting,
         Feeding,
         Positioning, // Moving the cut axis to a pass's start (see cutShiftPerFeed)
-        Finishing, // Unretracting after the last pass
+        Indexing, // Moving the index axis to a start (see indexPerStart)
+        Finishing, // Unretracting (or indexing on) after the last pass
         Finished
     };
 
@@ -316,7 +351,9 @@ public:
     // While a pass is under way (not paused): asks for a pause before the
     // next pass, as if the plan paused (e.g. to clear swarf), or, if already
     // asked, cancels the request. Does nothing if it would pause anyway, or
-    // in any other state. There's no pause after the last pass
+    // in any other state. There's no pause after the last pass. When
+    // indexing, the pause is before the next start instead (e.g. to look at
+    // the tooth just cut), and continuing goes on to that start
     void togglePauseRequest();
     // True if a pause before the next pass has been asked for
     bool pauseRequested() const;
@@ -348,8 +385,14 @@ public:
     // being made, or about to be)
     double fed() const;
     // While paused: how far the feed axis will move on for the next pass
-    // (with a manual feed, how far the user should feed it)
+    // (with a manual feed, how far the user should feed it). Zero if paused
+    // between starts
     double nextFeed() const;
+    // Whether it's paused between two starts of a pass (see
+    // togglePauseRequest()), rather than between passes
+    bool pausedBetweenStarts() const;
+    // Whether the plan indexes (see MultiPassPlan::indexPerStart)
+    bool indexes() const;
     // Why the multi-pass last stopped (empty if it finished, or hasn't)
     const std::string& message() const;
     const MultiPassPlan& plan() const;
@@ -361,6 +404,9 @@ private:
     // Whether the cut or feed axis is at a position (see cutStepSize())
     bool cutAt(double target) const;
     bool feedAt(double target) const;
+    bool indexAt(double target) const;
+    // Where the index axis goes for the start being cut
+    double indexTarget() const;
     bool isLastPass() const;
     // Whether the pass being made retracts before its return
     bool passRetracts() const;
@@ -372,8 +418,10 @@ private:
     double feedBase() const;
     // Where the feed axis goes for a pass (from 1), from where it is
     double nextFeedTarget(double from, int pass) const;
-    // Moves the cut axis to the pass's start if need be, then cuts
+    // Indexes (if the plan does), then moves the cut axis to the pass's
+    // start if need be, then cuts
     void startPass();
+    void positionAndCut();
     void startCut();
     void startCutBack();
     void startReturn();
@@ -399,6 +447,8 @@ private:
     double m_cutSpeed { 0.0 };
     // (See togglePauseRequest())
     bool m_pauseRequested { false };
+    // (See pausedBetweenStarts())
+    bool m_pausedBetweenStarts { false };
     // (See stopAfterPass())
     std::string m_stopAfterPassReason;
     std::string m_message;

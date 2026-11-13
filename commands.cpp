@@ -149,6 +149,7 @@ bool menuOnly(int k)
         case key::f2o:
         case key::f2m:
         case key::f2k:
+        case key::f2g:
         case key::threadingPasses:
         case key::toggleThreadingAutoRetract:
         case key::clearFeature:
@@ -448,6 +449,10 @@ buildCommands(const IConfigReader& config, DisplayUnits units, bool threadingAut
         [](const Model& m) { return m.getMode() == Mode::Threading; },
         'n');
     b.add(c, "Cut knurling (experimental)...", key::f2k, BOTH, nullptr, 'k');
+    // (Only on a machine with a rotary table as axis 2, e.g. the mill)
+    if (config.readBool("GearCutting", false)) {
+        b.add(c, "Gear cutting...", key::f2g, BOTH, nullptr, 'c');
+    }
     // (Rarely changed, so no shortcut. It moves nothing, so can be changed
     // at any time.) Worded as a statement of how it's set now ("is ON"),
     // which can't be mistaken for what choosing it does, as "Turn
@@ -470,7 +475,7 @@ buildCommands(const IConfigReader& config, DisplayUnits units, bool threadingAut
         [](const Model& m) {
             return m.getMode() == Mode::MultiPass
                 || (m.getMode() == Mode::Threading && m.threadingPassesSet())
-                || m.getMode() == Mode::Knurling;
+                || m.getMode() == Mode::Knurling || m.gearCuttingSet();
         },
         'g');
     b.add(c, fmt::format("{} retraction direction...", a2), key::f2r, BOTH, nullptr, 'r');

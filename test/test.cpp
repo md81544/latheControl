@@ -2126,6 +2126,19 @@ public:
     {
         return m_retracted;
     }
+    double indexPosition() const override
+    {
+        return m_index;
+    }
+    bool indexMoving() const override
+    {
+        return m_indexTarget.has_value();
+    }
+    void indexMoveTo(double position) override
+    {
+        log.push_back(fmt::format("index {:.6g}", position));
+        m_indexTarget = position;
+    }
 
     // Finishes any moves in progress (or, if given, stops the cut short there)
     void finishMoves(std::optional<double> cutStopsAt = std::nullopt)
@@ -2141,6 +2154,10 @@ public:
         if (m_feedTarget) {
             m_feed = *m_feedTarget;
             m_feedTarget.reset();
+        }
+        if (m_indexTarget) {
+            m_index = indexStopsAt.value_or(*m_indexTarget);
+            m_indexTarget.reset();
         }
     }
     // Updates the multi-pass, finishing each move, until it's paused, finished
@@ -2166,11 +2183,15 @@ public:
     std::string threadError;
     // The feed axis's step size (0 to move anywhere)
     double feedStep { 0.0 };
+    double m_index { 0.0 };
+    // If set, the index axis stops here, rather than where it was sent
+    std::optional<double> indexStopsAt;
 
 private:
     std::optional<double> m_cutTarget;
     double m_cutFollows { 0.0 };
     std::optional<double> m_feedTarget;
+    std::optional<double> m_indexTarget;
 };
 
 using Log = std::vector<std::string>;
@@ -5121,4 +5142,441 @@ TEST_CASE("Model:   going to the feature needs it, and isn't allowed in some mod
     f.model.featureGoToStart(true);
     REQUIRE(!f.model.getWarning().empty());
     REQUIRE(!f.model.isMotionSequenceRunning());
+}
+
+namespace {
+
+// Gear cutting's plan: four teeth, the depth (0.2) fed by hand, 0.1 per pass
+mgo::MultiPassPlan indexedPlan()
+{
+    mgo::MultiPassPlan plan = basicPlan();
+    plan.feedManual = true;
+    plan.feedStart = 0.0;
+    plan.feedEnd = 0.2;
+    plan.feedPerPass = 0.1;
+    plan.starts = 4;
+    plan.indexPerStart = 90.0;
+    plan.indexStart = 0.0;
+    return plan;
+}
+
+} // end anonymous namespace
+
+TEST_CASE("MultiPass: indexing, each start indexed and cut before feeding in, always forwards")
+{
+    FakeMultiPassMachine machine;
+    mgo::MultiPass mp(machine);
+    REQUIRE(mp.start(indexedPlan()).empty());
+    REQUIRE(mp.indexes());
+    // (Paused first, for the user to feed in for the first pass)
+    REQUIRE(mp.state() == mgo::MultiPass::State::Paused);
+    REQUIRE(!mp.pausedBetweenStarts());
+    REQUIRE(mp.nextFeed() == Approx(0.1));
+    REQUIRE(mp.totalPasses() == 2);
+    mp.continueAfterPause();
+    // The first start is indexed to as well, where the index axis already
+    // is (the machine takes up its backlash)
+    REQUIRE(mp.state() == mgo::MultiPass::State::Indexing);
+    machine.run(mp);
+    REQUIRE(mp.state() == mgo::MultiPass::State::Paused);
+    REQUIRE(mp.pass() == 1);
+    REQUIRE(
+        machine.log
+        == Log { "index 0",
+                 "cut -10 at 40",
+                 "cut 0 at 1000",
+                 "index 90",
+                 "cut -10 at 40",
+                 "cut 0 at 1000",
+                 "index 180",
+                 "cut -10 at 40",
+                 "cut 0 at 1000",
+                 "index 270",
+                 "cut -10 at 40",
+                 "cut 0 at 1000" });
+    machine.log.clear();
+    // The second pass carries on round, rather than going back to 0, then
+    // it goes on round to where the first tooth was
+    mp.continueAfterPause();
+    machine.run(mp);
+    REQUIRE(mp.state() == mgo::MultiPass::State::Finished);
+    REQUIRE(mp.pass() == 2);
+    REQUIRE(mp.fed() == Approx(0.2));
+    REQUIRE(machine.log.at(0) == "index 360");
+    REQUIRE(machine.log.at(9) == "index 630");
+    REQUIRE(machine.log.back() == "index 720");
+    REQUIRE(machine.indexPosition() == Approx(720.0));
+}
+
+TEST_CASE("MultiPass: indexing, a pause asked for is before the next start")
+{
+    FakeMultiPassMachine machine;
+    mgo::MultiPass mp(machine);
+    auto plan = indexedPlan();
+    plan.indexStart = 10.0;
+    machine.m_index = 10.0;
+    REQUIRE(mp.start(plan).empty());
+    mp.continueAfterPause();
+    machine.finishMoves();
+    mp.update();
+    REQUIRE(mp.state() == mgo::MultiPass::State::Cutting);
+    // (With a manual feed, only when indexing)
+    mp.togglePauseRequest();
+    REQUIRE(mp.pauseRequested());
+    machine.run(mp);
+    REQUIRE(mp.state() == mgo::MultiPass::State::Paused);
+    REQUIRE(mp.pausedBetweenStarts());
+    REQUIRE(mp.startNumber() == 1);
+    // (Nothing to feed in)
+    REQUIRE(mp.nextFeed() == Approx(0.0));
+    machine.log.clear();
+    mp.continueAfterPause();
+    REQUIRE(!mp.pausedBetweenStarts());
+    REQUIRE(mp.startNumber() == 2);
+    REQUIRE(machine.log == Log { "index 100" });
+    REQUIRE(mp.pass() == 1);
+}
+
+TEST_CASE("MultiPass: indexing stops if the index stops short")
+{
+    FakeMultiPassMachine machine;
+    mgo::MultiPass mp(machine);
+    REQUIRE(mp.start(indexedPlan()).empty());
+    mp.continueAfterPause();
+    machine.run(mp);
+    machine.indexStopsAt = 45.0;
+    mp.continueAfterPause();
+    machine.run(mp);
+    REQUIRE(mp.state() == mgo::MultiPass::State::Idle);
+    REQUIRE(mp.message() == "The index stopped short");
+}
+
+TEST_CASE("MultiPass: indexing needs the index axis at its start, and no threading or retract")
+{
+    FakeMultiPassMachine machine;
+    mgo::MultiPass mp(machine);
+    auto plan = indexedPlan();
+    plan.indexStart = 5.0;
+    REQUIRE(mp.start(plan) == "The index axis isn't at its start");
+    REQUIRE(!mp.inProgress());
+
+    plan = indexedPlan();
+    plan.cut = mgo::MultiPassCut::Thread;
+    plan.feedManual = false;
+    plan.retract = true;
+    REQUIRE(mp.start(plan) == "Can't index while threading");
+
+    plan = indexedPlan();
+    plan.feedManual = false;
+    plan.retract = true;
+    REQUIRE(mp.start(plan) == "Can't retract while indexing");
+
+    // (Several starts without threading or indexing)
+    plan = indexedPlan();
+    plan.indexPerStart = 0.0;
+    REQUIRE(mp.start(plan) == "Only threading or indexed passes can have several starts");
+}
+
+TEST_CASE("Gear cutting: the depth, blank, cutter, and passes")
+{
+    REQUIRE(mgo::gearWholeDepthMm(1.0) == Approx(2.157));
+    REQUIRE(mgo::gearWholeDepthMm(0.5) == Approx(1.0785));
+    REQUIRE(mgo::gearBlankDiameterMm(1.0, 20) == Approx(22.0));
+    REQUIRE(mgo::gearBlankDiameterMm(0.5, 30) == Approx(16.0));
+    REQUIRE(mgo::gearCutterNumber(11) == 0);
+    REQUIRE(mgo::gearCutterNumber(12) == 8);
+    REQUIRE(mgo::gearCutterNumber(13) == 8);
+    REQUIRE(mgo::gearCutterNumber(14) == 7);
+    REQUIRE(mgo::gearCutterNumber(20) == 6);
+    REQUIRE(mgo::gearCutterNumber(21) == 5);
+    REQUIRE(mgo::gearCutterNumber(34) == 4);
+    REQUIRE(mgo::gearCutterNumber(35) == 3);
+    REQUIRE(mgo::gearCutterNumber(134) == 2);
+    REQUIRE(mgo::gearCutterNumber(135) == 1);
+    REQUIRE(mgo::gearCutterNumber(500) == 1);
+    // 2.157 in 0.5s: five passes, the last 0.157
+    REQUIRE(mgo::gearPassCount({ .depth = 2.157, .depthPerPass = 0.5 }) == 5);
+    REQUIRE(mgo::gearPassCount({ .depth = 1.0, .depthPerPass = 1.0 }) == 1);
+    REQUIRE(mgo::gearPassCount({ .depth = 1.0, .depthPerPass = 0.0 }) == 0);
+}
+
+TEST_CASE("Gear cutting: the cut's start and end")
+{
+    mgo::MultiPassPositions p;
+    p.cutHere = 10.0;
+    p.cutMemory = { 5.0, std::nullopt, -30.0 };
+    mgo::GearSetup setup {
+        .module = 1.0, .teeth = 20, .cutDistance = -40.0, .depth = 2.157, .depthPerPass = 0.5
+    };
+    auto r = mgo::resolveGearCut(setup, p);
+    REQUIRE(r.error.empty());
+    REQUIRE(r.cutStart == Approx(10.0));
+    REQUIRE(r.cutEnd == Approx(-30.0));
+
+    setup.cutStartMemory = 0;
+    setup.cutEndMemory = 2;
+    r = mgo::resolveGearCut(setup, p);
+    REQUIRE(r.error.empty());
+    REQUIRE(r.cutStart == Approx(5.0));
+    REQUIRE(r.cutEnd == Approx(-30.0));
+
+    setup.cutEndMemory = 1;
+    REQUIRE(mgo::resolveGearCut(setup, p).error == "Mem 2 has no X position");
+    setup.cutEndMemory = 0;
+    REQUIRE(mgo::resolveGearCut(setup, p).error == "The X start and end are the same");
+    setup.cutEndMemory = 2;
+    setup.teeth = 0;
+    REQUIRE(mgo::resolveGearCut(setup, p).error == "The number of teeth must be from 1 to 999");
+    setup.teeth = 20;
+    setup.module = 0.0;
+    REQUIRE(mgo::resolveGearCut(setup, p).error == "The module must be more than 0");
+    setup.module = 1.0;
+    setup.depthPerPass = 0.0;
+    REQUIRE(mgo::resolveGearCut(setup, p).error == "The depth per pass must be more than 0");
+}
+
+TEST_CASE("Gear cutting: the dialog's defaults")
+{
+    mgo::MultiPassPositions p;
+    p.cutHere = 5.0;
+    p.cutMemory = { 5.0, std::nullopt, -30.0 };
+    // The first time: from the slot X is at, to the next slot set, and the
+    // whole depth for the module
+    mgo::GearSetup setup = mgo::defaultGearSetup({ .module = 0.5 }, p);
+    REQUIRE(setup.cutStartMemory == 0);
+    REQUIRE(setup.cutEndMemory == 2);
+    REQUIRE(setup.depth == Approx(1.0785));
+    // Away from the slots: from here, by a distance; a depth typed is kept
+    p.cutHere = 7.0;
+    setup = mgo::defaultGearSetup(
+        { .module = 0.5, .teeth = 30, .cutDistance = -20.0, .depth = 1.2 }, p);
+    REQUIRE(!setup.cutStartMemory);
+    REQUIRE(!setup.cutEndMemory);
+    REQUIRE(setup.cutDistance == Approx(-20.0));
+    REQUIRE(setup.depth == Approx(1.2));
+    REQUIRE(setup.teeth == 30);
+}
+
+namespace {
+
+// The mill, as gear cutting uses it: X (axis 1), and a rotary table as axis 2
+// (a whole turn of its motor here is 360°, in 0.1° steps, so an index is
+// quick)
+struct GearTestModel {
+    TestConfigReader config { { { "GearCutting", "true" },
+                                { "Axis1Label", "X" },
+                                { "Axis2Label", "A" },
+                                { "Axis2DisplayUnits", "deg" },
+                                { "Axis2ConversionNumerator", "360" },
+                                { "Axis2ConversionDivisor", "3600" },
+                                { "Axis2StepsPerRev", "3600" },
+                                { "Axis2MaxMotorRpm", "50000" } } };
+    mgo::MockGpio gpio { false };
+    mgo::Model model { gpio, config };
+};
+
+} // end anonymous namespace
+
+TEST_CASE("Model:   gear cutting needs the config, and a rotary table as axis 2")
+{
+    {
+        mgo::MockConfigReader config;
+        mgo::MockGpio gpio(false);
+        mgo::Model model(gpio, config);
+        model.initialise();
+        REQUIRE(!model.gearCuttingUnavailable().empty());
+        model.changeMode(mgo::Mode::GearCutting);
+        REQUIRE(!model
+                     .setGearSetup(
+                         { .teeth = 20, .cutDistance = -10.0, .depth = 1.0, .depthPerPass = 0.5 })
+                     .empty());
+        REQUIRE(!model.gearCuttingSet());
+    }
+    {
+        TestConfigReader config { { { "GearCutting", "true" } } };
+        mgo::MockGpio gpio(false);
+        mgo::Model model(gpio, config);
+        model.initialise();
+        REQUIRE(
+            model.gearCuttingUnavailable()
+            == "Gear cutting needs X to be a rotary table (Axis2DisplayUnits = deg)");
+    }
+    GearTestModel t;
+    t.model.initialise();
+    REQUIRE(t.model.gearCuttingUnavailable().empty());
+    // (Only in the mode)
+    const mgo::GearSetup setup {
+        .teeth = 20, .cutDistance = -10.0, .depth = 1.0, .depthPerPass = 0.5
+    };
+    REQUIRE(!t.model.setGearSetup(setup).empty());
+    t.model.changeMode(mgo::Mode::GearCutting);
+    REQUIRE(t.model.setGearSetup(setup).empty());
+    REQUIRE(t.model.gearCuttingSet());
+    // (Leaving the mode clears it)
+    t.model.changeMode(mgo::Mode::None);
+    REQUIRE(!t.model.gearCuttingSet());
+}
+
+TEST_CASE("Model:   gear cutting, every tooth each pass, then A back to where it started")
+{
+    GearTestModel t;
+    mgo::Model& model = t.model;
+    model.initialise();
+    model.axis1SetSpeed(200.0);
+    // A starts at 30°, with a memory slot at 30° and one at 100°
+    model.setAxis2Position(30.0);
+    model.axis2StorePosition();
+    model.selectNextMemorySlot();
+    model.axis2StorePosition(100.0);
+    model.selectPreviousMemorySlot();
+
+    model.changeMode(mgo::Mode::GearCutting);
+    // Four teeth; X from 0 by 0.2; the depth 0.2 by 0.1, so two passes
+    REQUIRE(model
+                .setGearSetup(
+                    { .module = 1.0,
+                      .teeth = 4,
+                      .cutDistance = 0.2,
+                      .depth = 0.2,
+                      .depthPerPass = 0.1 })
+                .empty());
+    REQUIRE(model.multiPassAtStart());
+    model.multiPassGo();
+    REQUIRE(model.getWarning().empty());
+    // Paused first, for the depth to be fed in
+    REQUIRE(model.multiPass().state() == mgo::MultiPass::State::Paused);
+    REQUIRE(model.multiPass().totalPasses() == 2);
+    REQUIRE(model.multiPass().plan().indexStart == Approx(30.0));
+
+    // Watches A between cuts: it only moves while indexing, and each cut is
+    // at a whole tooth from the start
+    std::set<long> cutAt;
+    const auto runPass = [&] {
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(20);
+        model.multiPassGo();
+        while (model.multiPass().inProgress()
+               && model.multiPass().state() != mgo::MultiPass::State::Paused) {
+            REQUIRE(std::chrono::steady_clock::now() < deadline);
+            model.checkStatus();
+            if (model.multiPass().state() == mgo::MultiPass::State::Cutting) {
+                REQUIRE(!model.isAxis2MotorRunning());
+                cutAt.insert(std::lround(model.getAxis2MotorPosition()));
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        }
+    };
+    runPass();
+    REQUIRE(model.multiPass().state() == mgo::MultiPass::State::Paused);
+    REQUIRE(model.multiPass().pass() == 1);
+    REQUIRE(cutAt == std::set<long> { 30, 120, 210, 300 });
+    REQUIRE(model.getAxis2MotorPosition() == Approx(300.0));
+    REQUIRE(model.getAxis1MotorPosition() == Approx(0.0).margin(0.0001));
+    cutAt.clear();
+    runPass();
+    REQUIRE(model.multiPass().state() == mgo::MultiPass::State::Finished);
+    REQUIRE(model.multiPass().pass() == 2);
+    // The second pass went on round (390° is 30° a turn on)
+    REQUIRE(cutAt == std::set<long> { 390, 480, 570, 660 });
+    // Then A went on round to 750°, two turns from the start, which is shown
+    // as where it started, and the memory slots are as they were (the same
+    // places on the table)
+    REQUIRE(model.getAxis2MotorPosition() == Approx(30.0));
+    REQUIRE(*model.getAxis2MemoryAsPosition(0) == Approx(30.0));
+    REQUIRE(*model.getAxis2MemoryAsPosition(1) == Approx(100.0));
+    // (It's ready to go again)
+    REQUIRE(model.multiPassAtStart());
+    REQUIRE(runUntilStopped(model));
+}
+
+TEST_CASE("Model:   gear cutting's first tooth takes up A's backlash forwards")
+{
+    GearTestModel t;
+    mgo::Model& model = t.model;
+    model.initialise();
+    model.changeMode(mgo::Mode::GearCutting);
+    REQUIRE(
+        model.setGearSetup({ .teeth = 4, .cutDistance = 0.2, .depth = 0.1, .depthPerPass = 0.1 })
+            .empty());
+    model.multiPassGo();
+    model.multiPassGo(); // (after feeding in)
+    // A backs off, then comes forwards to 0
+    double lowest = 0.0;
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+    while (model.multiPass().state() == mgo::MultiPass::State::Indexing) {
+        REQUIRE(std::chrono::steady_clock::now() < deadline);
+        model.checkStatus();
+        lowest = std::min(lowest, model.getAxis2MotorPosition());
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    REQUIRE(lowest < -0.5);
+    REQUIRE(model.multiPass().state() == mgo::MultiPass::State::Cutting);
+    REQUIRE(model.getAxis2MotorPosition() == Approx(0.0).margin(0.001));
+    model.stopAllMotors();
+    REQUIRE(!model.multiPass().inProgress());
+    REQUIRE(runUntilStopped(model));
+}
+
+TEST_CASE("Model:   gear cutting stopped between teeth goes on to the next tooth to start again")
+{
+    // (A slow enough to stop part way: at full speed, 90° takes nearly 2 s)
+    TestConfigReader config { { { "GearCutting", "true" },
+                                { "Axis2DisplayUnits", "deg" },
+                                { "Axis2ConversionNumerator", "360" },
+                                { "Axis2ConversionDivisor", "3600" },
+                                { "Axis2StepsPerRev", "3600" },
+                                { "Axis2MaxMotorRpm", "3000" } } };
+    mgo::MockGpio gpio { false };
+    mgo::Model model { gpio, config };
+    model.initialise();
+    model.axis1SetSpeed(200.0);
+    model.changeMode(mgo::Mode::GearCutting);
+    REQUIRE(
+        model.setGearSetup({ .teeth = 4, .cutDistance = 0.2, .depth = 0.1, .depthPerPass = 0.1 })
+            .empty());
+    REQUIRE(model.gearAOnTooth());
+    model.multiPassGo();
+    model.multiPassGo(); // (after feeding in)
+    // Stopped while A turns to the second tooth
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+    while (
+        !(model.multiPass().state() == mgo::MultiPass::State::Indexing
+          && model.multiPass().startNumber() == 2 && model.getAxis2MotorPosition() > 20.0)) {
+        REQUIRE(std::chrono::steady_clock::now() < deadline);
+        model.checkStatus();
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    model.stopAllMotors();
+    REQUIRE(runUntilStopped(model));
+    const double stoppedAt = model.getAxis2MotorPosition();
+    REQUIRE(stoppedAt > 20.0);
+    REQUIRE(stoppedAt < 89.0);
+    REQUIRE(!model.gearAOnTooth());
+    REQUIRE(!model.multiPassAtStart());
+
+    // Enter moves A on to the second tooth (not back), then starts there
+    model.multiPassGo();
+    REQUIRE(model.multiPassMovingToStart());
+    double lowest = stoppedAt;
+    const auto deadline2 = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+    while (model.multiPassMovingToStart()) {
+        REQUIRE(std::chrono::steady_clock::now() < deadline2);
+        model.checkStatus();
+        lowest = std::min(lowest, model.getAxis2MotorPosition());
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+    REQUIRE(lowest == Approx(stoppedAt));
+    REQUIRE(model.getAxis2MotorPosition() == Approx(90.0));
+    REQUIRE(model.multiPassAtStart());
+    model.multiPassGo();
+    REQUIRE(model.getWarning().empty());
+    REQUIRE(model.multiPass().plan().indexStart == Approx(90.0));
+
+    // Zeroing A puts the first tooth wherever A is again
+    model.stopAllMotors();
+    REQUIRE(runUntilStopped(model));
+    model.axis2GoToPosition(100.0);
+    REQUIRE(runUntilStopped(model));
+    REQUIRE(!model.gearAOnTooth());
+    model.axis2Zero();
+    REQUIRE(model.gearAOnTooth());
 }

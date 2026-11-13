@@ -458,6 +458,7 @@ struct ViewQt::Impl {
     void updateMultiPassData(const Model& model);
     // The knurl, on one line (e.g. its starts and lead)
     std::string knurlDescription(const Model& model) const;
+    void updateGearData(const Model& model);
 };
 
 ViewQt::ViewQt()
@@ -623,6 +624,22 @@ void ViewQt::openMultiPassDialog(
         m_impl->fontFamily,
         info,
         [this, onDone = std::move(onDone)](std::optional<MultiPassSetup> setup) {
+            m_impl->dialogClosed();
+            onDone(setup);
+        });
+}
+
+void ViewQt::openGearDialog(
+    const GearDialogInfo& info,
+    std::function<void(std::optional<GearSetup>)> onDone)
+{
+    assert(!isDialogOpen()); // (one at a time)
+    m_impl->setDimmed(true);
+    m_impl->dialog = dialog::openGearDialog(
+        m_impl->widget.get(),
+        m_impl->fontFamily,
+        info,
+        [this, onDone = std::move(onDone)](std::optional<GearSetup> setup) {
             m_impl->dialogClosed();
             onDone(setup);
         });
@@ -1238,6 +1255,9 @@ void ViewQt::Impl::updateTextFromModel(const Model& model)
         case Mode::Knurling:
             notification.text = "KNURLING";
             break;
+        case Mode::GearCutting:
+            notification.text = "GEAR CUTTING";
+            break;
         default:
             notification.text = "";
     }
@@ -1305,6 +1325,15 @@ void ViewQt::Impl::updateTextFromModel(const Model& model)
                 misc2.text = misc1.text;
                 misc1.text = knurlDescription(model);
                 // e.g. the spindle is too fast for the lead
+                warning.text = model.getWarning();
+                if (!model.getWarning().empty()) {
+                    warning.colour = ++iteration % 6 < 3 ? RED : YELLOW;
+                }
+                break;
+            }
+        case Mode::GearCutting:
+            {
+                updateGearData(model);
                 warning.text = model.getWarning();
                 if (!model.getWarning().empty()) {
                     warning.colour = ++iteration % 6 < 3 ? RED : YELLOW;
@@ -1468,6 +1497,10 @@ void ViewQt::Impl::updateMultiPassData(const Model& model)
         case MultiPass::State::Positioning:
             status = pass + ": " + z + " to the pass's start";
             break;
+        // (Only when gear cutting: see updateGearData())
+        case MultiPass::State::Indexing:
+            status = pass + ": indexing";
+            break;
         case MultiPass::State::Finishing:
             status = "Finishing";
             break;
@@ -1502,6 +1535,121 @@ void ViewQt::Impl::updateMultiPassData(const Model& model)
         }
     }
     misc4.text = options1;
+    misc5.text = mp.inProgress() || model.multiPassMovingToStart() ? "Space stops" : "";
+    misc6.text = "";
+}
+
+void ViewQt::Impl::updateGearData(const Model& model)
+{
+    const MultiPass& mp = model.multiPass();
+    const GearSetup& gear = model.getGearSetup();
+    const MultiPassRange& range = model.getMultiPassRange();
+    const std::string x = model.config().read("Axis1Label", "Z");
+    const std::string a = model.config().read("Axis2Label", "X");
+    // (The depth is fed by hand, but is a length, as axis 1's are)
+    const auto length = [&model](double mm, int extraDecimals = 0) {
+        return fmt::format(
+            "{:.{}f} {}",
+            model.toDisplayUnits(1, mm),
+            model.axisDecimals(1) + extraDecimals,
+            model.axisUnitName(1));
+    };
+    if (!model.gearCuttingSet()) {
+        mode.text = "";
+        misc1.text = "Gear cutting isn't set up";
+        misc2.text = misc3.text = misc4.text = misc5.text = misc6.text = "";
+        return;
+    }
+    const auto position = [&model](double mm) {
+        const int decimals = model.axisDecimals(1);
+        double value = model.toDisplayUnits(1, mm);
+        // (Not "-0.00")
+        if (std::abs(value) < 0.5 * std::pow(10.0, -decimals)) {
+            value = 0.0;
+        }
+        return fmt::format("{:.{}f}", value, decimals);
+    };
+    // e.g. "X 10.00 to -30.00, depth 2.157 mm by 0.500 mm per pass"
+    mode.text = fmt::format(
+        "{} {} to {}, depth {} by {} per pass",
+        x,
+        position(range.cutStart),
+        position(range.cutEnd),
+        length(gear.depth, 1),
+        length(gear.depthPerPass, 1));
+    const int cutter = gearCutterNumber(gear.teeth);
+    misc1.text = fmt::format(
+        "Gear: {} teeth, module {:g}, {:.2f}° per tooth, blank Ø {}{}",
+        gear.teeth,
+        gear.module,
+        360.0 / gear.teeth,
+        length(gearBlankDiameterMm(gear.module, gear.teeth)),
+        cutter == 0 ? std::string() : fmt::format(", cutter No. {}", cutter));
+
+    const std::string pass = fmt::format("Pass {} of {}", mp.pass(), mp.totalPasses());
+    const std::string tooth
+        = fmt::format("{}, tooth {} of {}", pass, mp.startNumber(), mp.plan().starts);
+    std::string status;
+    std::string prompt;
+    switch (mp.state()) {
+        case MultiPass::State::Idle:
+            status = mp.message().empty() ? "" : "Stopped";
+            if (model.multiPassMovingToStart()) {
+                status = "Moving to the start";
+            } else if (model.multiPassAtStart()) {
+                status = status.empty() ? "At the start" : "Stopped, at the start";
+                prompt = "Press Enter to start: the first tooth is where " + a + " is now";
+            } else if (!model.gearAOnTooth()) {
+                prompt = "Press Enter to move " + x + " to the start, then " + a
+                    + " on to the next tooth";
+            } else {
+                prompt = "Press Enter to move " + x + " to the start";
+            }
+            break;
+        case MultiPass::State::Indexing:
+            status = tooth + ": turning " + a;
+            break;
+        case MultiPass::State::Cutting:
+            status = tooth + ": cutting";
+            break;
+        case MultiPass::State::Returning:
+            status = tooth + ": returning";
+            break;
+        case MultiPass::State::Paused:
+            if (mp.pausedBetweenStarts()) {
+                status = tooth + " done";
+                prompt = "Press Enter for the next tooth";
+            } else {
+                status = mp.pass() == 0 ? "" : pass + " done (once round)";
+                prompt = fmt::format(
+                    "Feed the depth in by {}, then press Enter", length(mp.nextFeed(), 1));
+            }
+            break;
+        case MultiPass::State::Finishing:
+            status = "Finishing: " + a + " on round to the first tooth";
+            break;
+        case MultiPass::State::Finished:
+            status = fmt::format("Finished ({} passes)", mp.pass());
+            prompt = model.multiPassAtStart() ? "Enter starts again"
+                                              : "Enter moves to the start, to go again";
+            break;
+        // (Not used for gear cutting)
+        case MultiPass::State::CuttingBack:
+        case MultiPass::State::Retracting:
+        case MultiPass::State::Unretracting:
+        case MultiPass::State::Feeding:
+        case MultiPass::State::Positioning:
+            status = tooth;
+            break;
+    }
+    if (mp.pauseRequested()) {
+        prompt = "Pausing after this tooth (Enter cancels)";
+    }
+    misc2.text = status;
+    misc3.text = prompt;
+    misc4.text = mp.pass() > 0
+        ? fmt::format("Depth fed in: {} of {}", length(mp.fed(), 1), length(gear.depth, 1))
+        : "";
     misc5.text = mp.inProgress() || model.multiPassMovingToStart() ? "Space stops" : "";
     misc6.text = "";
 }

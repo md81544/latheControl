@@ -260,8 +260,18 @@ std::string MultiPass::start(const MultiPassPlan& plan)
     if (plan.starts < 1) {
         return "There must be at least one start";
     }
-    if (plan.cut != MultiPassCut::Thread && (plan.starts != 1 || plan.cutBack)) {
-        return "Only threading passes can have several starts, or cut back";
+    const bool indexing = plan.indexPerStart != 0.0;
+    if (plan.cut != MultiPassCut::Thread && plan.cutBack) {
+        return "Only threading passes can cut back";
+    }
+    if (plan.cut != MultiPassCut::Thread && plan.starts != 1 && !indexing) {
+        return "Only threading or indexed passes can have several starts";
+    }
+    if (indexing && plan.cut == MultiPassCut::Thread) {
+        return "Can't index while threading";
+    }
+    if (indexing && plan.retract) {
+        return "Can't retract while indexing";
     }
     if (plan.cut == MultiPassCut::Thread) {
         // (Cutting back, the tool stays in: both ways are cuts)
@@ -278,7 +288,8 @@ std::string MultiPass::start(const MultiPassPlan& plan)
             return "Can't correct a taper while threading";
         }
     }
-    if (m_machine.cutMoving() || (!plan.feedManual && m_machine.feedMoving())) {
+    if (m_machine.cutMoving() || (!plan.feedManual && m_machine.feedMoving())
+        || (indexing && m_machine.indexMoving())) {
         return "Stop the motors first";
     }
     if (!plan.feedManual && m_machine.isRetracted()) {
@@ -288,8 +299,14 @@ std::string MultiPass::start(const MultiPassPlan& plan)
         return "Go to the start position first";
     }
     m_plan = plan;
+    if (indexing && !indexAt(plan.indexStart)) {
+        // (Checked once the plan's set, for its index axis's step size)
+        m_plan = {};
+        return "The index axis isn't at its start";
+    }
     m_message.clear();
     m_pauseRequested = false;
+    m_pausedBetweenStarts = false;
     m_stopAfterPassReason.clear();
     m_passCutStart = plan.cutStart;
     m_start = 0;
@@ -316,14 +333,25 @@ std::string MultiPass::start(const MultiPassPlan& plan)
 
 void MultiPass::continueAfterPause()
 {
-    if (m_state == State::Paused) {
-        startNextPass();
+    if (m_state != State::Paused) {
+        return;
     }
+    if (m_pausedBetweenStarts) {
+        // On to the next start, at the same depth
+        m_pausedBetweenStarts = false;
+        ++m_start;
+        startPass();
+        return;
+    }
+    startNextPass();
 }
 
 void MultiPass::togglePauseRequest()
 {
-    if (!inProgress() || m_state == State::Paused || m_plan.pause || m_plan.feedManual) {
+    // (When indexing, the pause is before the next start, which the plan
+    // never pauses before)
+    if (!inProgress() || m_state == State::Paused
+        || (!indexes() && (m_plan.pause || m_plan.feedManual))) {
         return;
     }
     m_pauseRequested = !m_pauseRequested;
@@ -432,6 +460,16 @@ void MultiPass::update()
             }
             startPass();
             return;
+        case State::Indexing:
+            if (m_machine.indexMoving()) {
+                return;
+            }
+            if (!indexAt(indexTarget())) {
+                abandon("The index stopped short");
+                return;
+            }
+            positionAndCut();
+            return;
         case State::Positioning:
             if (m_machine.cutMoving()) {
                 return;
@@ -444,7 +482,7 @@ void MultiPass::update()
             startCut();
             return;
         case State::Finishing:
-            if (!feedMoving) {
+            if (!feedMoving && !(indexes() && m_machine.indexMoving())) {
                 m_state = State::Finished;
             }
             return;
@@ -494,8 +532,21 @@ double MultiPass::fed() const
 
 double MultiPass::nextFeed() const
 {
+    if (m_pausedBetweenStarts) {
+        return 0.0;
+    }
     const double from = feedBase();
     return std::abs(nextFeedTarget(from, m_pass + 1) - from);
+}
+
+bool MultiPass::pausedBetweenStarts() const
+{
+    return m_state == State::Paused && m_pausedBetweenStarts;
+}
+
+bool MultiPass::indexes() const
+{
+    return m_plan.indexPerStart != 0.0;
 }
 
 const std::string& MultiPass::message() const
@@ -527,6 +578,18 @@ bool MultiPass::cutAt(double target) const
 bool MultiPass::feedAt(double target) const
 {
     return atPosition(m_machine.feedPosition(), target, m_machine.feedStepSize());
+}
+
+bool MultiPass::indexAt(double target) const
+{
+    return atPosition(m_machine.indexPosition(), target, m_machine.indexStepSize());
+}
+
+double MultiPass::indexTarget() const
+{
+    // (Carrying on round from pass to pass: see MultiPassPlan::indexPerStart)
+    const int index = (m_pass - 1) * m_plan.starts + m_start;
+    return m_plan.indexStart + index * m_plan.indexPerStart;
 }
 
 bool MultiPass::isLastPass() const
@@ -580,6 +643,17 @@ double MultiPass::nextFeedTarget(double from, int pass) const
 }
 
 void MultiPass::startPass()
+{
+    if (indexes()) {
+        // (Even if it's there: see IMultiPassMachine::indexMoveTo())
+        m_state = State::Indexing;
+        m_machine.indexMoveTo(indexTarget());
+        return;
+    }
+    positionAndCut();
+}
+
+void MultiPass::positionAndCut()
 {
     // (With a compound infeed, the deeper the feed axis, the further along)
     m_passCutStart = m_plan.cutStart + m_plan.cutShiftPerFeed * fed();
@@ -653,8 +727,15 @@ void MultiPass::afterReturn()
 void MultiPass::readyForNextCut()
 {
     if (m_start + 1 < m_plan.starts) {
-        // The next start, at the same depth (with no pause: a pause is
-        // between passes)
+        if (indexes() && m_pauseRequested) {
+            // (A request is for one pause only)
+            m_pauseRequested = false;
+            m_pausedBetweenStarts = true;
+            m_state = State::Paused;
+            return;
+        }
+        // The next start, at the same depth (with no pause, unless indexing:
+        // a pause is otherwise between passes)
         ++m_start;
         startPass();
         return;
@@ -703,6 +784,13 @@ void MultiPass::finish()
 {
     // (No pause after the last pass)
     m_pauseRequested = false;
+    if (indexes()) {
+        // On to where the next pass would start: a whole number of turns
+        // from the start, if the starts make a turn (e.g. back to 0°)
+        m_state = State::Finishing;
+        m_machine.indexMoveTo(m_plan.indexStart + m_pass * m_plan.starts * m_plan.indexPerStart);
+        return;
+    }
     // Unretract, so the feed axis shows the final position
     if (m_machine.isRetracted()) {
         m_machine.unretract();
@@ -716,6 +804,7 @@ void MultiPass::abandon(const std::string& reason)
 {
     m_state = State::Idle;
     m_pauseRequested = false;
+    m_pausedBetweenStarts = false;
     m_message = reason;
 }
 

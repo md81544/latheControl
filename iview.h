@@ -84,6 +84,19 @@ struct MultiPassDialogInfo {
     std::optional<Knurling> knurling;
 };
 
+// What the gear dialog needs to know (see IView::openGearDialog())
+struct GearDialogInfo {
+    // The cut axis (e.g. X on the mill)
+    MultiPassDialogInfo::Axis cut;
+    // The rotary table's label (e.g. "A")
+    std::string indexLabel;
+    // Where the cut axis and its memory slots are now (the feed axis's
+    // aren't used)
+    MultiPassPositions positions;
+    // The setup to start with
+    GearSetup setup;
+};
+
 class IView {
 public:
     virtual void initialise(const Model&) = 0;
@@ -130,6 +143,12 @@ public:
     virtual void openMultiPassDialog(
         const MultiPassDialogInfo& info,
         std::function<void(std::optional<MultiPassSetup>)> onDone) = 0;
+    // The gear cutting dialog: the gear, where the cut starts and ends, and
+    // the depth. onDone gets the setup chosen (which resolveGearCut() accepts
+    // with info's positions), or nullopt if cancelled
+    virtual void
+    openGearDialog(const GearDialogInfo& info, std::function<void(std::optional<GearSetup>)> onDone)
+        = 0;
     virtual bool isDialogOpen() const = 0;
     // Closes the open dialog (if any) as if cancelled, calling its onDone
     virtual void cancelDialog() = 0;

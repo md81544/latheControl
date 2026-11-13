@@ -64,6 +64,7 @@ add_library(shared_with_test OBJECT
 	linearscale.cpp
 	joystick.cpp
 	commands.cpp
+	gearcutting.cpp
 	menu.cpp
 	log.cpp
 	model.cpp

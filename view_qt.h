@@ -39,6 +39,9 @@ public:
     void openMultiPassDialog(
         const MultiPassDialogInfo& info,
         std::function<void(std::optional<MultiPassSetup>)> onDone) override;
+    void openGearDialog(
+        const GearDialogInfo& info,
+        std::function<void(std::optional<GearSetup>)> onDone) override;
     bool isDialogOpen() const override;
     void cancelDialog() override;
     void updateDisplay(const Model&) override;
