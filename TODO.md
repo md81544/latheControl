@@ -1058,8 +1058,8 @@ change.
       `STEPPERCONTROL_DIR`. A plain copy: its history stays in the
       stepperControl repo. It's now built with this project's warnings
       (`-Werror -Wpedantic`), which it wasn't before: clean with clang on
-      the Mac (`gpio.cpp` checked against a stub `pigpio.h`), but not yet
-      built with GCC on the Pi
+      the Mac, and a clean release build with GCC on the workshop Pi
+      (2026-11-13)
     - Gear cutting mode should be disabled by default, and only enabled by a
       setting in lc_mill.cfg (the milling machine currently only has a stepper
       on its X axis)
