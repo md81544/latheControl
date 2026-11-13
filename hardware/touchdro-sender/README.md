@@ -32,9 +32,9 @@ What was found on opening the box (10 November 2026):
   GND, so the Arduino's own regulator makes its supply.
 - Each scale plugs into a USB socket on the box. The sockets' D+ lines (the
   scales' data) go to D5, D6 and D7, the same pins as the sketch. The
-  schematic shows D3, D4 and D5 instead. The sockets' labels suggest X and
-  Y are swapped compared with the sketch, but the readings show each letter
-  is the right axis, so the labels are probably wrong.
+  schematic shows D3, D4 and D5 instead. The sockets' X and Y labels were
+  swapped compared with the sketch; the readings showed each letter is the
+  right axis, so the labels were corrected on 13 November 2026.
 - The crystal is marked "08", which suggests the 3.3 V/8 MHz kind of Pro
   Mini. The sketch works with either kind, as long as the right board was
   chosen when compiling it.
@@ -42,6 +42,7 @@ What was found on opening the box (10 November 2026):
 Not yet checked:
 
 - Which pin carries the clock. The sketch says D9; the schematic says D2.
+  This only matters if the sketch is changed.
 - The supply voltage: a multimeter between VCC and GND with the box on will
   confirm 3.3 V. The schematic's dividers only make sense at 5 V.
 
@@ -90,6 +91,8 @@ scales too.
 This was tested on 10 November 2026 with the old FTDI adapter, and the stream
 looked as expected, for example `X250383;Y-553984;Z131;`. The large values
 are just where the scales' counters happen to be; zeroing deals with them.
+On 13 November 2026 an FTDI adapter was wired in for good, and the stream
+read from `/dev/ttyUSB0` with `watch_scales.py`, with TouchDRO still working.
 
 Because the stream has no line breaks, it's hard to see changes in a serial
 monitor. `watch_scales.py` prints a line only when a reading changes, naming

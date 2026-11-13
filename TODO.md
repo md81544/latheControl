@@ -1505,7 +1505,12 @@ change.
             - feed in/out x by the specified change per pass
             - optional pause message
             - repeat until x delta equals thread pitch cut depth
-- [ ] Investigate how to interface with the mill's linear scales
+- [x] Investigate how to interface with the mill's linear scales
+    - **Done (13 Nov 2026):** a USB-serial adapter is now wired in for good,
+      listening to the Arduino's TX, and `watch_scales.py` reads the stream
+      from `/dev/ttyUSB0`, with TouchDRO still working. The box's X and Y
+      socket labels were indeed swapped, and have been corrected. Making use
+      of the readings is the next item
     - The milling machine has three linear scales (X,Y,Z), all of which interface with TouchDRO
       (an Android app which displays DRO data on a separate tablet) via a bluetooth connection.
       We need to determine how to get this data into latheControl too for linear scale functionality mentioned elsewhere in this document.
@@ -1546,11 +1551,12 @@ change.
         - The box stays on its own adapter. Everything at the mill draws power
           from one mains socket, switched by a Zigbee button, so it all comes
           on at once anyway
-        - Which pin is the clock. The sketch says D9; the schematic says D2
+        - Which pin is the clock. The sketch says D9; the schematic says D2.
+          Only matters if the sketch is ever changed, as we only listen
         - Axes and signs, checked with `watch_scales.py` (10 Nov 2026): each
-          letter is the axis it should be, so the sketch matches and the
-          box's socket labels (which suggested X and Y were swapped) are
-          probably wrong. Counts go up when the table moves right (X),
+          letter is the axis it should be, so the sketch matches. The box's
+          socket labels had X and Y swapped, and were corrected on
+          13 Nov 2026. Counts go up when the table moves right (X),
           the table moves in towards the column (Y), and the head comes down
           (Z). That's the opposite of the usual machine convention (tool
           relative to the work) on all three. latheControl will need a sign
@@ -1568,6 +1574,9 @@ change.
         - Reading the scales directly from the Pi: only one device can drive
           the scales' clock, and bit-banging the 21-bit protocol would load
           a Pi whose cores are reserved for the motor threads
+- [ ] **Use the mill's scales in latheControl.** To start with, X (the
+      table, axis 1), which has a stepper; perhaps later Y and Z as
+      read-only axes, which are moved by hand
     - What it's good for: at about 40 ms between smoothed readings it can't
       close the loop on motion, but it can check and correct when stopped:
       lost steps on the open-loop mill axes, re-basing after a stall (as for
