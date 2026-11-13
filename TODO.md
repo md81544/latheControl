@@ -1622,12 +1622,25 @@ change.
           counts
         - FAKE builds simulate the sender (`FakeDroScale`), following the
           motor with a lag
-    - **To check on the mill:** whether `Axis1ScaleReversed` should be true
-      (if so, the difference grows by twice each move); then, from lc.log,
-      how long readings take to settle (which sets `Axis1ScaleSettleMs`),
-      whether they jitter, and how the difference behaves after reversals
-      (a steady offset after reversing in one direction means the backlash
-      setting is out by that much). Also check the lathe's Z scale's sign
+    - **Tried on the mill (13 Nov 2026):** it works. `Axis1ScaleReversed`
+      had to be true. Moves to -10 and to -100 both ended about 0.3 mm
+      "off"; going back to 0 read 0 again (flickering between 0.00 and
+      0.01, which is the scale), and on to +10 was spot on. So the error
+      doesn't grow with distance, comes with a reversal and goes with the
+      next one: it's backlash, not lost steps. The configured 300 steps
+      (0.094 mm) is too little: the real slack looks like about 0.39 mm,
+      about 1260 steps (perhaps the 25:40 gearing as well as the nut). So
+      the scale has already earned its keep by measuring it. (The start-up
+      take-up of 300 steps couldn't take up all of that slack either.)
+    - **Still to check on the mill:** set `Axis1BacklashCompensationSteps`
+      to about 1260 and repeat; any figure still left after a negative move,
+      ÷ 0.0003125 mm per step, is the number of steps to add. Then, from
+      lc.log: how long readings take to settle (which sets
+      `Axis1ScaleSettleMs`), and whether they jitter. Also check the lathe's
+      Z scale's sign
+    - Idea, from the above: a "measure backlash" command, which reverses
+      the axis, sees how far it turns before the scale moves, and suggests
+      the setting
     - **Stage 4, as discussed (13 Nov 2026):** positioning moves (go to a
       memory, go to zero, go to a typed position) stop short of the target
       by a configurable approach distance, then finish in the same
