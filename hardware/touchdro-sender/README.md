@@ -68,10 +68,19 @@ times a second, one token per axis:
 
 The values are raw scale counts. iGaging scales usually give 2560 counts per
 inch, which is about 100.8 per mm, so about 10 µm per count. TouchDRO converts
-the counts to mm. The sketch smooths each reading (a 24-sample adaptive
-moving average), which steadies the display but lags a little while the table
-is moving. The readings are relative to when the scales were powered up, not
-absolute.
+the counts to mm. The readings are relative to when the scales were powered
+up, not absolute.
+
+The sketch smooths each axis's readings (`scaleValueRounded()`), with an
+adaptive moving average over the last 24 readings (one second). While the
+table moves steadily it follows closely, closing about half the gap at each
+reading. When the raw readings jitter, it hardly follows at all (its
+smoothing factor, in whole numbers, rounds down to nothing), so it can stay a
+count or two off. Once all 24 raw readings are the same, it jumps straight to
+the raw value. So at rest, the reading can still move by a count or two about
+a second after the scale stopped changing (seen on 13 November 2026).
+latheControl waits longer than that before trusting a reading
+(`Axis1ScaleSettleMs` in lc_mill.cfg).
 
 Directions, checked on 10 November 2026: the counts go up when the table
 moves right (X), when the table moves in towards the column (Y), and when the

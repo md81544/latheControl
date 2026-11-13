@@ -1632,13 +1632,30 @@ change.
       about 1260 steps (perhaps the 25:40 gearing as well as the nut). So
       the scale has already earned its keep by measuring it. (The start-up
       take-up of 300 steps couldn't take up all of that slack either.)
-    - **Still to check on the mill:** set `Axis1BacklashCompensationSteps`
-      to about 1260 and repeat; any figure still left after a negative move,
-      ÷ 0.0003125 mm per step, is the number of steps to add. Then, from
-      lc.log: how long readings take to settle (which sets
-      `Axis1ScaleSettleMs`), and whether they jitter. Also check the lathe's
-      Z scale's sign
-    - Idea, from the above: a "measure backlash" command, which reverses
+    - **Done (13 Nov 2026):** with `Axis1BacklashCompensationSteps` at 1260,
+      the difference stays at about zero in both directions. At rest, lc's
+      scale reading sometimes differs from TouchDRO's by 10-20 µm (one or
+      two counts); see the next points
+    - Also seen: at rest, TouchDRO's reading moved by 0.01-0.02 mm a couple
+      of seconds after the table stopped. That's the sender's smoothing (see
+      hardware/touchdro-sender/README.md): it can freeze a count or two off
+      while the raw reading jitters, and only jumps to the raw value once
+      all of its last 24 readings (one second) are the same. lc's 500 ms
+      settle time was shorter than that, so it could line up or log on the
+      frozen value, which may well explain the 10-20 µm. The mill's
+      `Axis1ScaleSettleMs` is now 1500. If that's not enough (e.g. the raw
+      reading keeps jittering, so it never jumps), the sketch could send
+      the raw readings as well; that's the only way to remove the smoothing
+      for lc while TouchDRO keeps it
+    - **Still to check on the mill:** whether that 10-20 µm is a steady
+      offset (the two were lined up or zeroed at different moments, within a
+      count), grows with distance (TouchDRO's counts per inch differ from
+      ours), or comes and goes (the reading flickering, and each display
+      rounding). Then, from lc.log: how long readings take to settle (which
+      sets `Axis1ScaleSettleMs`), and whether they jitter. Also check the
+      lathe's Z scale's sign
+    - Idea, from the above: a "measure backlash" command (System menu),
+      which reverses
       the axis, sees how far it turns before the scale moves, and suggests
       the setting
     - **Stage 4, as discussed (13 Nov 2026):** positioning moves (go to a
