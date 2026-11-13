@@ -12,6 +12,7 @@
 
 #include <QApplication>
 
+#include <cmath>
 #include <filesystem>
 #include <iostream>
 #include <set>
@@ -54,7 +55,7 @@ int main(int argc, char* argv[])
             mockOptions.rotaryEncoderDelayMicroseconds
                 = config.readLong("MockRotaryEncoderDelayMicroseconds", 250);
             mockOptions.linearScaleAxis1StepsPerMm
-                = config.readLong("LinearScaleAxis1StepsPerMM", 200);
+                = std::lround(config.readDouble("Axis1ScaleCountsPerMm", 200.0));
             mgo::MockGpio gpio(false, mockOptions);
         #else
             mgo::Gpio gpio;

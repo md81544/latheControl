@@ -1,9 +1,10 @@
 #pragma once
-// This class is used to read and respond to a linear
+// This class is used to read and respond to a quadrature linear
 // scale, used to determine the position of the tool on an axis
-// (currently just the Z-axis)
+// (currently just the lathe's Z-axis)
 
 #include "igpio.h"
+#include "scale.h"
 
 #include <atomic>
 #include <cassert>
@@ -11,7 +12,7 @@
 
 namespace mgo {
 
-class LinearScale {
+class LinearScale final : public IScale {
 public:
     LinearScale(IGpio& gpio, int pinA, int pinB, int stepsPerMm)
         : m_gpio(gpio)
@@ -23,7 +24,7 @@ public:
         m_gpio.setLinearScaleAxis1Callback(m_pinA, m_pinB, staticCallback, this);
     }
 
-    ~LinearScale()
+    ~LinearScale() override
     {
         // The GPIO library holds a pointer to us, so must stop calling back
         // before we are destroyed
@@ -36,6 +37,12 @@ public:
     static void staticCallback(int pin, int level, uint32_t tick, void* userData);
 
     void callback(int pin, int level, uint32_t tick);
+
+    // Always has a reading, as it counts every edge
+    std::optional<int32_t> readCounts() const override
+    {
+        return m_stepCount.load();
+    }
 
     float getPositionInMm();
 

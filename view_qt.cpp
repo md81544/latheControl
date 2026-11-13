@@ -414,7 +414,7 @@ struct ViewQt::Impl {
     TextItem chuckRpm;
     TextItem warning;
     TextItem taperAngle;
-    TextItem axis1LinearScalePos;
+    TextItem axis1Scale;
     TextItem surfaceSpeed; // Vc
 
     // Text items which are displayed sometimes:
@@ -570,7 +570,7 @@ void ViewQt::initialise(const Model& model)
     // (Surface speed, on the rpm line, in line with the axes' feed rates; the
     // linear scale's reading is below it)
     d.surfaceSpeed = make(550, 160, 30, QColor(209, 209, 50));
-    d.axis1LinearScalePos = make(550, 205, 20, QColor(209, 209, 50));
+    d.axis1Scale = make(550, 205, 20, QColor(209, 209, 50));
     d.fault = make(20, STATUS_BAR_Y - 30, 22, RED);
 
     // (Joystick support is only available on Linux)
@@ -1054,7 +1054,9 @@ void ViewQt::updateDisplay(const Model& model)
             draw(d.axis1Speed);
             draw(d.axis1Status);
             draw(d.axis1MemoryLabel);
-            draw(d.axis1LinearScalePos);
+            if (model.hasAxis1Scale()) {
+                draw(d.axis1Scale);
+            }
         }
         if (!model.config().readBool("DisableAxis2", false)) {
             d.axis2Label.colour = model.isAxisLocked(2) ? QColor(90, 90, 90) : QColor(0, 192, 0);
@@ -1225,12 +1227,27 @@ void ViewQt::Impl::updateTextFromModel(const Model& model)
     }
     chuckRpm.text = fmt::format("C: {: >5.1f} deg", model.getChuckAngle());
 
-    axis1LinearScalePos.text = fmt::format(
-        "{} Scale: {:<.{}f} {}",
-        model.config().read("Axis1Label", "Z"),
-        toDisplayLength(model.getAxis1LinearScalePosMm(), model.getDisplayUnits()),
-        model.getDisplayUnits() == DisplayUnits::Imperial ? 4 : 3,
-        lengthUnitName(model.getDisplayUnits()));
+    // The scale's position, and how far it is from the motor's (which shows
+    // any lost steps)
+    {
+        const std::string label = model.config().read("Axis1Label", "Z");
+        const auto position = model.getAxis1ScalePositionMm();
+        const auto difference = model.getAxis1ScaleDifferenceMm();
+        if (position && difference) {
+            axis1Scale.text = fmt::format(
+                "{} scale: {:.{}f} {}, off by {:+.{}f}",
+                label,
+                model.toDisplayUnits(1, *position),
+                model.axisDecimals(1),
+                model.axisUnitName(1),
+                model.toDisplayUnits(1, *difference),
+                model.axisDecimals(1));
+        } else if (model.axis1ScaleHasReading()) {
+            axis1Scale.text = fmt::format("{} scale: settling", label);
+        } else {
+            axis1Scale.text = fmt::format("{} scale: no reading", label);
+        }
+    }
 
     for (std::size_t n = 0; n < memoryLabel.size(); ++n) {
         const QColor colour

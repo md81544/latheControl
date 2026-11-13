@@ -1732,3 +1732,53 @@ TEST_CASE("UI: zeroing or setting a position asks before clearing the current fe
     REQUIRE(tm.model.getAxis2MotorPosition() == Approx(3.0));
     REQUIRE(!tm.model.getFeatureDiameterMm());
 }
+
+TEST_CASE("UI: no scale unless the config has one")
+{
+    TestModel tm;
+    mgo::Controller controller(&tm.model);
+    REQUIRE(!tm.model.hasAxis1Scale());
+    REQUIRE(!tm.model.getAxis1ScalePositionMm());
+}
+
+TEST_CASE("UI: a serial scale (simulated) is lined up with the motor, and follows it")
+{
+    MapConfigReader config { { { "Axis1Scale", "serial" },
+                               { "Axis1ScaleSerialLetter", "X" },
+                               { "Axis1ScaleCountsPerMm", "100" },
+                               { "Axis1ScaleSettleMs", "200" } } };
+    mgo::MockGpio gpio { false };
+    mgo::Model model { gpio, config };
+    mgo::Controller controller(&model);
+    REQUIRE(model.hasAxis1Scale());
+    // Runs the controller until the condition holds (or 5s pass)
+    const auto tickUntil = [&controller](const std::function<bool()>& condition) {
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        while (!condition() && std::chrono::steady_clock::now() < deadline) {
+            controller.tick();
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        }
+        return condition();
+    };
+    // (One count is 0.01mm)
+    const auto agrees = [&model]() {
+        const auto difference = model.getAxis1ScaleDifferenceMm();
+        return difference && std::abs(*difference) < 0.011;
+    };
+    REQUIRE(model.axis1ScaleHasReading());
+    REQUIRE(tickUntil([&model] { return model.getAxis1ScalePositionMm().has_value(); }));
+    REQUIRE(agrees());
+
+    model.setAxis1MotorSpeed(1'000.0);
+    model.axis1GoToPosition(1.0);
+    REQUIRE(tickUntil(
+        [&] { return std::abs(model.getAxis1MotorPosition() - 1.0) < 0.0001 && agrees(); }));
+    REQUIRE(tickUntil(
+        [&] { return std::abs(model.getAxis1MotorPosition() - 1.0) < 0.0001 && agrees(); }));
+    REQUIRE(*model.getAxis1ScalePositionMm() == Approx(1.0).margin(0.011));
+
+    // Zeroing lines it up again, at the new zero
+    model.axis1Zero();
+    REQUIRE(tickUntil([&model] { return model.getAxis1ScalePositionMm().has_value(); }));
+    REQUIRE(*model.getAxis1ScalePositionMm() == Approx(0.0).margin(0.011));
+}

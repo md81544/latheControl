@@ -1,7 +1,9 @@
 #include "commands.h"
 #include "configreader.h"
+#include "droserial.h"
 #include "joystick.h"
 #include "keycodes.h"
+#include "linearscale.h"
 #include "menu.h"
 #include "mockgpio.h"
 #include "model.h"
@@ -9,6 +11,7 @@
 #include "multipass.h"
 #include "radius.h"
 #include "rotaryencoder.h"
+#include "scale.h"
 #include "steppermotor.h"
 #include "threadpitches.h"
 
@@ -537,6 +540,217 @@ TEST_CASE("Scale:   Full cycle forwards then backwards")
     scale.callback(2, 1, 0);
     scale.callback(1, 0, 0);
     REQUIRE(scale.getPositionInMm() == 0.f);
+}
+
+TEST_CASE("Scale:   DRO stream parsing")
+{
+    mgo::DroStreamParser parser;
+    std::vector<mgo::DroStreamParser::Reading> readings;
+    const auto feed = [&](std::string_view text) {
+        for (char c : text) {
+            if (const auto r = parser.feed(c)) {
+                readings.push_back(*r);
+            }
+        }
+    };
+    SECTION("Axes, signs and large counts")
+    {
+        feed("X250383;Y-553984;Z0;");
+        REQUIRE(readings.size() == 3);
+        REQUIRE(readings[0].axis == 'X');
+        REQUIRE(readings[0].counts == 250'383);
+        REQUIRE(readings[1].axis == 'Y');
+        REQUIRE(readings[1].counts == -553'984);
+        REQUIRE(readings[2].axis == 'Z');
+        REQUIRE(readings[2].counts == 0);
+    }
+    SECTION("A token cut short at the start of the stream is skipped")
+    {
+        feed("83;Y-5;");
+        REQUIRE(readings.size() == 1);
+        REQUIRE(readings[0].axis == 'Y');
+        REQUIRE(readings[0].counts == -5);
+    }
+    SECTION("Tokens it doesn't understand are skipped")
+    {
+        // (A tachometer's reading, a letter with no number, a misplaced
+        // minus sign and a stray line break)
+        feed("T123/45/6;X;Y1-2;Z-;\r\nZ7;X12\n3;X4;");
+        REQUIRE(readings.size() == 2);
+        REQUIRE(readings[0].axis == 'Z');
+        REQUIRE(readings[0].counts == 7);
+        REQUIRE(readings[1].axis == 'X');
+        REQUIRE(readings[1].counts == 4);
+    }
+    SECTION("A letter starts a new token, even mid-token")
+    {
+        feed("X12Y34;");
+        REQUIRE(readings.size() == 1);
+        REQUIRE(readings[0].axis == 'Y');
+        REQUIRE(readings[0].counts == 34);
+    }
+    SECTION("Too many digits is skipped, not overflowed")
+    {
+        feed("X1234567890;X1;");
+        REQUIRE(readings.size() == 1);
+        REQUIRE(readings[0].counts == 1);
+    }
+}
+
+TEST_CASE("Scale:   A DRO reader with no port has no readings")
+{
+    mgo::DroSerialReader reader("/dev/no-such-port");
+    REQUIRE(!reader.latest('X'));
+    REQUIRE(!reader.latest('?'));
+}
+
+namespace {
+
+// A scale whose reading the test sets
+class SettableScale final : public mgo::IScale {
+public:
+    std::optional<int32_t> readCounts() const override
+    {
+        return *m_counts;
+    }
+    // (Shared, as the AxisScale owns the scale)
+    std::shared_ptr<std::optional<int32_t>> m_counts
+        = std::make_shared<std::optional<int32_t>>(1'000);
+};
+
+struct AxisScaleTest {
+    explicit AxisScaleTest(bool reversed = false)
+    {
+        auto scale = std::make_unique<SettableScale>();
+        counts = scale->m_counts;
+        axisScale = std::make_unique<mgo::AxisScale>(
+            std::move(scale),
+            mgo::AxisScale::Settings { .axisLabel = "X",
+                                       .countsPerMm = 100.0,
+                                       .reversed = reversed,
+                                       .settleTime = std::chrono::milliseconds(500),
+                                       .maxSettleTime = std::chrono::milliseconds(3'000) });
+    }
+    // Advances the clock, then updates the scale with the motor at motorMm
+    void update(double motorMm, bool running, int afterMs = 50)
+    {
+        now += std::chrono::milliseconds(afterMs);
+        axisScale->update(motorMm, running, now);
+    }
+    // Updates every 50ms for a while, with the motor stopped at motorMm
+    void rest(double motorMm, int forMs)
+    {
+        for (int t = 0; t < forMs; t += 50) {
+            update(motorMm, false);
+        }
+    }
+    std::shared_ptr<std::optional<int32_t>> counts;
+    std::unique_ptr<mgo::AxisScale> axisScale;
+    mgo::AxisScale::Clock::time_point now {};
+};
+
+} // namespace
+
+TEST_CASE("Scale:   An axis's scale is lined up with its motor once settled")
+{
+    AxisScaleTest t;
+    REQUIRE(t.axisScale->hasReading());
+    REQUIRE(!t.axisScale->isAligned());
+    REQUIRE(!t.axisScale->positionMm());
+    // Not lined up before the reading has been steady for the settle time
+    t.rest(2.0, 400);
+    REQUIRE(!t.axisScale->isAligned());
+    t.rest(2.0, 200);
+    REQUIRE(t.axisScale->isAligned());
+    REQUIRE(*t.axisScale->positionMm() == Approx(2.0));
+    REQUIRE(*t.axisScale->differenceMm(2.0) == Approx(0.0));
+
+    // The motor moves 1mm, and so does the scale: no difference
+    t.update(2.5, true);
+    *t.counts = 1'100;
+    t.rest(3.0, 1'000);
+    REQUIRE(*t.axisScale->positionMm() == Approx(3.0));
+    REQUIRE(*t.axisScale->differenceMm(3.0) == Approx(0.0));
+
+    // It moves another 1mm, but the scale only 0.9mm (lost steps)
+    t.update(3.5, true);
+    *t.counts = 1'190;
+    t.rest(4.0, 1'000);
+    REQUIRE(*t.axisScale->differenceMm(4.0) == Approx(-0.1));
+}
+
+TEST_CASE("Scale:   A reversed scale counts the other way")
+{
+    AxisScaleTest t(true);
+    t.rest(0.0, 600);
+    REQUIRE(t.axisScale->isAligned());
+    *t.counts = 900;
+    REQUIRE(*t.axisScale->positionMm() == Approx(1.0));
+}
+
+TEST_CASE("Scale:   A reading which keeps changing settles after the longest time")
+{
+    AxisScaleTest t;
+    for (int ms = 0; ms < 2'900; ms += 100) {
+        *t.counts = 1'000 + (ms / 100) % 2;
+        t.update(0.0, false, 100);
+    }
+    REQUIRE(!t.axisScale->isAligned());
+    t.update(0.0, false, 200);
+    REQUIRE(t.axisScale->isAligned());
+}
+
+TEST_CASE("Scale:   Realigning, e.g. after zeroing")
+{
+    AxisScaleTest t;
+    t.rest(5.0, 600);
+    REQUIRE(*t.axisScale->positionMm() == Approx(5.0));
+    // The axis is zeroed where it is: at rest, so lined up again at once
+    t.axisScale->realign();
+    REQUIRE(!t.axisScale->positionMm());
+    t.update(0.0, false);
+    REQUIRE(*t.axisScale->positionMm() == Approx(0.0));
+}
+
+TEST_CASE("Scale:   Losing the readings means lining up again")
+{
+    AxisScaleTest t;
+    t.rest(1.0, 600);
+    REQUIRE(t.axisScale->isAligned());
+    // The sender is switched off and on: its count starts again from
+    // wherever the scale is
+    *t.counts = std::nullopt;
+    t.update(1.0, false);
+    REQUIRE(!t.axisScale->hasReading());
+    REQUIRE(!t.axisScale->isAligned());
+    REQUIRE(!t.axisScale->positionMm());
+    *t.counts = 0;
+    t.rest(1.0, 600);
+    REQUIRE(*t.axisScale->positionMm() == Approx(1.0));
+}
+
+TEST_CASE("Scale:   Not lined up while the motor is moving")
+{
+    AxisScaleTest t;
+    for (int i = 0; i < 40; ++i) {
+        t.update(i * 0.1, true);
+    }
+    REQUIRE(!t.axisScale->isAligned());
+    t.rest(4.0, 600);
+    REQUIRE(t.axisScale->isAligned());
+}
+
+TEST_CASE("Scale:   The simulated DRO scale follows a position")
+{
+    std::atomic<double> position { 0.0 };
+    mgo::FakeDroScale scale([&position]() { return position.load(); }, 100.0, false);
+    REQUIRE(*scale.readCounts() == mgo::FakeDroScale::START_COUNTS);
+    position = 2.0;
+    std::this_thread::sleep_for(std::chrono::milliseconds(800));
+    REQUIRE(*scale.readCounts() == mgo::FakeDroScale::START_COUNTS + 200);
+    scale.setErrorMm(-0.5);
+    std::this_thread::sleep_for(std::chrono::milliseconds(800));
+    REQUIRE(*scale.readCounts() == mgo::FakeDroScale::START_COUNTS + 150);
 }
 
 TEST_CASE("Encoder: spindle pulses count up, and down when reversed")

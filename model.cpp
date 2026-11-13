@@ -1,5 +1,6 @@
 #include "model.h"
 #include "keycodes.h"
+#include "linearscale.h"
 #include "log.h"
 
 #include <algorithm>
@@ -178,7 +179,8 @@ void Model::initialise()
     long axis1StepsPerRevolution = m_config.readLong("Axis1StepsPerRev", 1'000);
     bool usingMockLinearScale = false;
 #ifdef FAKE
-    usingMockLinearScale = true;
+    // (The mock GPIO's quadrature scale follows this motor)
+    usingMockLinearScale = m_config.read("Axis1Scale", "none") == "quadrature";
 #endif
     m_axis1Motor = std::make_unique<mgo::StepperMotor>(
         m_gpio,
@@ -190,7 +192,7 @@ void Model::initialise()
         maxAxis1Rpm,
         m_config.readDouble("Axis1RampingSpeed", 100.0),
         usingMockLinearScale,
-        m_config.readLong("LinearScaleAxis1StepsPerMM", 200));
+        std::lround(m_config.readDouble("Axis1ScaleCountsPerMm", 200.0)));
     if (!m_axis1Motor->isRunningRealTimeScheduled()) {
         MGOLOG("*** Warning *** axis1 steppermotor thread not running real-time");
     }
@@ -288,11 +290,7 @@ void Model::initialise()
         MGOLOG(fmt::format("{} thread sizes read from {}", count, threadsFile));
     }
 
-    m_linearScaleAxis1 = std::make_unique<mgo::LinearScale>(
-        m_gpio,
-        m_config.readLong("LinearScaleAxis1GpioPinA", 5),
-        m_config.readLong("LinearScaleAxis1GpioPinB", 6),
-        m_config.readLong("LinearScaleAxis1StepsPerMM", 200));
+    configureAxis1Scale();
 
     // We need to ensure that the motors are in a known position with regard to
     // backlash - which means moving them initially by the amount of
@@ -327,6 +325,9 @@ void Model::checkStatus()
     recordSpindleSample();
     checkSpindleStopped(chuckRpm);
     checkEncoderLostPulses();
+    if (m_axis1Scale) {
+        m_axis1Scale->update(m_axis1Motor->getPosition(), m_axis1Motor->isRunning());
+    }
 
     if (const auto diameter = getDiameterMm()) {
         m_generalStatus = fmt::format(
@@ -1205,10 +1206,10 @@ void Model::axis1Zero()
     if (m_mode == Mode::Taper) {
         changeMode(Mode::None);
     }
-    if (m_config.readBool("Axis1UseLinearScale", false)) {
-        m_linearScaleAxis1->setZeroMm();
-    }
     m_axis1Motor->zeroPosition();
+    if (m_axis1Scale) {
+        m_axis1Scale->realign();
+    }
     // Zeroing will invalidate any memorised Z positions, so we clear them
     for (auto& m : m_axis1Memory) {
         m = AXIS1_UNSET;
@@ -2167,6 +2168,9 @@ void Model::setAxis2MotorSpeed(double speed)
 void Model::setAxis1Position(double mm)
 {
     m_axis1Motor->setPosition(mm);
+    if (m_axis1Scale) {
+        m_axis1Scale->realign();
+    }
     // The position is known again, so a motor fault can be cleared
     clearMotorFault(Axis::Axis1);
 }
@@ -2195,6 +2199,8 @@ void Model::clearDiameter()
 
 void Model::resetMotorThreads()
 {
+    // (First, as a simulated scale follows the motor)
+    m_axis1Scale.reset();
     m_axis2Motor.reset();
     m_axis1Motor.reset();
 }
@@ -2203,9 +2209,6 @@ double Model::getAxis1MotorPosition() const
 {
     if (!m_axis1Motor) {
         return 0.0;
-    }
-    if (m_config.readBool("Axis1UseLinearScale", false)) {
-        return m_linearScaleAxis1->getPositionInMm();
     }
     return m_axis1Motor->getPosition();
 }
@@ -2243,9 +2246,6 @@ double Model::getAxis1MotorCurrentStep() const
 {
     if (!m_axis1Motor) {
         return 0.0;
-    }
-    if (m_config.readBool("Axis1UseLinearScale", false)) {
-        return m_linearScaleAxis1->getPositionInMm() / m_axis1Motor->getConversionFactor();
     }
     return m_axis1Motor->getCurrentStep();
 }
@@ -2363,13 +2363,104 @@ float Model::getRotaryEncoderRpm() const
     return m_rotaryEncoder->getRpm();
 }
 
-float Model::getAxis1LinearScalePosMm() const
+bool Model::hasAxis1Scale() const
 {
-    if (m_linearScaleAxis1) {
-        return m_linearScaleAxis1->getPositionInMm();
-    } else {
-        return 0.f;
+    return m_axis1Scale != nullptr;
+}
+
+bool Model::axis1ScaleHasReading() const
+{
+    return m_axis1Scale && m_axis1Scale->hasReading();
+}
+
+std::optional<double> Model::getAxis1ScalePositionMm() const
+{
+    if (!m_axis1Scale) {
+        return std::nullopt;
     }
+    return m_axis1Scale->positionMm();
+}
+
+std::optional<double> Model::getAxis1ScaleDifferenceMm() const
+{
+    if (!m_axis1Scale || !m_axis1Motor) {
+        return std::nullopt;
+    }
+    return m_axis1Scale->differenceMm(m_axis1Motor->getPosition());
+}
+
+void Model::configureAxis1Scale()
+{
+    const std::string type = m_config.read("Axis1Scale", "none");
+    if (type == "none") {
+        return;
+    }
+    AxisScale::Settings settings {
+        .axisLabel = m_config.read("Axis1Label", "Z"),
+        .countsPerMm = m_config.readDouble("Axis1ScaleCountsPerMm", 200.0),
+        .reversed = m_config.readBool("Axis1ScaleReversed", false),
+        .settleTime = std::chrono::milliseconds(m_config.readLong("Axis1ScaleSettleMs", 500)),
+        .maxSettleTime
+        = std::chrono::milliseconds(m_config.readLong("Axis1ScaleMaxSettleMs", 3'000)),
+    };
+    if (settings.countsPerMm <= 0.0) {
+        MGOLOG(
+            fmt::format(
+                "*** Warning *** Axis1ScaleCountsPerMm should be more than zero, not {}: no "
+                "scale",
+                settings.countsPerMm));
+        return;
+    }
+    std::unique_ptr<IScale> scale;
+    std::string source;
+    if (type == "quadrature") {
+        const long pinA = m_config.readLong("Axis1ScaleGpioPinA", 5);
+        const long pinB = m_config.readLong("Axis1ScaleGpioPinB", 6);
+        scale
+            = std::make_unique<LinearScale>(m_gpio, pinA, pinB, std::lround(settings.countsPerMm));
+        source = fmt::format("GPIO {} and {}", pinA, pinB);
+    } else if (type == "serial") {
+        const std::string letter = m_config.read("Axis1ScaleSerialLetter", "X");
+        if (letter.size() != 1 || letter[0] < 'A' || letter[0] > 'Z') {
+            MGOLOG(
+                fmt::format(
+                    "*** Warning *** Axis1ScaleSerialLetter should be a capital letter, not "
+                    "\"{}\": no scale",
+                    letter));
+            return;
+        }
+        const std::string device = m_config.read("Axis1ScaleSerialDevice", "/dev/ttyUSB0");
+#ifdef FAKE
+        // (Simulated, following the motor. The motor is reset after the
+        // scale; see resetMotorThreads())
+        scale = std::make_unique<FakeDroScale>(
+            [this]() { return m_axis1Motor->getPosition(); },
+            settings.countsPerMm,
+            settings.reversed);
+        source = fmt::format("{} on {} (simulated)", letter, device);
+#else
+        if (!m_droReader) {
+            m_droReader = std::make_unique<DroSerialReader>(device);
+        }
+        scale = std::make_unique<DroSerialScale>(*m_droReader, letter[0]);
+        source = fmt::format("{} on {}", letter, device);
+#endif
+    } else {
+        MGOLOG(
+            fmt::format(
+                "*** Warning *** Axis1Scale should be none, quadrature or serial, not \"{}\": "
+                "no scale",
+                type));
+        return;
+    }
+    MGOLOG(
+        fmt::format(
+            "{} scale: {}, {} counts per mm{}",
+            settings.axisLabel,
+            source,
+            settings.countsPerMm,
+            settings.reversed ? ", reversed" : ""));
+    m_axis1Scale = std::make_unique<AxisScale>(std::move(scale), std::move(settings));
 }
 
 void Model::clearCurrentMemorySlot(Axis axis)

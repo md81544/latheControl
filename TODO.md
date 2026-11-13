@@ -884,11 +884,12 @@
       (commanded) and the scale's counts (measured) should never be mixed.
       Keep an explicit offset between them, set when zeroing; the
       "discrepancy" is then (scale position − motor position − offset).
-      Note the current code *does* mix them: with `Axis1UseLinearScale` on,
-      `getAxis1MotorCurrentStep()` returns a step derived from the scale,
-      which is passed to the motor's `goToStep()`. Once scale and motor drift
-      apart, moves (e.g. a nudge) are out by the whole drift. **Fix this
-      before enabling `Axis1UseLinearScale`**
+      **Done (13 Nov 2026):** the old code mixed them (with
+      `Axis1UseLinearScale` on, moves were made from a step worked out from
+      the scale, so were out by the whole drift). That key has gone. Now
+      `AxisScale` (scale.h) lines the scale up with the motor, and the
+      display and lc.log show the difference; see "Use the mill's scales in
+      latheControl", which did this for both machines
     - **Options, roughly in order of difficulty:**
         1. *Detect only:* watch the discrepancy, and if it exceeds a
            threshold (a few scale counts beyond the backlash allowance), stop
@@ -1589,3 +1590,80 @@ change.
       "scale position" interface shared with the quadrature `LinearScale`,
       so the lost-step and re-basing features work with either. A fake
       source for FAKE builds and the tests
+    - **Plan (agreed 13 Nov 2026), in stages:**
+        1. The shared base: one serial reader for the sender, a common
+           interface for any scale, scale and motor kept in separate frames,
+           and config per axis
+        2. Show the scale and its difference from the motor, and log it each
+           time the axis stops, to measure the real lag, settle time, jitter,
+           backlash and drift
+        3. Warn of lost steps: at rest, once the reading has settled, a
+           difference of more than a few counts stops things and warns
+        4. Correct at rest (see below)
+    - **Done (13 Nov 2026), stages 1 and 2, not yet tried on the machine:**
+        - `Axis1Scale` = none (the default), quadrature (the lathe's Z) or
+          serial (the mill's X), with `Axis1ScaleCountsPerMm`,
+          `Axis1ScaleReversed`, the GPIO pins or serial device and letter,
+          and `Axis1ScaleSettleMs` and `Axis1ScaleMaxSettleMs`. The old
+          `LinearScaleAxis1*` keys are renamed to match. Only axis 1 so far
+        - `DroSerialReader` (droserial.*) reads the port in its own thread,
+          started from the main thread, so kept off the motors' cores. A
+          reading is stale after a second with no update. It retries every
+          second if the port can't be opened
+        - `AxisScale` (scale.*) lines the scale up with the motor once the
+          reading has settled with the motor at rest: at the start, after
+          zeroing or setting the position, and when readings return after
+          being lost (the sender's count starts again if it's switched off).
+          The motor's position already leaves out the backlash steps, so the
+          difference should stay near zero in both directions
+        - The display shows e.g. "X scale: 12.345 mm, off by +0.010" below the
+          spindle speed. Each time the axis stops, lc.log records how long
+          the reading took to settle, the move, and the difference in mm and
+          counts
+        - FAKE builds simulate the sender (`FakeDroScale`), following the
+          motor with a lag
+    - **To check on the mill:** whether `Axis1ScaleReversed` should be true
+      (if so, the difference grows by twice each move); then, from lc.log,
+      how long readings take to settle (which sets `Axis1ScaleSettleMs`),
+      whether they jitter, and how the difference behaves after reversals
+      (a steady offset after reversing in one direction means the backlash
+      setting is out by that much). Also check the lathe's Z scale's sign
+    - **Stage 4, as discussed (13 Nov 2026):** positioning moves (go to a
+      memory, go to zero, go to a typed position) stop short of the target
+      by a configurable approach distance, then finish in the same
+      direction, so the slack is taken up. Then: wait for the reading to
+      settle, read the error, move by it, and repeat (two or three times at
+      most), then re-base the motor's position from the scale. Notes:
+        - Not "crawl in while watching the scale": the sender's smoothing
+          lags, so to stop within a count the crawl would need to be about
+          10-20 µm/s, which would take about a minute over 1 mm. The
+          lathe's quadrature scale has about 1 ms of lag, so could watch,
+          but one routine (with a shorter settle time) covers both
+        - Never reverse for a small correction: back off past the backlash
+          and come in again
+        - A count is about 32 of mill X's steps, and readings jitter by a
+          count, so only correct an error of more than about 2 counts;
+          otherwise just re-base
+        - Re-base only after the final approach, when the slack is known to
+          be taken up, without upsetting the backlash compensation's
+          direction. From then on the scale is the true position, so
+          memories and targets are really scale positions
+        - A large first error (a stall, lost steps, a slipping scale or a
+          stale reading), or one which doesn't shrink, stops and warns, as
+          stage 3 does, rather than being corrected silently
+        - Not for cutting feeds (multi-pass, repeated cuts): stopping
+          mid-cut would mark the work. Check, and warn, at rest afterwards
+          instead. Nudges and jogs are left alone. A quick way to turn it
+          off per axis (e.g. in the menu), for when speed matters more
+        - A state machine stepped from `checkStatus()` (as motionsequence.*
+          is), so Space cancels it and the menu and dialogs never block it,
+          with nothing added to the motor threads. If the scale goes stale,
+          fall back to dead reckoning with a warning
+        - Climb milling can pull the table into the backlash after it's
+          been positioned; stage 3's check at rest would catch that, and
+          locking the table is the real fix
+        - If the sender's adaptive average proves a nuisance, change the
+          sketch to send unsmoothed values as well
+    - Later: Y and Z as read-only (display-only) axes from the same reader,
+      each with its own zero. Z's depth would help gear cutting, where the
+      depth is fed by hand

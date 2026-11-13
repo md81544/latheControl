@@ -1,12 +1,13 @@
 #pragma once
 
 #include "configreader.h"
+#include "droserial.h"
 #include "gearcutting.h"
-#include "linearscale.h"
 #include "motionsequence.h"
 #include "multipass.h"
 #include "radius.h"
 #include "rotaryencoder.h"
+#include "scale.h"
 #include "steppermotor.h"
 #include "threadpitches.h"
 #include "units.h"
@@ -338,7 +339,15 @@ public:
     int axisDecimals(int axisNumber) const;
 
     float getRotaryEncoderRpm() const;
-    float getAxis1LinearScalePosMm() const;
+    // Axis 1's linear scale (Axis1Scale in the config), if it has one. Its
+    // position is in the motor's frame, so it's only known once the scale
+    // has been lined up with the motor (see AxisScale), and while it has a
+    // recent reading
+    bool hasAxis1Scale() const;
+    bool axis1ScaleHasReading() const;
+    std::optional<double> getAxis1ScalePositionMm() const;
+    // The scale's position less the motor's
+    std::optional<double> getAxis1ScaleDifferenceMm() const;
 
     void clearCurrentMemorySlot(Axis axis);
 
@@ -524,10 +533,14 @@ private:
     IGpio& m_gpio;
     IConfigReader& m_config;
     std::unique_ptr<mgo::RotaryEncoder> m_rotaryEncoder;
-    // Currently only one linear scale is supported; another could be added for Axis2
-    std::unique_ptr<mgo::LinearScale> m_linearScaleAxis1;
     std::unique_ptr<mgo::StepperMotor> m_axis1Motor;
     std::unique_ptr<mgo::StepperMotor> m_axis2Motor;
+    // Reads the mill's DRO sender, if any axis's scale is on it. (Declared
+    // before the scales, so outlives them, and after the motors, so the
+    // scales go before the motors, which a simulated scale follows)
+    std::unique_ptr<mgo::DroSerialReader> m_droReader;
+    // Only axis 1 can have a scale so far
+    std::unique_ptr<mgo::AxisScale> m_axis1Scale;
     std::vector<long> m_axis1Memory { AXIS1_UNSET, AXIS1_UNSET, AXIS1_UNSET,
                                       AXIS1_UNSET, AXIS1_UNSET, AXIS1_UNSET };
     std::vector<long> m_axis2Memory { AXIS2_UNSET, AXIS2_UNSET, AXIS2_UNSET,
@@ -695,6 +708,8 @@ private:
     // low speeds, a stray edge can flip it for a few milliseconds)
     std::optional<int> spindleTurningSign() const;
     void checkEncoderLostPulses();
+    // Creates axis 1's scale, if the config gives it one
+    void configureAxis1Scale();
     // X is no longer known to be measured from the centre
     void clearDiameter();
     void clearMotorFault(Axis axis);
