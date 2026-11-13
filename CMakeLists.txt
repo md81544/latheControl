@@ -22,26 +22,18 @@ find_package(Qt6 REQUIRED COMPONENTS Widgets)
 find_package(Threads REQUIRED)
 
 # ---------------------------------------------------------------------------
-# stepperControl library, fetched at configure time. To build against a local
-# checkout instead (e.g. when working on both), use
-#   make STEPPERCONTROL_DIR=../stepperControl
-# which sets FETCHCONTENT_SOURCE_DIR_STEPPERCONTROL
+# pigpio, for the real GPIO (gpio.cpp). Only on a Raspberry Pi: FAKE builds
+# use MockGpio instead, so don't need it
 # ---------------------------------------------------------------------------
-include(FetchContent)
-set(STEPPERCONTROL_GIT_REPOSITORY "https://github.com/md81544/stepperControl.git"
-	CACHE STRING "Git repository to fetch stepperControl from")
-FetchContent_Declare(stepperControl
-	GIT_REPOSITORY ${STEPPERCONTROL_GIT_REPOSITORY}
-	GIT_TAG        v1.5.1
-	GIT_SHALLOW    TRUE
-)
-# FAKE builds use MockGpio, so don't need pigpio
-if(FAKE)
-	set(STEPPERCONTROL_USE_PIGPIO OFF)
-else()
-	set(STEPPERCONTROL_USE_PIGPIO ON)
+if(NOT FAKE)
+	find_path(PIGPIO_INCLUDE_DIR pigpio.h)
+	find_library(PIGPIO_LIBRARY pigpio)
+	if(NOT PIGPIO_INCLUDE_DIR OR NOT PIGPIO_LIBRARY)
+		message(FATAL_ERROR
+			"pigpio not found. It is only available on a Raspberry Pi; on other "
+			"machines build with FAKE=ON (make, rather than make release)")
+	endif()
 endif()
-FetchContent_MakeAvailable(stepperControl)
 
 # ---------------------------------------------------------------------------
 # Options shared by every target (warnings, FAKE)
@@ -70,6 +62,7 @@ add_library(shared_with_test OBJECT
 	model.cpp
 	motionsequence.cpp
 	multipass.cpp
+	steppermotor.cpp
 	threadpitches.cpp
 	cpuaffinity.cpp
 )
@@ -77,8 +70,12 @@ target_link_libraries(shared_with_test PUBLIC
 	lc_options
 	fmt::fmt
 	Threads::Threads
-	stepperControl::stepperControl
 )
+# The Raspberry Pi's 32-bit OS needs the atomic library (for
+# std::atomic<double> etc, used by the stepper motor code)
+if(CMAKE_SYSTEM_PROCESSOR STREQUAL "armv7l")
+	target_link_libraries(shared_with_test PUBLIC atomic)
+endif()
 
 # ---------------------------------------------------------------------------
 # The app
@@ -94,6 +91,12 @@ target_link_libraries(${APP_NAME} PRIVATE
 	shared_with_test
 	Qt6::Widgets
 )
+# The real GPIO (main.cpp uses MockGpio in FAKE builds)
+if(NOT FAKE)
+	target_sources(${APP_NAME} PRIVATE gpio.cpp)
+	target_include_directories(${APP_NAME} PRIVATE ${PIGPIO_INCLUDE_DIR})
+	target_link_libraries(${APP_NAME} PRIVATE ${PIGPIO_LIBRARY})
+endif()
 
 # ---------------------------------------------------------------------------
 # Symlinks in the source root to the last-built executable (it loads lc.cfg

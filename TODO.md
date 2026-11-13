@@ -486,7 +486,7 @@
              flanks were clean enough not to need a needle file, which
              they always used to
 
-## Motion and timing (mostly in stepperControl)
+## Motion and timing (mostly in steppermotor.cpp)
 - [ ] Deceleration ramping. At the moment there's only acceleration, so
       stops (especially from rapids) are abrupt. Needs tuning on the machine,
       and changes where moves end. Also, the ramp rate is per loop, so depends
@@ -1052,6 +1052,14 @@ change.
       rotary table, replacing one axis.
     - This would mean we could also incorporate the repo stepperControl as it
       is only shared by latheControl and ERT (which would then be redundant)
+    - **Done (2026-11-13):** stepperControl's code (v1.5.1) is now in this
+      repo, flat in the root like everything else (`steppermotor.*`,
+      `igpio.h`, `gpio.*`, `mockgpio.h`), with no FetchContent and no
+      `STEPPERCONTROL_DIR`. A plain copy: its history stays in the
+      stepperControl repo. It's now built with this project's warnings
+      (`-Werror -Wpedantic`), which it wasn't before: clean with clang on
+      the Mac (`gpio.cpp` checked against a stub `pigpio.h`), but not yet
+      built with GCC on the Pi
     - Gear cutting mode should be disabled by default, and only enabled by a
       setting in lc_mill.cfg (the milling machine currently only has a stepper
       on its X axis)
@@ -1096,7 +1104,7 @@ change.
           number of teeth changes, or A is zeroed or set
         - Not done yet: stepping back a tooth (re-cutting one), a pause
           between teeth as a dialog option (`Enter` during a pass does it
-          once), and moving stepperControl into this repo (next)
+          once)
 - [x] **Unit tests which fail now and then** (2026-11-11). On neutron
       (Linux, 8 cores, a busy KDE desktop), 1 to 3 tests failed on every run
       of `unit_test`, mostly "threading passes stop if a pass can't start"

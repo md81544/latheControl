@@ -2,7 +2,7 @@
 // This class is used to read and respond to a rotary
 // encoder which measures the lathe's spindle rotation.
 
-#include "stepperControl/igpio.h"
+#include "igpio.h"
 
 #include <atomic>
 #include <cstdint>

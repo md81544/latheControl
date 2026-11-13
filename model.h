@@ -6,7 +6,7 @@
 #include "motionsequence.h"
 #include "multipass.h"
 #include "rotaryencoder.h"
-#include "stepperControl/steppermotor.h"
+#include "steppermotor.h"
 #include "threadpitches.h"
 #include "units.h"
 

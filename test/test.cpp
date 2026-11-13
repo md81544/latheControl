@@ -3,12 +3,12 @@
 #include "joystick.h"
 #include "keycodes.h"
 #include "menu.h"
+#include "mockgpio.h"
 #include "model.h"
 #include "motionsequence.h"
 #include "multipass.h"
 #include "rotaryencoder.h"
-#include "stepperControl/mockgpio.h"
-#include "stepperControl/steppermotor.h"
+#include "steppermotor.h"
 #include "threadpitches.h"
 
 #include <fmt/format.h>

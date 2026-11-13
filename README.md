@@ -11,13 +11,7 @@ Intended to be an aid for manual machining, rather than full CNC operation.
 
 ## Getting the Code
 
-Just `git clone <repo URL>`. The stepper motor code lives in a separate repository, [stepperControl](https://github.com/md81544/stepperControl), which CMake downloads automatically when you first build (so the first build needs network access). The version used is pinned by `GIT_TAG` in `CMakeLists.txt`.
-
-If you're changing stepperControl at the same time, clone it alongside and build against your local copy instead:
-
-    make STEPPERCONTROL_DIR=../stepperControl
-
-(or `export STEPPERCONTROL_DIR=../stepperControl` in your shell profile on a development machine).
+Just `git clone <repo URL>`. Everything is in this repository: the stepper motor code (`steppermotor.*`, and the GPIO in `igpio.h`, `gpio.*` and `mockgpio.h`) used to be a separate library, [stepperControl](https://github.com/md81544/stepperControl), which was moved in at its v1.5.1, once the electronicRotaryTable program (its only other user) was replaced by gear cutting mode. That repository is kept for its history.
 
 ## Dependencies
 

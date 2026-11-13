@@ -3,7 +3,7 @@
 // scale, used to determine the position of the tool on an axis
 // (currently just the Z-axis)
 
-#include "stepperControl/igpio.h"
+#include "igpio.h"
 
 #include <atomic>
 #include <cassert>

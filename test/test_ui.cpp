@@ -9,8 +9,8 @@
 #include "controller.h"
 #include "keycodes.h"
 #include "menu.h"
+#include "mockgpio.h"
 #include "model.h"
-#include "stepperControl/mockgpio.h"
 #include "tapers.h"
 #include "view_qt.h"
 
