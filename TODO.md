@@ -485,6 +485,67 @@
              a nudge in and a couple more before the nut went on. The
              flanks were clean enough not to need a needle file, which
              they always used to
+- [ ] **Radius mode: a radius on the work's end, as passes of short tapers.**
+      Replaces the old experimental radius mode, which synchronised X to
+      Z's absolute position with Pythagoras, needed both axes zeroed on the
+      radius's apex, and left the passes to the user (cut, return, nudge,
+      re-zero). Its X also fell behind near the end face: the motor's
+      synchronisation sets the follower's speed from the *average* ratio
+      since the sync started, not the slope where it is, and an arc's slope
+      goes towards vertical there, so X lagged and cut too deep.
+    - **Done (2026-11-13), not yet tried on the machine:** radius mode (menu
+      Modes, `O`; only with `CurrentFeature`) starts from the current
+      feature: face the end, mark it (`ZE`), set X as a diameter, and the
+      program knows where the corner is. The dialog asks for the radius (up
+      to half the diameter, a full ball end), the depth per pass, and the
+      tool's nose radius. radius.cpp works out the passes: concentric arcs
+      about the finished radius's centre, the first the largest that still
+      touches the corner (so it takes off no more than the depth per pass),
+      stepping in to the radius. Each is clipped to the work, from the end
+      face round to the diameter, so the first passes are short, nearly
+      straight cuts across the corner, and every pass removes about the
+      same depth. Each arc is a series of short tapers, within ±0.005 mm of
+      the arc (the points are moved out by half the chord's sag, so the
+      tapers fall either side of it), at most 10° each
+    - **The engine:** `MultiPassPlan::paths` gives each pass its own start X
+      and list of points; the cut goes from point to point, X following Z
+      at a fixed ratio on each (the ratio worked out from where the axes
+      actually are, so a step of rounding isn't carried on), then Z returns
+      straight back along the diameter, which is clear of the work once the
+      pass has cut. No retract: during a cut Z only moves towards the chuck
+      and X only outwards, so neither reverses part way. Pausing, `Enter`
+      during a pass and Space work as for any multi-pass
+    - **X's speed:** near the end face X must move many times as fast as
+      Z, so each taper caps Z's speed so that X needs no more than 80% of
+      the speed it can *start* at (40% of its maximum, where ramping
+      starts). Above that, X ramps up slowly (from 40%), and on a short
+      taper never gets there: in the tests it lagged by 0.05 mm until this
+      was capped. On the lathe that's about 43 mm/min of X, so the last
+      pass slows Z a lot for its first few tapers (for a 5 mm radius, to
+      under 3 mm/min on the steepest, for about a second)
+    - **Nose radius:** the tool's tip as touched off (on the diameter and
+      the end face, as a right-hand turning tool) follows an arc of the
+      cut's radius plus the nose radius, moved towards the chuck and the
+      centre by the nose radius. Without it, a 0.4 mm nose leaves the
+      radius about 0.17 mm proud at 45°. Typed in the dialog each time
+      until there's a tool database (see "Current tool and a tool
+      database")
+    - **Also fixed:** the backlash take-up before X follows Z (taper mode,
+      and `TaperCorrection`'s multi-pass cuts) took X's backlash up by the
+      sign of the taper's ratio and Z's direction in steps, which on a
+      machine whose axes' conversions have the same sign (as lc.cfg's both
+      are negative) is the opposite way to the way X then moves. It's now
+      worked out from both conversion factors. Worth checking on the
+      machine with a dial indicator at the start of a taper; it might
+      explain some of `TaperCorrection`'s shortfall (about 60% of the
+      expected effect)
+    - **To try on the machine:** whether Z's stop at each taper's end (it
+      stops while X catches up and is re-synchronised) leaves marks; if so,
+      a single X = f(Z) synchronisation with the speed from the local slope
+      would avoid the stops (the "profile" idea below needs that anyway).
+      Whether X keeps up at 80% of its start speed. The full ball end's last
+      pass crosses the centre line by the nose radius. Radii on the inside
+      (a bore's mouth) and concave fillets at a shoulder aren't done
 
 ## Motion and timing (mostly in steppermotor.cpp)
 - [ ] Deceleration ramping. At the moment there's only acceleration, so
@@ -653,9 +714,11 @@
       turning simple profiles (e.g. a chess piece) from a file. Idea only,
       for discussion, but it shares its machinery with the bump map above:
       X follows a function of Z's position, from a table of points
-    - Radius mode already does this for a circle (`synchroniseXForRadius()`
-      works out X from Z's absolute position). A profile swaps Pythagoras
-      for a lookup in the table. Since X depends only on where Z is, Z can
+    - The old radius mode did this for a circle (X worked out from Z's
+      absolute position by Pythagoras). A profile swaps Pythagoras for a
+      lookup in the table. (Radius mode now cuts arcs as a chain of tapers
+      instead: see "Radius mode" under Multi-pass. A profile's roughing
+      passes could use the same `MultiPassPlan::paths`.) Since X depends only on where Z is, Z can
       be wound back and forth, stopped and restarted anywhere, and the tool
       retraces the profile, just as a mechanical follower would. That suits
       the app as an aid to manual machining: the operator drives Z (keys,
@@ -695,7 +758,7 @@
       function of Z rather than a fixed ratio. Offsetting in X only leaves
       thinner material on steep parts, the safe way to be wrong
     - **Suggested first slice:** profile mode beside taper and radius: load
-      a points file, zero at the start as radius mode asks, drive Z by hand
+      a points file, start from the current feature as radius mode does, drive Z by hand
       with X following, and step the depth by hand. Test it on a profile
       whose X only moves one way (e.g. a cone with a radiused end), so
       backlash doesn't come into it yet. Lathe only, and off unless the
@@ -953,7 +1016,9 @@ change.
           Ø/2, step inwards, finish at a given end X (> 0 for a fillet). Arcs
           aren't a fixed X:Z ratio, so this needs either a chain of short
           tapers (`MotionSequence` could run them) or proper arc
-          synchronisation. Tool nose radius starts to matter here too
+          synchronisation. Tool nose radius starts to matter here too.
+          **Done** for a radius on the end, as a chain of tapers in the
+          multi-pass engine: see "Radius mode" under Multi-pass
     - **Suggested first slice:** feature Ø and end Z with set and clear, their
       own display box, cleared on re-zero, fault or tool change, and used to
       pre-fill multi-pass
@@ -1384,7 +1449,9 @@ change.
 - [ ] Once this "generic multi-pass" functionality is available, it could be used for:
         - threading on the lathe
         - turning down to a workpiece to a set diameter (lathe)
-        - radiusing (lathe)
+        - radiusing (lathe). **Done** as radius mode (see "Radius mode" above),
+          from the current feature as suggested here; the end X became the
+          radius itself (up to half the diameter for a full ball end)
             - Maybe radius should rely on diameter being set and the the work faced off;
               if a diameter is set after turning down bar stock to a known diameter, then facing
               the end, the program would know where (a) the centre line of the stock is, and

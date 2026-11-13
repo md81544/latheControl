@@ -38,6 +38,10 @@ enum class Direction {
 
 class StepperMotor {
 public:
+    // With ramping, a move starts at up to this fraction of the maximum
+    // speed, and ramps up from there to any speed above it
+    static constexpr double RAMP_START_FRACTION = 0.4;
+
     StepperMotor(
         IGpio& gpio,
         int stepPin,

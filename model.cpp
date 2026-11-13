@@ -382,12 +382,11 @@ void Model::checkStatus()
                 multiPassXFollowEnded();
             }
         }
-        if ((m_mode == Mode::Taper || m_mode == Mode::Radius || m_multiPassXFollowing)
-            && m_axis1WasRunning) {
-            // The end of a taper or radius cut. X follows Z in small updates,
-            // so may still be a few steps behind: leave it synchronised until
-            // it's stopped too (on a later update, by when it's had Z's final
-            // position), so it ends exactly on the taper or radius
+        if ((m_mode == Mode::Taper || m_multiPassXFollowing) && m_axis1WasRunning) {
+            // The end of a taper cut. X follows Z in small updates, so may
+            // still be a few steps behind: leave it synchronised until it's
+            // stopped too (on a later update, by when it's had Z's final
+            // position), so it ends exactly on the taper
             m_synchronisedCutEnding = true;
             m_synchronisedCutXStoppedOnce = false;
         }
@@ -438,7 +437,7 @@ void Model::checkStatus()
     } else {
         m_axis2WasRunning = true;
     }
-    if (m_mode == Mode::Taper || m_mode == Mode::Radius) {
+    if (m_mode == Mode::Taper) {
         m_axis2Status = "synchronised";
     }
 
@@ -672,7 +671,7 @@ void Model::changeMode(Mode mode)
         // stepper, and starting a retract at full speed can stall it
         m_axis1Motor->enableRamping(false);
         m_axis2Motor->enableRamping(true);
-    } else if (mode == Mode::Taper || mode == Mode::Radius) {
+    } else if (mode == Mode::Taper) {
         // X is synchronised with Z, so neither can ramp
         m_axis1Motor->enableRamping(false);
         m_axis2Motor->enableRamping(false);
@@ -698,6 +697,7 @@ void Model::changeMode(Mode mode)
     // (Set up afresh on entering the mode)
     m_knurlLeadMm = 0.0;
     m_gearSet = false;
+    m_radiusSet = false;
     setThreadingWarning("", false);
     m_mode = mode;
     m_input = "";
@@ -706,13 +706,6 @@ void Model::changeMode(Mode mode)
         m_taperPreviousXSpeed = m_axis2Motor->getSpeed();
         if (m_taperAngle != 0.0) {
             m_input = convertToString(m_taperAngle, 4);
-        }
-    }
-
-    if (mode == Mode::Radius) {
-        axis1SetSpeed(10.0);
-        if (m_radius != 0.0) {
-            m_input = convertToString(m_radius, 4);
         }
     }
 }
@@ -726,7 +719,7 @@ void Model::stopAllMotors()
     // (After stopping, so a sequence's end, e.g. restoring a nudge's speed,
     // doesn't race with a move it started)
     m_motionSequence.cancel();
-    // Otherwise X, synchronised to Z (in a taper or radius), would carry on
+    // Otherwise X, synchronised to Z (e.g. in a taper), would carry on
     // following it. (Its speed is still restored when the cut's end is seen)
     axis2SynchroniseOff();
     m_multiPassXSettling = false;
@@ -787,38 +780,11 @@ void Model::synchroniseXForTaper(double ratio)
     });
 }
 
-void Model::synchroniseXForRadius()
+double Model::axis2MaxSpeed() const
 {
-    m_synchronisedCutEnding = false; // (a new cut)
-    // To cut a radius, we need a defined start point for both
-    // axes. We do this by assuming zero is the start point for
-    // both (the change mode screen tells the user to zero out,
-    // such that the tool is on the outermost apex of the radius).
-    // We can then determine at any time whene axis2 should be
-    // in relation to axis1.
-    double radius = m_radius;
-    m_axis2Motor->synchroniseOn(
-        m_axis1Motor.get(),
-        [radius](double /*zPosDelta*/, double zCurrentPos) {
-            // Note, we only cut a radius if z is positive.
-            //
-            // To solve for X, given Z, we can use Pythagoras
-            // as we have a right angle with known hypoteneuse
-            // (i.e. the radius): z^2 + x^2 = r^2, so
-            // sqrt( r^2 - z^2 ) = our x position
-
-            if (zCurrentPos <= 0) {
-                return 0.0;
-            }
-            if (zCurrentPos > radius) {
-                return radius;
-            }
-            double xPos = std::sqrt(radius * radius - zCurrentPos * zCurrentPos);
-            // We need to return a delta
-            return radius - xPos;
-        },
-        true // always use zero as sync start pos
-    );
+    // (As threadingMaxZSpeed(), with the steps per revolution as initialise())
+    return m_axis2Motor->getMaxRpm() * m_config.readLong("Axis2StepsPerRev", 800)
+        * std::abs(m_axis2Motor->getConversionFactor());
 }
 
 std::vector<MotionSequence::Step> Model::threadingPassSteps(long step, double revolutionOffset)
@@ -849,25 +815,12 @@ std::vector<MotionSequence::Step> Model::axis1MoveSteps(long step)
         return threadingPassSteps(step, 0.0);
     }
     const auto move = [this, step]() { m_axis1Motor->goToStep(step); };
-    const ZDirection direction
-        = step < getAxis1MotorCurrentStep() ? ZDirection::Right : ZDirection::Left;
     if (m_mode == Mode::Taper) {
         // (Plus any correction for a taper the machine cuts itself)
         return xFollowsZSteps(
             step, std::tan((m_taperAngle + taperCorrection()) * DEG_TO_RAD), move);
     }
-    if (m_mode != Mode::Radius) {
-        return { { move, {} } };
-    }
-    // Radii synchronise X to Z, after first taking up the backlash on both,
-    // so that X moves as soon as Z does
-    return { takeUpZBacklashStep(direction),
-             takeUpXBacklashStep(direction == ZDirection::Left ? -1 : 1),
-             { [this, move]() {
-                  synchroniseXForRadius();
-                  move();
-              },
-               {} } };
+    return { { move, {} } };
 }
 
 std::vector<MotionSequence::Step>
@@ -875,12 +828,13 @@ Model::xFollowsZSteps(long step, double ratio, std::function<void()> move)
 {
     const ZDirection direction
         = step < getAxis1MotorCurrentStep() ? ZDirection::Right : ZDirection::Left;
-    // X's backlash is taken up the way it's about to move
-    int xStepAdd = -1;
-    if ((direction == ZDirection::Left && ratio < 0.0)
-        || (direction == ZDirection::Right && ratio > 0.0)) {
-        xStepAdd = 1;
-    }
+    // X's backlash is taken up the way it's about to move. X moves ratio
+    // times as far as Z in mm (see synchroniseXForTaper()), so which way that
+    // is in X's steps depends on both axes' conversion factors, which may
+    // have either sign
+    const double zMm = (step - getAxis1MotorCurrentStep()) * m_axis1Motor->getConversionFactor();
+    const double xSteps = ratio * zMm / m_axis2Motor->getConversionFactor();
+    const int xStepAdd = xSteps > 0.0 ? 1 : -1;
     return { takeUpZBacklashStep(direction),
              takeUpXBacklashStep(xStepAdd),
              { [this, ratio, move = std::move(move)]() {
@@ -1144,8 +1098,8 @@ void Model::axis1GoToStep(long step)
     if (axis1MoveRefused()) {
         return;
     }
-    // (Usually just the move itself, which starts at once. For a taper or
-    // radius, the backlash is taken up first, on later updates)
+    // (Usually just the move itself, which starts at once. For a taper, the
+    // backlash is taken up first, on later updates)
     m_motionSequence.start(axis1MoveSteps(step));
 }
 
@@ -1870,7 +1824,8 @@ void Model::clearFeature()
 bool Model::featureGoToAllowed() const
 {
     const bool modeAllows = m_mode == Mode::None
-        || (m_mode == Mode::MultiPass && !m_multiPass.inProgress() && !m_multiPassMovingToStart);
+        || ((m_mode == Mode::MultiPass || m_mode == Mode::Radius) && !m_multiPass.inProgress()
+            && !m_multiPassMovingToStart);
     return currentFeatureEnabled() && modeAllows && !m_motionSequence.isRunning() && !m_axis1Faulted
         && !m_axis2Faulted;
 }
@@ -1991,16 +1946,6 @@ void Model::setKeyMode(KeyMode mode)
 Mode Model::getMode() const
 {
     return m_mode;
-}
-
-double Model::getRadius() const
-{
-    return m_radius;
-}
-
-void Model::setRadius(double radius)
-{
-    m_radius = radius;
 }
 
 double Model::getTaperAngle() const
@@ -2491,9 +2436,9 @@ void Model::checkLimitSwitch()
 bool Model::lockRefused(unsigned axisNumber) const
 {
     // Not while anything is moving it, so nothing under way (e.g. a pass, or
-    // a nudge's sequence) finds it locked part way through. (In a taper or
-    // radius, X follows Z, so is moving whenever Z is)
-    const bool follows = axisNumber == 2 && (m_mode == Mode::Taper || m_mode == Mode::Radius);
+    // a nudge's sequence) finds it locked part way through. (In a taper, X
+    // follows Z, so is moving whenever Z is)
+    const bool follows = axisNumber == 2 && m_mode == Mode::Taper;
     const bool moving = (axisNumber == 1 ? m_axis1Motor : m_axis2Motor)->isRunning()
         || (follows && m_axis1Motor->isRunning());
     const bool multiPassRunning
@@ -2559,7 +2504,7 @@ bool Model::moveRefused(bool axis1, bool axis2)
 
 bool Model::axis1MoveRefused()
 {
-    return moveRefused(true, m_mode == Mode::Taper || m_mode == Mode::Radius);
+    return moveRefused(true, m_mode == Mode::Taper);
 }
 
 bool Model::axis2MoveRefused()
@@ -2874,6 +2819,91 @@ GearSetup Model::gearDialogSetup() const
     return defaultGearSetup(m_gearSetup, multiPassPositions());
 }
 
+std::string Model::radiusUnavailable() const
+{
+    const std::string z = m_config.read("Axis1Label", "Z");
+    const std::string x = m_config.read("Axis2Label", "X");
+    if (!currentFeatureEnabled()) {
+        return "Radius cutting needs the current feature (CurrentFeature = true in the config)";
+    }
+    if (!m_featureX || !m_workEndZ) {
+        return "Face the end and mark it (" + z + "E), and set " + x
+            + " as a diameter on the work, first";
+    }
+    if (m_xRetractionDirection != XDirection::Outwards) {
+        // (The radius is on the outside of the work: X must come out of it)
+        return "Radius cutting is on the outside of the work: set the retraction to outwards";
+    }
+    return {};
+}
+
+RadiusWork Model::radiusWork() const
+{
+    RadiusWork work;
+    work.diameter = getFeatureDiameterMm().value_or(0.0);
+    work.workEndZ = m_workEndZ.value_or(0.0);
+    work.zTowardsChuck = m_config.read("Axis1TowardsChuck", "negative") == "positive" ? 1.0 : -1.0;
+    work.xSign = m_featureX.value_or(0.0) < 0.0 ? -1.0 : 1.0;
+    work.clearance = m_config.readDouble("FeatureStartClearance", 0.5);
+    // X ramps up to anything faster than this, which on a short taper it
+    // might never get to: it would lag, and cut too deep. (It's also as fast
+    // as an open-loop stepper can safely start)
+    work.xMaxSpeed = axis2MaxSpeed() * StepperMotor::RAMP_START_FRACTION;
+    return work;
+}
+
+std::string Model::setRadiusSetup(const RadiusSetup& setup)
+{
+    if (m_mode != Mode::Radius) {
+        return "Radius cutting is only in radius mode";
+    }
+    if (const std::string error = radiusUnavailable(); !error.empty()) {
+        return error;
+    }
+    const RadiusWork work = radiusWork();
+    if (work.xSign * axis2IntoWorkSign() > 0.0) {
+        // X's position must get smaller (nearer the centre) going into the
+        // work, as it does on the outside of it
+        return m_config.read("Axis2Label", "X")
+            + " goes the wrong way into the work for a radius on its outside";
+    }
+    RadiusPlan plan = planRadius(setup, work);
+    if (!plan.error.empty()) {
+        return plan.error;
+    }
+    m_radiusSetup = setup;
+    m_radiusPasses = std::move(plan.passes);
+    m_multiPassRange = plan.range;
+    m_radiusMultiPassSetup = {};
+    m_radiusMultiPassSetup.retractBeforeMoveToStart = true;
+    m_radiusSet = true;
+    MGOLOG(
+        fmt::format(
+            "Radius set up: radius {} on diameter {}, end Z {}, {} per pass, nose {}: {} passes, Z "
+            "{} to {}, X {} to {}",
+            setup.radius,
+            work.diameter,
+            work.workEndZ,
+            setup.depthPerPass,
+            setup.noseRadius,
+            m_radiusPasses.size(),
+            m_multiPassRange.cutStart,
+            m_multiPassRange.cutEnd,
+            m_multiPassRange.feedStart,
+            m_multiPassRange.feedEnd));
+    return {};
+}
+
+const RadiusSetup& Model::getRadiusSetup() const
+{
+    return m_radiusSetup;
+}
+
+bool Model::radiusSet() const
+{
+    return m_mode == Mode::Radius && m_radiusSet;
+}
+
 const MultiPassSetup& Model::activeMultiPassSetup() const
 {
     switch (m_mode) {
@@ -2881,6 +2911,8 @@ const MultiPassSetup& Model::activeMultiPassSetup() const
             return m_threadingPassesSetup;
         case Mode::Knurling:
             return m_knurlingSetup;
+        case Mode::Radius:
+            return m_radiusMultiPassSetup;
         default:
             return m_multiPassSetup;
     }
@@ -3079,7 +3111,8 @@ void Model::multiPassGo()
     const bool threading = m_mode == Mode::Threading && m_threadingPassesSet;
     const bool knurling = m_mode == Mode::Knurling && getKnurlLeadMm().has_value();
     const bool gear = gearCuttingSet();
-    if ((m_mode != Mode::MultiPass && !threading && !knurling && !gear)
+    const bool radius = radiusSet();
+    if ((m_mode != Mode::MultiPass && !threading && !knurling && !gear && !radius)
         || m_multiPassMovingToStart) {
         return;
     }
@@ -3193,6 +3226,16 @@ void Model::multiPassGo()
         // (On the tooth: see multiPassAtStart())
         plan.indexStart = gearStartTooth();
     }
+    if (radius) {
+        // Each pass is an arc, as a series of tapers. The return is along
+        // the work's diameter, which is clear of the work once the pass has
+        // cut (the radius is all inside it), so there's no retract
+        plan.paths = m_radiusPasses;
+        plan.feedPerPass = m_radiusSetup.depthPerPass;
+        plan.retract = false;
+        plan.pause = false;
+        plan.feedCorrection = 0.0;
+    }
     // (Its first pass sets which way the spindle must turn for the rest)
     m_passesSpindleSign.reset();
     if (const std::string error = m_multiPass.start(plan); !error.empty()) {
@@ -3210,7 +3253,9 @@ void Model::multiPassGo()
             threading      ? "Threading passes"
                 : knurling ? "Knurling passes"
                 : gear     ? "Gear cutting"
-                           : "Multi-pass",
+                : radius
+                ? fmt::format("Radius {} (nose {})", m_radiusSetup.radius, m_radiusSetup.noseRadius)
+                : "Multi-pass",
             plan.cutStart,
             plan.cutEnd,
             plan.feedStart,
@@ -3601,8 +3646,10 @@ void Model::multiPassFinished()
     // diameter at the end as it was: a start from the feature assumes the
     // diameter runs from the end)
     // (Not for a thread: its depth isn't a surface's diameter)
+    // (Nor for paths, e.g. a radius, which doesn't change the diameter)
     const MultiPassPlan& plan = m_multiPass.plan();
-    if (!m_workEndZ || !m_xDiameterSet || plan.feedManual || plan.cut == MultiPassCut::Thread) {
+    if (!m_workEndZ || !m_xDiameterSet || plan.feedManual || plan.cut == MultiPassCut::Thread
+        || !plan.paths.empty()) {
         return;
     }
     const double direction = plan.cutEnd > plan.cutStart ? 1.0 : -1.0;

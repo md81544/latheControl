@@ -288,6 +288,31 @@ std::string MultiPass::start(const MultiPassPlan& plan)
             return "Can't correct a taper while threading";
         }
     }
+    if (!plan.paths.empty()) {
+        if (plan.cut != MultiPassCut::Feed) {
+            return "Can't follow a path while threading";
+        }
+        if (plan.feedManual) {
+            return "Can't follow a path with a manual feed";
+        }
+        if (indexing || plan.starts != 1 || plan.cutShiftPerFeed != 0.0
+            || plan.feedCorrection != 0.0 || plan.constantArea) {
+            return "A path can't be shifted, corrected or repeated";
+        }
+        const double direction = plan.cutEnd > plan.cutStart ? 1.0 : -1.0;
+        for (const MultiPassPath& path : plan.paths) {
+            if (path.points.empty()) {
+                return "A path has no points";
+            }
+            double cut = plan.cutStart;
+            for (const MultiPassPathPoint& point : path.points) {
+                if ((point.cut - cut) * direction < TOLERANCE) {
+                    return "A path's cut axis must move away from the start at every point";
+                }
+                cut = point.cut;
+            }
+        }
+    }
     if (m_machine.cutMoving() || (!plan.feedManual && m_machine.feedMoving())
         || (indexing && m_machine.indexMoving())) {
         return "Stop the motors first";
@@ -400,8 +425,13 @@ void MultiPass::update()
             if (m_machine.cutMoving()) {
                 return;
             }
-            if (!cutAt(m_plan.cutEnd)) {
+            if (!cutAt(cutTarget())) {
                 abandon("The cut stopped short of its end");
+                return;
+            }
+            if (followsPaths() && m_point + 1 < m_plan.paths.at(m_pass - 1).points.size()) {
+                ++m_point;
+                cutToPoint();
                 return;
             }
             if (m_plan.cutBack) {
@@ -511,6 +541,9 @@ int MultiPass::startNumber() const
 
 int MultiPass::totalPasses() const
 {
+    if (followsPaths()) {
+        return static_cast<int>(m_plan.paths.size());
+    }
     if (m_plan.feedPerPass < TOLERANCE) {
         return 0;
     }
@@ -594,6 +627,9 @@ double MultiPass::indexTarget() const
 
 bool MultiPass::isLastPass() const
 {
+    if (followsPaths()) {
+        return m_pass >= static_cast<int>(m_plan.paths.size());
+    }
     return m_plan.feedPerPass >= TOLERANCE && near(m_feedTarget, m_plan.feedEnd);
 }
 
@@ -621,6 +657,19 @@ double MultiPass::passCutStart() const
     return m_passCutStart;
 }
 
+bool MultiPass::followsPaths() const
+{
+    return !m_plan.paths.empty();
+}
+
+double MultiPass::cutTarget() const
+{
+    if (followsPaths()) {
+        return m_plan.paths.at(m_pass - 1).points.at(m_point).cut;
+    }
+    return m_plan.cutEnd;
+}
+
 double MultiPass::revolutionOffset() const
 {
     return static_cast<double>(m_start) / static_cast<double>(m_plan.starts);
@@ -628,6 +677,11 @@ double MultiPass::revolutionOffset() const
 
 double MultiPass::nextFeedTarget(double from, int pass) const
 {
+    if (followsPaths()) {
+        // (Where the path starts, whatever the feed axis was nudged to)
+        const std::size_t index = std::clamp<std::size_t>(pass, 1, m_plan.paths.size()) - 1;
+        return m_plan.paths[index].feedStart;
+    }
     const double direction = m_plan.feedEnd < m_plan.feedStart ? -1.0 : 1.0;
     // (As deep as from is, which may have been nudged)
     const double depth = (from - m_plan.feedStart) * direction;
@@ -678,7 +732,38 @@ void MultiPass::startCut()
         }
         return;
     }
+    if (followsPaths()) {
+        // (The speed set now is the cut speed, which the points may slow)
+        m_cutSpeed = m_machine.cutSpeed();
+        m_pointSpeed.reset();
+        m_point = 0;
+        cutToPoint();
+        return;
+    }
     m_machine.cutMoveTo(m_plan.cutEnd, m_plan.feedCorrection);
+}
+
+void MultiPass::cutToPoint()
+{
+    if (m_pointSpeed && m_machine.cutSpeed() != *m_pointSpeed) {
+        // The user changed the speed during the last move: that's the cut
+        // speed from now on
+        m_cutSpeed = m_machine.cutSpeed();
+    }
+    const MultiPassPathPoint& point = m_plan.paths.at(m_pass - 1).points.at(m_point);
+    double speed = m_cutSpeed;
+    if (point.maxCutSpeed > 0.0) {
+        speed = std::min(speed, point.maxCutSpeed);
+    }
+    m_machine.setCutSpeed(speed);
+    m_pointSpeed = m_machine.cutSpeed();
+    // The feed axis follows in a straight line to the point, from where it is
+    // (so a step it's off by, e.g. rounding, isn't carried on to the next)
+    const double cutDistance = point.cut - m_machine.cutPosition();
+    const double follows = std::abs(cutDistance) < TOLERANCE
+        ? 0.0
+        : (point.feed - m_machine.feedPosition()) / cutDistance;
+    m_machine.cutMoveTo(point.cut, follows);
 }
 
 void MultiPass::startCutBack()
@@ -694,8 +779,11 @@ void MultiPass::startCutBack()
 void MultiPass::startReturn()
 {
     // (Saved here, at the end of the cut, so a speed the user set during the
-    // cut is kept for the next)
-    m_cutSpeed = m_machine.cutSpeed();
+    // cut is kept for the next. Following a path, only if it's not the speed
+    // set for the last point, which may have been slowed)
+    if (!followsPaths() || !m_pointSpeed || m_machine.cutSpeed() != *m_pointSpeed) {
+        m_cutSpeed = m_machine.cutSpeed();
+    }
     m_machine.setCutSpeed(m_machine.cutMaxSpeed());
     m_state = State::Returning;
     // (Following back, so the feed axis is where the cut started)

@@ -2365,6 +2365,265 @@ private:
     QLabel* m_message { nullptr };
 };
 
+// ---------------------------------------------------------------------------
+// Radius dialog
+// ---------------------------------------------------------------------------
+
+class RadiusDialog final : public QDialog {
+public:
+    RadiusDialog(QWidget* parent, const QString& fontFamily, const RadiusDialogInfo& info)
+        : QDialog(parent, Qt::Dialog | Qt::FramelessWindowHint)
+        , m_info(info)
+        , m_setup(info.setup)
+    {
+        setModal(true);
+        setFocusPolicy(Qt::StrongFocus);
+        QFont titleFont(fontFamily);
+        titleFont.setPixelSize(MP_TITLE_FONT_SIZE);
+        QFont labelFont(fontFamily);
+        labelFont.setPixelSize(MP_LABEL_FONT_SIZE);
+        QFont valueFont(fontFamily);
+        valueFont.setPixelSize(MP_VALUE_FONT_SIZE);
+        QFont hintFont(fontFamily);
+        hintFont.setPixelSize(MP_HINT_FONT_SIZE);
+
+        auto* outer = new QVBoxLayout(this);
+        outer->setContentsMargins(0, 0, 0, 0);
+        auto* box = new QFrame(this);
+        box->setObjectName("box");
+        box->setStyleSheet(BOX_STYLE);
+        outer->addWidget(box);
+        auto* layout = new QVBoxLayout(box);
+        layout->setContentsMargins(16, 12, 16, 12);
+        layout->setSpacing(10);
+
+        auto* title = new QLabel("Radius on the work's end", box);
+        title->setFont(titleFont);
+        title->setStyleSheet(PROMPT_STYLE);
+        layout->addWidget(title);
+
+        auto* work = new QLabel(
+            QString::fromStdString(
+                fmt::format(
+                    "The work: Ø {} {}, its end at {} {}",
+                    length(m_info.work.diameter),
+                    m_info.feed.unit,
+                    m_info.cut.label,
+                    position(m_info.work.workEndZ))),
+            box);
+        work->setFont(labelFont);
+        work->setStyleSheet(MP_LABEL_STYLE);
+        layout->addWidget(work);
+
+        auto* grid = new QGridLayout();
+        grid->setHorizontalSpacing(12);
+        grid->setVerticalSpacing(8);
+        layout->addLayout(grid);
+        const char* names[ROW_COUNT] = { "Radius", "Depth per pass", "Tool nose radius" };
+        for (int r = 0; r < ROW_COUNT; ++r) {
+            Row& row = m_rows[r];
+            row.name = new QLabel(names[r], box);
+            row.name->setFont(labelFont);
+            grid->addWidget(row.name, r, 0);
+            row.edit = new QLineEdit(box);
+            row.edit->setFont(valueFont);
+            row.edit->setStyleSheet(MP_EDIT_STYLE);
+            row.edit->setFixedWidth(120);
+            row.edit->setValidator(new QRegularExpressionValidator(
+                QRegularExpression(R"(^[0-9]{0,3}(\.[0-9]*)?$)"), row.edit));
+            row.edit->installEventFilter(this);
+            grid->addWidget(row.edit, r, 1);
+            row.result = new QLabel(box);
+            row.result->setFont(valueFont);
+            row.result->setStyleSheet(MP_LABEL_STYLE);
+            grid->addWidget(row.result, r, 2);
+        }
+        grid->setColumnStretch(2, 1);
+
+        m_message = new QLabel(box);
+        m_message->setFont(labelFont);
+        layout->addWidget(m_message);
+
+        auto* hint = new QLabel(
+            QString::fromStdString(
+                "Up/Down: line   Enter: OK   Esc: cancel\n"
+                "Each pass is an arc, from the end face round to the diameter,\n"
+                "cut as a series of short tapers. The tool is as touched off\n"
+                "on the diameter and the end face."),
+            box);
+        hint->setFont(hintFont);
+        hint->setStyleSheet(MP_HINT_STYLE);
+        layout->addWidget(hint);
+
+        // The values to start with (the nose radius may be 0, a sharp tool)
+        const auto setValue = [this](QLineEdit* edit, double mm, bool zeroToo) {
+            if (mm != 0.0 || zeroToo) {
+                edit->setText(QString::fromStdString(length(mm, 1)));
+            }
+        };
+        setValue(m_rows[Radius].edit, m_setup.radius, false);
+        setValue(m_rows[DepthPerPass].edit, m_setup.depthPerPass, false);
+        setValue(m_rows[Nose].edit, m_setup.noseRadius, true);
+        for (int r = 0; r < ROW_COUNT; ++r) {
+            QObject::connect(m_rows[r].edit, &QLineEdit::textEdited, this, [this, r] {
+                const double mm = typed(m_rows[r].edit).value_or(0.0) / m_info.feed.displayPerMm;
+                (r == Radius             ? m_setup.radius
+                     : r == DepthPerPass ? m_setup.depthPerPass
+                                         : m_setup.noseRadius) = mm;
+                refresh();
+            });
+        }
+
+        refresh();
+        // (Start where something needs typing)
+        setCurrentRow(m_setup.radius > 0.0 && m_setup.depthPerPass <= 0.0 ? DepthPerPass : Radius);
+        adjustSize();
+        if (parent) {
+            const QPoint centre = parent->mapToGlobal(parent->rect().center());
+            move(centre - rect().center());
+        }
+    }
+
+    std::optional<RadiusSetup> chosenSetup() const
+    {
+        if (result() != QDialog::Accepted) {
+            return std::nullopt;
+        }
+        return m_setup;
+    }
+
+protected:
+    bool eventFilter(QObject* watched, QEvent* event) override
+    {
+        if (event->type() == QEvent::KeyPress && handleKey(static_cast<QKeyEvent*>(event))) {
+            return true;
+        }
+        return QDialog::eventFilter(watched, event);
+    }
+
+    void keyPressEvent(QKeyEvent* event) override
+    {
+        if (!handleKey(event)) {
+            QDialog::keyPressEvent(event);
+        }
+    }
+
+private:
+    enum RowId {
+        Radius,
+        DepthPerPass,
+        Nose,
+        ROW_COUNT
+    };
+
+    struct Row {
+        QLabel* name { nullptr };
+        QLineEdit* edit { nullptr };
+        // What it comes to
+        QLabel* result { nullptr };
+    };
+
+    static std::optional<double> typed(const QLineEdit* edit)
+    {
+        bool ok = false;
+        const double v = edit->text().toDouble(&ok);
+        return ok ? std::optional<double>(v) : std::nullopt;
+    }
+
+    // A length (e.g. the radius), in X's display units
+    std::string length(double mm, int extraDecimals = 0) const
+    {
+        return fmt::format(
+            "{:.{}f}", mm * m_info.feed.displayPerMm, m_info.feed.decimals + extraDecimals);
+    }
+
+    // A Z position, in Z's display units
+    std::string position(double mm) const
+    {
+        const int decimals = m_info.cut.decimals;
+        double value = mm * m_info.cut.displayPerMm;
+        // (Not "-0.00")
+        if (std::abs(value) < 0.5 * std::pow(10.0, -decimals)) {
+            value = 0.0;
+        }
+        return fmt::format("{:.{}f}", value, decimals);
+    }
+
+    void setCurrentRow(int row)
+    {
+        m_current = row;
+        m_rows[row].edit->setFocus();
+        m_rows[row].edit->selectAll(); // (so typing replaces it)
+        refresh();
+    }
+
+    void refresh()
+    {
+        const RadiusPlan plan = planRadius(m_setup, m_info.work);
+        const double workRadius = m_info.work.diameter / 2.0;
+        m_rows[Radius].result->setText(
+            m_setup.radius > 0.0 && std::abs(m_setup.radius - workRadius) <= MultiPass::TOLERANCE
+                ? "a full ball end"
+                : "");
+        m_rows[DepthPerPass].result->setText(
+            plan.error.empty()
+                ? QString::fromStdString(
+                      fmt::format(
+                          "{} pass{}", plan.passes.size(), plan.passes.size() == 1 ? "" : "es"))
+                : "");
+        m_rows[Nose].result->setText(m_setup.noseRadius <= 0.0 ? "a sharp tool" : "");
+        for (int row = 0; row < ROW_COUNT; ++row) {
+            m_rows[row].edit->setStyleSheet(
+                row == m_current ? MP_EDIT_CURRENT_STYLE : MP_EDIT_STYLE);
+            m_rows[row].name->setStyleSheet(row == m_current ? MP_CURRENT_STYLE : MP_LABEL_STYLE);
+        }
+        if (plan.error.empty()) {
+            m_message->setStyleSheet(MP_HINT_STYLE);
+            m_message->setText(
+                QString::fromStdString(
+                    "In the mode, Enter moves to the start (off the end, on the\n"
+                    "diameter); Enter again starts"));
+        } else {
+            m_message->setStyleSheet(MP_ERROR_STYLE);
+            m_message->setText(QString::fromStdString(plan.error));
+        }
+    }
+
+    // Returns true if the key press has been dealt with
+    bool handleKey(QKeyEvent* event)
+    {
+        const int qtKey = event->key();
+        if (qtKey == Qt::Key_Escape) {
+            reject();
+            return true;
+        }
+        if (qtKey == Qt::Key_Return || qtKey == Qt::Key_Enter) {
+            if (planRadius(m_setup, m_info.work).error.empty()) {
+                accept();
+            }
+            return true; // (not accepted unless it can be used)
+        }
+        if (qtKey == Qt::Key_Up || qtKey == Qt::Key_Down) {
+            const int row = m_current + (qtKey == Qt::Key_Up ? -1 : 1);
+            if (row >= 0 && row < ROW_COUNT) {
+                setCurrentRow(row);
+            }
+            return true;
+        }
+        const QString text = event->text();
+        if (text.size() == 1 && text.at(0).isLetter()) {
+            return true; // (letters do nothing)
+        }
+        return false;
+    }
+
+    RadiusDialogInfo m_info;
+    RadiusSetup m_setup;
+    Row m_rows[ROW_COUNT];
+    int m_current { Radius };
+    QLabel* m_message { nullptr };
+};
+
 } // end anonymous namespace
 
 QDialog* openMultiPassDialog(
@@ -2389,6 +2648,21 @@ QDialog* openGearDialog(
     std::function<void(std::optional<GearSetup>)> onDone)
 {
     auto* dlg = new GearDialog(parent, fontFamily, info);
+    dlg->setAttribute(Qt::WA_DeleteOnClose);
+    QObject::connect(dlg, &QDialog::finished, dlg, [dlg, onDone = std::move(onDone)](int) {
+        onDone(dlg->chosenSetup());
+    });
+    dlg->open();
+    return dlg;
+}
+
+QDialog* openRadiusDialog(
+    QWidget* parent,
+    const QString& fontFamily,
+    const RadiusDialogInfo& info,
+    std::function<void(std::optional<RadiusSetup>)> onDone)
+{
+    auto* dlg = new RadiusDialog(parent, fontFamily, info);
     dlg->setAttribute(Qt::WA_DeleteOnClose);
     QObject::connect(dlg, &QDialog::finished, dlg, [dlg, onDone = std::move(onDone)](int) {
         onDone(dlg->chosenSetup());

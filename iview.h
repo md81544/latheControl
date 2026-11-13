@@ -97,6 +97,17 @@ struct GearDialogInfo {
     GearSetup setup;
 };
 
+// What the radius dialog needs to know (see IView::openRadiusDialog())
+struct RadiusDialogInfo {
+    // Z and X (lengths are in X's display units)
+    MultiPassDialogInfo::Axis cut;
+    MultiPassDialogInfo::Axis feed;
+    // Where the work is (from the current feature)
+    RadiusWork work;
+    // The setup to start with
+    RadiusSetup setup;
+};
+
 class IView {
 public:
     virtual void initialise(const Model&) = 0;
@@ -149,6 +160,12 @@ public:
     virtual void
     openGearDialog(const GearDialogInfo& info, std::function<void(std::optional<GearSetup>)> onDone)
         = 0;
+    // The radius dialog: the radius, the depth per pass and the tool's nose
+    // radius. onDone gets the setup chosen (which planRadius() accepts with
+    // info's work), or nullopt if cancelled
+    virtual void openRadiusDialog(
+        const RadiusDialogInfo& info,
+        std::function<void(std::optional<RadiusSetup>)> onDone) = 0;
     virtual bool isDialogOpen() const = 0;
     // Closes the open dialog (if any) as if cancelled, calling its onDone
     virtual void cancelDialog() = 0;

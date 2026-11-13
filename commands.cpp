@@ -439,7 +439,10 @@ buildCommands(const IConfigReader& config, DisplayUnits units, bool threadingAut
     b.add(c, "Threading...", key::f2t, BOTH, nullptr, 't');
     b.add(c, "Taper...", key::f2p, BOTH, nullptr, 'p');
     b.add(c, "Quick chamfer (45 deg taper)", key::h, BOTH, nullptr, 'h');
-    b.add(c, "Radius...", key::f2o, BOTH, nullptr, 'o');
+    // (Only with the current feature, from which it's cut)
+    if (config.readBool("CurrentFeature", false)) {
+        b.add(c, "Radius on the end (experimental)...", key::f2o, BOTH, nullptr, 'o');
+    }
     b.add(c, "Multi-pass (experimental)...", key::f2m, BOTH, nullptr, 'm');
     b.add(
         c,

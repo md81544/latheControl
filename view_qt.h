@@ -42,6 +42,9 @@ public:
     void openGearDialog(
         const GearDialogInfo& info,
         std::function<void(std::optional<GearSetup>)> onDone) override;
+    void openRadiusDialog(
+        const RadiusDialogInfo& info,
+        std::function<void(std::optional<RadiusSetup>)> onDone) override;
     bool isDialogOpen() const override;
     void cancelDialog() override;
     void updateDisplay(const Model&) override;

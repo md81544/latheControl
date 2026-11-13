@@ -95,6 +95,27 @@ enum class MultiPassCut {
     Thread
 };
 
+// A point on a pass's path (see MultiPassPlan::paths)
+struct MultiPassPathPoint {
+    double cut { 0.0 };
+    double feed { 0.0 };
+    // The fastest the cut axis may move on the way here, or 0 for no limit
+    // (e.g. so the feed axis can keep up, following it on a steep slope).
+    // The cut goes at the cut axis's speed, if that's slower
+    double maxCutSpeed { 0.0 };
+};
+
+// The path of one pass (see MultiPassPlan::paths)
+struct MultiPassPath {
+    // Where the feed axis is for the pass's start, with the cut axis at the
+    // plan's cutStart
+    double feedStart { 0.0 };
+    // Where the cut goes, in order. Each move goes in a straight line (a
+    // short taper), the feed axis following the cut axis. The cut axis must
+    // move on each, and only ever away from cutStart
+    std::vector<MultiPassPathPoint> points;
+};
+
 // The parameters of a multi-pass
 struct MultiPassPlan {
     MultiPassCut cut { MultiPassCut::Feed };
@@ -176,6 +197,17 @@ struct MultiPassPlan {
     double indexPerStart { 0.0 };
     // (If indexing) Where the index axis is for the first start
     double indexStart { 0.0 };
+    // If not empty, one pass for each path (e.g. a radius, cut as a series of
+    // short tapers), rather than feeding in by feedPerPass and cutting
+    // straight to cutEnd: the feed axis moves to the path's feedStart (with
+    // the cut axis at cutStart), the cut follows the path from point to
+    // point, and the cut axis returns to cutStart (retracting first, if the
+    // plan retracts) without the feed axis following. feedPerPass, feedEnd
+    // and cutEnd are then only for display. A pass's path may end somewhere
+    // else on the cut axis from another's. Only for Feed cuts, with a
+    // motorised feed axis and none of the options above which shift, correct
+    // or repeat the cut
+    std::vector<MultiPassPath> paths;
 };
 
 // Where a multi-pass's start and end positions come from, as chosen in its
@@ -399,8 +431,16 @@ public:
     // Where the cut axis starts the pass being made (or last made): the
     // plan's cutStart, unless shifted (see MultiPassPlan::cutShiftPerFeed)
     double passCutStart() const;
+    // Whether each pass follows a path (see MultiPassPlan::paths)
+    bool followsPaths() const;
 
 private:
+    // Where the cut being made ends (or the move along a path, the point
+    // it's going to)
+    double cutTarget() const;
+    // Moves on along the path to its next point (m_point), at the cut speed,
+    // or the point's limit if that's slower
+    void cutToPoint();
     // Whether the cut or feed axis is at a position (see cutStepSize())
     bool cutAt(double target) const;
     bool feedAt(double target) const;
@@ -445,6 +485,11 @@ private:
     double m_passCutStart { 0.0 };
     // The cut axis's speed for cutting, while returning at full speed
     double m_cutSpeed { 0.0 };
+    // Following a path: the point the cut is going to, and the speed set for
+    // the move there (so a change the user makes during it can be seen, and
+    // kept as the cut speed)
+    std::size_t m_point { 0 };
+    std::optional<double> m_pointSpeed;
     // (See togglePauseRequest())
     bool m_pauseRequested { false };
     // (See pausedBetweenStarts())

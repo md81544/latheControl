@@ -890,6 +890,95 @@ TEST_CASE("UI: gear cutting isn't in the menu unless the config has it")
     REQUIRE(tm.model.getMode() == mgo::Mode::None);
 }
 
+TEST_CASE("UI: radius on the end through the controller")
+{
+    MapConfigReader config { { { "CurrentFeature", "true" } } };
+    mgo::MockGpio gpio { false };
+    mgo::Model model { gpio, config };
+    mgo::Controller controller(&model);
+    QWidget* w = mainWindow();
+    REQUIRE(w);
+    // (As Controller::run() sets them)
+    model.setAxis1MotorSpeed(40.0);
+    model.setAxis2MotorSpeed(20.0);
+
+    // Without the work's diameter and end, it says what's needed
+    bool told = false;
+    whenDialogShows([&told](QWidget* dialog) {
+        told = true;
+        key(dialog, Qt::Key_Escape);
+    });
+    press(w, controller, Qt::Key_Tab);
+    press(w, controller, Qt::Key_M);
+    press(w, controller, Qt::Key_O);
+    REQUIRE(waitForDialogToClose());
+    REQUIRE(told);
+    REQUIRE(model.getMode() == mgo::Mode::None);
+
+    // A 10 mm bar, its end at Z 0. A 2 mm radius, 0.3 per pass, with a
+    // 0.4 mm nose radius
+    model.setAxis2Position(5.0);
+    model.diameterIsSet();
+    model.markWorkEnd();
+    whenDialogShows([](QWidget* dialog) {
+        typeInto(dialog, "2");
+        key(dialog, Qt::Key_Down);
+        // (Not without a depth per pass)
+        key(dialog, Qt::Key_Return);
+        REQUIRE(dialog->isVisible());
+        typeInto(dialog, "0.3");
+        key(dialog, Qt::Key_Down);
+        typeInto(dialog, "0.4");
+        snapshot(dialog, "radius");
+        key(dialog, Qt::Key_Return);
+    });
+    press(w, controller, Qt::Key_Tab);
+    press(w, controller, Qt::Key_M);
+    press(w, controller, Qt::Key_O);
+    REQUIRE(waitForDialogToClose());
+    REQUIRE(model.getMode() == mgo::Mode::Radius);
+    REQUIRE(model.radiusSet());
+    const mgo::RadiusSetup& setup = model.getRadiusSetup();
+    REQUIRE(setup.radius == Approx(2.0));
+    REQUIRE(setup.depthPerPass == Approx(0.3));
+    REQUIRE(setup.noseRadius == Approx(0.4));
+
+    // Enter moves to the start: off the end, on the diameter
+    press(w, controller, Qt::Key_Return);
+    REQUIRE(model.multiPassMovingToStart());
+    REQUIRE(
+        QTest::qWaitFor(
+            [&] {
+                controller.tick();
+                return !model.multiPassMovingToStart();
+            },
+            10'000));
+    REQUIRE(model.multiPassAtStart());
+    // Enter again starts the passes
+    press(w, controller, Qt::Key_Return);
+    REQUIRE(model.multiPass().inProgress());
+    REQUIRE(model.multiPass().totalPasses() == 3);
+    controller.tick();
+    REQUIRE(model.multiPass().inProgress());
+    snapshot(w, "radius_mode");
+    // Space stops it
+    press(w, controller, Qt::Key_Space);
+    REQUIRE(!model.multiPass().inProgress());
+}
+
+TEST_CASE("UI: radius isn't in the menu without the current feature")
+{
+    TestModel tm;
+    mgo::Controller controller(&tm.model);
+    QWidget* w = mainWindow();
+    REQUIRE(w);
+    press(w, controller, Qt::Key_Tab);
+    press(w, controller, Qt::Key_M);
+    press(w, controller, Qt::Key_O);
+    press(w, controller, Qt::Key_Escape);
+    REQUIRE(tm.model.getMode() == mgo::Mode::None);
+}
+
 TEST_CASE("UI: multi-pass dialog, memory slots either way round")
 {
     TestModel tm;

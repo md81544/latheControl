@@ -62,6 +62,7 @@ add_library(shared_with_test OBJECT
 	model.cpp
 	motionsequence.cpp
 	multipass.cpp
+	radius.cpp
 	steppermotor.cpp
 	threadpitches.cpp
 	cpuaffinity.cpp

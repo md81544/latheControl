@@ -5,6 +5,7 @@
 #include "linearscale.h"
 #include "motionsequence.h"
 #include "multipass.h"
+#include "radius.h"
 #include "rotaryencoder.h"
 #include "steppermotor.h"
 #include "threadpitches.h"
@@ -45,7 +46,7 @@ enum class Mode {
     Setup,
     Threading,
     Taper,
-    Radius,
+    Radius, // Radius cutting (see Model::setRadiusSetup())
     MultiPass,
     Knurling, // Cut knurling (see Model::setKnurlingSetup())
     GearCutting // (See Model::setGearSetup())
@@ -229,9 +230,6 @@ public:
     // The mode (e.g. threading), as set by changeMode()
     Mode getMode() const;
 
-    double getRadius() const;
-    void setRadius(double radius);
-
     double getTaperAngle() const;
     void setTaperAngle(double taperAngle);
 
@@ -356,8 +354,8 @@ public:
 
     // A locked axis isn't moved by anything: keys, memory returns, retracts
     // (ThreadingAutoRetract too), or a multi-pass. Each such move is refused,
-    // with a warning to unlock it first. In a taper or radius, X follows Z, so
-    // Z's moves are refused while X is locked too. An axis can't be locked
+    // with a warning to unlock it first. In a taper, X follows Z, so Z's
+    // moves are refused while X is locked too. An axis can't be locked
     // while it's moving, or while a multi-pass runs (it can when paused), so
     // nothing already under way finds its axis locked part way through
     void lockAxis(unsigned axisNumber);
@@ -463,9 +461,25 @@ public:
     // this, it counts as stopped. Lower for knurling, whose long lead needs
     // a very slow spindle
     float minimumSpindleRpm() const;
+    // Radius cutting (radius mode; see radius.h): a multi-pass whose passes
+    // are arcs about the radius's centre, each cut as a series of short
+    // tapers, from the current feature (the work's diameter and its faced
+    // end), which must be set. Set up on entering the mode; the passes are
+    // fixed then, from the feature as it is at the time
+    std::string setRadiusSetup(const RadiusSetup& setup);
+    const RadiusSetup& getRadiusSetup() const;
+    // Whether radius cutting has been set up (in radius mode)
+    bool radiusSet() const;
+    // Why radius cutting can't be set up now (empty if it can): it needs the
+    // current feature, with both its values, on the outside of the work
+    std::string radiusUnavailable() const;
+    // Where the work is for a radius, from the current feature (only if
+    // radiusUnavailable() is empty)
+    RadiusWork radiusWork() const;
     // The setup of the multi-pass that Enter runs: the threading passes' in
-    // threading mode, the knurling's in knurling mode, otherwise multi-pass
-    // mode's
+    // threading mode, the knurling's in knurling mode, the radius's (whose
+    // only option is to retract before moving to the start) in radius mode,
+    // otherwise multi-pass mode's
     const MultiPassSetup& activeMultiPassSetup() const;
     // Enter, in multi-pass mode, or threading mode once threading passes are
     // set up. If the axes aren't at the start, moves them there
@@ -484,8 +498,8 @@ private:
     // The steps for a threading pass to a step (see axis1StartThreadingPass()):
     // taking up Z's backlash, if it's to move, then the pass
     std::vector<MotionSequence::Step> threadingPassSteps(long step, double revolutionOffset);
-    // The steps to move Z to a step: just the move, or, for a taper or
-    // radius, taking up both axes' backlash, then synchronising X and moving.
+    // The steps to move Z to a step: just the move, or, for a taper, taking
+    // up both axes' backlash, then synchronising X and moving.
     // (In threading mode, a threading pass)
     // (The last step's done is left empty, so the sequence ends once Z starts)
     std::vector<MotionSequence::Step> axis1MoveSteps(long step);
@@ -497,7 +511,8 @@ private:
     MotionSequence::Step takeUpZBacklashStep(ZDirection direction);
     MotionSequence::Step takeUpXBacklashStep(int stepAdd);
     void synchroniseXForTaper(double ratio);
-    void synchroniseXForRadius();
+    // The fastest X can move, in mm/min (once ramped up)
+    double axis2MaxSpeed() const;
     // How far X has moved (in mm) to correct the taper, during a multi-pass
     // (0 if none, or while retracted, when X unretracts to where the cut
     // started instead)
@@ -534,11 +549,11 @@ private:
     bool m_axis2RapidInProgress { false };
     int m_keyPressed { 0 };
     double m_taperAngle { 0.0 };
-    double m_radius { 0.0 };
     float m_taperPreviousXSpeed { 40.f };
     // The current mode (e.g. threading, taper). Only set by changeMode()
     Mode m_mode { Mode::None };
-    // Z has stopped at the end of a taper or radius cut: X's synchronisation
+    // Z has stopped at the end of a taper cut (or one X follows in a
+    // multi-pass): X's synchronisation
     // is turned off once it has stopped too
     bool m_synchronisedCutEnding { false };
     bool m_synchronisedCutXStoppedOnce { false };
@@ -598,6 +613,12 @@ private:
     std::optional<double> m_gearToothOrigin;
     // Where axis 2 goes for the first tooth of the next run of passes
     double gearStartTooth() const;
+    RadiusSetup m_radiusSetup;
+    bool m_radiusSet { false };
+    // The radius's passes, and its multi-pass setup (see
+    // activeMultiPassSetup())
+    std::vector<MultiPassPath> m_radiusPasses;
+    MultiPassSetup m_radiusMultiPassSetup;
     MultiPass m_multiPass { *this };
     bool m_multiPassMovingToStart { false };
     // X is following Z, to correct the taper, in a multi-pass cut or return
@@ -713,7 +734,7 @@ private:
     bool lockRefused(unsigned axisNumber) const;
     // Clears lockAxis()'s warning once the axis has stopped
     void checkLockRefusal();
-    // A move of axis 1, which X follows in a taper or radius
+    // A move of axis 1, which X follows in a taper
     bool axis1MoveRefused();
     bool axis2MoveRefused();
     // Moving to the multi-pass's start (see multiPassGo())

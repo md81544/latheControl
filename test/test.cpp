@@ -7,6 +7,7 @@
 #include "model.h"
 #include "motionsequence.h"
 #include "multipass.h"
+#include "radius.h"
 #include "rotaryencoder.h"
 #include "steppermotor.h"
 #include "threadpitches.h"
@@ -427,32 +428,6 @@ TEST_CASE("Model:   check tapering (small angle)")
     REQUIRE(runUntilStopped(model));
     double pos = model.getAxis2MotorPosition();
     REQUIRE(pos != 0.0);
-}
-
-TEST_CASE("Model:   check radius")
-{
-    mgo::MockConfigReader config;
-    mgo::MockGpio gpio(false);
-    // The mock config reader just returns whatever you specify
-    // as the default return value
-    mgo::Model model(gpio, config);
-    model.initialise();
-    model.changeMode(mgo::Mode::Radius);
-    model.setRadius(1.0);
-    model.axis1SetSpeed(60.0);
-    model.axis1GoToPosition(1.0);
-    REQUIRE(runUntilStopped(model));
-
-    double pos = model.getAxis2MotorPosition();
-    REQUIRE(pos < 1.05);
-    REQUIRE(pos > 0.95);
-
-    model.axis1GoToPosition(0.0);
-    REQUIRE(runUntilStopped(model));
-
-    // X position should be zero
-    pos = model.getAxis2MotorPosition();
-    REQUIRE(pos < 0.05);
 }
 
 TEST_CASE("Scale:   Forward and reverse")
@@ -5579,4 +5554,338 @@ TEST_CASE("Model:   gear cutting stopped between teeth goes on to the next tooth
     REQUIRE(!model.gearAOnTooth());
     model.axis2Zero();
     REQUIRE(model.gearAOnTooth());
+}
+
+// ---------------------------------------------------------------------------
+// Radius cutting
+// ---------------------------------------------------------------------------
+
+namespace {
+
+// A 20 mm bar, its end at Z 0, Z negative towards the chuck
+mgo::RadiusWork radiusWork(double xMaxSpeed = 0.0)
+{
+    return { .diameter = 20.0,
+             .workEndZ = 0.0,
+             .zTowardsChuck = -1.0,
+             .xSign = 1.0,
+             .clearance = 0.5,
+             .xMaxSpeed = xMaxSpeed };
+}
+
+// Checks every pass of a plan: it starts off the end face, goes on to it,
+// then round an arc about (centreZ, centreX) to the work's diameter, Z only
+// ever moving towards the chuck and X outwards. Each pass's arc is the next
+// of arcs, and every taper is within the tolerance of it, at its ends and in
+// the middle
+void checkRadiusPasses(
+    const mgo::RadiusPlan& plan,
+    double centreZ,
+    double centreX,
+    const std::vector<double>& arcs)
+{
+    REQUIRE(plan.error.empty());
+    REQUIRE(plan.passes.size() == arcs.size());
+    const double tolerance = mgo::RADIUS_CHORD_TOLERANCE + 1e-6;
+    for (std::size_t pass = 0; pass < arcs.size(); ++pass) {
+        const mgo::MultiPassPath& path = plan.passes[pass];
+        const double arc = arcs[pass];
+        const auto off
+            = [&](double pz, double px) { return std::hypot(px - centreX, pz - centreZ) - arc; };
+        REQUIRE(path.points.size() >= 2);
+        // On to the end face (or just off it, as the points may be out by up
+        // to the tolerance), X staying where it is
+        REQUIRE(path.points.front().cut >= 0.0);
+        REQUIRE(path.points.front().cut <= tolerance);
+        REQUIRE(path.points.front().feed == Approx(path.feedStart));
+        REQUIRE(path.points.front().maxCutSpeed == 0.0);
+        REQUIRE(std::abs(off(path.points.front().cut, path.feedStart)) <= tolerance);
+        double z = path.points.front().cut;
+        double x = path.points.front().feed;
+        for (std::size_t n = 1; n < path.points.size(); ++n) {
+            const mgo::MultiPassPathPoint& p = path.points[n];
+            REQUIRE(p.cut < z);
+            REQUIRE(p.feed > x);
+            REQUIRE(std::abs(off(p.cut, p.feed)) <= tolerance);
+            REQUIRE(std::abs(off((z + p.cut) / 2.0, (x + p.feed) / 2.0)) <= tolerance);
+            z = p.cut;
+            x = p.feed;
+        }
+        // It ends on the diameter (or just off it)
+        REQUIRE(x >= 10.0);
+        REQUIRE(x <= 10.0 + tolerance);
+    }
+}
+
+} // end anonymous namespace
+
+TEST_CASE("Radius: the passes are arcs, from the corner in to the radius")
+{
+    const mgo::RadiusPlan plan
+        = mgo::planRadius({ .radius = 5.0, .depthPerPass = 0.5, .noseRadius = 0.0 }, radiusWork());
+    // The corner is 5 x root 2 (7.07) from the centre: 2.07 in 0.5s is five
+    // passes, the first taking 0.07 off the corner
+    REQUIRE(plan.passes.size() == 5);
+    checkRadiusPasses(plan, -5.0, 5.0, { 7.0, 6.5, 6.0, 5.5, 5.0 });
+    // Off the end, on the diameter, to the end of the last pass, where it
+    // starts (on the end face, the radius in from the diameter)
+    REQUIRE(plan.range.cutStart == Approx(0.5));
+    REQUIRE(plan.range.feedStart == Approx(10.0));
+    REQUIRE(plan.range.cutEnd == Approx(-5.0));
+    REQUIRE(plan.range.feedEnd == Approx(5.0));
+    // The first passes are short and almost straight; the last goes all the
+    // way round, in tapers of a few degrees
+    REQUIRE(plan.passes.front().points.size() < plan.passes.back().points.size());
+    REQUIRE(plan.passes.back().points.size() > 10);
+
+    // A full ball end: the last pass starts on the centre line
+    const mgo::RadiusPlan ball
+        = mgo::planRadius({ .radius = 10.0, .depthPerPass = 0.5 }, radiusWork());
+    // (14.14 from the corner: 4.14 in 0.5s is nine passes)
+    checkRadiusPasses(ball, -10.0, 0.0, { 14.0, 13.5, 13.0, 12.5, 12.0, 11.5, 11.0, 10.5, 10.0 });
+    REQUIRE(ball.passes.back().feedStart == Approx(0.0).margin(mgo::RADIUS_CHORD_TOLERANCE));
+    REQUIRE(ball.range.cutEnd == Approx(-10.0));
+}
+
+TEST_CASE("Radius: a nose radius moves the path")
+{
+    // The tip, as touched off, follows an arc the same size as the cut's plus
+    // the nose radius, its centre moved towards the chuck and the centre line
+    // by the nose radius
+    const mgo::RadiusPlan plan
+        = mgo::planRadius({ .radius = 5.0, .depthPerPass = 0.5, .noseRadius = 0.4 }, radiusWork());
+    checkRadiusPasses(plan, -5.4, 4.6, { 7.4, 6.9, 6.4, 5.9, 5.4 });
+    REQUIRE(plan.range.cutEnd == Approx(-5.4));
+    REQUIRE(plan.range.feedEnd == Approx(4.6));
+}
+
+TEST_CASE("Radius: Z slows where X couldn't keep up")
+{
+    const double xMax = 100.0;
+    const mgo::RadiusPlan plan
+        = mgo::planRadius({ .radius = 5.0, .depthPerPass = 0.5 }, radiusWork(xMax));
+    REQUIRE(plan.error.empty());
+    const mgo::MultiPassPath& last = plan.passes.back();
+    double slowest = 1e9;
+    for (std::size_t n = 1; n < last.points.size(); ++n) {
+        const auto& from = last.points[n - 1];
+        const auto& to = last.points[n];
+        REQUIRE(to.maxCutSpeed > 0.0);
+        // X's speed at Z's limit
+        const double xSpeed
+            = to.maxCutSpeed * std::abs(to.feed - from.feed) / std::abs(to.cut - from.cut);
+        REQUIRE(xSpeed == Approx(mgo::RADIUS_X_SPEED_FRACTION * xMax));
+        slowest = std::min(slowest, to.maxCutSpeed);
+    }
+    // Slowest at the end face, where the arc is nearly square to Z
+    REQUIRE(slowest == last.points[1].maxCutSpeed);
+    REQUIRE(slowest < 10.0);
+}
+
+TEST_CASE("Radius: what can't be cut")
+{
+    const auto error = [](const mgo::RadiusSetup& setup, mgo::RadiusWork work = radiusWork()) {
+        return mgo::planRadius(setup, work).error;
+    };
+    REQUIRE(error({ .radius = 5.0, .depthPerPass = 0.5 }).empty());
+    REQUIRE(!error({ .radius = 0.0, .depthPerPass = 0.5 }).empty());
+    REQUIRE(
+        error({ .radius = 10.1, .depthPerPass = 0.5 })
+        == "The radius can't be more than half the diameter (10.000 is a full ball end)");
+    REQUIRE(!error({ .radius = 5.0, .depthPerPass = 0.0 }).empty());
+    REQUIRE(!error({ .radius = 5.0, .depthPerPass = 0.5, .noseRadius = -0.1 }).empty());
+    REQUIRE(!error({ .radius = 5.0, .depthPerPass = 0.001 }).empty());
+    auto noWork = radiusWork();
+    noWork.diameter = 0.0;
+    REQUIRE(
+        error({ .radius = 5.0, .depthPerPass = 0.5 }, noWork) == "The work's diameter isn't set");
+}
+
+namespace {
+
+// Two passes, each along a path of two points
+mgo::MultiPassPlan pathPlan()
+{
+    mgo::MultiPassPlan plan;
+    plan.cutStart = 0.0;
+    plan.cutEnd = -3.0;
+    plan.feedStart = 5.0;
+    plan.feedEnd = 4.0;
+    plan.paths = { { .feedStart = 4.5,
+                     .points = { { .cut = -1.0, .feed = 4.5 },
+                                 { .cut = -2.0, .feed = 5.0, .maxCutSpeed = 10.0 } } },
+                   { .feedStart = 4.0,
+                     .points = { { .cut = -1.0, .feed = 4.0 }, { .cut = -3.0, .feed = 5.0 } } } };
+    return plan;
+}
+
+} // end anonymous namespace
+
+TEST_CASE("MultiPass: following paths")
+{
+    FakeMultiPassMachine machine;
+    mgo::MultiPass mp(machine);
+    REQUIRE(mp.start(pathPlan()).empty());
+    REQUIRE(mp.followsPaths());
+    REQUIRE(mp.totalPasses() == 2);
+    machine.run(mp);
+    REQUIRE(mp.state() == mgo::MultiPass::State::Finished);
+    REQUIRE(mp.pass() == 2);
+    // To each path's start, then along it, the feed axis following from point
+    // to point (more slowly where a point says so), then straight back
+    REQUIRE(
+        machine.log
+        == Log { "feed 4.5",
+                 "cut -1 at 40",
+                 "cut -2 at 10 following -0.5",
+                 "cut 0 at 1000",
+                 "feed 4",
+                 "cut -1 at 40",
+                 "cut -3 at 40 following -0.5",
+                 "cut 0 at 1000" });
+    REQUIRE(machine.cutSpeed() == Approx(40.0));
+    REQUIRE(machine.feedPosition() == Approx(5.0));
+}
+
+TEST_CASE("MultiPass: a speed set while following a path is used from then on")
+{
+    FakeMultiPassMachine machine;
+    mgo::MultiPass mp(machine);
+    REQUIRE(mp.start(pathPlan()).empty());
+    for (int n = 0; n < 2; ++n) {
+        machine.finishMoves();
+        mp.update();
+    }
+    REQUIRE(machine.log.at(2) == "cut -2 at 10 following -0.5");
+    // (Set during the slowed move: it's the cut speed now, slowed or not)
+    machine.setCutSpeed(15.0);
+    machine.run(mp);
+    REQUIRE(machine.log.at(5) == "cut -1 at 15");
+    REQUIRE(machine.log.at(6) == "cut -3 at 15 following -0.5");
+    REQUIRE(machine.cutSpeed() == Approx(15.0));
+}
+
+TEST_CASE("MultiPass: paths it won't follow")
+{
+    FakeMultiPassMachine machine;
+    mgo::MultiPass mp(machine);
+    auto plan = pathPlan();
+    plan.paths[1].points[1].cut = -0.5; // (back towards the start)
+    REQUIRE(mp.start(plan) == "A path's cut axis must move away from the start at every point");
+    plan = pathPlan();
+    plan.paths[0].points.clear();
+    REQUIRE(mp.start(plan) == "A path has no points");
+    plan = pathPlan();
+    plan.feedCorrection = 0.01;
+    REQUIRE(!mp.start(plan).empty());
+    plan = pathPlan();
+    plan.feedManual = true;
+    REQUIRE(!mp.start(plan).empty());
+    REQUIRE(!mp.inProgress());
+}
+
+TEST_CASE("Model:   radius cutting needs the current feature")
+{
+    {
+        mgo::MockConfigReader config;
+        mgo::MockGpio gpio(false);
+        mgo::Model model(gpio, config);
+        model.initialise();
+        REQUIRE(!model.radiusUnavailable().empty());
+    }
+    auto config = featureConfig();
+    mgo::MockGpio gpio(false);
+    mgo::Model model(gpio, config);
+    model.initialise();
+    REQUIRE(!model.radiusUnavailable().empty());
+    model.setAxis2Position(5.0);
+    model.diameterIsSet();
+    REQUIRE(!model.radiusUnavailable().empty());
+    model.markWorkEnd();
+    REQUIRE(model.radiusUnavailable().empty());
+    // (Only in the mode)
+    const mgo::RadiusSetup setup { .radius = 2.0, .depthPerPass = 0.3 };
+    REQUIRE(!model.setRadiusSetup(setup).empty());
+    model.changeMode(mgo::Mode::Radius);
+    REQUIRE(model.setRadiusSetup(setup).empty());
+    REQUIRE(model.radiusSet());
+    model.changeMode(mgo::Mode::None);
+    REQUIRE(!model.radiusSet());
+    // Not on the inside of the work
+    model.setRetractionDirection(mgo::XDirection::Inwards);
+    REQUIRE(!model.radiusUnavailable().empty());
+}
+
+TEST_CASE("Model:   radius cutting, every pass round an arc")
+{
+    auto config = featureConfig();
+    mgo::MockGpio gpio(false);
+    mgo::Model model(gpio, config);
+    model.initialise();
+    // (As the controller starts with)
+    model.setAxis1MotorSpeed(40.0);
+    model.setAxis2MotorSpeed(20.0);
+    // A 10 mm bar, its end at Z 0 (Z negative towards the chuck)
+    model.setAxis2Position(5.0);
+    model.diameterIsSet();
+    model.markWorkEnd();
+    model.changeMode(mgo::Mode::Radius);
+    // A 2 mm radius: the corner is 0.83 out, so three passes of 0.3. With a
+    // 0.4 mm nose radius
+    REQUIRE(
+        model.setRadiusSetup({ .radius = 2.0, .depthPerPass = 0.3, .noseRadius = 0.4 }).empty());
+    REQUIRE(model.getMultiPassRange().cutStart == Approx(0.5));
+    REQUIRE(model.getMultiPassRange().feedStart == Approx(5.0));
+
+    model.multiPassGo(); // (to the start)
+    REQUIRE(runUntilAtStart(model));
+    REQUIRE(model.multiPassAtStart());
+    model.multiPassGo();
+    REQUIRE(model.getWarning().empty());
+    REQUIRE(model.multiPass().inProgress());
+    REQUIRE(model.multiPass().totalPasses() == 3);
+
+    // While cutting, Z only moves towards the chuck, X only outwards, and
+    // (on the last pass) the tip stays on its arc: the radius plus the nose
+    // radius, about Z -2.4, X 2.6 (see planRadius())
+    double furthestOff = 0.0;
+    double lastZ = 1.0;
+    double lastX = 0.0;
+    int lastPass = 0;
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
+    while (model.multiPass().inProgress()) {
+        REQUIRE(std::chrono::steady_clock::now() < deadline);
+        model.checkStatus();
+        const double z = model.getAxis1MotorPosition();
+        const double x = model.getAxis2MotorPosition();
+        if (model.multiPass().state() == mgo::MultiPass::State::Cutting) {
+            if (model.multiPass().pass() != lastPass) {
+                lastPass = model.multiPass().pass();
+                lastZ = z;
+                lastX = x;
+            }
+            REQUIRE(z <= lastZ + 0.0001);
+            // (Less a step, as X may correct a part-step of rounding as Z
+            // moves on to the end face)
+            REQUIRE(x >= lastX - 0.0011);
+            lastZ = z;
+            lastX = x;
+            if (lastPass == 3 && z < -0.0001) {
+                furthestOff = std::max(furthestOff, std::abs(std::hypot(z + 2.4, x - 2.6) - 2.4));
+            }
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    INFO(model.multiPass().message());
+    REQUIRE(model.multiPass().state() == mgo::MultiPass::State::Finished);
+    REQUIRE(model.getWarning().empty());
+    // (X follows Z in small updates, so lags it a little)
+    REQUIRE(furthestOff < 0.02);
+    // Back off the end, on the diameter (or just off it: see planRadius()),
+    // which is unchanged
+    REQUIRE(model.getAxis1MotorPosition() == Approx(0.5).margin(0.0001));
+    REQUIRE(model.getAxis2MotorPosition() >= 5.0 - 0.0001);
+    REQUIRE(model.getAxis2MotorPosition() <= 5.0 + mgo::RADIUS_CHORD_TOLERANCE + 0.0011);
+    REQUIRE(model.getFeatureDiameterMm() == Approx(10.0));
+    REQUIRE(model.getAxis1MotorSpeed() == Approx(40.0));
 }

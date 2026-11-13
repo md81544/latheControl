@@ -346,7 +346,8 @@ void Controller::processKey(int t)
             case key::ENTER:
                 if (m_model->getMode() == Mode::MultiPass
                     || (m_model->getMode() == Mode::Threading && m_model->threadingPassesSet())
-                    || m_model->getMode() == Mode::Knurling || m_model->gearCuttingSet()) {
+                    || m_model->getMode() == Mode::Knurling || m_model->gearCuttingSet()
+                    || m_model->radiusSet()) {
                     // Starts the multi-pass, or continues it after a pause
                     m_model->multiPassGo();
                     break;
@@ -864,35 +865,35 @@ void Controller::processKey(int t)
                         });
                     break;
                 }
-            case key::f2o: // Radius mode
+            case key::f2o: // radius mode
                 {
                     if (m_model->config().readBool("DisableAxis2", false)) {
                         break;
                     }
-                    const std::string axis1Name = m_model->config().read("Axis1Label", "Z");
-                    const std::string axis2Name = m_model->config().read("Axis2Label", "X");
-                    getNumericInput(
-                        "Enter radius value required" + unitsSuffix(1) + ":",
-                        { "Important! Ensure the tool is at the radius of the workpiece,",
-                          "near the end, and set axes to ZERO (this drives the operation).",
-                          fmt::format(
-                              "Keep "
-                              "{} "
-                              "constant.",
-                              axis2Name),
-                          fmt::format(
-                              "Then cut away from chuck. Return to zero, then nudge {} inwards, "
-                              "re-zero, repeat.",
-                              axis1Name),
-                          "Memorising the new zero position each time will make returning "
-                          "easier." },
-                        m_model->toDisplayUnits(1, m_model->getRadius()),
-                        [this](const NumericInputReturn& rc) {
-                            if (!rc.cancelled) {
-                                m_model->setRadius(m_model->fromDisplayUnits(1, rc.value));
-                                m_model->changeMode(Mode::Radius);
-                            }
-                        });
+                    // As with all dialogs, stop all motors first
+                    m_model->stopAllMotors();
+                    if (const std::string error = m_model->radiusUnavailable(); !error.empty()) {
+                        pressAnyKey("Radius", { error, "", "Press a key", "" }, [] { });
+                        break;
+                    }
+                    const MultiPassDialogInfo mp = multiPassDialogInfo();
+                    RadiusDialogInfo info { .cut = mp.cut,
+                                            .feed = mp.feed,
+                                            .work = m_model->radiusWork(),
+                                            .setup = m_model->getRadiusSetup() };
+                    m_view->openRadiusDialog(info, [this](std::optional<RadiusSetup> setup) {
+                        if (!setup) {
+                            return;
+                        }
+                        m_model->changeMode(Mode::Radius);
+                        // (The dialog only accepts a setup which can be
+                        // used, and nothing has moved since)
+                        if (const std::string error = m_model->setRadiusSetup(*setup);
+                            !error.empty()) {
+                            m_model->changeMode(Mode::None);
+                            pressAnyKey("Radius", { error, "", "Press a key", "" }, [] { });
+                        }
+                    });
                     break;
                 }
             case key::a1_e: // mark the work's end (current feature)

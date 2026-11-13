@@ -413,7 +413,7 @@ struct ViewQt::Impl {
     TextItem axis2Status;
     TextItem chuckRpm;
     TextItem warning;
-    TextItem taperOrRadius;
+    TextItem taperAngle;
     TextItem axis1LinearScalePos;
     TextItem surfaceSpeed; // Vc
 
@@ -561,7 +561,7 @@ void ViewQt::initialise(const Model& model)
     d.misc6 = make(20, MISC_Y + 180, 25);
 
     d.warning = make(20, MISC_Y + 210, 20, RED);
-    d.taperOrRadius = make(860, 75, 20, RED);
+    d.taperAngle = make(860, 75, 20, RED);
     d.notification = make(860, 45, 25, RED);
     d.xRetracted = make(860, 105, 25, RED);
     d.xRetracted.text = "RETRACTED";
@@ -640,6 +640,22 @@ void ViewQt::openGearDialog(
         m_impl->fontFamily,
         info,
         [this, onDone = std::move(onDone)](std::optional<GearSetup> setup) {
+            m_impl->dialogClosed();
+            onDone(setup);
+        });
+}
+
+void ViewQt::openRadiusDialog(
+    const RadiusDialogInfo& info,
+    std::function<void(std::optional<RadiusSetup>)> onDone)
+{
+    assert(!isDialogOpen()); // (one at a time)
+    m_impl->setDimmed(true);
+    m_impl->dialog = dialog::openRadiusDialog(
+        m_impl->widget.get(),
+        m_impl->fontFamily,
+        info,
+        [this, onDone = std::move(onDone)](std::optional<RadiusSetup> setup) {
             m_impl->dialogClosed();
             onDone(setup);
         });
@@ -1065,8 +1081,8 @@ void ViewQt::updateDisplay(const Model& model)
         draw(d.generalStatus);
         draw(d.warning);
         draw(d.notification);
-        if (model.getMode() == Mode::Taper || model.getMode() == Mode::Radius) {
-            draw(d.taperOrRadius);
+        if (model.getMode() == Mode::Taper) {
+            draw(d.taperAngle);
         }
         if (model.getRetractionDirection() == XDirection::Inwards) {
             draw(d.xRetractDirection);
@@ -1205,10 +1221,7 @@ void ViewQt::Impl::updateTextFromModel(const Model& model)
     axis2Status.text
         = fmt::format("{}: {}", model.config().read("Axis2Label", "X"), model.getAxis2Status());
     if (model.getMode() == Mode::Taper) {
-        taperOrRadius.text = fmt::format("Angle: {}", model.getTaperAngle());
-    } else if (model.getMode() == Mode::Radius) {
-        taperOrRadius.text = fmt::format(
-            "Radius: {} {}", model.toDisplayUnits(1, model.getRadius()), model.axisUnitName(1));
+        taperAngle.text = fmt::format("Angle: {}", model.getTaperAngle());
     }
     chuckRpm.text = fmt::format("C: {: >5.1f} deg", model.getChuckAngle());
 
@@ -1340,9 +1353,17 @@ void ViewQt::Impl::updateTextFromModel(const Model& model)
                 }
                 break;
             }
-        // (The taper angle or radius is shown by taperOrRadius)
-        case Mode::Taper:
         case Mode::Radius:
+            {
+                updateMultiPassData(model);
+                warning.text = model.getWarning();
+                if (!model.getWarning().empty()) {
+                    warning.colour = ++iteration % 6 < 3 ? RED : YELLOW;
+                }
+                break;
+            }
+        // (The taper angle is shown by taperAngle)
+        case Mode::Taper:
         case Mode::None:
             {
                 mode.text = "";
@@ -1373,6 +1394,8 @@ void ViewQt::Impl::updateMultiPassData(const Model& model)
     const bool threading = model.getMode() == Mode::Threading;
     const bool knurling = model.getMode() == Mode::Knurling;
     const bool feedsIn = threading || knurling;
+    // (A radius's passes are arcs: see radius.h)
+    const bool radius = model.getMode() == Mode::Radius;
     const MultiPassRange& range = model.getMultiPassRange();
     const std::string z = model.config().read("Axis1Label", "Z");
     const std::string x = model.config().read("Axis2Label", "X");
@@ -1401,6 +1424,14 @@ void ViewQt::Impl::updateMultiPassData(const Model& model)
         x,
         position(2, range.feedStart),
         position(2, range.feedEnd));
+    const RadiusSetup& radiusSetup = model.getRadiusSetup();
+    if (radius) {
+        // e.g. "Radius 5.00 mm on the end, Ø 20.00 mm"
+        mode.text = fmt::format(
+            "Radius {} on the end, Ø {}",
+            xLength(radiusSetup.radius),
+            xLength(2.0 * std::abs(range.feedStart)));
+    }
     // The lines are, in order: what's happening, what Enter does next, how
     // far X has gone, the options, then "Space stops". The first lines are
     // kept short, as the current feature's box is to their right; the options
@@ -1414,6 +1445,13 @@ void ViewQt::Impl::updateMultiPassData(const Model& model)
     } else {
         options1 = fmt::format(
             "{} {} {} per pass", x, feedsIn ? "infeed" : "step-over", xLength(options.feedPerPass));
+    }
+    if (radius) {
+        options1 = fmt::format(
+            "{} per pass, {}",
+            xLength(radiusSetup.depthPerPass),
+            radiusSetup.noseRadius > 0.0 ? "tool nose radius " + xLength(radiusSetup.noseRadius)
+                                         : std::string("a sharp tool"));
     }
     if (threading && options.compoundInfeed) {
         options1 += ", compound";
@@ -1486,13 +1524,17 @@ void ViewQt::Impl::updateMultiPassData(const Model& model)
                 ? fmt::format("Feed {} by {}, then press Enter", x, xLength(mp.nextFeed()))
                 : spring && !model.springPassAtStart() ? "Enter moves back to the last pass's start"
                 : spring ? "Enter for another (" + x + " can be nudged in), Space ends"
+                : radius ? "Press Enter for the next"
                          : "Press Enter for the next (" + x + " can be nudged)";
             break;
         case MultiPass::State::Unretracting:
             status = pass + ": unretracting";
             break;
         case MultiPass::State::Feeding:
-            status = pass + (feedsIn ? ": feeding in" : ": stepping over");
+            status = pass
+                + (feedsIn      ? ": feeding in"
+                       : radius ? ": " + x + " to the pass's start"
+                                : ": stepping over");
             break;
         case MultiPass::State::Positioning:
             status = pass + ": " + z + " to the pass's start";
@@ -1526,6 +1568,12 @@ void ViewQt::Impl::updateMultiPassData(const Model& model)
             "{} fed in: {} in all",
             x,
             xLength(std::abs(model.getAxis2Position() - range.feedStart)));
+    } else if (radius && mp.pass() > 0) {
+        // Each pass is an arc a depth per pass larger than the next
+        const double arc
+            = radiusSetup.radius + (mp.totalPasses() - mp.pass()) * radiusSetup.depthPerPass;
+        misc3.text = fmt::format(
+            "This pass's radius: {} (finishing at {})", xLength(arc), xLength(radiusSetup.radius));
     } else if (mp.pass() > 0) {
         misc3.text
             = fmt::format("{} {}: {}", x, feedsIn ? "fed in" : "stepped over", xLength(mp.fed()));

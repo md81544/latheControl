@@ -334,7 +334,7 @@ void StepperMotor::setRpm(double rpm, bool noLock)
     }
     if (m_useRamping && rpm > m_rpm) {
         // We don't start ramping from zero
-        m_rampedRpm = m_maxRpm * 0.4;
+        m_rampedRpm = m_maxRpm * RAMP_START_FRACTION;
         if (m_rampedRpm > rpm) {
             m_rampedRpm = rpm;
         }
