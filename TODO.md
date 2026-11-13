@@ -493,7 +493,7 @@
       synchronisation sets the follower's speed from the *average* ratio
       since the sync started, not the slope where it is, and an arc's slope
       goes towards vertical there, so X lagged and cut too deep.
-    - **Done (2026-11-13), not yet tried on the machine:** radius mode (menu
+    - **Done (2026-11-13):** radius mode (menu
       Modes, `O`; only with `CurrentFeature`) starts from the current
       feature: face the end, mark it (`ZE`), set X as a diameter, and the
       program knows where the corner is. The dialog asks for the radius (up
@@ -546,6 +546,14 @@
       Whether X keeps up at 80% of its start speed. The full ball end's last
       pass crosses the centre line by the nose radius. Radii on the inside
       (a bore's mouth) and concave fillets at a shoulder aren't done
+    - **Tried on the machine (2026-11-13):** a 5 mm radius on aluminium
+      turned to about 15.8 mm, at 0.1 or 0.2 mm per pass. The result was
+      very good and usable straight off the machine. There was slight
+      banding, which a lick of emery cloth would take out. It's not yet
+      known whether that's from Z's stops at each taper's end or from the
+      tapers themselves (the ±0.005 mm chords); a finer tolerance on the
+      last pass would tell them apart. X kept up: there was no sign of it
+      cutting deep near the end face. The full ball end hasn't been tried
 
 ## Motion and timing (mostly in steppermotor.cpp)
 - [ ] Deceleration ramping. At the moment there's only acceleration, so
