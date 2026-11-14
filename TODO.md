@@ -848,6 +848,27 @@
       this in software only?)
     - Display a warning if the chuck is running in reverse (at the moment the
       `n:` label turns red)
+- [ ] **Ask before the start-up backlash take-up.** Each axis moves by its
+      backlash at start-up (since 14 Nov 2026, when the take-up was found
+      never to have moved; see the mill scales item). A tool left against
+      the work while everything was off could be pushed into it. The idea
+      (the user's, 14 Nov 2026), with additions from discussing it:
+    - Before the take-up, a dialog says the backlash is about to be taken
+      up, and asks the user to make sure the tool is clear of the work by at
+      least each axis's backlash, which way and how far (e.g. "X +0.39 mm").
+      It has only OK: there's no cancelling (decided 14 Nov 2026), as the
+      slack must be taken up for positions to be right. The take-up starts
+      only once OK is pressed (Enter, so the gamepad's Enter works too).
+      Nothing can move until then. Space still stops the move
+    - A take-up direction per axis in the config (as `Axis1TowardsChuck`),
+      so each machine takes up the slack in its usually safe direction:
+      away from the chuck on Z, outwards on the lathe's X (unless boring).
+      `setBacklashCompensation()` already allows either side
+    - Rejected: remembering where the slack was at shutdown (a handwheel
+      turned while off would make it silently wrong), and taking the slack
+      up as part of the first move (overshoots by the backlash if it was
+      already taken up that way)
+    - Related: the TODO comment at the take-up in `Model::initialise()`
 
 ## Sensors
 - [ ] Rotary encoder: only rising edges on pin A are counted, so it relies on
