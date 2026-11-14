@@ -52,6 +52,10 @@ private:
     void processKey(int key);
     // Logs a key code the controller is about to act on
     void logKey(int key) const;
+    // Asks before measuring axis 1's backlash, as it moves the axis
+    void confirmMeasureBacklash();
+    // Shows the result once a backlash measurement has finished
+    void showBacklashReport();
     // e.g. " (mm)" or " (in)": the units an axis's values are typed in
     std::string unitsSuffix(int axisNumber) const;
     int checkKeyAllowedForMode(int key);

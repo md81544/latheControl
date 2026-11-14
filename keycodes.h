@@ -178,6 +178,7 @@ constexpr int clearLimitTrip = 7015; // clear a limit switch's stop
 constexpr int toggleThreadingAutoRetract = 7016; // threading: auto-retract on / off
 constexpr int f2k = 7017; // cut knurling mode
 constexpr int f2g = 7018; // gear cutting mode
+constexpr int measureAxis1Backlash = 7019; // measure axis 1's backlash with its scale
 
 // Joystick specific "keys"
 // Note some joystick commands just return regular keycodes.

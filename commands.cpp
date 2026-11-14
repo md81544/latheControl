@@ -150,6 +150,7 @@ bool menuOnly(int k)
         case key::f2m:
         case key::f2k:
         case key::f2g:
+        case key::measureAxis1Backlash:
         case key::threadingPasses:
         case key::toggleThreadingAutoRetract:
         case key::clearFeature:
@@ -247,6 +248,21 @@ bool keyAllowedInCurrentMode(int k, const Model& model)
             case key::u:
             case key::ASTERISK:
             case key::toggleThreadingAutoRetract:
+                return true;
+            default:
+                return false;
+        }
+    }
+    // While measuring the backlash, nothing else may move the axes (it moves
+    // X back and forth, comparing it with the scale): only stopping it, and
+    // keys which don't move anything
+    if (model.isMeasuringBacklash()) {
+        switch (k) {
+            case key::CtrlQ:
+            case key::ESC:
+            case key::SPACE:
+            case key::u:
+            case key::U:
                 return true;
             default:
                 return false;
@@ -579,6 +595,16 @@ buildCommands(const IConfigReader& config, DisplayUnits units, bool threadingAut
         NONE,
         [](const Model& m) { return m.limitSwitchTripped(); },
         'l');
+    // (Only with a scale on axis 1)
+    if (config.read("Axis1Scale", "none") != "none") {
+        b.add(
+            c,
+            fmt::format("Measure {}'s backlash (with its scale)", a1),
+            key::measureAxis1Backlash,
+            AXIS1,
+            [](const Model& m) { return m.canMeasureAxis1Backlash(); },
+            'b');
+    }
 
     return b.take();
 }

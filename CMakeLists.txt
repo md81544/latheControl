@@ -55,6 +55,7 @@ add_library(shared_with_test OBJECT
 	rotaryencoder.cpp
 	linearscale.cpp
 	scale.cpp
+	backlash.cpp
 	droserial.cpp
 	joystick.cpp
 	commands.cpp

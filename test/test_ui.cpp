@@ -1841,3 +1841,68 @@ TEST_CASE("UI: keys, moves and zeroing are logged")
     REQUIRE(log.find("Z zeroed at -0.0500") != std::string::npos);
     std::filesystem::remove(file);
 }
+
+TEST_CASE("UI: measuring the backlash with a (simulated) scale")
+{
+    // The simulated scale follows the motor's position, so has no backlash of
+    // its own: it should measure the compensation set
+    MapConfigReader config { { { "Axis1Scale", "serial" },
+                               { "Axis1ScaleCountsPerMm", "100" },
+                               { "Axis1ScaleSettleMs", "200" },
+                               { "Axis1BacklashCompensationSteps", "200" },
+                               { "Axis1SpeedPreset2", "600" } } };
+    mgo::MockGpio gpio { false };
+    mgo::Model model { gpio, config };
+    mgo::Controller controller(&model);
+    // Runs the model (not the controller, which would show the report)
+    const auto runUntil = [&model](const std::function<bool()>& condition, int seconds) {
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(seconds);
+        while (!condition() && std::chrono::steady_clock::now() < deadline) {
+            model.checkStatus();
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        }
+        return condition();
+    };
+    REQUIRE(!model.canMeasureAxis1Backlash()); // (not lined up yet)
+    REQUIRE(runUntil([&model] { return model.canMeasureAxis1Backlash(); }, 5));
+    // Moves of 1mm (more than twice the 0.2mm compensation), right first
+    REQUIRE(model.axis1BacklashMeasureDistanceMm() == Approx(1.0));
+    REQUIRE(model.axis1BacklashMeasureFirstDirection() == 1);
+    const double start = model.getAxis1MotorPosition();
+    // (It measures at the second preset's speed, then puts this back)
+    model.setAxis1MotorSpeed(250.0);
+
+    model.axis1MeasureBacklash();
+    REQUIRE(model.isMeasuringBacklash());
+    REQUIRE(model.getAxis1Status() == "Measuring backlash: move 1 of 6");
+    // Nothing else may move meanwhile
+    REQUIRE(!mgo::keyAllowedInCurrentMode(mgo::key::ENTER, model));
+    REQUIRE(!mgo::keyAllowedInCurrentMode(mgo::key::LEFT, model));
+    REQUIRE(mgo::keyAllowedInCurrentMode(mgo::key::SPACE, model));
+    std::optional<std::vector<std::string>> report;
+    REQUIRE(runUntil(
+        [&] {
+            // (Taken once only)
+            if (!report) {
+                report = model.takeBacklashReport();
+            }
+            return report.has_value();
+        },
+        20));
+    REQUIRE(!model.isMeasuringBacklash());
+    REQUIRE(model.getAxis1MotorPosition() == Approx(start).margin(0.0001));
+    REQUIRE(model.getAxis1MotorSpeed() == Approx(250.0));
+    INFO(report->front());
+    // About 200 steps (0.2mm), to within a count of the scale (10 steps)
+    const auto at = report->front().find(", which is ");
+    REQUIRE(at != std::string::npos);
+    const long steps = std::stol(report->front().substr(at + 11));
+    REQUIRE(std::abs(steps - 200) <= 10);
+
+    // Space (stop all motors) stops it part way, and there's no report
+    model.axis1MeasureBacklash();
+    REQUIRE(model.isMeasuringBacklash());
+    model.stopAllMotors();
+    REQUIRE(!model.isMeasuringBacklash());
+    REQUIRE(!model.takeBacklashReport());
+}

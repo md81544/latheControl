@@ -1834,7 +1834,26 @@ change.
     - **Still to check:** the cause of the lock;
       X's rapid speed or acceleration, so it doesn't stall; the lathe's Z
       scale's sign
-    - Idea, from the above: a "measure backlash" command (System menu),
+    - **Done (14 Nov 2026), not yet tried on the machine: "Measure X's
+      backlash (with its scale)"** in the System menu (only with a scale).
+      After a dialog warns that X will move, X moves back and forth by 1 mm
+      (or twice the backlash setting), away from the chuck first, six
+      times, ending where it started. The compensation stays on: after each
+      reversal (the first move only puts the slack on a known side), the
+      shortfall of the scale's move against the motor's is backlash the
+      setting doesn't cover, so the backlash is the setting plus the
+      average shortfall (`BacklashMeasurement`, backlash.*). Chosen over
+      turning the compensation off, which would leave the motor's idea of
+      where the table is wrong if the slack started on the other side. A
+      dialog gives the result in mm and steps, the shortfall each way, and
+      how much they varied (warning if by more than three counts); lc.log
+      has it too. The config isn't changed. Nothing else can move meanwhile;
+      Space stops it. Each move waits for the scale to settle (so about
+      20 s). `AxisScale` now counts settles, and treats a change of the
+      motor's position between updates as a move. **To try on the mill:**
+      it should give about 1420 steps; the ±4-5 count wandering seen when
+      edge-finding will show in how much the measurements vary
+    - (The original idea:) a "measure backlash" command (System menu),
       which reverses
       the axis, sees how far it turns before the scale moves, and suggests
       the setting

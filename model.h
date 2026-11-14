@@ -1,5 +1,6 @@
 #pragma once
 
+#include "backlash.h"
 #include "configreader.h"
 #include "droserial.h"
 #include "gearcutting.h"
@@ -349,6 +350,19 @@ public:
     // The scale's position less the motor's
     std::optional<double> getAxis1ScaleDifferenceMm() const;
 
+    // Measuring axis 1's backlash with its scale (System menu; see
+    // BacklashMeasurement). Only with a scale which has been lined up, in no
+    // mode, and with nothing moving. stopAllMotors() (e.g. Space) stops it
+    bool canMeasureAxis1Backlash() const;
+    void axis1MeasureBacklash();
+    bool isMeasuringBacklash() const;
+    // How far each of its moves goes (in mm), and which way the first goes
+    // (+1 or -1): away from the chuck, for a lathe's Z
+    double axis1BacklashMeasureDistanceMm() const;
+    int axis1BacklashMeasureFirstDirection() const;
+    // Once a measurement has finished, its result, to show (once)
+    std::optional<std::vector<std::string>> takeBacklashReport();
+
     void clearCurrentMemorySlot(Axis axis);
 
     // Limit switches (LimitSwitchPin in the config): any switch stops all the
@@ -541,6 +555,12 @@ private:
     std::unique_ptr<mgo::DroSerialReader> m_droReader;
     // Only axis 1 can have a scale so far
     std::unique_ptr<mgo::AxisScale> m_axis1Scale;
+    // While measuring the backlash (see axis1MeasureBacklash())
+    std::optional<BacklashMeasurement> m_backlashMeasurement;
+    // The scale's settleCount() when the measurement's last move started
+    int m_backlashSettleCount { 0 };
+    double m_backlashPreviousSpeed { 0.0 };
+    std::optional<std::vector<std::string>> m_backlashReport;
     std::vector<long> m_axis1Memory { AXIS1_UNSET, AXIS1_UNSET, AXIS1_UNSET,
                                       AXIS1_UNSET, AXIS1_UNSET, AXIS1_UNSET };
     std::vector<long> m_axis2Memory { AXIS2_UNSET, AXIS2_UNSET, AXIS2_UNSET,
@@ -717,6 +737,15 @@ private:
     void checkEncoderLostPulses();
     // Creates axis 1's scale, if the config gives it one
     void configureAxis1Scale();
+    // Called from checkStatus(): records each move's reading once the scale
+    // has settled, and starts the next move, or reports the result
+    void advanceBacklashMeasurement();
+    // Starts the measurement's next move
+    void backlashMeasurementMove();
+    // Ends it (finished or not), putting the speed back
+    void endBacklashMeasurement(const std::string& why);
+    // Axis 1's backlash compensation, in mm
+    double axis1BacklashCompensationMm() const;
     // Logs a motor starting or stopping, with where it was, where it's going,
     // and how fast, for diagnosing problems from lc.log. It's called on each
     // update, so a move which starts and stops between two of them (e.g. a

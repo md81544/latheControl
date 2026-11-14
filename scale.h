@@ -80,6 +80,9 @@ public:
     std::optional<double> positionMm() const;
     // The scale's position less the motor's
     std::optional<double> differenceMm(double motorMm) const;
+    // How many times the reading has settled after the motor stopped. (So
+    // something waiting for a move's reading can tell when it's ready)
+    int settleCount() const;
     double countsPerMm() const;
 
 private:
@@ -108,6 +111,10 @@ private:
     int32_t m_lastCounts { 0 };
     // Whether the readings have been missing (so it's only logged once)
     bool m_noReadings { false };
+    // Where the motor was on the last update (to see moves too quick to be
+    // seen running)
+    std::optional<double> m_lastMotorMm;
+    int m_settleCount { 0 };
 };
 
 } // namespace mgo

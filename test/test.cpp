@@ -1,3 +1,4 @@
+#include "backlash.h"
 #include "commands.h"
 #include "configreader.h"
 #include "droserial.h"
@@ -738,6 +739,71 @@ TEST_CASE("Scale:   Not lined up while the motor is moving")
     REQUIRE(!t.axisScale->isAligned());
     t.rest(4.0, 600);
     REQUIRE(t.axisScale->isAligned());
+}
+
+TEST_CASE("Scale:   A move between two updates is still a move, and settles")
+{
+    AxisScaleTest t;
+    t.rest(0.0, 600);
+    REQUIRE(t.axisScale->isAligned());
+    const int settles = t.axisScale->settleCount();
+    // The motor moved 1mm without ever being seen running
+    *t.counts = 1'100;
+    t.update(1.0, false);
+    REQUIRE(t.axisScale->settleCount() == settles);
+    t.rest(1.0, 600);
+    REQUIRE(t.axisScale->settleCount() == settles + 1);
+    REQUIRE(*t.axisScale->differenceMm(1.0) == Approx(0.0));
+    // Zeroing (a realign) isn't a move: lined up again at once
+    t.axisScale->realign();
+    t.update(0.0, false);
+    REQUIRE(t.axisScale->isAligned());
+    REQUIRE(t.axisScale->settleCount() == settles + 1);
+}
+
+TEST_CASE("Backlash: the moves, and the arithmetic")
+{
+    // From 10, moving 1mm right first, with 0.4mm of compensation
+    mgo::BacklashMeasurement m(10.0, 1.0, 1, 0.4);
+    const std::vector<double> targets { 11.0, 10.0, 11.0, 10.0, 11.0, 10.0 };
+    // The table falls short by 0.05 on each reversal (so the real backlash is
+    // 0.45); on the first move it's already taken up. The scale reads the
+    // table, which starts at 3 (the scale's own frame doesn't matter)
+    double table = 3.0;
+    for (std::size_t n = 0; n < targets.size(); ++n) {
+        REQUIRE(!m.finished());
+        REQUIRE(m.movesDone() == static_cast<int>(n));
+        REQUIRE(*m.nextTarget() == Approx(targets[n]));
+        const double move = n == 0 ? 1.0 : (n % 2 == 0 ? 0.95 : -0.95);
+        table += move;
+        m.record(targets[n], table);
+    }
+    REQUIRE(m.finished());
+    REQUIRE(!m.nextTarget());
+    const auto r = m.result();
+    REQUIRE(r.positiveShortfallMm == Approx(0.05));
+    REQUIRE(r.negativeShortfallMm == Approx(0.05));
+    REQUIRE(r.spreadMm == Approx(0.0).margin(1e-9));
+    REQUIRE(r.backlashMm() == Approx(0.45));
+}
+
+TEST_CASE("Backlash: too much compensation, measured to the left first")
+{
+    // The table goes 0.02 too far on each reversal: the backlash is 0.38
+    mgo::BacklashMeasurement m(0.0, 1.0, -1, 0.4);
+    REQUIRE(*m.nextTarget() == Approx(-1.0));
+    double table = 0.0;
+    const std::vector<double> moves { -1.0, 1.02, -1.02, 1.03, -1.01, 1.02 };
+    for (double move : moves) {
+        const double target = *m.nextTarget();
+        table += move;
+        m.record(target, table);
+    }
+    const auto r = m.result();
+    REQUIRE(r.positiveShortfallMm == Approx(-(0.02 + 0.03 + 0.02) / 3.0));
+    REQUIRE(r.negativeShortfallMm == Approx(-(0.02 + 0.01) / 2.0));
+    REQUIRE(r.spreadMm == Approx(0.02));
+    REQUIRE(r.backlashMm() == Approx(0.4 + (r.positiveShortfallMm + r.negativeShortfallMm) / 2.0));
 }
 
 TEST_CASE("Scale:   The simulated DRO scale follows a position")

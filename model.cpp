@@ -8,6 +8,7 @@
 #include <chrono>
 #include <cmath>
 #include <sstream>
+#include <utility>
 
 #include <fmt/format.h>
 
@@ -345,6 +346,7 @@ void Model::checkStatus()
         m_axis1Scale->update(
             m_axis1Motor->getPosition(), m_axis1Motor->isRunning(), m_axis1Motor->getSpeed());
     }
+    advanceBacklashMeasurement();
 
     if (const auto diameter = getDiameterMm()) {
         m_generalStatus = fmt::format(
@@ -409,8 +411,9 @@ void Model::checkStatus()
             m_synchronisedCutXStoppedOnce = false;
         }
         // (Not during a multi-pass, which sets the speeds itself: the cut
-        // speed must be kept from one pass to the next)
-        if (m_axis1WasRunning && !m_multiPass.inProgress()
+        // speed must be kept from one pass to the next. Nor while measuring
+        // the backlash, which puts the speed back when it ends)
+        if (m_axis1WasRunning && !m_multiPass.inProgress() && !m_backlashMeasurement
             && m_axis1Motor->getSpeed() > m_config.readDouble("Axis1SpeedResetAbove", 100.0)) {
             // We don't allow faster speeds to "stick" to avoid accidental
             // fast motion after a long fast movement
@@ -734,6 +737,9 @@ void Model::stopAllMotors()
     m_axis2Motor->stop();
     m_axis1Motor->wait();
     m_axis2Motor->wait();
+    if (m_backlashMeasurement) {
+        endBacklashMeasurement("stopped");
+    }
     // (After stopping, so a sequence's end, e.g. restoring a nudge's speed,
     // doesn't race with a move it started)
     m_motionSequence.cancel();
@@ -2059,6 +2065,12 @@ std::string Model::getWarning() const
 
 std::string Model::getAxis1Status() const
 {
+    if (m_backlashMeasurement) {
+        return fmt::format(
+            "Measuring backlash: move {} of {}",
+            std::min(m_backlashMeasurement->movesDone() + 1, BacklashMeasurement::MOVES),
+            BacklashMeasurement::MOVES);
+    }
     return m_axis1Status;
 }
 
@@ -2462,6 +2474,146 @@ void Model::logMotorMovement(const StepperMotor& motor, MotorLog& log, const std
     }
     log.running = running;
     log.step = step;
+}
+
+double Model::axis1BacklashCompensationMm() const
+{
+    return m_config.readLong("Axis1BacklashCompensationSteps", 0)
+        * std::abs(m_axis1Motor->getConversionFactor());
+}
+
+bool Model::canMeasureAxis1Backlash() const
+{
+    return m_axis1Scale && m_axis1Scale->isAligned() && !m_backlashMeasurement
+        && m_mode == Mode::None && !isAxisLocked(1) && !m_axis1Motor->isRunning()
+        && !m_axis2Motor->isRunning() && !isMotionSequenceRunning() && !limitSwitchTripped()
+        && !m_axis1Motor->isFaulted();
+}
+
+bool Model::isMeasuringBacklash() const
+{
+    return m_backlashMeasurement.has_value();
+}
+
+double Model::axis1BacklashMeasureDistanceMm() const
+{
+    // Comfortably more than any shortfall: even with no compensation set, the
+    // whole backlash is less than the move
+    return std::max(1.0, 2.0 * axis1BacklashCompensationMm());
+}
+
+int Model::axis1BacklashMeasureFirstDirection() const
+{
+    // (Away from the chuck, as the safer way for a lathe's Z)
+    return m_config.read("Axis1TowardsChuck", "negative") == "positive" ? -1 : 1;
+}
+
+void Model::axis1MeasureBacklash()
+{
+    if (!canMeasureAxis1Backlash()) {
+        return;
+    }
+    m_backlashPreviousSpeed = m_axis1Motor->getSpeed();
+    m_axis1Motor->setSpeed(m_config.readDouble("Axis1SpeedPreset2", 40.0));
+    m_backlashMeasurement.emplace(
+        m_axis1Motor->getPosition(),
+        axis1BacklashMeasureDistanceMm(),
+        axis1BacklashMeasureFirstDirection(),
+        axis1BacklashCompensationMm());
+    MGOLOG(
+        fmt::format(
+            "Measuring {}'s backlash: moves of {:.3f} mm, with compensation of {} steps "
+            "({:.4f} mm)",
+            m_config.read("Axis1Label", "Z"),
+            axis1BacklashMeasureDistanceMm(),
+            m_config.readLong("Axis1BacklashCompensationSteps", 0),
+            axis1BacklashCompensationMm()));
+    backlashMeasurementMove();
+}
+
+void Model::backlashMeasurementMove()
+{
+    const long step
+        = std::lround(*m_backlashMeasurement->nextTarget() / m_axis1Motor->getConversionFactor());
+    m_backlashSettleCount = m_axis1Scale->settleCount();
+    m_axis1Motor->goToStep(step);
+    if (!m_axis1Motor->isRunning() && m_axis1Motor->getCurrentStep() != step) {
+        // Refused (e.g. a limit switch, or the driver's alarm)
+        endBacklashMeasurement(fmt::format("{} didn't move", m_config.read("Axis1Label", "Z")));
+    }
+}
+
+void Model::advanceBacklashMeasurement()
+{
+    if (!m_backlashMeasurement) {
+        return;
+    }
+    const std::string label = m_config.read("Axis1Label", "Z");
+    const auto scaleMm = m_axis1Scale->positionMm();
+    if (!scaleMm) {
+        endBacklashMeasurement(fmt::format("{}'s scale has no reading", label));
+        return;
+    }
+    if (m_axis1Motor->isRunning() || m_axis1Scale->settleCount() == m_backlashSettleCount) {
+        return;
+    }
+    m_backlashMeasurement->record(m_axis1Motor->getPosition(), *scaleMm);
+    if (!m_backlashMeasurement->finished()) {
+        backlashMeasurementMove();
+        return;
+    }
+    const BacklashMeasurement::Result r = m_backlashMeasurement->result();
+    const double perStep = std::abs(m_axis1Motor->getConversionFactor());
+    const long steps = std::lround(r.backlashMm() / perStep);
+    const double countMm = 1.0 / m_axis1Scale->countsPerMm();
+    MGOLOG(
+        fmt::format(
+            "{}'s backlash measured: {:.4f} mm ({} steps); shortfall after reversing {:+.4f} mm "
+            "positive, {:+.4f} mm negative, spread {:.4f} mm",
+            label,
+            r.backlashMm(),
+            steps,
+            r.positiveShortfallMm,
+            r.negativeShortfallMm,
+            r.spreadMm));
+    std::vector<std::string> report {
+        fmt::format("{}'s backlash is {:.3f} mm, which is {} steps.", label, r.backlashMm(), steps),
+        fmt::format(
+            "Axis1BacklashCompensationSteps is {} now: to use this, change it in the config file.",
+            m_config.readLong("Axis1BacklashCompensationSteps", 0)),
+        "",
+        fmt::format(
+            "After reversing, {} fell short by {:+.3f} mm moving right, and {:+.3f} mm moving left",
+            label,
+            r.positiveShortfallMm,
+            r.negativeShortfallMm),
+        fmt::format(
+            "(the measurements varied by {:.3f} mm; a count of the scale is {:.3f} mm).",
+            r.spreadMm,
+            countMm),
+    };
+    if (r.spreadMm > 3.0 * countMm) {
+        report.push_back("");
+        report.push_back("They varied by more than a few counts, so take this as a rough guide,");
+        report.push_back("and perhaps measure again.");
+    }
+    m_backlashReport = std::move(report);
+    endBacklashMeasurement("finished");
+}
+
+void Model::endBacklashMeasurement(const std::string& why)
+{
+    MGOLOG(fmt::format("Backlash measurement {}", why));
+    if (why != "finished" && why != "stopped") {
+        m_warning = fmt::format("Backlash measurement stopped: {}", why);
+    }
+    m_backlashMeasurement.reset();
+    m_axis1Motor->setSpeed(m_backlashPreviousSpeed);
+}
+
+std::optional<std::vector<std::string>> Model::takeBacklashReport()
+{
+    return std::exchange(m_backlashReport, std::nullopt);
 }
 
 void Model::configureAxis1Scale()

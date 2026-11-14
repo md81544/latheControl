@@ -48,8 +48,19 @@ void AxisScale::update(double motorMm, bool motorRunning, double motorSpeed, Clo
         }
         m_moveTopSpeed = std::max(m_moveTopSpeed, std::abs(motorSpeed));
         m_state = State::Moving;
+        m_lastMotorMm = motorMm;
         return;
     }
+    // A move which started and finished between two updates (e.g. a quick
+    // nudge) is a move all the same, so the reading must settle again
+    if (m_state != State::Moving && m_lastMotorMm && motorMm != *m_lastMotorMm) {
+        if (m_state == State::Settled) {
+            m_moveStartMm = *m_lastMotorMm;
+            m_moveTopSpeed = std::abs(motorSpeed);
+        }
+        m_state = State::Moving;
+    }
+    m_lastMotorMm = motorMm;
     if (m_state == State::Moving) {
         m_state = State::Settling;
         m_stoppedAt = now;
@@ -75,6 +86,7 @@ void AxisScale::update(double motorMm, bool motorRunning, double motorSpeed, Clo
         return;
     }
     m_state = State::Settled;
+    ++m_settleCount;
     const double seconds = std::chrono::duration<double>(now - m_stoppedAt).count();
     if (!m_aligned) {
         align(*counts, motorMm);
@@ -104,6 +116,8 @@ void AxisScale::update(double motorMm, bool motorRunning, double motorSpeed, Clo
 void AxisScale::realign()
 {
     m_aligned = false;
+    // (The motor's position changes, e.g. when zeroed, without it moving)
+    m_lastMotorMm.reset();
 }
 
 bool AxisScale::hasReading() const
@@ -134,6 +148,11 @@ std::optional<double> AxisScale::differenceMm(double motorMm) const
         return *position - motorMm;
     }
     return std::nullopt;
+}
+
+int AxisScale::settleCount() const
+{
+    return m_settleCount;
 }
 
 double AxisScale::countsPerMm() const

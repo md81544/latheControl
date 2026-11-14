@@ -86,7 +86,46 @@ void Controller::tickBody()
     processKeyPress();
     m_model->checkStatus();
     checkLimitSwitch();
+    showBacklashReport();
     m_view->updateDisplay(*m_model);
+}
+
+void Controller::confirmMeasureBacklash()
+{
+    if (!m_model->canMeasureAxis1Backlash()) {
+        return;
+    }
+    const std::string label = m_model->config().read("Axis1Label", "Z");
+    const int direction = m_model->axis1BacklashMeasureFirstDirection();
+    okCancel(
+        fmt::format("Measure {}'s backlash", label),
+        { fmt::format(
+              "{} will move {} {}, then back, three times, ending where it is now.",
+              label,
+              fmt::format(
+                  "{:.{}f} {}",
+                  m_model->toDisplayUnits(1, m_model->axis1BacklashMeasureDistanceMm()),
+                  m_model->axisDecimals(1),
+                  m_model->axisUnitName(1)),
+              direction > 0 ? "right" : "left"),
+          "Make sure the tool is clear of the work, and nothing is in the way.",
+          "It compares each move with the scale, so takes about 20 seconds.",
+          "Space stops it." },
+        [this]() { m_model->axis1MeasureBacklash(); });
+}
+
+void Controller::showBacklashReport()
+{
+    // (Not over another dialog: it waits until that's closed)
+    if (m_view->isDialogOpen()) {
+        return;
+    }
+    if (auto report = m_model->takeBacklashReport()) {
+        pressAnyKey(
+            fmt::format("{}'s backlash", m_model->config().read("Axis1Label", "Z")),
+            std::move(*report),
+            []() { });
+    }
 }
 
 void Controller::checkLimitSwitch()
@@ -1089,6 +1128,11 @@ void Controller::processKey(int t)
             case key::clearLimitTrip:
                 {
                     m_model->clearLimitSwitchTrip();
+                    break;
+                }
+            case key::measureAxis1Backlash:
+                {
+                    confirmMeasureBacklash();
                     break;
                 }
             case key::a2_k: // lock axis 2
