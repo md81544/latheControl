@@ -28,6 +28,7 @@
 #include <cassert>
 #include <cctype>
 #include <deque>
+#include <optional>
 #include <variant>
 
 #include <fmt/format.h>
@@ -39,6 +40,12 @@ namespace {
 // The display is laid out in these "logical" coordinates (the original SFML
 // window size), and scaled to fit the actual window
 constexpr int LOGICAL_WIDTH = 1280;
+// Where the status line's items usually go, and the least space between them
+constexpr float STATUS_GENERAL_X = 20;
+constexpr float STATUS_AXIS1_X = 350;
+constexpr float STATUS_AXIS2_X = 550;
+constexpr float STATUS_CHUCK_X = 750;
+constexpr float STATUS_GAP = 30;
 constexpr int LOGICAL_HEIGHT = 720;
 
 // How long after a leader key (e.g. Z) is pressed its hints are shown
@@ -454,6 +461,10 @@ struct ViewQt::Impl {
     std::size_t iteration { 0 };
 
     void updateTextFromModel(const Model& model);
+    // Where each status line item goes, by how long the ones before it are
+    void layOutStatusLine(const Model& model);
+    // How wide an item's text is, in the display's logical pixels
+    float textWidth(const TextItem& item) const;
     void updateThreadData(const Model& model);
     void updateMultiPassData(const Model& model);
     // The knurl, on one line (e.g. its starts and lead)
@@ -542,12 +553,14 @@ void ViewQt::initialise(const Model& model)
     d.axis2MemoryLabel = make(24, MEMORY_Y + 55, 30, grey);
     d.axis2MemoryLabel.text = model.config().read("Axis2Label", "X") + ":";
 
-    // STATUS BAR (at bottom of screen)
+    // STATUS BAR (at bottom of screen). These are where its items usually
+    // go: one which is longer than usual moves those after it along (see
+    // updateDisplay())
     constexpr float STATUS_BAR_Y = 650;
-    d.generalStatus = make(20, STATUS_BAR_Y, 20, GREEN);
-    d.axis1Status = make(350, STATUS_BAR_Y, 20, GREEN);
-    d.axis2Status = make(550, STATUS_BAR_Y, 20, GREEN);
-    d.chuckRpm = make(750, STATUS_BAR_Y, 20, GREEN);
+    d.generalStatus = make(STATUS_GENERAL_X, STATUS_BAR_Y, 20, GREEN);
+    d.axis1Status = make(STATUS_AXIS1_X, STATUS_BAR_Y, 20, GREEN);
+    d.axis2Status = make(STATUS_AXIS2_X, STATUS_BAR_Y, 20, GREEN);
+    d.chuckRpm = make(STATUS_CHUCK_X, STATUS_BAR_Y, 20, GREEN);
 
     // Miscellaneous - this is the bank of text which contains, for example,
     // the help, or text for, say, threading
@@ -729,6 +742,52 @@ std::pair<std::string, int> menuRowText(std::string text, char hotkey)
 }
 
 } // end anonymous namespace
+
+std::vector<float> lineUpItems(const std::vector<std::pair<float, float>>& items, float gap)
+{
+    std::vector<float> positions;
+    std::optional<float> previousEnd;
+    for (const auto& [x, width] : items) {
+        const float position = previousEnd ? std::max(x, *previousEnd + gap) : x;
+        positions.push_back(position);
+        previousEnd = position + width;
+    }
+    return positions;
+}
+
+float ViewQt::Impl::textWidth(const TextItem& item) const
+{
+    QFont font(fontFamily);
+    font.setPixelSize(item.pixelSize);
+    font.setBold(item.bold);
+    return static_cast<float>(
+        QFontMetricsF(font).horizontalAdvance(QString::fromStdString(item.text)));
+}
+
+void ViewQt::Impl::layOutStatusLine(const Model& model)
+{
+    // (Only the items shown, left to right)
+    std::vector<TextItem*> items { &generalStatus };
+    std::vector<float> usual { STATUS_GENERAL_X };
+    if (!model.config().readBool("DisableAxis1", false)) {
+        items.push_back(&axis1Status);
+        usual.push_back(STATUS_AXIS1_X);
+    }
+    if (!model.config().readBool("DisableAxis2", false)) {
+        items.push_back(&axis2Status);
+        usual.push_back(STATUS_AXIS2_X);
+    }
+    items.push_back(&chuckRpm);
+    usual.push_back(STATUS_CHUCK_X);
+    std::vector<std::pair<float, float>> sizes;
+    for (std::size_t n = 0; n < items.size(); ++n) {
+        sizes.emplace_back(usual[n], textWidth(*items[n]));
+    }
+    const std::vector<float> positions = lineUpItems(sizes, STATUS_GAP);
+    for (std::size_t n = 0; n < items.size(); ++n) {
+        items[n]->position.setX(positions[n]);
+    }
+}
 
 bool ViewQt::menuRowFits(const std::string& description, char hotkey, const std::string& shortcut)
     const
@@ -1041,6 +1100,7 @@ void ViewQt::updateDisplay(const Model& model)
 {
     auto& d = *m_impl;
     d.updateTextFromModel(model);
+    d.layOutStatusLine(model);
 
     std::vector<DrawItem> frame;
     const auto draw = [&frame](const TextItem& item) { frame.push_back(item); };

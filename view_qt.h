@@ -4,6 +4,8 @@
 
 #include <memory>
 #include <string>
+#include <utility>
+#include <vector>
 
 namespace mgo {
 
@@ -61,5 +63,11 @@ private:
     struct Impl;
     std::unique_ptr<Impl> m_impl;
 };
+
+// Where to put items along a line (e.g. the status line), left to right. Each
+// goes at its usual x, unless the one before it would reach into it, when it's
+// moved along to leave gap after that one. Given each item's usual x and its
+// width, in order; returns each one's x
+std::vector<float> lineUpItems(const std::vector<std::pair<float, float>>& items, float gap);
 
 } // namespace mgo

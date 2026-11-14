@@ -2063,3 +2063,19 @@ TEST_CASE("UI: the dialog when the scale and motor disagree")
     REQUIRE(!t.model.axis1ScaleMismatchMm());
     REQUIRE(t.model.getAxis1MotorPosition() == Approx(1.3).margin(0.011));
 }
+
+TEST_CASE("UI: the status line's items move along to make room")
+{
+    // Each fits: where they usually go
+    REQUIRE(
+        mgo::lineUpItems({ { 20, 200 }, { 350, 150 }, { 550, 150 }, { 750, 100 } }, 30)
+        == std::vector<float> { 20, 350, 550, 750 });
+    // The second is long: those after it move along, each leaving the gap
+    REQUIRE(
+        mgo::lineUpItems({ { 20, 200 }, { 350, 400 }, { 550, 150 }, { 750, 100 } }, 30)
+        == std::vector<float> { 20, 350, 780, 960 });
+    // The first is long, but the last still fits where it usually goes
+    REQUIRE(
+        mgo::lineUpItems({ { 20, 340 }, { 350, 100 }, { 550, 100 }, { 750, 100 } }, 30)
+        == std::vector<float> { 20, 390, 550, 750 });
+}
