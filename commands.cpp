@@ -255,8 +255,9 @@ bool keyAllowedInCurrentMode(int k, const Model& model)
     }
     // While measuring the backlash, nothing else may move the axes (it moves
     // X back and forth, comparing it with the scale): only stopping it, and
-    // keys which don't move anything
-    if (model.isMeasuringBacklash()) {
+    // keys which don't move anything. Nor while axis 1's scale and motor
+    // disagree, until the user has said which to believe
+    if (model.isMeasuringBacklash() || model.axis1ScaleMismatchMm()) {
         switch (k) {
             case key::CtrlQ:
             case key::ESC:

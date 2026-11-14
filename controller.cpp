@@ -86,6 +86,7 @@ void Controller::tickBody()
     processKeyPress();
     m_model->checkStatus();
     checkLimitSwitch();
+    checkScaleMismatch();
     showBacklashReport();
     m_view->updateDisplay(*m_model);
 }
@@ -112,6 +113,59 @@ void Controller::confirmMeasureBacklash()
           "It compares each move with the scale, so takes about 20 seconds.",
           "Space stops it." },
         [this]() { m_model->axis1MeasureBacklash(); });
+}
+
+void Controller::checkScaleMismatch()
+{
+    const auto mismatch = m_model->axis1ScaleMismatchMm();
+    if (!mismatch) {
+        m_scaleDialogShown = false;
+        return;
+    }
+    // Once per mismatch, and not over another dialog (it waits until that's
+    // closed; nothing can move meanwhile)
+    if (m_scaleDialogShown || m_view->isDialogOpen()) {
+        return;
+    }
+    m_scaleDialogShown = true;
+    m_model->setKeyMode(KeyMode::None);
+    m_heldKeys.clear();
+    const std::string label = m_model->config().read("Axis1Label", "Z");
+    const auto length = [this](double mm) {
+        return fmt::format(
+            "{:.{}f} {}",
+            m_model->toDisplayUnits(1, mm),
+            m_model->axisDecimals(1),
+            m_model->axisUnitName(1));
+    };
+    const double position = m_model->getAxis1MotorPosition();
+    std::vector<std::string> lines {
+        fmt::format(
+            "{}'s scale says {}, but {}'s position is {}: {} apart,",
+            label,
+            length(position + *mismatch),
+            label,
+            length(position),
+            length(std::abs(*mismatch))),
+        fmt::format(
+            "more than the {} allowed (Axis1ScaleWarnMm), so everything has stopped.",
+            length(m_model->config().readDouble("Axis1ScaleWarnMm", 0.0))),
+        "The motor may have lost steps (e.g. a stall), or the scale may have misread.",
+        "",
+        "Y or Enter: use the scale's position (usually right after a stall).",
+        fmt::format("N or Esc: keep {}'s position, and line the scale up with it again.", label),
+    };
+    m_view->openInput(
+        Input::Type::OkCancel,
+        fmt::format("{}'s scale and position disagree", label),
+        std::move(lines),
+        [this](const Input::Return& rc) {
+            if (rc.cancelled) {
+                m_model->keepAxis1MotorPosition();
+            } else {
+                m_model->acceptAxis1ScalePosition();
+            }
+        });
 }
 
 void Controller::showBacklashReport()

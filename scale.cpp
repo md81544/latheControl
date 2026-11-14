@@ -150,6 +150,11 @@ std::optional<double> AxisScale::differenceMm(double motorMm) const
     return std::nullopt;
 }
 
+void AxisScale::motorRebased(double motorMm)
+{
+    m_lastMotorMm = motorMm;
+}
+
 int AxisScale::settleCount() const
 {
     return m_settleCount;

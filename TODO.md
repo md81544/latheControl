@@ -1926,6 +1926,28 @@ change.
           or if past it, back along the cut path and in again). Without it,
           X's varying backlash could leave the ends up to about 0.1 mm out
         - Order: re-base at rest with the warning first, then stage 4
+    - **Done (14 Nov 2026), re-base at rest with the warning (stages 3
+      and "2½"), not yet tried on the machine.** `Axis1ScaleWarnMm` (0 =
+      off, the default; the mill 0.2) and `Axis1ScaleRebase` (off by
+      default; on for the mill; the lathe's Z scale's sign is still to be
+      checked first). Each time the scale settles: further apart than the
+      limit, everything stops and a dialog asks which to believe (Y/Enter:
+      the scale's position; N/Esc: keep lc's, and line the scale up with it
+      again), nothing moving until answered; otherwise, a count or more
+      apart, the motor's position is set from the scale's
+      (`StepperMotor::setPosition()`: nothing moves, and the backlash's side
+      is unchanged), in no mode or gear cutting, not part way through a
+      multi-pass or motion sequence, nor while measuring the backlash.
+      lc.log has each re-base. The FAKE build's simulated scale now follows
+      the motor's actual steps (a table with no backlash), so re-basing
+      doesn't move it too. Not done: marking the position as unconfirmed
+      when the scale has no reading
+    - **To try on the mill:** positions after moves should now agree with
+      TouchDRO (within a count, allowing for the 2 s to settle); the "off
+      by" figure should be about 0 at rest; lc.log's "re-based" lines show
+      each correction (expect up to about 0.13 mm at the least worn end,
+      with 1420). And, to see the warning: with the table's lock on, a short,
+      slow move (so the motor stalls harmlessly), then the lock off
     - (The original idea:) a "measure backlash" command (System menu),
       which reverses
       the axis, sees how far it turns before the scale moves, and suggests

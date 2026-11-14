@@ -70,6 +70,9 @@ public:
     // Line the scale up with the motor again, once the reading has settled
     // (e.g. after zeroing the axis, as the motor's position has changed)
     void realign();
+    // The motor's position has been set from the scale's (a re-base): not a
+    // move, and the scale stays lined up as it is
+    void motorRebased(double motorMm);
 
     // Whether there's a recent reading from the scale
     bool hasReading() const;

@@ -37,6 +37,7 @@ private:
     // Opens a dialog to clear a limit switch's stop, once per stop
     void checkLimitSwitch();
     bool m_limitDialogShown { false };
+    bool m_scaleDialogShown { false };
     bool m_inTick { false };
     // Keys pressed while a motion sequence was running, to act on afterwards
     std::deque<int> m_heldKeys;
@@ -56,6 +57,9 @@ private:
     void confirmMeasureBacklash();
     // Shows the result once a backlash measurement has finished
     void showBacklashReport();
+    // Asks which to believe when axis 1's scale and motor disagree (see
+    // Model::axis1ScaleMismatchMm())
+    void checkScaleMismatch();
     // e.g. " (mm)" or " (in)": the units an axis's values are typed in
     std::string unitsSuffix(int axisNumber) const;
     int checkKeyAllowedForMode(int key);

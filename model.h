@@ -363,6 +363,23 @@ public:
     // Once a measurement has finished, its result, to show (once)
     std::optional<std::vector<std::string>> takeBacklashReport();
 
+    // Axis 1's scale against its motor, each time the axis stops and the
+    // scale settles. Within Axis1ScaleWarnMm, with Axis1ScaleRebase, the
+    // motor's position is set from the scale's (a re-base: nothing moves),
+    // so the position, and every move made from it, follows where the table
+    // really is. Further apart than Axis1ScaleWarnMm, everything stops, and
+    // this is how far apart they are (the scale less the motor), until
+    // dealt with by one of the two below. Nothing can move meanwhile
+    std::optional<double> axis1ScaleMismatchMm() const;
+    // Use the scale's position (e.g. after a stall)
+    void acceptAxis1ScalePosition();
+    // Keep the motor's position, and line the scale up with it again
+    void keepAxis1MotorPosition();
+#ifdef FAKE
+    // The simulated scale, if axis 1 has a serial one (for the tests)
+    FakeDroScale* fakeAxis1Scale();
+#endif
+
     void clearCurrentMemorySlot(Axis axis);
 
     // Limit switches (LimitSwitchPin in the config): any switch stops all the
@@ -561,6 +578,12 @@ private:
     int m_backlashSettleCount { 0 };
     double m_backlashPreviousSpeed { 0.0 };
     std::optional<std::vector<std::string>> m_backlashReport;
+    // The scale's settleCount() when last checked against the motor
+    int m_axis1ScaleCheckedSettles { 0 };
+    std::optional<double> m_axis1ScaleMismatchMm;
+#ifdef FAKE
+    FakeDroScale* m_fakeAxis1Scale { nullptr };
+#endif
     std::vector<long> m_axis1Memory { AXIS1_UNSET, AXIS1_UNSET, AXIS1_UNSET,
                                       AXIS1_UNSET, AXIS1_UNSET, AXIS1_UNSET };
     std::vector<long> m_axis2Memory { AXIS2_UNSET, AXIS2_UNSET, AXIS2_UNSET,
@@ -746,6 +769,11 @@ private:
     void endBacklashMeasurement(const std::string& why);
     // Axis 1's backlash compensation, in mm
     double axis1BacklashCompensationMm() const;
+    // Called from checkStatus(): compares axis 1's scale with its motor once
+    // it has settled, re-basing or warning (see axis1ScaleMismatchMm())
+    void checkAxis1ScaleAtRest();
+    // Sets axis 1's motor's position to the scale's
+    void rebaseAxis1FromScale(const char* why);
     // Logs a motor starting or stopping, with where it was, where it's going,
     // and how fast, for diagnosing problems from lc.log. It's called on each
     // update, so a move which starts and stops between two of them (e.g. a

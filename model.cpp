@@ -347,6 +347,7 @@ void Model::checkStatus()
             m_axis1Motor->getPosition(), m_axis1Motor->isRunning(), m_axis1Motor->getSpeed());
     }
     advanceBacklashMeasurement();
+    checkAxis1ScaleAtRest();
 
     if (const auto diameter = getDiameterMm()) {
         m_generalStatus = fmt::format(
@@ -2251,6 +2252,9 @@ void Model::clearDiameter()
 void Model::resetMotorThreads()
 {
     // (First, as a simulated scale follows the motor)
+#ifdef FAKE
+    m_fakeAxis1Scale = nullptr;
+#endif
     m_axis1Scale.reset();
     m_axis2Motor.reset();
     m_axis1Motor.reset();
@@ -2616,6 +2620,113 @@ std::optional<std::vector<std::string>> Model::takeBacklashReport()
     return std::exchange(m_backlashReport, std::nullopt);
 }
 
+void Model::checkAxis1ScaleAtRest()
+{
+    // (Not while measuring the backlash, which compares them itself)
+    if (!m_axis1Scale || m_backlashMeasurement || m_axis1ScaleMismatchMm) {
+        return;
+    }
+    // Once each time the scale settles
+    const int settles = m_axis1Scale->settleCount();
+    if (settles == m_axis1ScaleCheckedSettles) {
+        return;
+    }
+    m_axis1ScaleCheckedSettles = settles;
+    const auto difference = getAxis1ScaleDifferenceMm();
+    if (!difference || m_axis1Motor->isRunning() || m_axis1Motor->isFaulted()) {
+        return;
+    }
+    const std::string label = m_config.read("Axis1Label", "Z");
+    const double limit = m_config.readDouble("Axis1ScaleWarnMm", 0.0);
+    if (limit > 0.0 && std::abs(*difference) > limit) {
+        // Something's wrong: the motor lost steps (e.g. a stall), or the scale
+        // misread. So everything stops (e.g. a multi-pass), until the user
+        // says which to believe
+        MGOLOG(
+            fmt::format(
+                "*** Warning *** {}'s scale and motor are {:+.4f} mm apart (more than {:.4f}): "
+                "stopping everything",
+                label,
+                *difference,
+                limit));
+        stopAllMotors();
+        m_axis1ScaleMismatchMm = *difference;
+        return;
+    }
+    if (!m_config.readBool("Axis1ScaleRebase", false)) {
+        return;
+    }
+    // Not part way through something which works from the motor's position,
+    // e.g. between a multi-pass's passes (only once it's finished), nor in
+    // the lathe's modes (threading, tapers, etc.), which haven't been tried
+    // with it
+    if ((m_mode != Mode::None && m_mode != Mode::GearCutting) || m_multiPass.inProgress()
+        || isMotionSequenceRunning() || limitSwitchTripped()) {
+        return;
+    }
+    // (Less than a count apart is as close as the scale can tell)
+    if (std::abs(*difference) * m_axis1Scale->countsPerMm() < 1.0) {
+        return;
+    }
+    rebaseAxis1FromScale("re-based");
+}
+
+void Model::rebaseAxis1FromScale(const char* why)
+{
+    const auto scaleMm = getAxis1ScalePositionMm();
+    if (!scaleMm) {
+        return;
+    }
+    const double before = m_axis1Motor->getPosition();
+    m_axis1Motor->setPosition(*scaleMm);
+    m_axis1MotorLog.step = m_axis1Motor->getCurrentStep();
+    m_axis1Scale->motorRebased(m_axis1Motor->getPosition());
+    MGOLOG(
+        fmt::format(
+            "{} {} from its scale: {:.4f} to {:.4f} ({:+.4f} mm)",
+            m_config.read("Axis1Label", "Z"),
+            why,
+            before,
+            m_axis1Motor->getPosition(),
+            m_axis1Motor->getPosition() - before));
+}
+
+std::optional<double> Model::axis1ScaleMismatchMm() const
+{
+    return m_axis1ScaleMismatchMm;
+}
+
+void Model::acceptAxis1ScalePosition()
+{
+    if (!m_axis1ScaleMismatchMm) {
+        return;
+    }
+    m_axis1ScaleMismatchMm.reset();
+    rebaseAxis1FromScale("set (the scale's position accepted)");
+}
+
+void Model::keepAxis1MotorPosition()
+{
+    if (!m_axis1ScaleMismatchMm) {
+        return;
+    }
+    m_axis1ScaleMismatchMm.reset();
+    MGOLOG(
+        fmt::format(
+            "{}'s position kept: lining its scale up with it again",
+            m_config.read("Axis1Label", "Z")));
+    if (m_axis1Scale) {
+        m_axis1Scale->realign();
+    }
+}
+
+#ifdef FAKE
+FakeDroScale* Model::fakeAxis1Scale()
+{
+    return m_fakeAxis1Scale;
+}
+#endif
+
 void Model::configureAxis1Scale()
 {
     const std::string type = m_config.read("Axis1Scale", "none");
@@ -2658,12 +2769,19 @@ void Model::configureAxis1Scale()
         }
         const std::string device = m_config.read("Axis1ScaleSerialDevice", "/dev/ttyUSB0");
 #ifdef FAKE
-        // (Simulated, following the motor. The motor is reset after the
-        // scale; see resetMotorThreads())
-        scale = std::make_unique<FakeDroScale>(
-            [this]() { return m_axis1Motor->getPosition(); },
+        // (Simulated, following the motor's actual steps, as a table with no
+        // backlash would: so neither the backlash compensation nor re-basing
+        // the motor's position changes where it thinks the table is. The
+        // motor is reset after the scale; see resetMotorThreads())
+        auto fake = std::make_unique<FakeDroScale>(
+            [this]() {
+                return m_axis1Motor->getPosition(
+                    m_axis1Motor->getCurrentStepWithoutBacklashCompensation());
+            },
             settings.countsPerMm,
             settings.reversed);
+        m_fakeAxis1Scale = fake.get();
+        scale = std::move(fake);
         source = fmt::format("{} on {} (simulated)", letter, device);
 #else
         if (!m_droReader) {

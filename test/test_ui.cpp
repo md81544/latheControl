@@ -1844,8 +1844,9 @@ TEST_CASE("UI: keys, moves and zeroing are logged")
 
 TEST_CASE("UI: measuring the backlash with a (simulated) scale")
 {
-    // The simulated scale follows the motor's position, so has no backlash of
-    // its own: it should measure the compensation set
+    // The simulated scale follows the motor's actual steps, as a table with
+    // no backlash would: so all of the compensation set is too much, and it
+    // should measure no backlash
     MapConfigReader config { { { "Axis1Scale", "serial" },
                                { "Axis1ScaleCountsPerMm", "100" },
                                { "Axis1ScaleSettleMs", "200" },
@@ -1893,11 +1894,11 @@ TEST_CASE("UI: measuring the backlash with a (simulated) scale")
     REQUIRE(model.getAxis1MotorPosition() == Approx(start).margin(0.0001));
     REQUIRE(model.getAxis1MotorSpeed() == Approx(250.0));
     INFO(report->front());
-    // About 200 steps (0.2mm), to within a count of the scale (10 steps)
+    // No backlash, to within a count of the scale (10 steps)
     const auto at = report->front().find(", which is ");
     REQUIRE(at != std::string::npos);
     const long steps = std::stol(report->front().substr(at + 11));
-    REQUIRE(std::abs(steps - 200) <= 10);
+    REQUIRE(std::abs(steps) <= 10);
 
     // Space (stop all motors) stops it part way, and there's no report
     model.axis1MeasureBacklash();
@@ -1905,4 +1906,139 @@ TEST_CASE("UI: measuring the backlash with a (simulated) scale")
     model.stopAllMotors();
     REQUIRE(!model.isMeasuringBacklash());
     REQUIRE(!model.takeBacklashReport());
+}
+
+namespace {
+
+// A model with a simulated serial scale on axis 1 (1 count = 0.01mm), and
+// the given extra config
+struct ScaleTestModel {
+    explicit ScaleTestModel(std::map<std::string, std::string> extra = {})
+        : config([&] {
+            extra.insert(
+                { { "Axis1Scale", "serial" },
+                  { "Axis1ScaleCountsPerMm", "100" },
+                  { "Axis1ScaleSettleMs", "200" },
+                  { "Axis1SpeedPreset2", "600" } });
+            return extra;
+        }())
+    {
+    }
+    // Runs the model (not the controller, so no dialogs) until the
+    // condition holds, or 10s pass
+    bool runUntil(const std::function<bool()>& condition)
+    {
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+        while (!condition() && std::chrono::steady_clock::now() < deadline) {
+            model.checkStatus();
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        }
+        return condition();
+    }
+    MapConfigReader config;
+    mgo::MockGpio gpio { false };
+    mgo::Model model { gpio, config };
+    mgo::Controller controller { &model };
+};
+
+} // namespace
+
+TEST_CASE("UI: re-basing from the scale at rest")
+{
+    ScaleTestModel t({ { "Axis1ScaleRebase", "true" }, { "Axis1ScaleWarnMm", "0.2" } });
+    REQUIRE(t.runUntil([&] { return t.model.getAxis1ScalePositionMm().has_value(); }));
+    // The table goes 0.05mm further than the motor says (e.g. its backlash
+    // is less than the compensation, here)
+    t.model.fakeAxis1Scale()->setErrorMm(0.05);
+    t.model.axis1GoToPosition(1.0);
+    // Once settled, the position is the scale's (to within a count)
+    REQUIRE(t.runUntil([&] {
+        return !t.model.isAxis1MotorRunning()
+            && std::abs(t.model.getAxis1MotorPosition() - 1.05) < 0.011;
+    }));
+    REQUIRE(std::abs(*t.model.getAxis1ScaleDifferenceMm()) < 0.011);
+    REQUIRE(!t.model.axis1ScaleMismatchMm());
+    // Moves now go from the corrected position: to 2 is a move of 0.95, and
+    // the table (still 0.05 ahead of the motor's steps) arrives at 2
+    t.model.axis1GoToPosition(2.0);
+    REQUIRE(t.runUntil([&] {
+        return !t.model.isAxis1MotorRunning()
+            && std::abs(t.model.getAxis1MotorPosition() - 2.0) < 0.0001;
+    }));
+    // (The scale settles, still agreeing: nothing changes)
+    std::this_thread::sleep_for(std::chrono::milliseconds(600));
+    REQUIRE(t.runUntil([&] { return std::abs(*t.model.getAxis1ScaleDifferenceMm()) < 0.011; }));
+    REQUIRE(t.model.getAxis1MotorPosition() == Approx(2.0).margin(0.011));
+}
+
+TEST_CASE("UI: no re-basing unless the config asks for it")
+{
+    ScaleTestModel t;
+    REQUIRE(t.runUntil([&] { return t.model.getAxis1ScalePositionMm().has_value(); }));
+    t.model.fakeAxis1Scale()->setErrorMm(0.5);
+    t.model.axis1GoToPosition(1.0);
+    REQUIRE(t.runUntil([&] {
+        const auto d = t.model.getAxis1ScaleDifferenceMm();
+        return !t.model.isAxis1MotorRunning() && d && std::abs(*d - 0.5) < 0.011;
+    }));
+    std::this_thread::sleep_for(std::chrono::milliseconds(800));
+    for (int n = 0; n < 10; ++n) {
+        t.model.checkStatus();
+    }
+    // Nothing done: no warning, and the position is the motor's
+    REQUIRE(t.model.getAxis1MotorPosition() == Approx(1.0).margin(0.0001));
+    REQUIRE(!t.model.axis1ScaleMismatchMm());
+}
+
+TEST_CASE("UI: the scale and motor too far apart stops everything and asks")
+{
+    ScaleTestModel t({ { "Axis1ScaleRebase", "true" }, { "Axis1ScaleWarnMm", "0.2" } });
+    REQUIRE(t.runUntil([&] { return t.model.getAxis1ScalePositionMm().has_value(); }));
+    // e.g. the motor stalled, losing 0.5mm
+    t.model.fakeAxis1Scale()->setErrorMm(-0.5);
+    t.model.axis1GoToPosition(1.0);
+    REQUIRE(t.runUntil([&] { return t.model.axis1ScaleMismatchMm().has_value(); }));
+    REQUIRE(*t.model.axis1ScaleMismatchMm() == Approx(-0.5).margin(0.011));
+    REQUIRE(t.model.getAxis1MotorPosition() == Approx(1.0).margin(0.0001)); // (not re-based)
+    // Nothing may move until it's dealt with
+    REQUIRE(!mgo::keyAllowedInCurrentMode(mgo::key::ENTER, t.model));
+    REQUIRE(!mgo::keyAllowedInCurrentMode(mgo::key::RIGHT, t.model));
+    REQUIRE(mgo::keyAllowedInCurrentMode(mgo::key::SPACE, t.model));
+
+    SECTION("Use the scale's position")
+    {
+        t.model.acceptAxis1ScalePosition();
+        REQUIRE(!t.model.axis1ScaleMismatchMm());
+        REQUIRE(t.model.getAxis1MotorPosition() == Approx(0.5).margin(0.011));
+        REQUIRE(mgo::keyAllowedInCurrentMode(mgo::key::ENTER, t.model));
+    }
+    SECTION("Keep the motor's position")
+    {
+        t.model.keepAxis1MotorPosition();
+        REQUIRE(!t.model.axis1ScaleMismatchMm());
+        REQUIRE(t.runUntil([&] {
+            const auto d = t.model.getAxis1ScaleDifferenceMm();
+            return d && std::abs(*d) < 0.011;
+        }));
+        REQUIRE(t.model.getAxis1MotorPosition() == Approx(1.0).margin(0.0001));
+    }
+}
+
+TEST_CASE("UI: the dialog when the scale and motor disagree")
+{
+    ScaleTestModel t({ { "Axis1ScaleWarnMm", "0.2" } });
+    REQUIRE(t.runUntil([&] { return t.model.getAxis1ScalePositionMm().has_value(); }));
+    t.model.fakeAxis1Scale()->setErrorMm(0.3);
+    t.model.axis1GoToPosition(1.0);
+    REQUIRE(t.runUntil([&] { return t.model.axis1ScaleMismatchMm().has_value(); }));
+    bool shown = false;
+    whenDialogShows([&shown](QWidget* dialog) {
+        shown = true;
+        QTest::keyClick(inputWidget(dialog), Qt::Key_Y);
+    });
+    t.controller.tick();
+    REQUIRE(waitForDialogToClose());
+    REQUIRE(shown);
+    REQUIRE(!t.model.axis1ScaleMismatchMm());
+    REQUIRE(t.model.getAxis1MotorPosition() == Approx(1.3).margin(0.011));
 }
