@@ -1778,8 +1778,9 @@ change.
           power cycle, so a dip at the time can't be ruled out. A lock which
           even SysRq can't get through points more at the kernel or hardware
           (e.g. the USB driver). Still unexplained: the persistent journal
-          and ssh over Wi-Fi are for next time. Pinning the mill's motor
-          threads, as on the lathe, is still worth doing, to rule it out
+          and ssh over Wi-Fi are for next time. **Done:** the mill's motor
+          threads are now pinned as on the lathe (X on core 3, A on core 2,
+          spinning when idle), to rule that out
         - Nine of the settles hit the 3 s limit ("still changing"): the
           reading flickers at rest sometimes, so a settled value can be a
           count out
