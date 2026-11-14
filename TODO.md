@@ -1228,6 +1228,22 @@ change.
     - (Separately, the debug build on neutron had been configured with
       FAKE=OFF, and the Makefile doesn't reconfigure an existing tree, so
       `make test` wouldn't build until it was reconfigured by hand)
+- [ ] **More unit tests which fail now and then, on slower machines**
+      (2026-11-14, on an M2 MacBook, while m4pro is away for repair; they
+      passed on m4pro, which is much faster). Each failed about one run in
+      three or four, and passed on re-running, with or without the change
+      being tested:
+    - "Threading: Z's backlash is taken up before a pass reverses"
+      (test.cpp, `pulsesFromWholeRev(started) <= 5`: a pass started more
+      than 5 encoder pulses from a whole revolution)
+    - The spring passes test (test.cpp, `getWarning() == "Stop the motors
+      first"` after `axis1GoToPosition(zStart - 0.5)`): probably the 0.5 mm
+      move finishing before the test thread gets to `multiPassGo()`, so
+      the motors are already stopped. A longer or slower move would make
+      it safe
+    - The fix, as before: tests mustn't assume the test thread runs
+      promptly. Wait for conditions rather than for fixed times, and give
+      moves which must still be running when checked enough time to spare
 - [ ] Lots of refactoring still needed, as this grew a bit organically
 - [ ] (undecided) Replace all "Axis1..." and "Axis2..." references with an array, to
       allow for future expansion. Might be difficult owing to the axes'
