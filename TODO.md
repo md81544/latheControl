@@ -1895,6 +1895,37 @@ change.
     - To make a survey along X easier: log the scale's raw count with each
       measurement (so results after different zeros can be placed along
       the table), and say in the result where it measured
+    - **Decided (14 Nov 2026): rely on the scale.** How lc's X and the
+      scale are kept in line:
+        - lc's X stays the motor's count (smooth and immediate while moving;
+          the scale lags), but it's re-based from the scale at rest: once
+          the axis has stopped and the reading has settled, the motor's
+          position is set to the scale's (nothing moves). Everything else
+          (memories, go-to, nudges, multi-pass, gear cutting) keeps working
+          in the motor's steps, which now mean where the table really is.
+          Memories stay valid, as both share the zero
+        - If they differ by more than a limit (config; perhaps 0.2 mm, about
+          20 counts, against normal corrections under 0.15 mm), no re-base:
+          stop and warn (stage 3), as something's wrong (a stall, a jump).
+          Undecided: whether the warning also offers "accept the scale's
+          position"
+        - Not re-based during a running multi-pass or threading (between
+          passes), only once it's finished. Without a reading, carry on
+          with the motor alone, showing that the position isn't confirmed
+        - Then stage 4: positioning moves (go to memory, zero, a position,
+          relative moves) settle, and if out by more than about 2 counts,
+          correct (at most two or three times), never reversing into the
+          work (back off past the backlash and approach again), then
+          re-base. Can't tell a cut from a positioning move (both are "go
+          to memory"), so it can be switched off from the menu
+        - Milling a pocket (cut to a memory, move Y by hand, cut back): the
+          re-base at each end means the return cut goes to the real
+          position, so errors don't build up from pass to pass. Stage 4
+          adds a dwell of about 2 s at each end wall, and finishes the wall
+          at the memory position (a small move on, in the cut's direction;
+          or if past it, back along the cut path and in again). Without it,
+          X's varying backlash could leave the ends up to about 0.1 mm out
+        - Order: re-base at rest with the warning first, then stage 4
     - (The original idea:) a "measure backlash" command (System menu),
       which reverses
       the axis, sees how far it turns before the scale moves, and suggests
