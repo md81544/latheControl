@@ -3918,6 +3918,7 @@ struct ThreadingTestModel {
                   return options;
               }())
         , model(gpio, config)
+        , spindleSign(spindleNormal ? 1 : -1)
     {
         model.initialise();
         std::istringstream threads("[Test | ISO]\nM6, 6, 1\n");
@@ -3944,6 +3945,12 @@ struct ThreadingTestModel {
     void startPass(long endStep)
     {
         model.axis1GoToStep(endStep);
+        waitForPassToStart();
+    }
+    // Runs the model's updates until a move's backlash has been taken up and
+    // the pass itself has started
+    void waitForPassToStart()
+    {
         const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
         while (model.isMotionSequenceRunning()) {
             REQUIRE(std::chrono::steady_clock::now() < deadline);
@@ -3952,16 +3959,38 @@ struct ThreadingTestModel {
         }
         REQUIRE(model.isAxis1MotorRunning());
     }
-    // Waits for Z to leave its current step, returning the pulse count then
+    // Waits for Z to get going, returning the pulse count when it started.
+    // Each reading is worked out from the count and how far Z has gone, and
+    // can only come out late: on a busy machine, the test's thread can wake a
+    // few ms after Z has moved (several pulses), and Z can be a few steps
+    // behind the spindle (its thread isn't real-time here). A pass can't
+    // start early, so the earliest of the readings over a while is the best
     int64_t pulsesWhenZStarts()
     {
         const long start = model.getAxis1MotorCurrentStep();
         const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
-        while (model.getAxis1MotorCurrentStep() == start) {
+        std::optional<int64_t> earliest;
+        std::optional<std::chrono::steady_clock::time_point> end;
+        while (!end || std::chrono::steady_clock::now() < *end) {
             REQUIRE(std::chrono::steady_clock::now() < deadline);
+            // (Read the count either side of Z's step, so a delay between
+            // them shows, and the reading is dropped)
+            const int64_t pulses = model.getSpindlePulses();
+            const long z = model.getAxis1MotorCurrentStep();
+            if (z != start && std::abs(model.getSpindlePulses() - pulses) <= 1) {
+                if (!end) {
+                    end = std::chrono::steady_clock::now() + std::chrono::milliseconds(40);
+                }
+                const int64_t started = pulses
+                    - spindleSign
+                        * std::llround(static_cast<double>(std::abs(z - start)) / STEPS_PER_PULSE);
+                if (!earliest || spindleSign * (started - *earliest) < 0) {
+                    earliest = started;
+                }
+            }
             std::this_thread::sleep_for(std::chrono::microseconds(100));
         }
-        return model.getSpindlePulses();
+        return *earliest;
     }
     // Runs the model's updates for a while (as the controller's ticks would)
     void runFor(std::chrono::milliseconds time)
@@ -3978,6 +4007,8 @@ struct ThreadingTestModel {
     TestConfigReader config;
     mgo::MockGpio gpio;
     mgo::Model model;
+    // (Which way the encoder's count goes)
+    const int spindleSign;
 };
 
 } // end anonymous namespace
@@ -4484,8 +4515,11 @@ TEST_CASE("Model:   spring passes after the threading passes")
     REQUIRE(mgo::keyAllowedInCurrentMode(mgo::key::RIGHT, t.model));
     REQUIRE(mgo::keyAllowedInCurrentMode(mgo::key::LEFT, t.model));
     REQUIRE(!mgo::keyAllowedInCurrentMode(mgo::key::AltRight, t.model));
+    // (In threading mode, the move is a pass: Z's backlash is taken up, by a
+    // step, then it waits for the spindle. Polling for Z running could miss
+    // the step and never see the pass, as it starts on a later update)
     t.model.axis1GoToPosition(zStart - 0.5);
-    REQUIRE(waitFor([&t] { return t.model.isAxis1MotorRunning(); }, std::chrono::seconds(3)));
+    t.waitForPassToStart();
     t.model.multiPassGo();
     REQUIRE(t.model.getWarning() == "Stop the motors first");
     REQUIRE(t.model.multiPass().state() == mgo::MultiPass::State::Paused);

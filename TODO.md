@@ -1228,7 +1228,7 @@ change.
     - (Separately, the debug build on neutron had been configured with
       FAKE=OFF, and the Makefile doesn't reconfigure an existing tree, so
       `make test` wouldn't build until it was reconfigured by hand)
-- [ ] **More unit tests which fail now and then, on slower machines**
+- [x] **More unit tests which fail now and then, on slower machines**
       (2026-11-14, on an M2 MacBook, while m4pro is away for repair; they
       passed on m4pro, which is much faster). Each failed about one run in
       three or four, and passed on re-running, with or without the change
@@ -1237,13 +1237,35 @@ change.
       (test.cpp, `pulsesFromWholeRev(started) <= 5`: a pass started more
       than 5 encoder pulses from a whole revolution)
     - The spring passes test (test.cpp, `getWarning() == "Stop the motors
-      first"` after `axis1GoToPosition(zStart - 0.5)`): probably the 0.5 mm
-      move finishing before the test thread gets to `multiPassGo()`, so
-      the motors are already stopped. A longer or slower move would make
-      it safe
-    - The fix, as before: tests mustn't assume the test thread runs
-      promptly. Wait for conditions rather than for fixed times, and give
-      moves which must still be running when checked enough time to spare
+      first"` after `axis1GoToPosition(zStart - 0.5)`)
+    - Neither failed on the M2 when it wasn't busy (five runs of the whole
+      suite). With ten busy processes on its eight cores, the spring passes
+      test failed five runs in six, so that's the way to reproduce them
+    - **Spring passes: not a move finishing too soon, as first thought.** In
+      threading mode, a Z move is a threading pass: Z's backlash is taken
+      up by one step, then the pass starts on a later `checkStatus()`, and
+      waits for the spindle. The test polled for Z running (without calling
+      `checkStatus()`), which only worked if it caught the one step while
+      it was being made. On a busy machine, the step was over between
+      polls, so the pass never started (or, if the step was caught,
+      `multiPassGo()` could come once it was done). **Fixed:** the test runs
+      the updates until the pass has started, as `startPass()` does
+      (`waitForPassToStart()`). It passed eight runs in eight under the
+      same load
+    - **Pass starts:** `pulsesWhenZStarts()` read the encoder's count once
+      it saw Z move, polling every 0.1 ms. A wake-up 1.5 ms late is 5
+      pulses at the tests' spindle speed. **Changed:** it takes readings for
+      40 ms after Z starts, each working out the start from the count and
+      how far Z has gone, and keeps the earliest. Both of the errors (the
+      test's thread waking late, and Z lagging the spindle for a moment)
+      only make a start look later, and a pass can't start early. On an
+      idle machine they come out 0 or 1 pulses from a whole revolution
+    - Under that much load, the threading tests still fail now and then
+      (old and new versions alike, about one run in eight): the mock's
+      encoder and motor threads are starved too, and then Z really does
+      fall behind (e.g. 12 steps in "Z follows the spindle's position").
+      The tests can't allow for that, and the Pi's motor threads are
+      real-time and pinned to their own cores
 - [ ] Lots of refactoring still needed, as this grew a bit organically
 - [ ] (undecided) Replace all "Axis1..." and "Axis2..." references with an array, to
       allow for future expansion. Might be difficult owing to the axes'
