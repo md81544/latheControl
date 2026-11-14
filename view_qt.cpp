@@ -136,7 +136,25 @@ public:
         setWindowTitle("Lathe Control");
         setFocusPolicy(Qt::StrongFocus);
         m_lastKeyTime.start();
+        m_rapidReleaseTimer.setSingleShot(true);
+        m_rapidReleaseTimer.setInterval(RAPID_RELEASE_MS);
+        QObject::connect(&m_rapidReleaseTimer, &QTimer::timeout, this, [this]() {
+            // The rapid's arrow key really was let go
+            m_rapidQtKey = 0;
+            m_keys.push_back(key::SPACE);
+        });
     }
+
+    // How long after a rapid's arrow key is released before the motors stop.
+    // A key held down repeats, and under X11 each repeat is a release then a
+    // press, which Qt marks as a repeat only if the press has already arrived
+    // when it sees the release. On a busy Pi it sometimes hasn't, so the
+    // release looked like letting go: the rapid stopped dead, and the press
+    // started it again (seen on the mill, 14 Nov 2026: X stopping and
+    // starting about once a second, at 800 mm/min, during a held Alt+Left).
+    // So a release only stops it if the key isn't pressed again within this
+    // time. (About 0.8 mm at 800 mm/min. Space stops everything at once)
+    static constexpr int RAPID_RELEASE_MS = 60;
 
     // What to draw, in order. Set by the view on each updateDisplay()
     std::vector<DrawItem> frame;
@@ -232,6 +250,14 @@ protected:
         if (isModifierKey(qtKey)) {
             return;
         }
+        // While a rapid's arrow key is held, a press of it is a repeat, whether
+        // or not Qt says so (see RAPID_RELEASE_MS): it keeps going. (Also if
+        // Alt has been let go, which stopped it: the repeat mustn't start a
+        // jog, which wouldn't stop by itself)
+        if (m_rapidQtKey != 0 && qtKey == m_rapidQtKey) {
+            m_rapidReleaseTimer.stop();
+            return;
+        }
         // Otherwise held keys don't repeat: holding an arrow key must not
         // keep jogging the motors
         const bool menuRepeat = event->isAutoRepeat() && menu && menu->isOpen()
@@ -249,6 +275,10 @@ protected:
         if (k != key::None) {
             m_keys.push_back(k);
         }
+        if (isArrowKey(qtKey) && altPressed(event)) {
+            // A rapid: it moves while the arrow (and Alt) are held
+            m_rapidQtKey = qtKey;
+        }
     }
 
     void keyReleaseEvent(QKeyEvent* event) override
@@ -265,6 +295,11 @@ protected:
             m_altHeld = m_altHeld && qtKey != Qt::Key_Alt;
             m_altGrHeld = m_altGrHeld && qtKey != Qt::Key_AltGr;
             m_keys.push_back(key::SPACE);
+            return;
+        }
+        if (qtKey == m_rapidQtKey) {
+            // (Unless it's a repeat: see RAPID_RELEASE_MS)
+            m_rapidReleaseTimer.start();
             return;
         }
         if (isArrowKey(qtKey) && altPressed(event)) {
@@ -387,6 +422,10 @@ private:
     bool m_altGrHeld { false };
     int m_lastQtKey { 0 };
     QElapsedTimer m_lastKeyTime;
+    // The arrow key of a rapid, while it's held (0 if none). See
+    // RAPID_RELEASE_MS
+    int m_rapidQtKey { 0 };
+    QTimer m_rapidReleaseTimer;
 };
 
 } // end anonymous namespace

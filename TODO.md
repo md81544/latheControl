@@ -2002,6 +2002,36 @@ change.
       **To try on the mill:** go-tos landing within a count of the target
       at both ends of the table; a pocket (cut to a memory, Y by hand, cut
       back) with it on and off
+    - **Found (14 Nov 2026): X's pulley was slipping** on the stepper's
+      shaft (perhaps from all that running against the lock). Tightening
+      its two grub screws made repeatability far better. The backlash
+      measurements before then may have included some slip: worth
+      measuring again
+    - **Found and fixed (14 Nov 2026): rapids stopping and starting.** A
+      held Alt+arrow at 800 mm/min often seemed to stall, the speed shown
+      dipping, while key 5 then an arrow at the same speed was fine. lc.log
+      showed why: during one hold, "Key Space" then "Key Alt+Left" 50 ms
+      later, about once a second. Under X11 a held key repeats as a release
+      and a press, and Qt marks them as a repeat only if the press has
+      already arrived when it sees the release; on a busy Pi it sometimes
+      hadn't, so the release stopped the rapid dead (the dead man) and the
+      press started it again. Fixed in the view (`RAPID_RELEASE_MS`): a
+      release of a rapid's arrow stops it 60 ms later, unless the same key
+      is pressed again meanwhile (a repeat); and while the arrow's held,
+      its presses are repeats however marked, so letting go of Alt (which
+      still stops at once) can't let a repeat start a jog. Releasing a
+      rapid now stops 60 ms later (about 0.8 mm at 800 mm/min); Space is
+      still immediate. **To try on the mill:** held rapids should run
+      smoothly. The stop-start may also explain the earlier "stalls" on
+      fast moves, so see whether any are left before lowering X's speed
+    - **Also seen then: stops at speed overshoot.** Space stops from
+      800 mm/min (key 5 then an arrow) left the table 0.27-0.38 mm beyond
+      the motor in the direction of travel, bringing up the "disagree"
+      dialog (more than 0.2 mm). The motor stops dead (only acceleration is
+      ramped; see "Deceleration ramping" under Motion and timing, where
+      stops the user makes are to stay instant), and the table carries on
+      into the slack. Possibly worse with the pulley slipping: to check
+      again now it's tight
     - **Still to try on the mill:** positions after moves should now agree with
       TouchDRO (within a count, allowing for the 2 s to settle); the "off
       by" figure should be about 0 at rest; lc.log's "re-based" lines show

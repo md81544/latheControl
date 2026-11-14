@@ -249,10 +249,12 @@ TEST_CASE("UI: releasing Alt or an Alt-arrow stops (dead man)")
     // Pressing Alt+Left starts a rapid (QTest presses Alt first, then Left)
     QTest::keyPress(w, Qt::Key_Left, Qt::AltModifier);
     REQUIRE(allKeys(view) == Keys { mgo::key::AltLeft });
-    // Releasing it stops: once for the arrow (released with Alt still held)
-    // and once for the Alt key itself
+    // Releasing it stops: once for the Alt key itself, at once, and once for
+    // the arrow, a moment later (in case it was a repeat: see the next test)
     QTest::keyRelease(w, Qt::Key_Left, Qt::AltModifier);
-    REQUIRE(allKeys(view) == Keys { mgo::key::SPACE, mgo::key::SPACE });
+    REQUIRE(allKeys(view) == Keys { mgo::key::SPACE });
+    QTest::qWait(100);
+    REQUIRE(allKeys(view) == Keys { mgo::key::SPACE });
 
     // Alt on its own does nothing until released
     QTest::keyPress(w, Qt::Key_Alt);
@@ -269,6 +271,8 @@ TEST_CASE("UI: releasing Alt or an Alt-arrow stops (dead man)")
     QTest::keyPress(w, Qt::Key_Up);
     REQUIRE(allKeys(view) == Keys { mgo::key::AltUp });
     QTest::keyRelease(w, Qt::Key_Up);
+    REQUIRE(allKeys(view).empty());
+    QTest::qWait(100);
     REQUIRE(allKeys(view) == Keys { mgo::key::SPACE });
     QKeyEvent altGrRelease(QEvent::KeyRelease, Qt::Key_AltGr, Qt::NoModifier);
     QApplication::sendEvent(w, &altGrRelease);
@@ -279,6 +283,50 @@ TEST_CASE("UI: releasing Alt or an Alt-arrow stops (dead man)")
     REQUIRE(allKeys(view) == Keys { mgo::key::RIGHT });
     QTest::keyRelease(w, Qt::Key_Right);
     REQUIRE(allKeys(view).empty());
+}
+
+TEST_CASE("UI: a rapid's key repeating, unmarked, doesn't stop it")
+{
+    TestModel tm;
+    mgo::ViewQt view;
+    view.initialise(tm.model);
+    QWidget* w = mainWindow();
+    REQUIRE(w);
+
+    QTest::keyPress(w, Qt::Key_Alt);
+    QTest::keyPress(w, Qt::Key_Left, Qt::AltModifier);
+    REQUIRE(allKeys(view) == Keys { mgo::key::AltLeft });
+    // A held key's repeats, under X11, are a release and a press. If Qt
+    // doesn't mark them as repeats (seen on the Pi), they must still neither
+    // stop the rapid nor start it again
+    for (int n = 0; n < 5; ++n) {
+        QKeyEvent release(QEvent::KeyRelease, Qt::Key_Left, Qt::AltModifier);
+        QApplication::sendEvent(w, &release);
+        QKeyEvent press(QEvent::KeyPress, Qt::Key_Left, Qt::AltModifier);
+        QApplication::sendEvent(w, &press);
+        QTest::qWait(30);
+    }
+    QTest::qWait(100);
+    REQUIRE(allKeys(view).empty());
+    // Letting go of Alt stops it at once. Then the arrow's repeats (no longer
+    // with Alt) mustn't start a jog
+    QTest::keyRelease(w, Qt::Key_Alt);
+    REQUIRE(allKeys(view) == Keys { mgo::key::SPACE });
+    for (int n = 0; n < 3; ++n) {
+        QKeyEvent release(QEvent::KeyRelease, Qt::Key_Left, Qt::NoModifier);
+        QApplication::sendEvent(w, &release);
+        QKeyEvent press(QEvent::KeyPress, Qt::Key_Left, Qt::NoModifier);
+        QApplication::sendEvent(w, &press);
+        QTest::qWait(30);
+    }
+    REQUIRE(allKeys(view).empty());
+    // Letting go of the arrow, for real: (another) stop, and it's over, so
+    // the arrow is an ordinary key again
+    QTest::keyRelease(w, Qt::Key_Left);
+    QTest::qWait(100);
+    REQUIRE(allKeys(view) == Keys { mgo::key::SPACE });
+    QTest::keyPress(w, Qt::Key_Left);
+    REQUIRE(allKeys(view) == Keys { mgo::key::LEFT });
 }
 
 TEST_CASE("UI: auto-repeated keys are ignored")
