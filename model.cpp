@@ -2652,7 +2652,16 @@ void Model::checkAxis1ScaleAtRest()
         return;
     }
     const std::string label = m_config.read("Axis1Label", "Z");
-    const double limit = m_config.readDouble("Axis1ScaleWarnMm", 0.0);
+    double limit = m_config.readDouble("Axis1ScaleWarnMm", 0.0);
+    // A table which has gone further than the motor, the way it was moving,
+    // has carried on into the slack: the motor stops dead, even from full
+    // speed (seen on the mill: 0.12-0.29 mm after stops from 800 mm/min).
+    // That's expected, up to about the backlash, and a stall can't do it (it
+    // leaves the table behind), so that much more is allowed that way
+    const int direction = m_axis1Scale->lastMoveDirection();
+    if (limit > 0.0 && direction != 0 && *difference * direction > 0.0) {
+        limit += axis1BacklashCompensationMm();
+    }
     if (limit > 0.0 && std::abs(*difference) > limit) {
         // Something's wrong: the motor lost steps (e.g. a stall), or the scale
         // misread. So everything stops (e.g. a multi-pass), until the user
@@ -2666,6 +2675,7 @@ void Model::checkAxis1ScaleAtRest()
                 limit));
         stopAllMotors();
         m_axis1ScaleMismatchMm = *difference;
+        m_axis1ScaleMismatchLimitMm = limit;
         return;
     }
     if (!m_config.readBool("Axis1ScaleRebase", false)) {
@@ -2849,6 +2859,11 @@ void Model::endAxis1Finish(const std::string& why)
 std::optional<double> Model::axis1ScaleMismatchMm() const
 {
     return m_axis1ScaleMismatchMm;
+}
+
+double Model::axis1ScaleMismatchLimitMm() const
+{
+    return m_axis1ScaleMismatchLimitMm;
 }
 
 void Model::acceptAxis1ScalePosition()

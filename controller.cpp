@@ -154,8 +154,8 @@ void Controller::checkScaleMismatch()
             length(position),
             length(std::abs(*mismatch))),
         fmt::format(
-            "more than the {} allowed (Axis1ScaleWarnMm), so everything has stopped.",
-            length(m_model->config().readDouble("Axis1ScaleWarnMm", 0.0))),
+            "more than the {} allowed, so everything has stopped.",
+            length(m_model->axis1ScaleMismatchLimitMm())),
         "The motor may have lost steps (e.g. a stall), or the scale may have misread.",
         "",
         "Y or Enter: use the scale's position (usually right after a stall).",

@@ -371,6 +371,9 @@ public:
     // this is how far apart they are (the scale less the motor), until
     // dealt with by one of the two below. Nothing can move meanwhile
     std::optional<double> axis1ScaleMismatchMm() const;
+    // How far apart they were allowed to be: Axis1ScaleWarnMm, plus the
+    // backlash if the table had gone further the way it was moving
+    double axis1ScaleMismatchLimitMm() const;
     // Use the scale's position (e.g. after a stall)
     void acceptAxis1ScalePosition();
     // Keep the motor's position, and line the scale up with it again
@@ -596,6 +599,7 @@ private:
     // The scale's settleCount() when last checked against the motor
     int m_axis1ScaleCheckedSettles { 0 };
     std::optional<double> m_axis1ScaleMismatchMm;
+    double m_axis1ScaleMismatchLimitMm { 0.0 };
     // See axis1FinishesOnScale()
     bool m_axis1FinishOnScale { false };
     struct Axis1Finish {

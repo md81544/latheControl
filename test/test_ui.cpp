@@ -2223,3 +2223,39 @@ TEST_CASE("UI: finishing on the scale is turned on and off from the menu")
     press(w, controller, Qt::Key_Tab);
     REQUIRE(!controller.isMenuOpen());
 }
+
+TEST_CASE("UI: the table carrying on into the slack is allowed for")
+{
+    // 0.3mm of backlash compensation (300 steps of 0.001mm)
+    ScaleTestModel t(
+        { { "Axis1ScaleRebase", "true" },
+          { "Axis1ScaleWarnMm", "0.2" },
+          { "Axis1BacklashCompensationSteps", "300" } });
+    REQUIRE(t.runUntil([&] { return t.model.getAxis1ScalePositionMm().has_value(); }));
+    const auto stoppedAt = [&t](double position) {
+        return t.runUntil([&] {
+            return !t.model.isAxis1MotorRunning() && !t.model.axis1ScaleMismatchMm()
+                && std::abs(t.model.getAxis1MotorPosition() - position) < 0.011;
+        });
+    };
+    // (The simulated table has no backlash, so the first move to the right,
+    // a reversal after the start-up take-up, ends 0.3 further right: within
+    // what's allowed that way, so re-based. After that, moves to the right
+    // aren't reversals)
+    t.model.axis1GoToPosition(0.5);
+    REQUIRE(stoppedAt(0.8));
+
+    // Moving right, the table ends 0.4mm further right than the motor (as
+    // after stopping dead from speed): within 0.2 + 0.3, so just re-based.
+    // (The error changes while moving: at rest, a change is just that)
+    t.model.axis1GoToPosition(1.8);
+    t.model.fakeAxis1Scale()->setErrorMm(0.4);
+    REQUIRE(stoppedAt(2.2));
+    // Moving right again, the table ends 0.3mm short (as if stalled): that
+    // way, only 0.2 is allowed
+    t.model.axis1GoToPosition(3.2);
+    t.model.fakeAxis1Scale()->setErrorMm(0.1);
+    REQUIRE(t.runUntil([&] { return t.model.axis1ScaleMismatchMm().has_value(); }));
+    REQUIRE(*t.model.axis1ScaleMismatchMm() == Approx(-0.3).margin(0.011));
+    REQUIRE(t.model.axis1ScaleMismatchLimitMm() == Approx(0.2));
+}

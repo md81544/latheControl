@@ -93,6 +93,9 @@ public:
     // How many times the reading has settled after the motor stopped. (So
     // something waiting for a move's reading can tell when it's ready)
     int settleCount() const;
+    // Which way the move before the last settle went: +1, -1, or 0 if it
+    // settled after a change at rest (or the move wasn't seen)
+    int lastMoveDirection() const;
     double countsPerMm() const;
 
 private:
@@ -131,6 +134,7 @@ private:
     // Whether it's settling after a change at rest, not a move
     bool m_changedAtRest { false };
     int m_settleCount { 0 };
+    int m_lastMoveDirection { 0 };
 };
 
 } // namespace mgo

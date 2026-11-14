@@ -2032,6 +2032,16 @@ change.
       stops the user makes are to stay instant), and the table carries on
       into the slack. Possibly worse with the pulley slipping: to check
       again now it's tight
+    - **Checked, with the pulley tight and the rapids fixed (14 Nov 2026):**
+      held rapids now run smoothly. Every stop from 800 mm/min still left
+      the table ahead of the motor, the way it was moving: 0.12, 0.23, 0.26
+      and 0.29 mm, so within the backlash (820 steps, 0.256 mm) plus a
+      little. **Fixed by making the warning one-sided:** ahead of the motor
+      in the direction of the last move (`AxisScale::lastMoveDirection()`),
+      `Axis1ScaleWarnMm` plus the backlash setting is allowed, and re-based
+      quietly; behind it (a stall can only leave it behind), or after a
+      change at rest, the limit is as before. The dialog gives the limit
+      which applied
     - **Still to try on the mill:** positions after moves should now agree with
       TouchDRO (within a count, allowing for the 2 s to settle); the "off
       by" figure should be about 0 at rest; lc.log's "re-based" lines show

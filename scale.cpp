@@ -113,6 +113,10 @@ void AxisScale::update(double motorMm, bool motorRunning, double motorSpeed, Clo
     m_state = State::Settled;
     ++m_settleCount;
     m_settledCounts = *counts;
+    m_lastMoveDirection = 0;
+    if (m_moveStartMm && !m_changedAtRest && motorMm != *m_moveStartMm) {
+        m_lastMoveDirection = motorMm > *m_moveStartMm ? 1 : -1;
+    }
     const double seconds = std::chrono::duration<double>(now - m_stoppedAt).count();
     if (!m_aligned) {
         align(*counts, motorMm);
@@ -185,6 +189,11 @@ void AxisScale::motorRebased(double motorMm)
 int AxisScale::settleCount() const
 {
     return m_settleCount;
+}
+
+int AxisScale::lastMoveDirection() const
+{
+    return m_lastMoveDirection;
 }
 
 double AxisScale::countsPerMm() const
