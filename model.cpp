@@ -348,6 +348,7 @@ void Model::checkStatus()
     }
     advanceBacklashMeasurement();
     checkAxis1ScaleAtRest();
+    advanceAxis1Finish();
 
     if (const auto diameter = getDiameterMm()) {
         m_generalStatus = fmt::format(
@@ -741,6 +742,9 @@ void Model::stopAllMotors()
     if (m_backlashMeasurement) {
         endBacklashMeasurement("stopped");
     }
+    if (m_axis1Finish) {
+        endAxis1Finish("stopped");
+    }
     // (After stopping, so a sequence's end, e.g. restoring a nudge's speed,
     // doesn't race with a move it started)
     m_motionSequence.cancel();
@@ -1133,11 +1137,10 @@ void Model::axis1GoToPosition(double pos)
     if (axis1MoveRefused()) {
         return;
     }
-    // TODO - if the linear scale is enabled, we need to perhaps go to a step close to
-    // the desired position, then start nudging while monitoring the linear scale
-    // until we get to the desired position. This could be implemented in the motor
-    // perhaps by supplying a callback that is called after each step is taken.
-    axis1GoToStep(std::lround(pos / m_axis1Motor->getConversionFactor()));
+    const long step = std::lround(pos / m_axis1Motor->getConversionFactor());
+    axis1GoToStep(step);
+    // (With a scale: see axis1FinishesOnScale())
+    startAxis1Finish(step);
     if (std::abs(pos) < 0.00001) {
         // Round to zero for display purposes, just to
         // avoid having "-0.000" displayed
@@ -1192,6 +1195,8 @@ void Model::axis1GoToCurrentMemory()
     m_axis1Status = "returning";
     // (If threading, this waits for zero degrees on the chuck before starting)
     axis1GoToStep(m_axis1Memory.at(m_currentMemory));
+    // (With a scale: see axis1FinishesOnScale())
+    startAxis1Finish(m_axis1Memory.at(m_currentMemory));
 }
 
 void Model::axis1Nudge(ZDirection direction, double nudgeAmountMm)
@@ -2066,6 +2071,16 @@ std::string Model::getWarning() const
 
 std::string Model::getAxis1Status() const
 {
+    if (m_axis1Finish) {
+        // (The move itself as usual, e.g. "Going to 10.000"; then waiting for
+        // the scale, and correcting)
+        if (m_axis1Finish->corrections == 0 && m_axis1Motor->isRunning()) {
+            return m_axis1Status;
+        }
+        return m_axis1Finish->corrections == 0
+            ? "Finishing on the scale"
+            : fmt::format("Finishing on the scale (correction {})", m_axis1Finish->corrections);
+    }
     if (m_backlashMeasurement) {
         return fmt::format(
             "Measuring backlash: move {} of {}",
@@ -2488,7 +2503,7 @@ double Model::axis1BacklashCompensationMm() const
 
 bool Model::canMeasureAxis1Backlash() const
 {
-    return m_axis1Scale && m_axis1Scale->isAligned() && !m_backlashMeasurement
+    return m_axis1Scale && m_axis1Scale->isAligned() && !m_backlashMeasurement && !m_axis1Finish
         && m_mode == Mode::None && !isAxisLocked(1) && !m_axis1Motor->isRunning()
         && !m_axis2Motor->isRunning() && !isMotionSequenceRunning() && !limitSwitchTripped()
         && !m_axis1Motor->isFaulted();
@@ -2691,6 +2706,146 @@ void Model::rebaseAxis1FromScale(const char* why)
             m_axis1Motor->getPosition() - before));
 }
 
+bool Model::axis1FinishesOnScale() const
+{
+    return m_axis1FinishOnScale;
+}
+
+void Model::toggleAxis1FinishOnScale()
+{
+    m_axis1FinishOnScale = !m_axis1FinishOnScale;
+    MGOLOG(
+        fmt::format(
+            "Finishing {}'s moves on the scale turned {}",
+            m_config.read("Axis1Label", "Z"),
+            m_axis1FinishOnScale ? "on" : "off"));
+    if (!m_axis1FinishOnScale && m_axis1Finish) {
+        // (Where it's got to is where it stays)
+        stopAllMotors();
+    }
+}
+
+bool Model::isAxis1FinishingOnScale() const
+{
+    return m_axis1Finish.has_value();
+}
+
+void Model::startAxis1Finish(long step)
+{
+    m_axis1Finish.reset();
+    if (!m_axis1FinishOnScale || !m_axis1Scale || !m_axis1Scale->isAligned()
+        || (m_mode != Mode::None && m_mode != Mode::GearCutting) || m_multiPass.inProgress()) {
+        return;
+    }
+    // (Only if it's moving: not if refused, e.g. a locked axis, or already there)
+    if (!m_axis1Motor->isRunning() && !isMotionSequenceRunning()) {
+        return;
+    }
+    const double target = m_axis1Motor->getPosition(step);
+    m_axis1Finish = Axis1Finish {
+        .targetMm = target,
+        .direction = target >= m_axis1Motor->getPosition() ? 1 : -1,
+        .settles = m_axis1Scale->settleCount(),
+    };
+}
+
+void Model::advanceAxis1Finish()
+{
+    if (!m_axis1Finish || m_axis1Motor->isRunning() || isMotionSequenceRunning()) {
+        return;
+    }
+    Axis1Finish& f = *m_axis1Finish;
+    if (f.backingOff) {
+        // (No need to wait for the scale: it's only to come back)
+        f.backingOff = false;
+        axis1FinishMove(f.approachMm);
+        return;
+    }
+    if (m_axis1Scale->settleCount() == f.settles) {
+        return;
+    }
+    const auto scaleMm = m_axis1Scale->positionMm();
+    if (!scaleMm) {
+        endAxis1Finish("no scale reading");
+        return;
+    }
+    const double countMm = 1.0 / m_axis1Scale->countsPerMm();
+    const double error = f.targetMm - *scaleMm;
+    // (A count is as close as the scale can tell)
+    if (std::abs(error) < 1.5 * countMm) {
+        endAxis1Finish(fmt::format("on target ({:+.4f} mm)", -error));
+        return;
+    }
+    if (f.corrections >= MAX_SCALE_CORRECTIONS) {
+        const std::string label = m_config.read("Axis1Label", "Z");
+        m_warning = fmt::format(
+            "{} is {:.3f} {} from its target after {} corrections",
+            label,
+            toDisplayUnits(1, std::abs(error)),
+            axisUnitName(1),
+            f.corrections);
+        endAxis1Finish(fmt::format("still {:+.4f} mm out", -error));
+        return;
+    }
+    ++f.corrections;
+    // (The motor's position and the scale's agree, if re-based; this works
+    // either way)
+    const double approach = m_axis1Motor->getPosition() + error;
+    if (error * f.direction > 0.0) {
+        MGOLOG(
+            fmt::format(
+                "{} {:.4f} mm short of {:.4f}: moving on (correction {})",
+                m_config.read("Axis1Label", "Z"),
+                std::abs(error),
+                f.targetMm,
+                f.corrections));
+        axis1FinishMove(approach);
+    } else {
+        // Past it: back off past the backlash, and approach again the same
+        // way, rather than reverse onto it (which would leave the slack the
+        // other way, and could push back into the work)
+        const double backOff = std::max(0.5, 2.0 * axis1BacklashCompensationMm());
+        MGOLOG(
+            fmt::format(
+                "{} {:.4f} mm past {:.4f}: backing off {:.3f} mm to approach again (correction "
+                "{})",
+                m_config.read("Axis1Label", "Z"),
+                std::abs(error),
+                f.targetMm,
+                backOff,
+                f.corrections));
+        f.backingOff = true;
+        f.approachMm = approach;
+        axis1FinishMove(approach - f.direction * backOff);
+    }
+}
+
+void Model::axis1FinishMove(double position)
+{
+    const long step = std::lround(position / m_axis1Motor->getConversionFactor());
+    m_axis1Finish->settles = m_axis1Scale->settleCount();
+    m_axis1Motor->goToStep(step);
+    if (!m_axis1Motor->isRunning() && m_axis1Motor->getCurrentStep() != step) {
+        // Refused (e.g. a limit switch, or the driver's alarm)
+        endAxis1Finish("the move was refused");
+    }
+}
+
+void Model::endAxis1Finish(const std::string& why)
+{
+    if (m_axis1Finish) {
+        MGOLOG(
+            fmt::format(
+                "{}: finishing on the scale at {:.4f} ended ({}), after {} correction{}",
+                m_config.read("Axis1Label", "Z"),
+                m_axis1Finish->targetMm,
+                why,
+                m_axis1Finish->corrections,
+                m_axis1Finish->corrections == 1 ? "" : "s"));
+    }
+    m_axis1Finish.reset();
+}
+
 std::optional<double> Model::axis1ScaleMismatchMm() const
 {
     return m_axis1ScaleMismatchMm;
@@ -2798,6 +2953,7 @@ void Model::configureAxis1Scale()
                 type));
         return;
     }
+    m_axis1FinishOnScale = m_config.readBool("Axis1ScaleFinishMoves", false);
     MGOLOG(
         fmt::format(
             "{} scale: {}, {} counts per mm{}",

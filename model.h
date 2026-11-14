@@ -375,6 +375,21 @@ public:
     void acceptAxis1ScalePosition();
     // Keep the motor's position, and line the scale up with it again
     void keepAxis1MotorPosition();
+
+    // Finishing axis 1's positioning moves on its scale (stage 4): after a go
+    // to (a memory, a typed or relative position, the last position), once
+    // the scale has settled, if the table is more than a count from the
+    // target, a correction move: on, if short; if past, backing off past the
+    // backlash and approaching again, so the slack is always taken up the
+    // same way. At most MAX_SCALE_CORRECTIONS, then a warning. Not for jogs,
+    // nudges or the fast return, nor in a multi-pass or the lathe's modes.
+    // Space stops it, and keys wait meanwhile, as for a nudge. Starts as
+    // Axis1ScaleFinishMoves says (off unless set); the menu turns it on and
+    // off
+    static constexpr int MAX_SCALE_CORRECTIONS = 3;
+    bool axis1FinishesOnScale() const;
+    void toggleAxis1FinishOnScale();
+    bool isAxis1FinishingOnScale() const;
 #ifdef FAKE
     // The simulated scale, if axis 1 has a serial one (for the tests)
     FakeDroScale* fakeAxis1Scale();
@@ -581,6 +596,22 @@ private:
     // The scale's settleCount() when last checked against the motor
     int m_axis1ScaleCheckedSettles { 0 };
     std::optional<double> m_axis1ScaleMismatchMm;
+    // See axis1FinishesOnScale()
+    bool m_axis1FinishOnScale { false };
+    struct Axis1Finish {
+        // Where the table should end up (in the motor's frame when it
+        // started, which re-basing keeps the same as the scale's)
+        double targetMm { 0.0 };
+        // +1 or -1: the way the move went, and so the way to approach it
+        int direction { 1 };
+        int corrections { 0 };
+        // Backing off, to approach approachMm again
+        bool backingOff { false };
+        double approachMm { 0.0 };
+        // The scale's settleCount() when its last move started
+        int settles { 0 };
+    };
+    std::optional<Axis1Finish> m_axis1Finish;
 #ifdef FAKE
     FakeDroScale* m_fakeAxis1Scale { nullptr };
 #endif
@@ -774,6 +805,15 @@ private:
     void checkAxis1ScaleAtRest();
     // Sets axis 1's motor's position to the scale's
     void rebaseAxis1FromScale(const char* why);
+    // After a positioning move to step has started: finish it on the scale,
+    // if that's on and can be done now
+    void startAxis1Finish(long step);
+    // Called from checkStatus(): each time the scale settles, corrects or
+    // finishes
+    void advanceAxis1Finish();
+    // Starts one of its moves, to a position (in mm)
+    void axis1FinishMove(double position);
+    void endAxis1Finish(const std::string& why);
     // Logs a motor starting or stopping, with where it was, where it's going,
     // and how fast, for diagnosing problems from lc.log. It's called on each
     // update, so a move which starts and stops between two of them (e.g. a

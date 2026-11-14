@@ -14,8 +14,11 @@ namespace mgo {
 
 Controller::Controller(Model* model)
     : m_model(model)
-    , m_menu(
-          buildCommands(model->config(), model->getDisplayUnits(), model->threadingAutoRetract()))
+    , m_menu(buildCommands(
+          model->config(),
+          model->getDisplayUnits(),
+          model->threadingAutoRetract(),
+          model->axis1FinishesOnScale()))
 {
     m_view = std::make_unique<ViewQt>();
     m_view->setMenu(&m_menu);
@@ -28,7 +31,10 @@ void Controller::rebuildMenu()
 {
     // (Keeping its place, as it may be open: e.g. after a toggle: see Command::isToggle)
     m_menu.setCommands(buildCommands(
-        m_model->config(), m_model->getDisplayUnits(), m_model->threadingAutoRetract()));
+        m_model->config(),
+        m_model->getDisplayUnits(),
+        m_model->threadingAutoRetract(),
+        m_model->axis1FinishesOnScale()));
 }
 
 void Controller::run()
@@ -234,10 +240,11 @@ void Controller::processKeyPress()
         }
         return;
     }
-    if (m_model->isMotionSequenceRunning()) {
+    if (m_model->isMotionSequenceRunning() || m_model->isAxis1FinishingOnScale()) {
         // Keys wait until the sequence (e.g. a nudge) has finished, as they
         // did when it blocked, so e.g. a quick series of nudges each moves
-        // the full amount. Except Space, which stops everything at once
+        // the full amount. Likewise while a move is finished on the scale.
+        // Except Space, which stops everything at once
         if ((k & ~key::JOYSTICK) == key::SPACE) {
             MGOLOG("Stopping all motors: Space during a motion sequence");
             m_model->stopAllMotors();
@@ -1150,6 +1157,13 @@ void Controller::processKey(int t)
             case key::toggleThreadingAutoRetract:
                 {
                     m_model->toggleThreadingAutoRetract();
+                    // (The menu shows whether it's on)
+                    rebuildMenu();
+                    break;
+                }
+            case key::toggleAxis1FinishOnScale:
+                {
+                    m_model->toggleAxis1FinishOnScale();
                     // (The menu shows whether it's on)
                     rebuildMenu();
                     break;

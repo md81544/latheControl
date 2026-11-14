@@ -38,11 +38,13 @@ char categoryHotkey(const std::string& category);
 // disabled in the config are left out.
 // units: the display units, used in commands' descriptions (e.g. nudge amounts)
 // threadingAutoRetract: whether it's on, as the menu shows (see
-// Model::threadingAutoRetract())
+// Model::threadingAutoRetract()); likewise axis1FinishOnScale (see
+// Model::axis1FinishesOnScale())
 std::vector<Command> buildCommands(
     const IConfigReader& config,
     DisplayUnits units = DisplayUnits::Metric,
-    bool threadingAutoRetract = false);
+    bool threadingAutoRetract = false,
+    bool axis1FinishOnScale = false);
 
 // Whether a key is allowed in the current mode (e.g. only motion keys in
 // Setup mode; no X motion while X is retracted). Used by the controller to

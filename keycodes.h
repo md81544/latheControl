@@ -179,6 +179,7 @@ constexpr int toggleThreadingAutoRetract = 7016; // threading: auto-retract on /
 constexpr int f2k = 7017; // cut knurling mode
 constexpr int f2g = 7018; // gear cutting mode
 constexpr int measureAxis1Backlash = 7019; // measure axis 1's backlash with its scale
+constexpr int toggleAxis1FinishOnScale = 7020; // finish axis 1's moves on its scale: on / off
 
 // Joystick specific "keys"
 // Note some joystick commands just return regular keycodes.

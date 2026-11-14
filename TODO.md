@@ -1972,6 +1972,22 @@ change.
       (a longer `Axis1ScaleSettleMs` would be cleaner); if at random times,
       or while cutting, the table really moves (springiness, cutting
       forces, knocks)
+    - **Done (14 Nov 2026), stage 4, not yet tried on the machine:
+      finishing positioning moves on the scale.** `Axis1ScaleFinishMoves`
+      (off by default; on for the mill) sets how it starts; the menu's
+      System category toggles it ("Finishing on the scale is ON (X)").
+      After `axis1GoToPosition()` (typed go to, relative moves, `L`, the
+      feature's go-tos) or `axis1GoToCurrentMemory()`, in no mode or gear
+      cutting and not in a multi-pass: at each settle (after the re-base),
+      within 1 count of the target it's done; short, a move on; past, back
+      off by twice the backlash setting (at least 0.5 mm) and approach
+      again, so always from the same side. At most three corrections, then
+      a warning. Keys wait meanwhile (as for a nudge); Space stops it. Not
+      the fast return (decided: it only gets things out of the way, and
+      stalls at speed). lc.log has each correction and how it ended.
+      **To try on the mill:** go-tos landing within a count of the target
+      at both ends of the table; a pocket (cut to a memory, Y by hand, cut
+      back) with it on and off
     - **Still to try on the mill:** positions after moves should now agree with
       TouchDRO (within a count, allowing for the 2 s to settle); the "off
       by" figure should be about 0 at rest; lc.log's "re-based" lines show

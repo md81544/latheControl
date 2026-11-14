@@ -590,12 +590,13 @@ TEST_CASE("UI: every menu row fits, without overlapping its shortcut")
     TestModel tm;
     mgo::ViewQt view;
     view.initialise(tm.model);
-    // (The descriptions depend on the config, the units and the auto-retract)
+    // (The descriptions depend on the config, the units and the toggles)
     for (const char* file : { "lc.cfg", "lc_mill.cfg" }) {
         const mgo::ConfigReader config(file);
         for (const auto units : { mgo::DisplayUnits::Metric, mgo::DisplayUnits::Imperial }) {
-            for (const bool autoRetract : { false, true }) {
-                for (const auto& c : mgo::buildCommands(config, units, autoRetract)) {
+            for (const bool on : { false, true }) {
+                // (Threading's auto-retract and finishing on the scale)
+                for (const auto& c : mgo::buildCommands(config, units, on, on)) {
                     INFO(file << ": " << c.description);
                     CHECK(view.menuRowFits(
                         c.description, c.hotkey, mgo::shortcutText(c.key, config)));
@@ -2078,4 +2079,99 @@ TEST_CASE("UI: the status line's items move along to make room")
     REQUIRE(
         mgo::lineUpItems({ { 20, 340 }, { 350, 100 }, { 550, 100 }, { 750, 100 } }, 30)
         == std::vector<float> { 20, 390, 550, 750 });
+}
+
+TEST_CASE("UI: finishing moves on the scale")
+{
+    ScaleTestModel t(
+        { { "Axis1ScaleRebase", "true" },
+          { "Axis1ScaleWarnMm", "0.2" },
+          { "Axis1ScaleFinishMoves", "true" } });
+    REQUIRE(t.model.axis1FinishesOnScale());
+    REQUIRE(t.runUntil([&] { return t.model.getAxis1ScalePositionMm().has_value(); }));
+    const auto finishedAt = [&t](double target) {
+        return t.runUntil([&] {
+            const auto scale = t.model.getAxis1ScalePositionMm();
+            return !t.model.isAxis1FinishingOnScale() && !t.model.isAxis1MotorRunning() && scale
+                && std::abs(*scale - target) < 0.011;
+        });
+    };
+
+    SECTION("Short of the target: moves on")
+    {
+        // The table falls 0.05mm short of where the motor's steps say
+        t.model.fakeAxis1Scale()->setErrorMm(-0.05);
+        t.model.axis1GoToPosition(1.0);
+        REQUIRE(t.model.isAxis1FinishingOnScale());
+        // (Keys wait meanwhile)
+        REQUIRE(t.runUntil([&] {
+            return !t.model.isAxis1MotorRunning() && t.model.isAxis1FinishingOnScale()
+                && t.model.getAxis1Status().starts_with("Finishing on the scale");
+        }));
+        REQUIRE(finishedAt(1.0));
+        REQUIRE(t.model.getAxis1MotorPosition() == Approx(1.0).margin(0.011));
+        REQUIRE(t.model.getWarning().empty());
+    }
+    SECTION("Past the target: backs off and approaches again")
+    {
+        t.model.fakeAxis1Scale()->setErrorMm(0.05);
+        t.model.axis1GoToPosition(1.0);
+        // It goes back below 1 (backing off), then comes up to it again
+        REQUIRE(t.runUntil([&] { return t.model.getAxis1MotorPosition() < 0.6; }));
+        REQUIRE(finishedAt(1.0));
+        REQUIRE(t.model.getWarning().empty());
+    }
+    SECTION("Both directions, after zeroing")
+    {
+        t.model.axis1GoToPosition(2.0);
+        REQUIRE(finishedAt(2.0));
+        t.model.fakeAxis1Scale()->setErrorMm(0.03);
+        t.model.axis1Zero();
+        REQUIRE(t.runUntil([&] { return t.model.getAxis1ScalePositionMm().has_value(); }));
+        t.model.axis1GoToPosition(-1.0);
+        REQUIRE(finishedAt(-1.0));
+        t.model.axis1GoToPosition(0.0);
+        REQUIRE(finishedAt(0.0));
+    }
+    SECTION("Space stops it")
+    {
+        t.model.fakeAxis1Scale()->setErrorMm(-0.05);
+        t.model.axis1GoToPosition(1.0);
+        REQUIRE(t.model.isAxis1FinishingOnScale());
+        t.model.stopAllMotors();
+        REQUIRE(!t.model.isAxis1FinishingOnScale());
+    }
+    SECTION("Turned off: no correction (just the re-base)")
+    {
+        t.model.toggleAxis1FinishOnScale();
+        REQUIRE(!t.model.axis1FinishesOnScale());
+        t.model.fakeAxis1Scale()->setErrorMm(-0.05);
+        t.model.axis1GoToPosition(1.0);
+        REQUIRE(!t.model.isAxis1FinishingOnScale());
+        REQUIRE(t.runUntil([&] {
+            return !t.model.isAxis1MotorRunning()
+                && std::abs(t.model.getAxis1MotorPosition() - 0.95) < 0.011;
+        }));
+    }
+}
+
+TEST_CASE("UI: finishing on the scale is turned on and off from the menu")
+{
+    // It starts as the config says, and Tab, Y (System), F toggles it
+    MapConfigReader config { { { "Axis1Scale", "serial" }, { "Axis1ScaleFinishMoves", "true" } } };
+    mgo::MockGpio gpio { false };
+    mgo::Model model { gpio, config };
+    mgo::Controller controller(&model);
+    QWidget* w = mainWindow();
+    REQUIRE(w);
+    REQUIRE(model.axis1FinishesOnScale());
+    press(w, controller, Qt::Key_Tab);
+    press(w, controller, Qt::Key_Y);
+    for (const bool expected : { false, true }) {
+        press(w, controller, Qt::Key_F);
+        REQUIRE(controller.isMenuOpen());
+        REQUIRE(model.axis1FinishesOnScale() == expected);
+    }
+    press(w, controller, Qt::Key_Tab);
+    REQUIRE(!controller.isMenuOpen());
 }

@@ -151,6 +151,7 @@ bool menuOnly(int k)
         case key::f2k:
         case key::f2g:
         case key::measureAxis1Backlash:
+        case key::toggleAxis1FinishOnScale:
         case key::threadingPasses:
         case key::toggleThreadingAutoRetract:
         case key::clearFeature:
@@ -248,6 +249,7 @@ bool keyAllowedInCurrentMode(int k, const Model& model)
             case key::u:
             case key::ASTERISK:
             case key::toggleThreadingAutoRetract:
+            case key::toggleAxis1FinishOnScale:
                 return true;
             default:
                 return false;
@@ -308,6 +310,7 @@ bool keyAllowedInCurrentMode(int k, const Model& model)
             case key::u:
             case key::U:
             case key::toggleThreadingAutoRetract:
+            case key::toggleAxis1FinishOnScale:
                 return true;
             default:
                 return false;
@@ -331,8 +334,11 @@ bool isAvailable(const Command& command, const Model& model)
     return keyAllowedInCurrentMode(command.key, model) && command.available(model);
 }
 
-std::vector<Command>
-buildCommands(const IConfigReader& config, DisplayUnits units, bool threadingAutoRetract)
+std::vector<Command> buildCommands(
+    const IConfigReader& config,
+    DisplayUnits units,
+    bool threadingAutoRetract,
+    bool axis1FinishOnScale)
 {
     const std::string a1 = config.read("Axis1Label", "Z");
     const std::string a2 = config.read("Axis2Label", "X");
@@ -598,6 +604,15 @@ buildCommands(const IConfigReader& config, DisplayUnits units, bool threadingAut
         'l');
     // (Only with a scale on axis 1)
     if (config.read("Axis1Scale", "none") != "none") {
+        // (Worded, and toggled, as threading's auto-retract is)
+        b.add(
+            c,
+            fmt::format("Finishing on the scale is {} ({})", axis1FinishOnScale ? "ON" : "OFF", a1),
+            key::toggleAxis1FinishOnScale,
+            AXIS1,
+            nullptr,
+            'f',
+            true);
         b.add(
             c,
             fmt::format("Measure {}'s backlash (with its scale)", a1),
