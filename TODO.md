@@ -1942,7 +1942,24 @@ change.
       the motor's actual steps (a table with no backlash), so re-basing
       doesn't move it too. Not done: marking the position as unconfirmed
       when the scale has no reading
-    - **To try on the mill:** positions after moves should now agree with
+    - **Tried on the mill (14 Nov 2026): works.** lc and TouchDRO now agree.
+      Stalling X on a fast move brought up the dialog, as expected
+    - **X's table lock had been on all along** (left on from the last
+      project), so every test of X so far dragged the table against it,
+      the stepper doing remarkably well. That wound up the nut and gears
+      before the table moved, which looked like extra backlash. With the
+      lock off, the backlash measurement gave 787 steps at the far left of
+      the table, 660 in the middle and 1018 at the right (0.21-0.32 mm). So
+      the 1420 (and the "worn leadscrew" idea, from a range of 0.31-0.45 mm)
+      came mostly from the lock; the range that's left, least in the
+      middle, isn't what wear would usually give (uneven gib tightness?).
+      X's backlash is now 820 steps, the middle of the range (out by about
+      0.06 mm at the ends, which re-basing and stage 4 take care of). The
+      stalls may well have been the lock too: see whether they still
+      happen before lowering X's rapid speed. The counts per inch (2556)
+      stands: the edge finder compared the scale with the block, which the
+      lock doesn't affect
+    - **Still to try on the mill:** positions after moves should now agree with
       TouchDRO (within a count, allowing for the 2 s to settle); the "off
       by" figure should be about 0 at rest; lc.log's "re-based" lines show
       each correction (expect up to about 0.13 mm at the least worn end,
