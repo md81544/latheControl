@@ -33,9 +33,7 @@ void Controller::rebuildMenu()
 
 void Controller::run()
 {
-    m_model->setAxis1MotorSpeed(m_model->config().readDouble("Axis1SpeedPreset2", 40.0));
-    m_model->setAxis2MotorSpeed(m_model->config().readDouble("Axis2SpeedPreset2", 20.0));
-
+    // (The model sets the motors' starting speeds, in initialise())
     if (m_model->isQuitting()) {
         return;
     }

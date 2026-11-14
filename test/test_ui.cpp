@@ -1782,3 +1782,21 @@ TEST_CASE("UI: a serial scale (simulated) is lined up with the motor, and follow
     REQUIRE(tickUntil([&model] { return model.getAxis1ScalePositionMm().has_value(); }));
     REQUIRE(*model.getAxis1ScalePositionMm() == Approx(0.0).margin(0.011));
 }
+
+TEST_CASE("UI: start-up sets the motors' speeds before taking up the backlash")
+{
+    // (A motor at zero speed cancels any move, so the backlash was never
+    // taken up while the speeds were set afterwards)
+    MapConfigReader config { { { "Axis1BacklashCompensationSteps", "100" },
+                               { "Axis2BacklashCompensationSteps", "50" },
+                               { "Axis1SpeedPreset2", "250" },
+                               { "Axis2SpeedPreset2", "150" } } };
+    mgo::MockGpio gpio { false };
+    mgo::Model model { gpio, config };
+    mgo::Controller controller(&model);
+    REQUIRE(model.getAxis1MotorSpeed() == Approx(250.0));
+    REQUIRE(model.getAxis2MotorSpeed() == Approx(150.0));
+    // Re-zeroed after the take-up
+    REQUIRE(model.getAxis1MotorPosition() == 0.0);
+    REQUIRE(model.getAxis2MotorPosition() == 0.0);
+}

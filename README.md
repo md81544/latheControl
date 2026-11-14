@@ -50,6 +50,8 @@ This program is very time-critical. You shouldn't need to use `nice`, as, intern
 ## Usage
 *Note: the axes are referred to as Z and X here, but these names are configurable. Z is the primary axis (axis1) and X is the secondary (axis2).*
 
+**Starting up** - each axis moves a little at start-up, in its positive direction, by its backlash setting (`Axis1BacklashCompensationSteps` and `Axis2BacklashCompensationSteps`), so that the slack is known to be taken up. Then its position is set to zero. Make sure the tool isn't touching the work when starting.
+
 **The menu** - press `Tab` or `F1` (or, on the gamepad, the previous and next memory slot buttons together; see `JoystickMenuChord` in lc.cfg) to open a menu of everything you can do, with each command's keyboard shortcut alongside. Use the arrow keys (or the gamepad's D-pad, and its Enter button) to move around it (`Up` from the top goes round to the bottom, and `Down` from the bottom to the top), `Enter` or `Right` to choose, `Left` or `Esc` to go back, and `Tab` again to close it. Categories, and the less frequent commands, have a hotkey letter (shown yellow and underlined): for example `Tab`, `M`, `T` for Modes, Threading. While the menu is open, letters typed are only menu hotkeys, not their usual shortcuts. The menu doesn't stop anything: motors keep running while it's open, `Space` still stops all motors, and rapids (`Alt` + arrow) still work. Commands which can't be used at the moment (e.g. moving a locked axis) are greyed out, and `Up` and `Down` skip over them.
 
 **Leader key hints** - if you pause for half a second after pressing a leader key (`Z`, `X` or `\`), a panel lists the keys which can follow it, and what each does. If you type the whole shortcut quickly, it doesn't appear.

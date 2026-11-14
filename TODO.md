@@ -1679,6 +1679,22 @@ change.
       corrected, and one close to a multiple of 512 counts (on these
       scales) can be reported as a likely scale jump. Better still, find
       the cause and stop the jumps
+    - **Found with the scale (14 Nov 2026): the start-up backlash take-up
+      never moved.** The first move after starting (+10) read 9.59 on the
+      scale (and TouchDRO), and the 0.40 mm difference then stayed the same
+      through a reversal and another move: the whole backlash, lost once.
+      The take-up moves at start-up were asked for before the motors'
+      speeds were set (in `Controller::run()`, after `Model::initialise()`),
+      and a motor at zero speed cancels any move. So the motors were told
+      the slack had been taken up when it hadn't, on both machines, probably
+      since 2021: the first move after starting was short by the backlash
+      whenever the last session had ended moving the other way. **Fixed:**
+      `initialise()` now sets the speeds (the second presets) first. So the
+      axes now really do move by their backlash at start-up, in the positive
+      direction (mill: X 0.39 mm; lathe: Z away from the chuck, and X
+      outwards), which matters if the tool is touching the work. **To check
+      on both machines:** the axes move at start-up, and the first move
+      after starting is right
     - **Still to check:** the DTI test above; whether lc and TouchDRO now
       agree at rest to within a count; the lathe's Z scale's sign
     - Idea, from the above: a "measure backlash" command (System menu),

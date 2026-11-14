@@ -297,6 +297,13 @@ void Model::initialise()
     // configured backlash compensation to ensure any backlash is taken up
     // This initial movement will be small but this could cause an issue if
     // the tool is against work already - maybe TODO something here?
+    // The speeds must be set first: a motor at zero speed cancels any move.
+    // (They used to be set after this, so until 2026-11-14 the backlash was
+    // never taken up, though the motors were told it had been. The mill's
+    // X scale showed it: its first move after starting was short by the
+    // backlash, if the last session's last move had been the other way)
+    m_axis1Motor->setSpeed(m_config.readDouble("Axis1SpeedPreset2", 40.0));
+    m_axis2Motor->setSpeed(m_config.readDouble("Axis2SpeedPreset2", 20.0));
     unsigned long zBacklashCompensation = m_config.readLong("Axis1BacklashCompensationSteps", 0);
     unsigned long xBacklashCompensation = m_config.readLong("Axis2BacklashCompensationSteps", 0);
     axis1GoToStep(zBacklashCompensation);
