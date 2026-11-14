@@ -1743,7 +1743,43 @@ change.
           stopping; a move which starts and stops between two updates (e.g.
           a nudge), as a change of position; zeroing, setting a position,
           and the start-up backlash take-up
-        - X's backlash is now 1420 steps, to try
+        - X's backlash is now 1420 steps. **Tried (14 Nov 2026, later):**
+          0 → -10 → -15 → 0 and 0 → 20 → -10 → 0: the motor, the scale and
+          TouchDRO all agreed within 10 µm at every stop, and back at 0. So
+          1420 looks right, as far as the scale (a count is about 10 µm) can
+          tell
+        - The DTI still read short: 19.93 for 20 and 9.96 for 10 (0.35-0.4%),
+          against 0.6% the day before. A wrong counts per inch would be the
+          same percentage every time; this varies with the setup, while the
+          leadscrew (and gearing) and the scale, which share nothing, agree.
+          So more likely the DTI: cosine error (5-6 degrees, hard to see by
+          eye), or the DTI itself near the end of its travel. To settle it
+          without the DTI: calipers between something on the table and
+          something fixed, before and after a 100 mm move (0.4% would be
+          0.4 mm); or check the DTI against a slip gauge or micrometer
+          standard, plunger vertical in a stand
+        - **The Pi locked solid once (14 Nov 2026)**, just after lc started
+          a test: no keyboard, no other consoles, no SysRq; power cycled.
+          lc.log stopped after the scale was lined up (the last few seconds
+          of a log are lost in a hard lock). Main suspect: lc_mill.cfg
+          doesn't pin the motor threads to cores (lc.cfg does), so a motor
+          thread, real-time and spinning for a whole move, can land on
+          core 0, where a Pi 3B handles all interrupts, USB included (the
+          keyboard, Ethernet and the FTDI adapter). With real-time
+          throttling off (`kernel.sched_rt_runtime_us=-1`), that would starve
+          them completely; luck of the core would make it intermittent.
+          Also possible: the Pi 3B's USB driver (known for hard locks), or
+          power. To check: `cat /proc/sys/kernel/sched_rt_runtime_us`,
+          `vcgencmd get_throttled`, ssh over Wi-Fi next time (not on USB),
+          and a persistent journal (`sudo mkdir -p /var/log/journal`, then
+          `journalctl -b -1` after a lock). **Checked:** throttling is on
+          (950000), so a motor thread could only make things sluggish, not
+          dead: starvation is unlikely. `throttled=0x0`, but only since the
+          power cycle, so a dip at the time can't be ruled out. A lock which
+          even SysRq can't get through points more at the kernel or hardware
+          (e.g. the USB driver). Still unexplained: the persistent journal
+          and ssh over Wi-Fi are for next time. Pinning the mill's motor
+          threads, as on the lathe, is still worth doing, to rule it out
         - Nine of the settles hit the 3 s limit ("still changing"): the
           reading flickers at rest sometimes, so a settled value can be a
           count out
@@ -1771,9 +1807,8 @@ change.
       outwards), which matters if the tool is touching the work. **To check
       on both machines:** the axes move at start-up, and the first move
       after starting is right
-    - **Still to check:** X's backlash at about 1420, with the DTI and
-      lc.log (the 4-5 count swing should go); whether lc and TouchDRO agree
-      at rest to within a count, zeroed together after about 3 s at rest;
+    - **Still to check:** whether TouchDRO's 2556 or the DTI is out (see
+      above); the cause of the lock;
       X's rapid speed or acceleration, so it doesn't stall; the lathe's Z
       scale's sign
     - Idea, from the above: a "measure backlash" command (System menu),
