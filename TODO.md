@@ -1808,8 +1808,30 @@ change.
       outwards), which matters if the tool is touching the work. **To check
       on both machines:** the axes move at start-up, and the first move
       after starting is right
-    - **Still to check:** whether TouchDRO's 2556 or the DTI is out (see
-      above); the cause of the lock;
+    - **Settled with an edge finder (14 Nov 2026): the DTI was out, and
+      2556 is right.** A metric "123" block, 80.00 mm long (Mitutoyo digital
+      calipers), its two ends found along X:
+        - Mechanical edge finder: TouchDRO 80.05, lc's scale 80.06, lc's X
+          (the motor) 79.98
+        - Electronic edge finder: TouchDRO 80.01, lc's scale 80.01, lc's X
+          79.98
+        - The DTI's 0.35-0.6% would have been 0.28-0.48 mm. Instead the
+          scale is within a count, and the motor (so the leadscrew and
+          gearing) within 0.025%: as fine as a 10 µm scale can calibrate.
+          So 2556 and the conversion stay as they are
+        - The motor read 79.98 both times, but the scale differed by 0.05
+          between the two finders. lc.log shows why: while finding an edge
+          with small nudges back and forth, the scale less the motor at rest
+          wandered by about ±4-5 counts, depending on how the table last
+          moved (e.g. +4.5 at one edge's nudges, -4.7 at another's, both
+          after nudges to the right). So below about 0.05 mm the table
+          doesn't follow the motor exactly, especially in small nudges after
+          a reversal: elastic wind-up in the gearing and nut, or backlash
+          which varies along the screw (1420 is an average). At that level
+          the scale is the one to believe, which argues for stage 4 (go-to
+          moves finished against the scale). Meanwhile, read the scale or
+          TouchDRO, not lc's X, when edge-finding
+    - **Still to check:** the cause of the lock;
       X's rapid speed or acceleration, so it doesn't stall; the lathe's Z
       scale's sign
     - Idea, from the above: a "measure backlash" command (System menu),
