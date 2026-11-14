@@ -1850,9 +1850,51 @@ change.
       has it too. The config isn't changed. Nothing else can move meanwhile;
       Space stops it. Each move waits for the scale to settle (so about
       20 s). `AxisScale` now counts settles, and treats a change of the
-      motor's position between updates as a move. **To try on the mill:**
-      it should give about 1420 steps; the ±4-5 count wandering seen when
-      edge-finding will show in how much the measurements vary
+      motor's position between updates as a move.
+    - **Tried on the mill (14 Nov 2026), three times:** 1013, 995 and 1008
+      steps (about 0.31 mm), each very repeatable (its five reversals
+      within a count of each other). So the command works, but the answer
+      disagrees with 1420: with 1 mm moves the table went 1.133 mm for each
+      1 mm of the motor, both ways, every time. Yet moves of 5-20 mm back
+      and forth at 1420 (that morning, at a similar speed) all ended within
+      ±2 counts, and 10 mm moves at 1260 showed about 0.05 mm too little.
+      So the lost motion seems to depend on how far the table moves: about
+      0.31 mm for 1 mm moves, about 0.44 mm for 5 mm or more. Either part
+      of it is elastic wind-up (nut, gears, gib friction) which a short
+      move never fully builds, so no one setting suits every length; or
+      the scale reads unevenly within its 5.08 mm pattern (0.13 mm would be
+      a lot for that). 1420 stays for now, as most real moves are longer.
+      Next: repeat at another place on the table (if the answer changes,
+      it's the scale), and measure at several distances (e.g. 1, 5 and
+      10 mm) to see how the lost motion depends on the length of the move.
+      If it's the mechanics, stage 4 (finishing moves against the scale)
+      gets round it
+    - **Repeated at other places (14 Nov 2026): it's where on the table,
+      not the move's length.** The scale's raw counts (which zeroing
+      doesn't change, and the sender stayed on all day) put every session
+      on one line. Taking the morning's zero as 0, in lc's direction:
+      -16 mm: 0.451 mm (1444 steps); about -20 to 0: the morning's 5-20 mm
+      moves fitted 1420 to ±2 counts; +16 mm: 0.398 mm (1274); +94 mm:
+      0.313 mm (1005). Each place repeated within a count or two. So the
+      backlash falls steadily, by about 0.14 mm over 110 mm of travel. The
+      steady trend rules out the scale (unevenness within its pattern
+      would go up and down). Most likely a worn leadscrew or nut (a screw
+      wears thinnest where it's used most). So no one setting suits all of
+      X's travel: 1420 suits the worn end, and is 0.13 mm too much at the
+      far end. Options:
+        - Stage 4 (finishing positioning moves against the scale) doesn't
+          care what the backlash is, and needs no absolute position: now
+          clearly the best answer in software
+        - Backlash depending on position (a map from a survey) would need
+          the table's absolute position, which neither lc's zero nor the
+          scale has after a restart (the sender's count starts again at
+          power-up): it would need homing to a reference switch
+        - Mechanical: if X's nut can be adjusted, take it up until it just
+          binds at the least worn end
+        - Meanwhile, set the backlash for where the work usually is
+    - To make a survey along X easier: log the scale's raw count with each
+      measurement (so results after different zeros can be placed along
+      the table), and say in the result where it measured
     - (The original idea:) a "measure backlash" command (System menu),
       which reverses
       the axis, sees how far it turns before the scale moves, and suggests
