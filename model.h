@@ -578,6 +578,13 @@ private:
     bool m_fastRetracting { false };
 
     bool m_axis1WasRunning { false };
+    // What logMotorMovement() last saw of each motor
+    struct MotorLog {
+        bool running { false };
+        long step { 0 };
+    };
+    MotorLog m_axis1MotorLog;
+    MotorLog m_axis2MotorLog;
     bool m_axis2WasRunning { false };
     bool m_spindleWasRunning { false };
     // When the spindle started reading as stopped (see checkSpindleStopped())
@@ -710,6 +717,13 @@ private:
     void checkEncoderLostPulses();
     // Creates axis 1's scale, if the config gives it one
     void configureAxis1Scale();
+    // Logs a motor starting or stopping, with where it was, where it's going,
+    // and how fast, for diagnosing problems from lc.log. It's called on each
+    // update, so a move which starts and stops between two of them (e.g. a
+    // nudge) is logged as a change of position. (Anything else which changes
+    // the position, e.g. zeroing, must update log.step)
+    static void
+    logMotorMovement(const StepperMotor& motor, MotorLog& log, const std::string& label);
     // X is no longer known to be measured from the centre
     void clearDiameter();
     void clearMotorFault(Axis axis);

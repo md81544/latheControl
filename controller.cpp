@@ -196,6 +196,23 @@ void Controller::processKeyPress()
     processKey(k);
 }
 
+void Controller::logKey(int key) const
+{
+    // (By its command's description, if it has one, e.g. "z g: Go to a Z
+    // position", so lc.log shows what was asked for)
+    std::string description;
+    for (const Command& c : m_menu.commands()) {
+        if (c.key == key) {
+            description = ": " + c.description;
+            break;
+        }
+    }
+    const std::string shortcut = shortcutText(key, m_model->config());
+    MGOLOG(
+        fmt::format(
+            "Key {}{}", shortcut.empty() ? fmt::format("{:#x}", key) : shortcut, description));
+}
+
 void Controller::processKey(int t)
 {
     t = checkKeyAllowedForMode(t);
@@ -211,6 +228,9 @@ void Controller::processKey(int t)
         // Modify key press if it is a known axis leader key:
         m_model->setKeyPressed(checkForAxisLeaderKeys(m_model->getKeyPressed()));
         int kp = m_model->getKeyPressed();
+        if (kp != key::None) {
+            logKey(kp);
+        }
         switch (kp) {
             case key::None:
                 {

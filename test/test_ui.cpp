@@ -8,6 +8,7 @@
 #include "configreader.h"
 #include "controller.h"
 #include "keycodes.h"
+#include "log.h"
 #include "menu.h"
 #include "mockgpio.h"
 #include "model.h"
@@ -24,7 +25,10 @@
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
+#include <filesystem>
+#include <fstream>
 #include <functional>
+#include <iterator>
 #include <map>
 #include <optional>
 #include <sstream>
@@ -1799,4 +1803,41 @@ TEST_CASE("UI: start-up sets the motors' speeds before taking up the backlash")
     // Re-zeroed after the take-up
     REQUIRE(model.getAxis1MotorPosition() == 0.0);
     REQUIRE(model.getAxis2MotorPosition() == 0.0);
+}
+
+TEST_CASE("UI: keys, moves and zeroing are logged")
+{
+    const auto file = std::filesystem::temp_directory_path() / "lc_ui_test.log";
+    std::filesystem::remove(file);
+    mgo::g_logger = new mgo::Logger(file.string());
+    {
+        TestModel tm;
+        mgo::Controller controller(&tm.model);
+        QWidget* w = mainWindow();
+        REQUIRE(w);
+        // A (nudge Z left), then Z Z (zero Z) once it's stopped
+        press(w, controller, Qt::Key_A);
+        REQUIRE(waitUntil([&] {
+            controller.tick();
+            return !tm.model.isMotionSequenceRunning() && !tm.model.isAxis1MotorRunning();
+        }));
+        controller.tick();
+        press(w, controller, Qt::Key_Z);
+        press(w, controller, Qt::Key_Z);
+    }
+    delete mgo::g_logger;
+    mgo::g_logger = nullptr;
+
+    std::ifstream in(file);
+    const std::string log { std::istreambuf_iterator<char>(in), {} };
+    INFO(log);
+    REQUIRE(log.find("Taking up the backlash: Z 0 steps, X 0 steps") != std::string::npos);
+    REQUIRE(log.find("Key a: Z left 0.05mm") != std::string::npos);
+    // (The nudge is quick enough to start and stop between updates)
+    REQUIRE(
+        (log.find("Z moved from 0.0000 to -0.0500 between updates") != std::string::npos
+         || log.find("Z stopped at -0.0500") != std::string::npos));
+    REQUIRE(log.find("Key z z:") != std::string::npos);
+    REQUIRE(log.find("Z zeroed at -0.0500") != std::string::npos);
+    std::filesystem::remove(file);
 }

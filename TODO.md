@@ -1680,26 +1680,65 @@ change.
           exactly the gap. lc.log's 10,068 counts for the motor's 100 mm is
           about 2557. So the scale and the 2 mm leadscrew agree to about
           0.05%, and lc_mill.cfg now uses 2556 (100.6299 per mm)
-        - **The scale jumps.** Three times the difference suddenly grew, each
-          time with the scale saying the table had gone *further* than the
-          motor (lost steps would do the opposite): by about 509 counts, about
-          1025 (allowing for the 2556/2560 error; this was a move of exactly
-          90.0000 mm by the motor, which the scale and TouchDRO read as
-          100.07), and about 1080 (a stretch with several stops). 512 counts
-          is 0.2" (5.08 mm), thought to be the pitch of these capacitive
-          scales' pattern (not confirmed), so the scale's electronics most likely
-          lost whole pitches. TouchDRO agreeing with the scale proves nothing,
-          as it reads the same stream. Not yet known: whether the scale or
-          the motor was right (check with a DTI on the table at zero: long
-          moves, back to zero, and see which one is still there), and what
-          triggers it (speed? interference from the stepper's wiring?). The
-          settle line in lc.log now gives the move's top speed, to help
-    - **This matters for stages 3 and 4:** a scale jump looks exactly like
-      5 mm of lost steps, and "correcting" it would drive the table 5 mm
-      the wrong way. So a large difference must stop and warn, never be
-      corrected, and one close to a multiple of 512 counts (on these
-      scales) can be reported as a likely scale jump. Better still, find
-      the cause and stop the jumps
+        - **Sudden jumps in the difference.** Three times it suddenly grew,
+          by about 5, 10 and 11 mm (once a move of exactly 90.0000 mm by the
+          motor, which the scale and TouchDRO read as 100.07). It was lc's
+          main X readout (the motor's position) which the user saw jump, not
+          the scale. (A first guess, that the scale had lost whole 5.08 mm
+          pitches of its pattern, was wrong.) Not reproduced on 14 Nov, but
+          see 10:12 below
+    - **Tried on the mill (14 Nov 2026), with a DTI on the table:**
+        - The start-up take-up now works: the first move after starting was
+          right (2.7 counts)
+        - Repeated moves 0 → 10 → 0 and 0 → 15 → 0 (all reversals): the DTI
+          read 9.94 and 14.91, and back at zero every time (within 10-20 µm).
+          The scale saw the same 10 mm moves as about 9.957, agreeing with the
+          DTI to within 0.02 mm; the motor said 10.00. In lc.log the
+          difference went back and forth by 4-5 counts between the two ends.
+          That's residual backlash: each reversing move falls short by the
+          same amount, and the return lands back on zero. So 1260 steps is
+          still about 0.05-0.06 mm (160-190 steps) short: try about 1420.
+          The 15 mm moves leave about 0.04 mm unexplained (the DTI was set
+          square by eye, so cosine error should be small)
+        - The counts per inch can't be settled against the motor: over
+          100 mm the scale read 0.1% differently from the day before, on
+          another part of the table. Probably the leadscrew's pitch error
+          varying along the screw (which is what the scale is for). 2556
+          stays, until it can be checked against an independent reference
+          (gauge blocks, or a long, carefully aligned DTI)
+        - **At 10:12, the difference suddenly became -1.36 mm (137 counts).**
+          X had settled at motor 0.00; when lc next saw it moving, the motor
+          was already at +1.70 (at 40 mm/min it can't go that far in one
+          50 ms update), and it ended at 1.10, while the scale said the table
+          had gone back 0.19 mm. It then stayed at -1.4 through a rapid of
+          about 12 mm, which moved properly, until zeroed at 10:13. The user
+          stalled X once on a fast move, which fits: the motor's count went
+          about 1.4 mm further than the table. (Though lc.log gives that
+          stretch's top speed as 40 mm/min, and didn't see the first 1.7 mm
+          as moving, so the fast move may have started and stopped between
+          two of lc's updates.) Stage 3's warning would have caught it at
+          once. To do: lower X's rapid speed (`Axis1MaxMotorRpm`) or its
+          acceleration (`Axis1RampingSpeed`); a stall at the start of a fast
+          move is often the acceleration rather than the top speed
+        - **Done (14 Nov 2026): more logging, to diagnose such things from
+          lc.log.** Each key the controller acts on, with its command (e.g.
+          "Key z g: Go to a Z position"); each axis starting (from where,
+          where it was first seen moving, its target, and its speed) and
+          stopping; a move which starts and stops between two updates (e.g.
+          a nudge), as a change of position; zeroing, setting a position,
+          and the start-up backlash take-up
+        - X's backlash is now 1420 steps, to try
+        - Nine of the settles hit the 3 s limit ("still changing"): the
+          reading flickers at rest sometimes, so a settled value can be a
+          count out
+        - TouchDRO read 0.00 where lc's scale read -0.03: the residual
+          backlash (returns to 0 read -2 to -4 counts after zeroing), and
+          TouchDRO zeroed at a different moment. NB lc's X counts the
+          opposite way to TouchDRO's
+    - **This matters for stages 3 and 4:** a sudden jump in the difference
+      looks exactly like lost steps, and "correcting" it would move the
+      table by the jump. So a large difference must stop and warn, never be
+      corrected. Better still, find the cause of the jumps
     - **Found with the scale (14 Nov 2026): the start-up backlash take-up
       never moved.** The first move after starting (+10) read 9.59 on the
       scale (and TouchDRO), and the 0.40 mm difference then stayed the same
@@ -1716,8 +1755,11 @@ change.
       outwards), which matters if the tool is touching the work. **To check
       on both machines:** the axes move at start-up, and the first move
       after starting is right
-    - **Still to check:** the DTI test above; whether lc and TouchDRO now
-      agree at rest to within a count; the lathe's Z scale's sign
+    - **Still to check:** X's backlash at about 1420, with the DTI and
+      lc.log (the 4-5 count swing should go); whether lc and TouchDRO agree
+      at rest to within a count, zeroed together after about 3 s at rest;
+      X's rapid speed or acceleration, so it doesn't stall; the lathe's Z
+      scale's sign
     - Idea, from the above: a "measure backlash" command (System menu),
       which reverses
       the axis, sees how far it turns before the scale moves, and suggests

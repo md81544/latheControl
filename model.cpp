@@ -306,6 +306,13 @@ void Model::initialise()
     m_axis2Motor->setSpeed(m_config.readDouble("Axis2SpeedPreset2", 20.0));
     unsigned long zBacklashCompensation = m_config.readLong("Axis1BacklashCompensationSteps", 0);
     unsigned long xBacklashCompensation = m_config.readLong("Axis2BacklashCompensationSteps", 0);
+    MGOLOG(
+        fmt::format(
+            "Taking up the backlash: {} {} steps, {} {} steps",
+            m_config.read("Axis1Label", "Z"),
+            zBacklashCompensation,
+            m_config.read("Axis2Label", "X"),
+            xBacklashCompensation));
     axis1GoToStep(zBacklashCompensation);
     m_axis1Motor->setBacklashCompensation(zBacklashCompensation, zBacklashCompensation);
     m_axis2Motor->goToStep(xBacklashCompensation);
@@ -332,6 +339,8 @@ void Model::checkStatus()
     recordSpindleSample();
     checkSpindleStopped(chuckRpm);
     checkEncoderLostPulses();
+    logMotorMovement(*m_axis1Motor, m_axis1MotorLog, m_config.read("Axis1Label", "Z"));
+    logMotorMovement(*m_axis2Motor, m_axis2MotorLog, m_config.read("Axis2Label", "X"));
     if (m_axis1Scale) {
         m_axis1Scale->update(
             m_axis1Motor->getPosition(), m_axis1Motor->isRunning(), m_axis1Motor->getSpeed());
@@ -1214,7 +1223,11 @@ void Model::axis1Zero()
     if (m_mode == Mode::Taper) {
         changeMode(Mode::None);
     }
+    MGOLOG(
+        fmt::format(
+            "{} zeroed at {:.4f}", m_config.read("Axis1Label", "Z"), m_axis1Motor->getPosition()));
     m_axis1Motor->zeroPosition();
+    m_axis1MotorLog.step = 0;
     if (m_axis1Scale) {
         m_axis1Scale->realign();
     }
@@ -1456,7 +1469,11 @@ void Model::axis2Zero()
     if (m_mode == Mode::Taper) {
         changeMode(Mode::None);
     }
+    MGOLOG(
+        fmt::format(
+            "{} zeroed at {:.4f}", m_config.read("Axis2Label", "X"), m_axis2Motor->getPosition()));
     m_axis2Motor->zeroPosition();
+    m_axis2MotorLog.step = 0;
     // (Gear cutting's teeth are now wherever axis 2 is when it starts)
     m_gearToothOrigin.reset();
     // Zeroing will invalidate any memorised X positions, so we clear them
@@ -2175,7 +2192,14 @@ void Model::setAxis2MotorSpeed(double speed)
 
 void Model::setAxis1Position(double mm)
 {
+    MGOLOG(
+        fmt::format(
+            "{} position set to {:.4f} (was {:.4f})",
+            m_config.read("Axis1Label", "Z"),
+            mm,
+            m_axis1Motor->getPosition()));
     m_axis1Motor->setPosition(mm);
+    m_axis1MotorLog.step = m_axis1Motor->getCurrentStep();
     if (m_axis1Scale) {
         m_axis1Scale->realign();
     }
@@ -2185,7 +2209,14 @@ void Model::setAxis1Position(double mm)
 
 void Model::setAxis2Position(double mm)
 {
+    MGOLOG(
+        fmt::format(
+            "{} position set to {:.4f} (was {:.4f})",
+            m_config.read("Axis2Label", "X"),
+            mm,
+            m_axis2Motor->getPosition()));
     m_axis2Motor->setPosition(mm);
+    m_axis2MotorLog.step = m_axis2Motor->getCurrentStep();
     // (Gear cutting's teeth are now wherever axis 2 is when it starts)
     m_gearToothOrigin.reset();
     // The position is known again, so a motor fault can be cleared
@@ -2395,6 +2426,42 @@ std::optional<double> Model::getAxis1ScaleDifferenceMm() const
         return std::nullopt;
     }
     return m_axis1Scale->differenceMm(m_axis1Motor->getPosition());
+}
+
+void Model::logMotorMovement(const StepperMotor& motor, MotorLog& log, const std::string& label)
+{
+    const bool running = motor.isRunning();
+    const long step = motor.getCurrentStep();
+    // (Adding 0.0 turns -0.0, from a negative conversion factor, into 0.0)
+    const auto position = [&motor](long s) { return motor.getPosition(s) + 0.0; };
+    if (running && !log.running) {
+        // (A move with no end, e.g. an arrow key's, goes towards one of these)
+        const long target = motor.getTargetStep();
+        const bool endless = target == INF_LEFT || target == INF_RIGHT;
+        MGOLOG(
+            fmt::format(
+                "{} moving from {:.4f} (seen at {:.4f}), {}, at {:.0f}/min",
+                label,
+                position(log.step),
+                position(step),
+                endless ? (target == INF_LEFT ? "with no end (step count rising)"
+                                              : "with no end (step count falling)")
+                        : fmt::format("to {:.4f}", position(target)),
+                motor.getSpeed()));
+    } else if (!running && log.running) {
+        MGOLOG(fmt::format("{} stopped at {:.4f}", label, position(step)));
+    } else if (!running && step != log.step) {
+        // Started and stopped between two updates (e.g. a nudge)
+        MGOLOG(
+            fmt::format(
+                "{} moved from {:.4f} to {:.4f} between updates, at {:.0f}/min",
+                label,
+                position(log.step),
+                position(step),
+                motor.getSpeed()));
+    }
+    log.running = running;
+    log.step = step;
 }
 
 void Model::configureAxis1Scale()
@@ -3653,7 +3720,14 @@ void Model::gearCuttingFinished()
     // memory slots are left as they are: whole turns don't change where on
     // the table a slot is, and a slot stored before the passes is then
     // that position again, not whole turns behind
+    MGOLOG(
+        fmt::format(
+            "{} renumbered by {} whole turns, to {:.4f}",
+            m_config.read("Axis2Label", "X"),
+            -turns,
+            m_axis2Motor->getPosition(step)));
     m_axis2Motor->setPosition(m_axis2Motor->getPosition(step));
+    m_axis2MotorLog.step = m_axis2Motor->getCurrentStep();
     // (Going back to them would take whole turns)
     axis2ClearBreadcrumbs();
     MGOLOG(

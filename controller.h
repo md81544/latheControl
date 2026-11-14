@@ -50,6 +50,8 @@ private:
     void rebuildMenu();
     // Acts on a key code (whether from a key press or chosen from the menu)
     void processKey(int key);
+    // Logs a key code the controller is about to act on
+    void logKey(int key) const;
     // e.g. " (mm)" or " (in)": the units an axis's values are typed in
     std::string unitsSuffix(int axisNumber) const;
     int checkKeyAllowedForMode(int key);
