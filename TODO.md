@@ -1781,6 +1781,20 @@ change.
           and ssh over Wi-Fi are for next time. **Done:** the mill's motor
           threads are now pinned as on the lathe (X on core 3, A on core 2,
           spinning when idle), to rule that out
+        - **A second lock-up (14 Nov 2026)**, during a clean build over ssh
+          with lc still running. This time REISUB (on the Pi's own
+          keyboard) worked, so the kernel was alive, and on the lock before
+          it the build had been "Killed" (the out-of-memory killer). htop
+          during a later build showed memory high and a lot of swap. So
+          probably out of memory: four compiles at once (`make` uses nproc)
+          on a 1 GB Pi 3B, with lc's spinning motor threads holding cores 2
+          and 3. Quit lc before building; if it happens again, build with
+          `make release JOBS=2` (the user isn't convinced builds are usually
+          a problem, so the Makefile is left as it is for now). The
+          persistent journal is now on (`/var/log/journal`), so after any
+          lock-up, `journalctl -b -1` shows the end of the previous boot.
+          The first lock-up (just after starting lc, no build) is still
+          unexplained
         - Nine of the settles hit the 3 s limit ("still changing"): the
           reading flickers at rest sometimes, so a settled value can be a
           count out
