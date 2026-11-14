@@ -761,6 +761,34 @@ TEST_CASE("Scale:   A move between two updates is still a move, and settles")
     REQUIRE(t.axisScale->settleCount() == settles + 1);
 }
 
+TEST_CASE("Scale:   At rest, a change of more than a count settles again")
+{
+    AxisScaleTest t;
+    t.rest(0.0, 600);
+    REQUIRE(t.axisScale->isAligned());
+    const int settles = t.axisScale->settleCount();
+    // A count of flicker, either way, is ignored
+    for (int n = 0; n < 10; ++n) {
+        *t.counts = 1'000 + (n % 2 == 0 ? 1 : -1);
+        t.update(0.0, false, 300);
+    }
+    REQUIRE(t.axisScale->settleCount() == settles);
+    // Drifting a count, then another: two counts from where it settled
+    *t.counts = 1'001;
+    t.rest(0.0, 600);
+    REQUIRE(t.axisScale->settleCount() == settles);
+    *t.counts = 1'002;
+    t.update(0.0, false);
+    REQUIRE(t.axisScale->settleCount() == settles); // (settling)
+    t.rest(0.0, 600);
+    REQUIRE(t.axisScale->settleCount() == settles + 1);
+    REQUIRE(*t.axisScale->positionMm() == Approx(0.02));
+    // Measured from there now: a count more is flicker again
+    *t.counts = 1'003;
+    t.rest(0.0, 600);
+    REQUIRE(t.axisScale->settleCount() == settles + 1);
+}
+
 TEST_CASE("Backlash: the moves, and the arithmetic")
 {
     // From 10, moving 1mm right first, with 0.4mm of compensation

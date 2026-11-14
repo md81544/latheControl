@@ -1959,6 +1959,19 @@ change.
       happen before lowering X's rapid speed. The counts per inch (2556)
       stands: the edge finder compared the scale with the block, which the
       lock doesn't affect
+    - **Done (14 Nov 2026): watching the scale at rest too.** The user saw
+      TouchDRO wander a few tens of microns after X had stopped, while
+      lc's re-based position stayed put, as it only re-based once per
+      stop. Now, at rest, a change of 2 counts or more from where it last
+      settled (`AxisScale::REST_CHANGE_COUNTS`; one count is flicker)
+      settles again as at the end of a move, so the position follows it
+      (or, beyond `Axis1ScaleWarnMm`, everything stops and asks). Logged as
+      "X scale's reading changed at rest by ..., n s after the axis
+      stopped". **To check from lc.log:** if the changes mostly come a few
+      seconds after stopping, it's the sender's smoothing catching up late
+      (a longer `Axis1ScaleSettleMs` would be cleaner); if at random times,
+      or while cutting, the table really moves (springiness, cutting
+      forces, knocks)
     - **Still to try on the mill:** positions after moves should now agree with
       TouchDRO (within a count, allowing for the 2 s to settle); the "off
       by" figure should be about 0 at rest; lc.log's "re-based" lines show

@@ -35,11 +35,18 @@ public:
 // backlash, so with the right backlash setting the difference stays close
 // to zero whichever way the axis last moved.
 //
+// While the axis is at rest, the reading is still watched: if it changes by
+// REST_CHANGE_COUNTS or more (e.g. the table moved, or the sender's smoothing
+// caught up late), it settles again, as at the end of a move.
+//
 // update() must be called regularly (from the model's checkStatus()). All of
 // this is used only from the UI thread, so needs no locking
 class AxisScale {
 public:
     using Clock = std::chrono::steady_clock;
+
+    // At rest, a change of the reading by less than this is just flicker
+    static constexpr int32_t REST_CHANGE_COUNTS = 2;
 
     struct Settings {
         // e.g. "X", for the log
@@ -117,6 +124,12 @@ private:
     // Where the motor was on the last update (to see moves too quick to be
     // seen running)
     std::optional<double> m_lastMotorMm;
+    // The reading when it last settled (or was lined up), to watch at rest
+    int32_t m_settledCounts { 0 };
+    // When the motor last stopped (for the log)
+    Clock::time_point m_motorStoppedAt;
+    // Whether it's settling after a change at rest, not a move
+    bool m_changedAtRest { false };
     int m_settleCount { 0 };
 };
 

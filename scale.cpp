@@ -64,15 +64,40 @@ void AxisScale::update(double motorMm, bool motorRunning, double motorSpeed, Clo
     if (m_state == State::Moving) {
         m_state = State::Settling;
         m_stoppedAt = now;
+        m_motorStoppedAt = now;
         m_lastChangeAt = now;
         m_lastCounts = *counts;
+        m_changedAtRest = false;
         return;
     }
     if (m_state == State::Settled) {
         if (!m_aligned) {
             // (realign() while at rest: the reading is already steady)
             align(*counts, motorMm);
+            return;
         }
+        // Still watching, at rest: the table may move (e.g. springiness
+        // releasing, cutting forces, or a knock), or the sender's smoothing
+        // may catch up late. A change of a count is just flicker; more, and
+        // it settles again, as at the end of a move, so the position follows
+        // (or, if far out, the user is asked)
+        const int32_t change = *counts - m_settledCounts;
+        if (std::abs(change) < REST_CHANGE_COUNTS) {
+            return;
+        }
+        MGOLOG(
+            fmt::format(
+                "{} scale's reading changed at rest by {:+.4f} mm ({:+} counts), {:.1f} s after "
+                "the axis stopped",
+                m_settings.axisLabel,
+                rawMm(*counts) - rawMm(m_settledCounts),
+                m_settings.reversed ? -change : change,
+                std::chrono::duration<double>(now - m_motorStoppedAt).count()));
+        m_state = State::Settling;
+        m_stoppedAt = now;
+        m_lastChangeAt = now;
+        m_lastCounts = *counts;
+        m_changedAtRest = true;
         return;
     }
 
@@ -87,6 +112,7 @@ void AxisScale::update(double motorMm, bool motorRunning, double motorSpeed, Clo
     }
     m_state = State::Settled;
     ++m_settleCount;
+    m_settledCounts = *counts;
     const double seconds = std::chrono::duration<double>(now - m_stoppedAt).count();
     if (!m_aligned) {
         align(*counts, motorMm);
@@ -96,11 +122,12 @@ void AxisScale::update(double motorMm, bool motorRunning, double motorSpeed, Clo
     const double difference = scaleMm - motorMm;
     MGOLOG(
         fmt::format(
-            "{} scale {} {:.2f} s after stopping{}: scale {:.4f} mm, motor {:.4f} mm, "
+            "{} scale {} {:.2f} s after {}{}: scale {:.4f} mm, motor {:.4f} mm, "
             "difference {:+.4f} mm ({:+.1f} counts)",
             m_settings.axisLabel,
             steady ? "settled" : "still changing",
             seconds,
+            m_changedAtRest ? "changing at rest" : "stopping",
             m_moveStartMm ? fmt::format(
                                 " after a move of {:+.4f} mm at up to {:.0f} mm/min",
                                 motorMm - *m_moveStartMm,
@@ -174,6 +201,7 @@ void AxisScale::align(int32_t counts, double motorMm)
 {
     m_offsetMm = motorMm - rawMm(counts);
     m_aligned = true;
+    m_settledCounts = counts;
     MGOLOG(
         fmt::format(
             "{} scale lined up with the motor at {:.4f} mm (reading {} counts)",

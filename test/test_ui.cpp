@@ -1971,6 +1971,27 @@ TEST_CASE("UI: re-basing from the scale at rest")
     REQUIRE(t.model.getAxis1MotorPosition() == Approx(2.0).margin(0.011));
 }
 
+TEST_CASE("UI: re-basing when the scale changes at rest")
+{
+    ScaleTestModel t({ { "Axis1ScaleRebase", "true" }, { "Axis1ScaleWarnMm", "0.2" } });
+    REQUIRE(t.runUntil([&] { return t.model.getAxis1ScalePositionMm().has_value(); }));
+    t.model.axis1GoToPosition(1.0);
+    REQUIRE(t.runUntil([&] {
+        const auto d = t.model.getAxis1ScaleDifferenceMm();
+        return !t.model.isAxis1MotorRunning() && d && std::abs(*d) < 0.011;
+    }));
+    // Settled at 1. Then, with nothing moving, the table shifts 0.04mm (e.g.
+    // pushed by a cut): the position follows, once the reading has settled
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    t.model.checkStatus();
+    t.model.fakeAxis1Scale()->setErrorMm(0.04);
+    REQUIRE(t.runUntil([&] { return std::abs(t.model.getAxis1MotorPosition() - 1.04) < 0.011; }));
+    REQUIRE(!t.model.axis1ScaleMismatchMm());
+    // And far more (e.g. a knock): it stops and asks
+    t.model.fakeAxis1Scale()->setErrorMm(0.5);
+    REQUIRE(t.runUntil([&] { return t.model.axis1ScaleMismatchMm().has_value(); }));
+}
+
 TEST_CASE("UI: no re-basing unless the config asks for it")
 {
     ScaleTestModel t;
