@@ -835,6 +835,67 @@ TEST_CASE("UI: knurling dialog")
     REQUIRE(setup->constantArea);
 }
 
+TEST_CASE("UI: knurling dialog, the angle and starts suggested")
+{
+    TestModel tm;
+    mgo::ViewQt view;
+    view.initialise(tm.model);
+    // Ø 20 (X 10), with the spindle knurling at 70 rpm and Z at up to 800
+    // mm/min: 80 degrees is the least it can follow
+    auto info = multiPassInfo();
+    info.knurling = mgo::MultiPassDialogInfo::Knurling {
+        .maxCutSpeed = 800.0, .minimumSpindleRpm = 5.0, .spindleRpm = 70.0, .minimumInfeedMm = 0.02
+    };
+
+    whenDialogShows([](QWidget* dialog) {
+        typeInto(dialog, "-7");
+        key(dialog, Qt::Key_Down);
+        // 0.2 mm deep: grooves 0.4 mm apart across, π × 20 × cos 80° ÷ 0.4,
+        // about 27 starts
+        typeInto(dialog, "0.2");
+        key(dialog, Qt::Key_Down, 2);
+        typeInto(dialog, "0.05");
+        key(dialog, Qt::Key_Down);
+        REQUIRE(inputWidget(dialog)->property("text").toString() == "27");
+        key(dialog, Qt::Key_Down);
+        REQUIRE(inputWidget(dialog)->property("text").toString() == "80");
+        // 0.3 deep instead: the starts follow (0.6 mm apart: 18)
+        key(dialog, Qt::Key_Up, 4);
+        typeInto(dialog, "0.3");
+        key(dialog, Qt::Key_Down, 3);
+        REQUIRE(inputWidget(dialog)->property("text").toString() == "18");
+        // Typed in, the starts are kept, even if the depth changes
+        typeInto(dialog, "16");
+        key(dialog, Qt::Key_Up, 3);
+        typeInto(dialog, "0.2");
+        key(dialog, Qt::Key_Down, 3);
+        REQUIRE(inputWidget(dialog)->property("text").toString() == "16");
+        snapshot(dialog, "knurling_suggested");
+        key(dialog, Qt::Key_Return);
+    });
+    auto setup = multiPassDialog(view, info);
+    REQUIRE(setup.has_value());
+    REQUIRE(setup->knurlStarts == 16);
+    REQUIRE(setup->knurlStartsChosen);
+    REQUIRE(setup->knurlHelixAngleDeg == Approx(80.0));
+    REQUIRE(!setup->knurlHelixAngleChosen);
+
+    // Next time, the starts typed are kept; cleared, they're suggested again
+    info.setup = *setup;
+    whenDialogShows([](QWidget* dialog) {
+        // (From the start, as Z's distance is set this time)
+        key(dialog, Qt::Key_Down, 5);
+        REQUIRE(inputWidget(dialog)->property("text").toString() == "16");
+        key(dialog, Qt::Key_Backspace);
+        REQUIRE(inputWidget(dialog)->property("text").toString() == "27");
+        key(dialog, Qt::Key_Return);
+    });
+    setup = multiPassDialog(view, info);
+    REQUIRE(setup.has_value());
+    REQUIRE(setup->knurlStarts == 27);
+    REQUIRE(!setup->knurlStartsChosen);
+}
+
 TEST_CASE("UI: knurling through the controller")
 {
     TestModel tm;
@@ -850,8 +911,9 @@ TEST_CASE("UI: knurling through the controller")
     REQUIRE(waitForDialogToClose());
     REQUIRE(tm.model.getMode() == mgo::Mode::None);
 
-    // On Ø 10, by distances. (The starts suggested give grooves about 1 mm
-    // apart: 31)
+    // On Ø 10, by distances. (With no knurling speed in the config, the angle
+    // suggested is 45 degrees, and 0.3 mm deep, the starts space the grooves
+    // 0.6 mm apart across: π × 10 × cos 45° ÷ 0.6, about 37)
     tm.model.setAxis2Position(5.0);
     tm.model.diameterIsSet();
     whenDialogShows([](QWidget* dialog) {
@@ -867,7 +929,9 @@ TEST_CASE("UI: knurling through the controller")
     press(w, controller, Qt::Key_K);
     REQUIRE(waitForDialogToClose());
     REQUIRE(tm.model.getMode() == mgo::Mode::Knurling);
-    REQUIRE(tm.model.getKnurlingSetup().knurlStarts == 31);
+    REQUIRE(tm.model.getKnurlingSetup().knurlStarts == 37);
+    REQUIRE(tm.model.getKnurlingSetup().knurlHelixAngleDeg == Approx(45.0));
+    REQUIRE(!tm.model.getKnurlingSetup().knurlStartsChosen);
     REQUIRE(tm.model.getKnurlLeadMm() == Approx(M_PI * 10.0));
     REQUIRE(tm.model.getMultiPassRange().cutEnd == Approx(-7.0));
     controller.tick();

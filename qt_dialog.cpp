@@ -1273,12 +1273,17 @@ public:
             m_feedPerPassMm = typed(m_rows[StepOver].edit).value_or(0.0) / m_info.feed.displayPerMm;
             refresh();
         });
+        // (Typed in, each is kept; cleared, it's suggested again)
         QObject::connect(m_rows[Starts].edit, &QLineEdit::textEdited, this, [this] {
-            m_knurlStarts = static_cast<int>(typed(m_rows[Starts].edit).value_or(0.0));
+            const auto v = typed(m_rows[Starts].edit);
+            m_setup.knurlStartsChosen = v.has_value();
+            m_knurlStarts = static_cast<int>(v.value_or(0.0));
             refresh();
         });
         QObject::connect(m_rows[HelixAngle].edit, &QLineEdit::textEdited, this, [this] {
-            m_knurlHelixAngleDeg = typed(m_rows[HelixAngle].edit).value_or(0.0);
+            const auto v = typed(m_rows[HelixAngle].edit);
+            m_setup.knurlHelixAngleChosen = v.has_value();
+            m_knurlHelixAngleDeg = v.value_or(0.0);
             refresh();
         });
 
@@ -1437,6 +1442,56 @@ private:
             return std::nullopt;
         }
         return knurlLeadMm(*diameter, m_knurlHelixAngleDeg);
+    }
+
+    // Knurling: the knurl's depth (X's infeed, from start to end)
+    double knurlDepth() const
+    {
+        MultiPassSetup s = currentSetup();
+        s.cutDistance = 1.0; // (just for X's end)
+        const MultiPassResolved r = resolveMultiPass(s, m_info.positions);
+        return r.error.empty() ? std::abs(r.range.feedEnd - r.range.feedStart) : 0.0;
+    }
+
+    // Knurling: suggests the helix angle and the number of starts, unless
+    // they've been typed in. The angle is the smallest whose lead Z can
+    // follow with the spindle at its knurling speed (or, if that isn't set,
+    // 45 degrees, or the smallest it can follow at the slowest it may turn).
+    // The starts space the grooves twice the depth apart across them, which
+    // with a 90 degree tool gives sharp diamonds (or 1 mm apart, if there's
+    // no depth yet)
+    void suggestKnurl()
+    {
+        const auto diameter = knurlDiameter();
+        if (!m_info.knurling || !diameter || *diameter < MultiPass::TOLERANCE) {
+            return;
+        }
+        const auto suggest = [this](int row, double value) {
+            QLineEdit* edit = m_rows[row].edit;
+            const QString text = QString::number(value);
+            if (edit->text() != text) {
+                edit->setText(text);
+                if (edit->hasFocus()) {
+                    edit->selectAll(); // (so typing replaces it)
+                }
+            }
+        };
+        const MultiPassDialogInfo::Knurling& k = *m_info.knurling;
+        if (!m_setup.knurlHelixAngleChosen) {
+            const double rpm = std::max(k.spindleRpm, k.minimumSpindleRpm);
+            m_knurlHelixAngleDeg = knurlHelixAngleForSpindle(*diameter, k.maxCutSpeed, rpm);
+            if (k.spindleRpm <= 0.0) {
+                m_knurlHelixAngleDeg = std::max(m_knurlHelixAngleDeg, 45.0);
+            }
+            suggest(HelixAngle, m_knurlHelixAngleDeg);
+        }
+        if (!m_setup.knurlStartsChosen && m_knurlHelixAngleDeg > 0.0
+            && m_knurlHelixAngleDeg < 90.0) {
+            const double depth = knurlDepth();
+            const double spacing = depth > MultiPass::TOLERANCE ? 2.0 * depth : 1.0;
+            m_knurlStarts = knurlStartsForSpacing(*diameter, m_knurlHelixAngleDeg, spacing);
+            suggest(Starts, m_knurlStarts);
+        }
     }
 
     // Knurling: why the knurl itself can't be cut (empty if it can)
@@ -1640,6 +1695,7 @@ private:
 
     void refresh()
     {
+        suggestKnurl();
         const MultiPassResolved r = resolved();
         const auto& z = m_info.cut;
         const auto& x = m_info.feed;
@@ -1726,20 +1782,27 @@ private:
                         : QString::fromStdString(
                               fmt::format("{} pass{}", passes, passes == 1 ? "" : "es")));
         if (m_info.knurling) {
-            // How far apart the grooves of each hand are, round the work, and
-            // how far Z moves per revolution
-            const auto diameter = knurlDiameter();
-            m_rows[Starts].result->setText(
-                diameter && m_knurlStarts > 0
-                    ? QString::fromStdString(
-                          "grooves " + format(m_info.feed, M_PI * *diameter / m_knurlStarts) + " "
-                          + m_info.feed.unit + " apart round Ø " + format(m_info.feed, *diameter))
-                    : "");
+            // How far apart the grooves of each hand are, across them (at a
+            // steep angle, much closer than round the work), and how far Z
+            // moves per revolution
             const auto lead = knurlLead();
-            m_rows[HelixAngle].result->setText(
-                lead
-                    ? QString::fromStdString("lead " + format(z, *lead) + " " + z.unit + " per rev")
+            const auto suggested = [](bool chosen) { return chosen ? "" : " (suggested)"; };
+            m_rows[Starts].result->setText(
+                lead && m_knurlStarts > 0
+                    ? QString::fromStdString(
+                          "grooves "
+                          + format(
+                              m_info.feed,
+                              knurlSpacingAcrossMm(
+                                  *knurlDiameter(), m_knurlHelixAngleDeg, m_knurlStarts))
+                          + " " + m_info.feed.unit + " apart across"
+                          + suggested(m_setup.knurlStartsChosen))
                     : "");
+            m_rows[HelixAngle].result->setText(
+                lead ? QString::fromStdString(
+                           "lead " + format(z, *lead) + " " + z.unit + " per rev"
+                           + suggested(m_setup.knurlHelixAngleChosen))
+                     : "");
         }
 
         // Which of each row's entry box and fixed value is shown, and which
@@ -1814,8 +1877,9 @@ private:
             if (const auto lead = knurlLead(); m_info.knurling && lead) {
                 // (The lead is per start, so is the same however many there are)
                 text += fmt::format(
-                    "Spindle at most {:.0f} rpm. Each start is cut there and back:\nthe {} end "
-                    "needs a relief groove for the cut back to start in.\n",
+                    "Spindle at most {:.0f} rpm. Clear the starts or angle to have them\n"
+                    "suggested again. Each start is cut there and back: the {} end needs\na "
+                    "relief groove for the cut back to start in.\n",
                     m_info.knurling->maxCutSpeed / *lead,
                     z.label);
             }

@@ -1365,11 +1365,10 @@ change.
               rpm, and whether the encoder's rpm and lost-pulse checks behave
               at those speeds
             - How the tool's flanks cope with cutting both ways
-        - **Not done yet:** choosing the starts from a target pitch (fine,
-          medium, coarse: the first suggestion is just about 1 mm apart);
-          taking the Ø from the current feature rather than X; multi-start
-          threading (the engine supports it now, but the threading passes
-          dialog doesn't offer it)
+        - **Not done yet:** taking the Ø from the current feature rather
+          than X; multi-start threading (the engine supports it now, but the
+          threading passes dialog doesn't offer it); allowing for a tool
+          other than 90° in the starts suggested
         - **First hurdle on the machine (2026-11-12): the spindle won't go
           slow enough.** The VFD (Mitsubishi FR-D700-SC, set up by the
           package's supplier, with an external pot box) won't go below about
@@ -1454,17 +1453,6 @@ change.
               plate. Not to do: set Pr.71 to a constant-torque motor (only
               for a motor with a separately powered fan), or raise Pr.9
               above the plate
-        - **Where it stands (2026-11-12): undecided.** Running the motor
-          at 1-2 Hz trips its overload protection, so the user may set Pr.2
-          and C2 back to 5 Hz (about 70 rpm), which limits knurls to steep
-          helix angles (about 70° on 10 mm, more on bigger bars). The back
-          gear looks impractical for about 10 rpm: a single stage of about
-          7:1 needs a very large pulley on the spindle. (Two smaller stages
-          through a countershaft would avoid that, but it's more work
-          still.) Hand-turning the spindle (above) needs no motor at all,
-          so it has none of these problems. Cutting the starts in whichever
-          order their angles come round would shorten each run (so less
-          heat), but isn't worth doing until the way forward is chosen
             - **Second run (40 starts): a pass waited for ever.** Its start
               angle was set more than a revolution *behind* the spindle
               ("from spindle pulse 1839425 (now 1840261)"), which only
@@ -1485,6 +1473,44 @@ change.
               revolutions away from it, so nothing can hang silently. And
               when the spindle stopping stops a multi-pass (or any motor),
               the warning says so. Not yet tried on the machine
+        - **Where it stood (2026-11-12): undecided.** Running the motor
+          at 1-2 Hz trips its overload protection, so the user may set Pr.2
+          and C2 back to 5 Hz (about 70 rpm), which limits knurls to steep
+          helix angles (about 70° on 10 mm, more on bigger bars). The back
+          gear looks impractical for about 10 rpm: a single stage of about
+          7:1 needs a very large pulley on the spindle. (Two smaller stages
+          through a countershaft would avoid that, but it's more work
+          still.) Hand-turning the spindle (above) needs no motor at all,
+          so it has none of these problems. Cutting the starts in whichever
+          order their angles come round would shorten each run (so less
+          heat), but isn't worth doing until the way forward is chosen
+        - **A good knurl at the spindle's usual floor (2026-11-15):** with
+          the VFD set back as supplied (about 70 rpm), Ø 17.5, 80°, 16
+          starts, 0.2 mm deep (0.1 mm first pass), 4 passes. The "diamonds"
+          are very long and thin, which looks almost like a weave, but the
+          surface grips very well, which is what it's for. So steep angles
+          at 70 rpm are the way forward for now, with no motor or VFD
+          changes. Then, as the user asked:
+            - **The dialog suggests the angle and starts** (until typed in;
+              typed ones are kept, and clearing one has it suggested again).
+              The angle is the smallest whose lead Z can follow at
+              `KnurlingSpindleRpm` (new in lc.cfg, 70; 45° if not set): 79°
+              for Ø 17.5. The starts space the grooves twice the depth apart
+              across them, for sharp diamonds with a 90° tool: 26 for Ø 17.5
+              at 79° and 0.2 mm deep. (The 16 used left flats: 0.6 mm apart
+              across against a 0.4 mm groove.) The dialog now shows the
+              spacing across the grooves, not round the work, as at 80° the
+              two differ six-fold, and the old figure hid that too many
+              starts would just turn the work down
+            - **Starts in whichever order comes round first.** The engine
+              offers the model every start still to cut (that way, this
+              pass), and the model starts the one whose angle comes round
+              first after the backlash take-up. Each pass still cuts every
+              start once each way. A cut used to wait for the next whole
+              turn and then the start's offset (up to two turns); now it's
+              at most just over one, and usually much less. (Gear cutting's
+              indexed starts are still in order.) Not yet tried on the
+              machine
 - [x] Add ability to add new thread pitches without recompilation. Move the
       definitions in threadpitches.h into separate config file (threadpitches.cfg)
       which is loaded at program start.

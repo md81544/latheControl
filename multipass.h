@@ -29,12 +29,18 @@ public:
     // A threading pass (for MultiPassCut::Thread): the cut axis follows the
     // spindle to position, at the thread's pitch (or lead) per revolution,
     // starting at the same angle of the spindle's rotation as every other
-    // pass (so each pass cuts the same thread), plus revolutionOffset of a
-    // revolution (from 0 to 1: see MultiPassPlan::starts). Returns an empty
-    // string if it started, or else why not (e.g. the spindle isn't
-    // turning). If it's stopped part way (e.g. the cut axis couldn't keep
-    // up), it ends short of position
-    virtual std::string cutThreadTo(double position, double revolutionOffset) = 0;
+    // pass (so each pass cuts the same thread), plus one of
+    // revolutionOffsets of a revolution (each from 0 to 1: see
+    // MultiPassPlan::starts): whichever comes round first, once it's ready
+    // to start. threadStartChosen() then says which. Returns an empty string
+    // if it started (or is about to), or else why not (e.g. the spindle
+    // isn't turning). If it's stopped part way (e.g. the cut axis couldn't
+    // keep up), it ends short of position
+    virtual std::string cutThreadTo(double position, const std::vector<double>& revolutionOffsets)
+        = 0;
+    // Which of the last cutThreadTo()'s offsets its pass started at (an
+    // index into them), once it has started; nullopt until then
+    virtual std::optional<std::size_t> threadStartChosen() const = 0;
     // The size of a step of each axis's motor (in mm; 0 if it can move
     // anywhere). An axis can only stop on a whole step, so it counts as at a
     // position if it's within half a step: e.g. a thread's depth is seldom a
@@ -172,18 +178,21 @@ struct MultiPassPlan {
     // movement, during each cut (and back again on the return), to cancel
     // it out. e.g. tan(angle). Zero for none. Not with a manual feed
     double feedCorrection { 0.0 };
-    // Threading only: how many starts each pass cuts, one after the other at
-    // the same depth, each starting 1/starts of a revolution of the spindle
-    // further round than the one before (as for a multi-start thread, or
-    // the grooves of a cut knurl). The feed axis moves on once every start
-    // has been cut
+    // How many starts each pass cuts, at the same depth (threading, or
+    // indexing: see indexPerStart). Threading, each starts a whole number of
+    // starts' worth of 1/starts of a revolution of the spindle round from
+    // the first (as for a multi-start thread, or the grooves of a cut
+    // knurl), and they're cut in whichever order their angles come round
+    // (see IMultiPassMachine::cutThreadTo()), which saves waiting. The feed
+    // axis moves on once every start has been cut
     int starts { 1 };
     // Threading only: the return is a threading pass too, with the tool
     // still in, so it cuts a helix of the opposite hand, with the spindle
     // still turning the same way (e.g. a cut knurl's second set of
     // grooves). The tool must have room to start at the cut's end, e.g. a
-    // relief groove. Each start is cut there and back before the next. Not
-    // with a retract
+    // relief groove. Each pass cuts every start there and every start back,
+    // alternately, in whichever order their angles come round. Not with a
+    // retract
     bool cutBack { false };
     // Indexing (e.g. gear cutting, with the starts as the teeth): if not
     // zero, each start is a position of the index axis rather than of the
@@ -253,10 +262,14 @@ struct MultiPassSetup {
     bool constantArea { false };
     bool compoundInfeed { false };
     // Cut knurling only: how many grooves of each hand (see
-    // MultiPassPlan::starts; 0 until chosen), and their angle to the cut
-    // axis on the work's surface, in degrees (see knurlLeadMm())
+    // MultiPassPlan::starts), and their angle to the cut axis on the work's
+    // surface, in degrees (see knurlLeadMm()). Each is suggested by the
+    // dialog (see knurlHelixAngleForSpindle() and knurlStartsForSpacing())
+    // unless chosen, i.e. typed in, in which case it's kept
     int knurlStarts { 0 };
     double knurlHelixAngleDeg { 45.0 };
+    bool knurlStartsChosen { false };
+    bool knurlHelixAngleChosen { false };
 };
 
 // What's needed to work out a MultiPassSetup's positions (in mm)
@@ -320,9 +333,21 @@ defaultMultiPassSetup(const MultiPassSetup& previous, const MultiPassPositions& 
 // axis has to move fast, and the spindle turn slowly
 double knurlLeadMm(double diameterMm, double helixAngleDeg);
 
-// Cut knurling: how many starts give grooves about pitchMm apart round the
-// work (at least one)
-int knurlStartsForPitch(double diameterMm, double pitchMm);
+// Cut knurling: the smallest helix angle (a whole number of degrees, from 1 to
+// 89) whose lead the cut axis can follow, at up to maxCutSpeed (mm/min), with
+// the spindle at spindleRpm. Steeper grooves (nearer 90 degrees: more across
+// the work) have a shorter lead
+double knurlHelixAngleForSpindle(double diameterMm, double maxCutSpeed, double spindleRpm);
+
+// Cut knurling: how far apart the grooves of each hand are, measured across
+// them (not round the work: at a steep angle, the grooves run nearly round
+// the work, so are much closer together across than round it)
+double knurlSpacingAcrossMm(double diameterMm, double helixAngleDeg, int starts);
+
+// Cut knurling: how many starts give grooves about spacingMm apart across
+// them (at least one). With a 90 degree tool, whose groove is twice as wide
+// as it is deep, twice the depth gives sharp diamonds
+int knurlStartsForSpacing(double diameterMm, double helixAngleDeg, double spacingMm);
 
 // True if an axis is at a position (within MultiPass::TOLERANCE)
 bool atMultiPassPosition(double position, double target);
@@ -410,8 +435,9 @@ public:
     // The number of passes in all, or 0 if repeating until stopped. (May
     // change if the feed axis is moved while paused)
     int totalPasses() const;
-    // Which of the plan's starts is being cut (from 1; see
-    // MultiPassPlan::starts)
+    // How many of this pass's starts have been begun, including the one being
+    // cut (so from 1; see MultiPassPlan::starts). Threading, the starts
+    // aren't cut in order, so it's not which start is being cut
     int startNumber() const;
     // How far the feed axis has been fed in from the start (for the pass
     // being made, or about to be)
@@ -450,9 +476,19 @@ private:
     bool isLastPass() const;
     // Whether the pass being made retracts before its return
     bool passRetracts() const;
-    // How far round from the first start the start being cut begins, as a
-    // fraction of a revolution
-    double revolutionOffset() const;
+    // Threading: whether the plan's starts are cut in whichever order their
+    // angles come round, rather than in order
+    bool startsInAnyOrder() const;
+    // Whether this pass has more starts to cut
+    bool moreStarts() const;
+    // Threading: cuts to position at whichever of the starts comes round
+    // first (see IMultiPassMachine::cutThreadTo())
+    void cutThreadAtNextStart(double position, const std::vector<int>& starts);
+    // Threading: notes the start the cut just finished was at, so it's not
+    // cut again this pass. False (having abandoned) if it isn't known
+    bool markStartCut(std::vector<int>& starts);
+    // Threading: all the starts are still to be cut, for a new pass
+    void resetStarts();
     // Where the next step on starts from: the feed axis's position (or, for
     // a manual feed, where it should be)
     double feedBase() const;
@@ -478,8 +514,15 @@ private:
     MultiPassPlan m_plan;
     State m_state { State::Idle };
     int m_pass { 0 };
-    // The start being cut (from 0)
+    // The start being cut (from 0). Threading (see startsInAnyOrder()), the
+    // one last cut, while m_startsBegun counts them
     int m_start { 0 };
+    int m_startsBegun { 0 };
+    // Threading: the starts still to be cut this pass, there (to cutEnd) and
+    // (if cutting back) back, and those offered for the cut being made
+    std::vector<int> m_startsThere;
+    std::vector<int> m_startsBack;
+    std::vector<int> m_startsOffered;
     // The feed axis's position for the pass being made
     double m_feedTarget { 0.0 };
     double m_passCutStart { 0.0 };

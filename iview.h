@@ -78,6 +78,9 @@ struct MultiPassDialogInfo {
         // slowest the spindle may turn (rpm), which together limit the lead
         double maxCutSpeed { 0.0 };
         double minimumSpindleRpm { 5.0 };
+        // The speed the spindle knurls at (rpm), for the suggested helix
+        // angle (KnurlingSpindleRpm in the config; 0 if not set)
+        double spindleRpm { 0.0 };
         // The least a pass goes in with a constant area
         double minimumInfeedMm { 0.02 };
     };

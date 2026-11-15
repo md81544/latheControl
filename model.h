@@ -557,7 +557,8 @@ public:
 private:
     // The steps for a threading pass to a step (see axis1StartThreadingPass()):
     // taking up Z's backlash, if it's to move, then the pass
-    std::vector<MotionSequence::Step> threadingPassSteps(long step, double revolutionOffset);
+    std::vector<MotionSequence::Step>
+    threadingPassSteps(long step, std::vector<double> revolutionOffsets);
     // The steps to move Z to a step: just the move, or, for a taper, taking
     // up both axes' backlash, then synchronising X and moving.
     // (In threading mode, a threading pass)
@@ -759,6 +760,9 @@ private:
     // (+1 if its pulse count goes up), for threadingCheckSpeed()'s watchdog
     double m_threadingStartPulse { 0.0 };
     int m_threadingSpindleSign { 1 };
+    // Which of cutThreadTo()'s offsets the pass started at (see
+    // threadStartChosen())
+    std::optional<std::size_t> m_threadStartChosen;
     // Recent readings of the spindle's pulse count, one per checkStatus()
     // (see spindleTurningSign())
     struct SpindleSample {
@@ -841,7 +845,8 @@ private:
     void setCutSpeed(double speed) override;
     double cutMaxSpeed() const override;
     // (Only in threading mode, with a thread chosen, or in knurling mode)
-    std::string cutThreadTo(double position, double revolutionOffset) override;
+    std::string cutThreadTo(double position, const std::vector<double>& revolutionOffsets) override;
+    std::optional<std::size_t> threadStartChosen() const override;
     double cutStepSize() const override;
     double feedStepSize() const override;
     double feedPosition() const override;
@@ -911,11 +916,13 @@ private:
     // How far Z moves per revolution of the spindle in a pass: the thread's
     // pitch, or the knurl's lead (nullopt if neither is set)
     std::optional<double> spindleLeadMm() const;
-    // Starts a threading pass: Z follows the spindle to endStep, starting
-    // revolutionOffset of a revolution after the usual angle (see
-    // MultiPassPlan::starts). Returns false if it couldn't start (with a
-    // warning)
-    bool axis1StartThreadingPass(long endStep, double revolutionOffset = 0.0);
+    // Starts a threading pass: Z follows the spindle to endStep, starting at
+    // whichever of revolutionOffsets (fractions of a revolution after the
+    // usual angle: see MultiPassPlan::starts) comes round first, which is
+    // noted for threadStartChosen(). Returns false if it couldn't start
+    // (with a warning)
+    bool
+    axis1StartThreadingPass(long endStep, const std::vector<double>& revolutionOffsets = { 0.0 });
     // Why a threading pass can't start now (empty if it can). sticky is
     // whether its warning should stay (see setThreadingWarning())
     struct ThreadingPassError {

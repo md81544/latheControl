@@ -904,6 +904,7 @@ void Controller::processKey(int t)
                     info.knurling = MultiPassDialogInfo::Knurling {
                         .maxCutSpeed = m_model->spindlePassSpeedLimit(),
                         .minimumSpindleRpm = Model::KNURLING_MIN_SPINDLE_RPM,
+                        .spindleRpm = m_model->config().readDouble("KnurlingSpindleRpm", 0.0),
                         .minimumInfeedMm
                         = m_model->config().readDouble("ThreadingMinimumInfeed", 0.02)
                     };

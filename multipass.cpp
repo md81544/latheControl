@@ -29,9 +29,27 @@ double knurlLeadMm(double diameterMm, double helixAngleDeg)
     return M_PI * diameterMm / std::tan(helixAngleDeg * M_PI / 180.0);
 }
 
-int knurlStartsForPitch(double diameterMm, double pitchMm)
+double knurlHelixAngleForSpindle(double diameterMm, double maxCutSpeed, double spindleRpm)
 {
-    return std::max(1, static_cast<int>(std::lround(M_PI * diameterMm / pitchMm)));
+    // The lead must be at most maxCutSpeed / spindleRpm: pi x diameter /
+    // tan(angle) <= that, so tan(angle) >= pi x diameter x spindleRpm /
+    // maxCutSpeed. (Rounded up, so it's still followed)
+    const double tangent = M_PI * diameterMm * spindleRpm / maxCutSpeed;
+    const double angle = std::ceil(std::atan(tangent) * 180.0 / M_PI - 1e-9);
+    return std::clamp(angle, 1.0, 89.0);
+}
+
+double knurlSpacingAcrossMm(double diameterMm, double helixAngleDeg, int starts)
+{
+    return M_PI * diameterMm * std::cos(helixAngleDeg * M_PI / 180.0) / starts;
+}
+
+int knurlStartsForSpacing(double diameterMm, double helixAngleDeg, double spacingMm)
+{
+    return std::max(
+        1,
+        static_cast<int>(
+            std::lround(knurlSpacingAcrossMm(diameterMm, helixAngleDeg, 1) / spacingMm)));
 }
 
 bool atMultiPassPosition(double position, double target)
@@ -335,6 +353,8 @@ std::string MultiPass::start(const MultiPassPlan& plan)
     m_stopAfterPassReason.clear();
     m_passCutStart = plan.cutStart;
     m_start = 0;
+    m_startsBegun = 0;
+    resetStarts();
     // The first pass is one step in from the start (which is usually where
     // the tool touched the work, so a pass there would cut nothing)
     const double firstTarget = nextFeedTarget(plan.feedStart, 1);
@@ -429,6 +449,9 @@ void MultiPass::update()
                 abandon("The cut stopped short of its end");
                 return;
             }
+            if (startsInAnyOrder() && !markStartCut(m_startsThere)) {
+                return;
+            }
             if (followsPaths() && m_point + 1 < m_plan.paths.at(m_pass - 1).points.size()) {
                 ++m_point;
                 cutToPoint();
@@ -455,6 +478,9 @@ void MultiPass::update()
             }
             if (!cutAt(m_passCutStart)) {
                 abandon("The cut back stopped short of the start");
+                return;
+            }
+            if (!markStartCut(m_startsBack)) {
                 return;
             }
             afterReturn();
@@ -536,7 +562,8 @@ int MultiPass::pass() const
 
 int MultiPass::startNumber() const
 {
-    return m_start + 1;
+    // (Before the first is begun, e.g. feeding in, the first)
+    return startsInAnyOrder() ? std::max(1, m_startsBegun) : m_start + 1;
 }
 
 int MultiPass::totalPasses() const
@@ -670,9 +697,53 @@ double MultiPass::cutTarget() const
     return m_plan.cutEnd;
 }
 
-double MultiPass::revolutionOffset() const
+bool MultiPass::startsInAnyOrder() const
 {
-    return static_cast<double>(m_start) / static_cast<double>(m_plan.starts);
+    return m_plan.cut == MultiPassCut::Thread;
+}
+
+bool MultiPass::moreStarts() const
+{
+    return startsInAnyOrder() ? !m_startsThere.empty() : m_start + 1 < m_plan.starts;
+}
+
+void MultiPass::resetStarts()
+{
+    m_startsThere.clear();
+    m_startsBack.clear();
+    if (!startsInAnyOrder()) {
+        return;
+    }
+    for (int start = 0; start < m_plan.starts; ++start) {
+        m_startsThere.push_back(start);
+        if (m_plan.cutBack) {
+            m_startsBack.push_back(start);
+        }
+    }
+}
+
+void MultiPass::cutThreadAtNextStart(double position, const std::vector<int>& starts)
+{
+    m_startsOffered = starts;
+    std::vector<double> offsets;
+    for (const int start : starts) {
+        offsets.push_back(static_cast<double>(start) / static_cast<double>(m_plan.starts));
+    }
+    if (std::string error = m_machine.cutThreadTo(position, offsets); !error.empty()) {
+        abandon(error);
+    }
+}
+
+bool MultiPass::markStartCut(std::vector<int>& starts)
+{
+    const auto chosen = m_machine.threadStartChosen();
+    if (!chosen || *chosen >= m_startsOffered.size()) {
+        abandon("The machine didn't say which start it cut");
+        return false;
+    }
+    m_start = m_startsOffered[*chosen];
+    std::erase(starts, m_start);
+    return true;
 }
 
 double MultiPass::nextFeedTarget(double from, int pass) const
@@ -726,10 +797,8 @@ void MultiPass::startCut()
 {
     m_state = State::Cutting;
     if (m_plan.cut == MultiPassCut::Thread) {
-        if (std::string error = m_machine.cutThreadTo(m_plan.cutEnd, revolutionOffset());
-            !error.empty()) {
-            abandon(error);
-        }
+        ++m_startsBegun;
+        cutThreadAtNextStart(m_plan.cutEnd, m_startsThere);
         return;
     }
     if (followsPaths()) {
@@ -768,12 +837,10 @@ void MultiPass::cutToPoint()
 
 void MultiPass::startCutBack()
 {
-    // (At the same start: the cut back's groove crosses the cut's)
+    // (Whichever start comes round first: the grooves back cross those there
+    // wherever they start, as long as every pass cuts them all)
     m_state = State::CuttingBack;
-    if (std::string error = m_machine.cutThreadTo(m_passCutStart, revolutionOffset());
-        !error.empty()) {
-        abandon(error);
-    }
+    cutThreadAtNextStart(m_passCutStart, m_startsBack);
 }
 
 void MultiPass::startReturn()
@@ -797,7 +864,7 @@ void MultiPass::afterReturn()
         abandon(m_stopAfterPassReason);
         return;
     }
-    if (m_start + 1 >= m_plan.starts && isLastPass()) {
+    if (!moreStarts() && isLastPass()) {
         finish();
         return;
     }
@@ -814,7 +881,7 @@ void MultiPass::afterReturn()
 
 void MultiPass::readyForNextCut()
 {
-    if (m_start + 1 < m_plan.starts) {
+    if (moreStarts()) {
         if (indexes() && m_pauseRequested) {
             // (A request is for one pause only)
             m_pauseRequested = false;
@@ -823,8 +890,11 @@ void MultiPass::readyForNextCut()
             return;
         }
         // The next start, at the same depth (with no pause, unless indexing:
-        // a pause is otherwise between passes)
-        ++m_start;
+        // a pause is otherwise between passes). (Threading, whichever comes
+        // round first)
+        if (!startsInAnyOrder()) {
+            ++m_start;
+        }
         startPass();
         return;
     }
@@ -849,6 +919,8 @@ void MultiPass::startNextPass()
     m_feedTarget = nextFeedTarget(feedBase(), m_pass + 1);
     ++m_pass;
     m_start = 0;
+    m_startsBegun = 0;
+    resetStarts();
     startFeed();
 }
 
