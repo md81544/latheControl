@@ -3960,11 +3960,15 @@ struct ThreadingTestModel {
         REQUIRE(model.isAxis1MotorRunning());
     }
     // Waits for Z to get going, returning the pulse count when it started.
-    // Each reading is worked out from the count and how far Z has gone, and
-    // can only come out late: on a busy machine, the test's thread can wake a
-    // few ms after Z has moved (several pulses), and Z can be a few steps
-    // behind the spindle (its thread isn't real-time here). A pass can't
-    // start early, so the earliest of the readings over a while is the best
+    // Each reading is worked out from the spindle's position and how far Z
+    // has gone, and can only come out late: on a busy machine, the test's
+    // thread can wake a few ms after Z has moved (several pulses), and Z can
+    // be a few steps behind the spindle (its thread isn't real-time here). A
+    // pass can't start early, so the earliest of the readings over a while
+    // is the best. (The position, not the count, as that's what Z follows.
+    // When the mock encoder's thread runs late, the count falls behind, and
+    // the position runs on past it by up to 2 ms, i.e. 5 pulses here: against
+    // the count, Z looked that far early)
     int64_t pulsesWhenZStarts()
     {
         const long start = model.getAxis1MotorCurrentStep();
@@ -3973,17 +3977,17 @@ struct ThreadingTestModel {
         std::optional<std::chrono::steady_clock::time_point> end;
         while (!end || std::chrono::steady_clock::now() < *end) {
             REQUIRE(std::chrono::steady_clock::now() < deadline);
-            // (Read the count either side of Z's step, so a delay between
+            // (Read the position either side of Z's step, so a delay between
             // them shows, and the reading is dropped)
-            const int64_t pulses = model.getSpindlePulses();
+            const double position = model.getSpindlePosition();
             const long z = model.getAxis1MotorCurrentStep();
-            if (z != start && std::abs(model.getSpindlePulses() - pulses) <= 1) {
+            if (z != start && std::abs(model.getSpindlePosition() - position) <= 1.0) {
                 if (!end) {
                     end = std::chrono::steady_clock::now() + std::chrono::milliseconds(40);
                 }
-                const int64_t started = pulses
-                    - spindleSign
-                        * std::llround(static_cast<double>(std::abs(z - start)) / STEPS_PER_PULSE);
+                const int64_t started = std::llround(
+                    position
+                    - spindleSign * static_cast<double>(std::abs(z - start)) / STEPS_PER_PULSE);
                 if (!earliest || spindleSign * (started - *earliest) < 0) {
                     earliest = started;
                 }
@@ -4025,11 +4029,11 @@ TEST_CASE("Threading: Z follows the spindle's position, even as its speed change
     // Z is where the spindle's position says, i.e. the pitch per revolution
     // since the start. (Read one after the other, so allow a few steps)
     const auto checkPosition = [&] {
-        const int64_t pulses = t.model.getSpindlePulses();
-        const long expected
-            = std::lround((pulses - startPulse) * ThreadingTestModel::STEPS_PER_PULSE);
+        const double position = t.model.getSpindlePosition();
+        const long expected = std::lround(
+            (position - static_cast<double>(startPulse)) * ThreadingTestModel::STEPS_PER_PULSE);
         const long z = t.model.getAxis1MotorCurrentStep();
-        INFO("pulses " << pulses << ", Z step " << z << ", expected " << expected);
+        INFO("spindle " << position << ", Z step " << z << ", expected " << expected);
         REQUIRE(std::abs(z - expected) <= 6);
     };
     t.runFor(std::chrono::milliseconds(300));
@@ -4375,8 +4379,10 @@ TEST_CASE("Model:   threading passes, each locked to the spindle")
     // the spindle, its steps from the start give the pulses since the pass
     // started, so any reading during the cut shows where it started (to
     // within a few steps, as Z and the spindle are read one after the other).
-    // A pass that wasn't synchronised could start up to half a revolution
-    // (350 pulses) away
+    // A reading can only come out late (Z or the test's thread held up on a
+    // busy machine), so the earliest during the cut is kept. A pass that
+    // wasn't synchronised could start up to half a revolution (350 pulses)
+    // away
     const long startStep = t.model.getAxis1MotorCurrentStep();
     std::map<int, int64_t> passStarts; // (by pass)
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(20);
@@ -4384,12 +4390,16 @@ TEST_CASE("Model:   threading passes, each locked to the spindle")
         REQUIRE(std::chrono::steady_clock::now() < deadline);
         t.model.checkStatus();
         const int pass = t.model.multiPass().pass();
-        const int64_t pulses = t.model.getSpindlePulses();
+        // (The position, which Z follows: see pulsesWhenZStarts())
+        const double position = t.model.getSpindlePosition();
         const long steps = std::abs(t.model.getAxis1MotorCurrentStep() - startStep);
         if (t.model.multiPass().state() == mgo::MultiPass::State::Cutting && steps > 50
-            && steps < 950 && !passStarts.contains(pass)) {
-            passStarts[pass] = pulses
-                - std::lround(static_cast<double>(steps) / ThreadingTestModel::STEPS_PER_PULSE);
+            && steps < 950) {
+            const int64_t started = std::llround(
+                position - static_cast<double>(steps) / ThreadingTestModel::STEPS_PER_PULSE);
+            if (!passStarts.contains(pass) || started < passStarts[pass]) {
+                passStarts[pass] = started;
+            }
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
@@ -4932,8 +4942,8 @@ TEST_CASE("Model:   knurling passes, each start there and back, locked to the sp
     REQUIRE(t.model.multiPass().totalPasses() == 2);
 
     // Where each cut started (as in the threading passes' test, from Z's
-    // steps during the cut), by pass, start and way. Each start is half a
-    // revolution (350 pulses) on from a whole revolution
+    // steps during the cut, keeping the earliest), by pass, start and way.
+    // Each start is half a revolution (350 pulses) on from a whole revolution
     const long startStep = t.model.getAxis1MotorCurrentStep();
     std::map<std::tuple<int, int, bool>, int64_t> cutStarts;
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
@@ -4948,12 +4958,17 @@ TEST_CASE("Model:   knurling passes, each start there and back, locked to the sp
         }
         const auto key
             = std::make_tuple(t.model.multiPass().pass(), t.model.multiPass().startNumber(), back);
-        const int64_t pulses = t.model.getSpindlePulses();
+        // (The position, which Z follows: see pulsesWhenZStarts())
+        const double position = t.model.getSpindlePosition();
         // (Back from the end, 1000 steps from the start)
         const long fromStart = std::abs(t.model.getAxis1MotorCurrentStep() - startStep);
         const long steps = back ? 1'000 - fromStart : fromStart;
-        if (steps > 50 && steps < 950 && !cutStarts.contains(key)) {
-            cutStarts[key] = pulses - std::lround(static_cast<double>(steps) / stepsPerPulse);
+        if (steps > 50 && steps < 950) {
+            const int64_t started
+                = std::llround(position - static_cast<double>(steps) / stepsPerPulse);
+            if (!cutStarts.contains(key) || started < cutStarts[key]) {
+                cutStarts[key] = started;
+            }
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }

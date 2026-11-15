@@ -308,6 +308,8 @@ public:
     double getAxis1MotorSpeed() const;
     // See RotaryEncoder::getSpindlePulses()
     int64_t getSpindlePulses() const;
+    // See RotaryEncoder::getSpindlePosition(): what threading passes follow
+    double getSpindlePosition() const;
     // When threading or knurling: the speed Z moves at (pitch or lead x the
     // spindle's speed)
     double getThreadingZSpeed() const;

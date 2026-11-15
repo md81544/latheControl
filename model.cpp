@@ -2021,6 +2021,11 @@ int64_t Model::getSpindlePulses() const
     return m_rotaryEncoder->getSpindlePulses();
 }
 
+double Model::getSpindlePosition() const
+{
+    return m_rotaryEncoder->getSpindlePosition();
+}
+
 double Model::getThreadingZSpeed() const
 {
     return m_threadingZSpeed;

@@ -1267,6 +1267,26 @@ change.
       fall behind (e.g. 12 steps in "Z follows the spindle's position").
       The tests can't allow for that, and the Pi's motor threads are
       real-time and pinned to their own cores
+    - **Not starved after all (2026-11-15).** With a `yes` on each of the
+      M2's eight cores, the threading tests failed in 14 runs out of 15
+      (none in 15 when idle), always with the pass starting 6 to 8 pulses
+      *early*, which the motors can't cause. Z follows the spindle's
+      position, which runs on past the last pulse by up to 2 ms (5 pulses
+      at the tests' speed), and the tests measured it against the pulse
+      count. When the mock encoder's thread runs late, the count falls
+      behind and the position runs on ahead of it, so Z looked early.
+      **Fixed:** the tests measure against the position
+      (`Model::getSpindlePosition()`), which is what Z follows. The model
+      was right all along. The two multi-pass tests also keep the earliest
+      reading during a cut, rather than the first, as a reading can only
+      come out late
+    - Under that load, the suite still failed in 3 of 5 runs afterwards. Each
+      time the mock's threads really were starved: Z 11 and 40 steps behind
+      in "Z follows the spindle's position", and once the encoder's thread
+      held up for over 100 ms, so it lost pulses. Those can't happen on the
+      Pi (its threads are real-time). Eight `yes` processes plus the tests'
+      spinning motor threads is more than the M2 has cores, so it's a
+      harsher test than a busy desktop
 - [ ] Lots of refactoring still needed, as this grew a bit organically
 - [ ] (undecided) Replace all "Axis1..." and "Axis2..." references with an array, to
       allow for future expansion. Might be difficult owing to the axes'
