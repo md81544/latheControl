@@ -18,6 +18,7 @@
 #include <QApplication>
 #include <QFile>
 #include <QFontDatabase>
+#include <QLabel>
 #include <QTest>
 #include <QTimer>
 
@@ -120,6 +121,16 @@ chooseThread(mgo::ViewQt& view, const mgo::ThreadTable& threads, mgo::ThreadChoi
     });
     REQUIRE(QTest::qWaitFor([&done] { return done; }, 5'000));
     return choice;
+}
+
+// All the text a dialog shows, one label per line
+QString dialogText(QWidget* dialog)
+{
+    QStringList lines;
+    for (const QLabel* label : dialog->findChildren<QLabel*>()) {
+        lines << label->text();
+    }
+    return lines.join('\n');
 }
 
 // The widget within the dialog that keyboard input goes to
@@ -2175,6 +2186,126 @@ TEST_CASE("UI: the dialog when the scale and motor disagree")
     REQUIRE(shown);
     REQUIRE(!t.model.axis1ScaleMismatchMm());
     REQUIRE(t.model.getAxis1MotorPosition() == Approx(1.3).margin(0.011));
+}
+
+TEST_CASE("UI: a mismatch found straight after one is answered is asked about too")
+{
+    // (On the mill, a second mismatch was found before the controller had
+    // seen the first one cleared, so was never asked about, and every key
+    // was refused from then on)
+    ScaleTestModel t({ { "Axis1ScaleWarnMm", "0.2" } });
+    REQUIRE(t.runUntil([&] { return t.model.getAxis1ScalePositionMm().has_value(); }));
+    t.model.fakeAxis1Scale()->setErrorMm(0.3);
+    t.model.axis1GoToPosition(1.0);
+    REQUIRE(t.runUntil([&] { return t.model.axis1ScaleMismatchMm().has_value(); }));
+    whenDialogShows([](QWidget* dialog) { QTest::keyClick(inputWidget(dialog), Qt::Key_Y); });
+    t.controller.tick();
+    REQUIRE(waitForDialogToClose());
+    REQUIRE(!t.model.axis1ScaleMismatchMm());
+    REQUIRE(t.model.getAxis1MotorPosition() == Approx(1.3).margin(0.011));
+    // The table shifts again (the model runs, but the controller doesn't
+    // tick in between)
+    t.model.fakeAxis1Scale()->setErrorMm(0.8);
+    REQUIRE(t.runUntil([&] { return t.model.axis1ScaleMismatchMm().has_value(); }));
+    bool shown = false;
+    whenDialogShows([&shown](QWidget* dialog) {
+        shown = true;
+        QTest::keyClick(inputWidget(dialog), Qt::Key_N);
+    });
+    t.controller.tick();
+    REQUIRE(waitForDialogToClose());
+    REQUIRE(shown);
+    REQUIRE(!t.model.axis1ScaleMismatchMm());
+    REQUIRE(t.model.getAxis1MotorPosition() == Approx(1.3).margin(0.011));
+}
+
+TEST_CASE("UI: the scale's position isn't used until its reading is steady")
+{
+    ScaleTestModel t({ { "Axis1ScaleWarnMm", "0.2" }, { "Axis1ScaleMaxSettleMs", "1000" } });
+    REQUIRE(t.runUntil([&] { return t.model.getAxis1ScalePositionMm().has_value(); }));
+    t.model.axis1GoToPosition(1.0);
+    REQUIRE(t.runUntil([&] {
+        const auto d = t.model.getAxis1ScaleDifferenceMm();
+        return !t.model.isAxis1MotorRunning() && d && std::abs(*d) < 0.011;
+    }));
+    // The reading runs away (e.g. interference), never settling: after the
+    // longest time, everything stops and asks
+    double error = 0.0;
+    REQUIRE(t.runUntil([&] {
+        error += 0.5;
+        t.model.fakeAxis1Scale()->setErrorMm(error);
+        return t.model.axis1ScaleMismatchMm().has_value();
+    }));
+    REQUIRE(!t.model.axis1ScaleIsSteady());
+    QString text;
+    whenDialogShows([&text](QWidget* dialog) {
+        text = dialogText(dialog);
+        QTest::keyClick(inputWidget(dialog), Qt::Key_Y);
+    });
+    t.controller.tick();
+    REQUIRE(waitForDialogToClose());
+    REQUIRE(text.contains("still changing"));
+    // Not used: the position is still the motor's, and it still asks
+    REQUIRE(t.model.axis1ScaleMismatchMm());
+    REQUIRE(t.model.getAxis1MotorPosition() == Approx(1.0).margin(0.0001));
+    REQUIRE(!mgo::keyAllowedInCurrentMode(mgo::key::ENTER, t.model));
+
+    // Once the reading settles, it asks again, and then it's used
+    const int asks = t.model.axis1ScaleMismatchAsks();
+    t.model.fakeAxis1Scale()->setErrorMm(0.3);
+    REQUIRE(t.runUntil([&] { return t.model.axis1ScaleMismatchAsks() > asks; }));
+    REQUIRE(t.model.axis1ScaleIsSteady());
+    REQUIRE(*t.model.axis1ScaleMismatchMm() == Approx(0.3).margin(0.011));
+    text.clear();
+    whenDialogShows([&text](QWidget* dialog) {
+        text = dialogText(dialog);
+        QTest::keyClick(inputWidget(dialog), Qt::Key_Y);
+    });
+    t.controller.tick();
+    REQUIRE(waitForDialogToClose());
+    REQUIRE(!text.isEmpty());
+    REQUIRE(!text.contains("still changing"));
+    REQUIRE(!t.model.axis1ScaleMismatchMm());
+    REQUIRE(t.model.getAxis1MotorPosition() == Approx(1.3).margin(0.011));
+}
+
+TEST_CASE("UI: a scale which jumps at rest is misreading, so only the position can be kept")
+{
+    ScaleTestModel t(
+        { { "Axis1ScaleRebase", "true" },
+          { "Axis1ScaleWarnMm", "0.2" },
+          { "Axis1ScaleFaultMm", "5" } });
+    REQUIRE(t.runUntil([&] { return t.model.getAxis1ScalePositionMm().has_value(); }));
+    t.model.axis1GoToPosition(1.0);
+    REQUIRE(t.runUntil([&] {
+        const auto d = t.model.getAxis1ScaleDifferenceMm();
+        return !t.model.isAxis1MotorRunning() && d && std::abs(*d) < 0.011
+            && t.model.axis1ScaleIsSteady();
+    }));
+    // As on the mill, with the lathe running
+    t.model.fakeAxis1Scale()->setErrorMm(300.0);
+    REQUIRE(t.runUntil([&] { return t.model.axis1ScaleMisreadJumpMm().has_value(); }));
+    REQUIRE(t.model.axis1ScaleMismatchMm());
+    REQUIRE(t.model.axis1ScaleMismatchLimitMm() == Approx(5.0));
+    REQUIRE(!mgo::keyAllowedInCurrentMode(mgo::key::ENTER, t.model));
+    // Y can't take the scale's position: any key keeps the motor's
+    QString text;
+    whenDialogShows([&text](QWidget* dialog) {
+        text = dialogText(dialog);
+        QTest::keyClick(inputWidget(dialog), Qt::Key_Y);
+    });
+    t.controller.tick();
+    REQUIRE(waitForDialogToClose());
+    REQUIRE(text.contains("misreading"));
+    REQUIRE(!t.model.axis1ScaleMismatchMm());
+    REQUIRE(!t.model.axis1ScaleMisreadJumpMm());
+    REQUIRE(t.model.getAxis1MotorPosition() == Approx(1.0).margin(0.0001));
+    // The scale is lined up with the motor again
+    REQUIRE(t.runUntil([&] {
+        const auto d = t.model.getAxis1ScaleDifferenceMm();
+        return d && std::abs(*d) < 0.011;
+    }));
+    REQUIRE(t.model.getAxis1MotorPosition() == Approx(1.0).margin(0.011));
 }
 
 TEST_CASE("UI: the status line's items move along to make room")

@@ -39,6 +39,12 @@ public:
 // REST_CHANGE_COUNTS or more (e.g. the table moved, or the sender's smoothing
 // caught up late), it settles again, as at the end of a move.
 //
+// A scale can misread: on the mill, interference (from the lathe's VFD, it
+// seems) once made the reading jump by hundreds of mm at a time, for half an
+// hour. So a settle only counts as steady if the reading stopped jumping, and
+// a jump at rest bigger than faultMm (with the motor holding the table) is
+// taken as a misread.
+//
 // update() must be called regularly (from the model's checkStatus()). All of
 // this is used only from the UI thread, so needs no locking
 class AxisScale {
@@ -60,6 +66,9 @@ public:
         // ...or, if it keeps changing (e.g. flickering between two counts),
         // after this long
         std::chrono::milliseconds maxSettleTime { 3'000 };
+        // A change of the reading at rest by more than this (in mm; 0 is off)
+        // can't be the table moving, so the scale is misreading
+        double faultMm { 0.0 };
     };
 
     AxisScale(std::unique_ptr<IScale> scale, Settings settings);
@@ -93,6 +102,13 @@ public:
     // How many times the reading has settled after the motor stopped. (So
     // something waiting for a move's reading can tell when it's ready)
     int settleCount() const;
+    // Whether the reading has settled and is steady: it settled within the
+    // settle time, or (after the longest time) had only flickered by a count
+    // for the settle time before that. Not while it's settling again
+    bool isSteady() const;
+    // If the reading has jumped at rest by more than faultMm since it was
+    // last lined up, by how much (the first such jump, in mm)
+    std::optional<double> misreadJumpMm() const;
     // Which way the move before the last settle went: +1, -1, or 0 if it
     // settled after a change at rest (or the move wasn't seen)
     int lastMoveDirection() const;
@@ -102,6 +118,9 @@ private:
     // The reading in mm, before it's lined up with the motor
     double rawMm(int32_t counts) const;
     void align(int32_t counts, double motorMm);
+    // Starts settling (after a move, or a change at rest)
+    void startSettling(int32_t counts, Clock::time_point now);
+    void checkForMisread(int32_t counts);
 
     enum class State {
         Moving, // (Or not yet seen at rest)
@@ -135,6 +154,14 @@ private:
     bool m_changedAtRest { false };
     int m_settleCount { 0 };
     int m_lastMoveDirection { 0 };
+    // While settling, the reading the last jump (a change of
+    // REST_CHANGE_COUNTS or more, i.e. not flicker) went to, and when
+    int32_t m_jumpCounts { 0 };
+    Clock::time_point m_lastJumpAt;
+    // See isSteady()
+    bool m_lastSettleSteady { false };
+    // See misreadJumpMm()
+    std::optional<double> m_misreadJumpMm;
 };
 
 } // namespace mgo

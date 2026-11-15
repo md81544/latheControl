@@ -376,7 +376,20 @@ public:
     // How far apart they were allowed to be: Axis1ScaleWarnMm, plus the
     // backlash if the table had gone further the way it was moving
     double axis1ScaleMismatchLimitMm() const;
-    // Use the scale's position (e.g. after a stall)
+    // If the mismatch is because the scale is misreading (its reading jumped
+    // at rest by more than Axis1ScaleFaultMm, which the table can't have
+    // done), by how much it jumped. Then only the motor's position can be
+    // kept, and the limit above is Axis1ScaleFaultMm
+    std::optional<double> axis1ScaleMisreadJumpMm() const;
+    // Goes up each time the user is to be asked about a mismatch (a new one,
+    // or the same one again), so each is asked about once
+    int axis1ScaleMismatchAsks() const;
+    // Whether the scale's reading has settled and is steady (see
+    // AxisScale::isSteady())
+    bool axis1ScaleIsSteady() const;
+    // Use the scale's position (e.g. after a stall). Only once its reading
+    // is steady: until then, the mismatch stays, and is asked about again
+    // once the reading has settled
     void acceptAxis1ScalePosition();
     // Keep the motor's position, and line the scale up with it again
     void keepAxis1MotorPosition();
@@ -603,6 +616,10 @@ private:
     int m_axis1ScaleCheckedSettles { 0 };
     std::optional<double> m_axis1ScaleMismatchMm;
     double m_axis1ScaleMismatchLimitMm { 0.0 };
+    std::optional<double> m_axis1ScaleMisreadJumpMm;
+    int m_axis1ScaleMismatchAsks { 0 };
+    // The scale's position was chosen before its reading was steady
+    bool m_axis1ScaleAskAgain { false };
     // See axis1FinishesOnScale()
     bool m_axis1FinishOnScale { false };
     struct Axis1Finish {

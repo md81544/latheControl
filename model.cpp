@@ -2661,7 +2661,22 @@ std::optional<std::vector<std::string>> Model::takeBacklashReport()
 void Model::checkAxis1ScaleAtRest()
 {
     // (Not while measuring the backlash, which compares them itself)
-    if (!m_axis1Scale || m_backlashMeasurement || m_axis1ScaleMismatchMm) {
+    if (!m_axis1Scale || m_backlashMeasurement) {
+        return;
+    }
+    // A misread stops everything at once, rather than once the reading has
+    // settled: it may not, for a long time (half an hour, on the mill)
+    if (const auto jump = m_axis1Scale->misreadJumpMm(); jump && !m_axis1ScaleMisreadJumpMm) {
+        const auto difference = getAxis1ScaleDifferenceMm();
+        MGOLOG(
+            fmt::format(
+                "{}'s scale is misreading: stopping everything", m_config.read("Axis1Label", "Z")));
+        stopAllMotors();
+        m_axis1ScaleMisreadJumpMm = *jump;
+        m_axis1ScaleMismatchMm = difference.value_or(*jump);
+        m_axis1ScaleMismatchLimitMm = m_config.readDouble("Axis1ScaleFaultMm", 0.0);
+        m_axis1ScaleAskAgain = false;
+        ++m_axis1ScaleMismatchAsks;
         return;
     }
     // Once each time the scale settles
@@ -2670,6 +2685,19 @@ void Model::checkAxis1ScaleAtRest()
         return;
     }
     m_axis1ScaleCheckedSettles = settles;
+    if (m_axis1ScaleMismatchMm) {
+        // The scale's position was chosen while its reading was still
+        // changing: now it has settled, ask again (it may have settled
+        // somewhere else entirely)
+        if (m_axis1ScaleAskAgain) {
+            if (const auto difference = getAxis1ScaleDifferenceMm()) {
+                m_axis1ScaleMismatchMm = *difference;
+            }
+            m_axis1ScaleAskAgain = false;
+            ++m_axis1ScaleMismatchAsks;
+        }
+        return;
+    }
     const auto difference = getAxis1ScaleDifferenceMm();
     if (!difference || m_axis1Motor->isRunning() || m_axis1Motor->isFaulted()) {
         return;
@@ -2699,9 +2727,12 @@ void Model::checkAxis1ScaleAtRest()
         stopAllMotors();
         m_axis1ScaleMismatchMm = *difference;
         m_axis1ScaleMismatchLimitMm = limit;
+        ++m_axis1ScaleMismatchAsks;
         return;
     }
-    if (!m_config.readBool("Axis1ScaleRebase", false)) {
+    // Nor from a reading which only settled because it ran out of time,
+    // still jumping about (e.g. a misreading scale)
+    if (!m_config.readBool("Axis1ScaleRebase", false) || !m_axis1Scale->isSteady()) {
         return;
     }
     // Not part way through something which works from the motor's position,
@@ -2802,6 +2833,11 @@ void Model::advanceAxis1Finish()
         endAxis1Finish("no scale reading");
         return;
     }
+    // (A correction from a reading still jumping about could go anywhere)
+    if (!m_axis1Scale->isSteady()) {
+        endAxis1Finish("the scale's reading didn't settle");
+        return;
+    }
     const double countMm = 1.0 / m_axis1Scale->countsPerMm();
     const double error = f.targetMm - *scaleMm;
     // (A count is as close as the scale can tell)
@@ -2889,9 +2925,43 @@ double Model::axis1ScaleMismatchLimitMm() const
     return m_axis1ScaleMismatchLimitMm;
 }
 
+std::optional<double> Model::axis1ScaleMisreadJumpMm() const
+{
+    return m_axis1ScaleMisreadJumpMm;
+}
+
+int Model::axis1ScaleMismatchAsks() const
+{
+    return m_axis1ScaleMismatchAsks;
+}
+
+bool Model::axis1ScaleIsSteady() const
+{
+    return m_axis1Scale && m_axis1Scale->isSteady();
+}
+
 void Model::acceptAxis1ScalePosition()
 {
     if (!m_axis1ScaleMismatchMm) {
+        return;
+    }
+    const std::string label = m_config.read("Axis1Label", "Z");
+    // (Only answered this way from a dialog shown before the misread was
+    // seen: its own dialog follows)
+    if (m_axis1ScaleMisreadJumpMm) {
+        MGOLOG(fmt::format("{}'s scale is misreading: its position isn't used", label));
+        return;
+    }
+    // A reading which is still changing could be anywhere: on the mill, once,
+    // thousands of mm out. So it waits for the reading to settle, and asks
+    // again (see checkAxis1ScaleAtRest())
+    if (!m_axis1Scale || !m_axis1Scale->isSteady()) {
+        MGOLOG(
+            fmt::format(
+                "{}'s scale reading isn't steady, so its position isn't used yet: asking again "
+                "once it has settled",
+                label));
+        m_axis1ScaleAskAgain = true;
         return;
     }
     m_axis1ScaleMismatchMm.reset();
@@ -2904,6 +2974,8 @@ void Model::keepAxis1MotorPosition()
         return;
     }
     m_axis1ScaleMismatchMm.reset();
+    m_axis1ScaleMisreadJumpMm.reset();
+    m_axis1ScaleAskAgain = false;
     MGOLOG(
         fmt::format(
             "{}'s position kept: lining its scale up with it again",
@@ -2933,6 +3005,7 @@ void Model::configureAxis1Scale()
         .settleTime = std::chrono::milliseconds(m_config.readLong("Axis1ScaleSettleMs", 500)),
         .maxSettleTime
         = std::chrono::milliseconds(m_config.readLong("Axis1ScaleMaxSettleMs", 3'000)),
+        .faultMm = m_config.readDouble("Axis1ScaleFaultMm", 0.0),
     };
     if (settings.countsPerMm <= 0.0) {
         MGOLOG(

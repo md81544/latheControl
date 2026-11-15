@@ -37,7 +37,11 @@ private:
     // Opens a dialog to clear a limit switch's stop, once per stop
     void checkLimitSwitch();
     bool m_limitDialogShown { false };
-    bool m_scaleDialogShown { false };
+    // Model::axis1ScaleMismatchAsks() when the scale's dialog was last shown.
+    // (A count rather than a flag: a new mismatch can be found in the tick
+    // straight after one is answered, before the flag could be cleared, and
+    // would then never be asked about, leaving every key refused)
+    int m_scaleAsksShown { 0 };
     bool m_inTick { false };
     // Keys pressed while a motion sequence was running, to act on afterwards
     std::deque<int> m_heldKeys;
@@ -58,7 +62,7 @@ private:
     // Shows the result once a backlash measurement has finished
     void showBacklashReport();
     // Asks which to believe when axis 1's scale and motor disagree (see
-    // Model::axis1ScaleMismatchMm())
+    // Model::axis1ScaleMismatchMm()), or says its scale is misreading
     void checkScaleMismatch();
     // e.g. " (mm)" or " (in)": the units an axis's values are typed in
     std::string unitsSuffix(int axisNumber) const;

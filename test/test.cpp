@@ -620,7 +620,7 @@ public:
 };
 
 struct AxisScaleTest {
-    explicit AxisScaleTest(bool reversed = false)
+    explicit AxisScaleTest(bool reversed = false, double faultMm = 0.0)
     {
         auto scale = std::make_unique<SettableScale>();
         counts = scale->m_counts;
@@ -630,7 +630,8 @@ struct AxisScaleTest {
                                        .countsPerMm = 100.0,
                                        .reversed = reversed,
                                        .settleTime = std::chrono::milliseconds(500),
-                                       .maxSettleTime = std::chrono::milliseconds(3'000) });
+                                       .maxSettleTime = std::chrono::milliseconds(3'000),
+                                       .faultMm = faultMm });
     }
     // Advances the clock, then updates the scale with the motor at motorMm
     void update(double motorMm, bool running, int afterMs = 50)
@@ -787,6 +788,73 @@ TEST_CASE("Scale:   At rest, a change of more than a count settles again")
     *t.counts = 1'003;
     t.rest(0.0, 600);
     REQUIRE(t.axisScale->settleCount() == settles + 1);
+}
+
+TEST_CASE("Scale:   A reading which only flickers is steady once settled; one which jumps isn't")
+{
+    AxisScaleTest t;
+    t.rest(0.0, 600);
+    REQUIRE(t.axisScale->isSteady());
+    // Changed at rest: not steady while settling
+    *t.counts = 1'005;
+    t.update(0.0, false);
+    REQUIRE(!t.axisScale->isSteady());
+    // Flickering by a count until the longest time: still steady (it does
+    // that for ever on the mill)
+    for (int ms = 0; ms < 3'000; ms += 100) {
+        *t.counts = 1'005 + (ms / 100) % 2;
+        t.update(0.0, false, 100);
+    }
+    REQUIRE(t.axisScale->isSteady());
+    // Jumping about until the longest time: settles, but isn't steady
+    const int settles = t.axisScale->settleCount();
+    for (int n = 0; n < 40 && t.axisScale->settleCount() == settles; ++n) {
+        *t.counts = 1'005 + 50 * (n % 2);
+        t.update(0.0, false, 100);
+    }
+    REQUIRE(t.axisScale->settleCount() == settles + 1);
+    REQUIRE(!t.axisScale->isSteady());
+    // Once it settles properly again, it's steady
+    *t.counts = 1'020;
+    t.rest(0.0, 600);
+    REQUIRE(t.axisScale->settleCount() == settles + 2);
+    REQUIRE(t.axisScale->isSteady());
+}
+
+TEST_CASE("Scale:   A jump at rest bigger than the fault limit is a misread")
+{
+    AxisScaleTest t(false, 5.0);
+    t.rest(0.0, 600);
+    // Up to the limit, the table could have moved (e.g. knocked)
+    *t.counts = 1'400;
+    t.rest(0.0, 600);
+    REQUIRE(!t.axisScale->misreadJumpMm());
+    // Further, it can't have: seen at once, not when it settles
+    *t.counts = 2'000;
+    t.update(0.0, false);
+    REQUIRE(t.axisScale->misreadJumpMm());
+    REQUIRE(*t.axisScale->misreadJumpMm() == Approx(6.0));
+    // It stays (the first jump) until the scale is lined up again
+    *t.counts = -50'000;
+    t.rest(0.0, 600);
+    REQUIRE(*t.axisScale->misreadJumpMm() == Approx(6.0));
+    t.axisScale->realign();
+    REQUIRE(!t.axisScale->misreadJumpMm());
+    t.rest(0.0, 600);
+    REQUIRE(t.axisScale->isAligned());
+    REQUIRE(*t.axisScale->positionMm() == Approx(0.0));
+
+    // A move can go any distance
+    t.update(50.0, true);
+    *t.counts = -45'000;
+    t.rest(50.0, 1'000);
+    REQUIRE(!t.axisScale->misreadJumpMm());
+    // Off unless set
+    AxisScaleTest off;
+    off.rest(0.0, 600);
+    *off.counts = 100'000;
+    off.rest(0.0, 600);
+    REQUIRE(!off.axisScale->misreadJumpMm());
 }
 
 TEST_CASE("Backlash: the moves, and the arithmetic")

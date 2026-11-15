@@ -62,11 +62,8 @@ void AxisScale::update(double motorMm, bool motorRunning, double motorSpeed, Clo
     }
     m_lastMotorMm = motorMm;
     if (m_state == State::Moving) {
-        m_state = State::Settling;
-        m_stoppedAt = now;
+        startSettling(*counts, now);
         m_motorStoppedAt = now;
-        m_lastChangeAt = now;
-        m_lastCounts = *counts;
         m_changedAtRest = false;
         return;
     }
@@ -85,6 +82,7 @@ void AxisScale::update(double motorMm, bool motorRunning, double motorSpeed, Clo
         if (std::abs(change) < REST_CHANGE_COUNTS) {
             return;
         }
+        checkForMisread(*counts);
         MGOLOG(
             fmt::format(
                 "{} scale's reading changed at rest by {:+.4f} mm ({:+} counts), {:.1f} s after "
@@ -93,10 +91,7 @@ void AxisScale::update(double motorMm, bool motorRunning, double motorSpeed, Clo
                 rawMm(*counts) - rawMm(m_settledCounts),
                 m_settings.reversed ? -change : change,
                 std::chrono::duration<double>(now - m_motorStoppedAt).count()));
-        m_state = State::Settling;
-        m_stoppedAt = now;
-        m_lastChangeAt = now;
-        m_lastCounts = *counts;
+        startSettling(*counts, now);
         m_changedAtRest = true;
         return;
     }
@@ -106,12 +101,22 @@ void AxisScale::update(double motorMm, bool motorRunning, double motorSpeed, Clo
         m_lastCounts = *counts;
         m_lastChangeAt = now;
     }
+    if (std::abs(*counts - m_jumpCounts) >= REST_CHANGE_COUNTS) {
+        m_jumpCounts = *counts;
+        m_lastJumpAt = now;
+    }
+    if (m_changedAtRest) {
+        checkForMisread(*counts);
+    }
     const bool steady = now - m_lastChangeAt >= m_settings.settleTime;
     if (!steady && now - m_stoppedAt < m_settings.maxSettleTime) {
         return;
     }
     m_state = State::Settled;
     ++m_settleCount;
+    // (Flicker of a count, which can go on for ever on the mill, still counts
+    // as steady; jumps don't)
+    m_lastSettleSteady = steady || now - m_lastJumpAt >= m_settings.settleTime;
     m_settledCounts = *counts;
     m_lastMoveDirection = 0;
     if (m_moveStartMm && !m_changedAtRest && motorMm != *m_moveStartMm) {
@@ -144,9 +149,39 @@ void AxisScale::update(double motorMm, bool motorRunning, double motorSpeed, Clo
     m_moveStartMm.reset();
 }
 
+void AxisScale::startSettling(int32_t counts, Clock::time_point now)
+{
+    m_state = State::Settling;
+    m_stoppedAt = now;
+    m_lastChangeAt = now;
+    m_lastCounts = counts;
+    m_jumpCounts = counts;
+    m_lastJumpAt = now;
+}
+
+void AxisScale::checkForMisread(int32_t counts)
+{
+    if (m_settings.faultMm <= 0.0 || !m_aligned || m_misreadJumpMm) {
+        return;
+    }
+    const double jumpMm = rawMm(counts) - rawMm(m_settledCounts);
+    if (std::abs(jumpMm) <= m_settings.faultMm) {
+        return;
+    }
+    m_misreadJumpMm = jumpMm;
+    MGOLOG(
+        fmt::format(
+            "*** Warning *** {} scale's reading jumped by {:+.4f} mm at rest, more than {:.4f}: "
+            "it's misreading",
+            m_settings.axisLabel,
+            jumpMm,
+            m_settings.faultMm));
+}
+
 void AxisScale::realign()
 {
     m_aligned = false;
+    m_misreadJumpMm.reset();
     // (The motor's position changes, e.g. when zeroed, without it moving)
     m_lastMotorMm.reset();
 }
@@ -191,6 +226,16 @@ int AxisScale::settleCount() const
     return m_settleCount;
 }
 
+bool AxisScale::isSteady() const
+{
+    return m_aligned && m_state == State::Settled && m_lastSettleSteady;
+}
+
+std::optional<double> AxisScale::misreadJumpMm() const
+{
+    return m_misreadJumpMm;
+}
+
 int AxisScale::lastMoveDirection() const
 {
     return m_lastMoveDirection;
@@ -210,6 +255,7 @@ void AxisScale::align(int32_t counts, double motorMm)
 {
     m_offsetMm = motorMm - rawMm(counts);
     m_aligned = true;
+    m_misreadJumpMm.reset();
     m_settledCounts = counts;
     MGOLOG(
         fmt::format(

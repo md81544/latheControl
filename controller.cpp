@@ -124,16 +124,13 @@ void Controller::confirmMeasureBacklash()
 void Controller::checkScaleMismatch()
 {
     const auto mismatch = m_model->axis1ScaleMismatchMm();
-    if (!mismatch) {
-        m_scaleDialogShown = false;
-        return;
-    }
-    // Once per mismatch, and not over another dialog (it waits until that's
+    const int asks = m_model->axis1ScaleMismatchAsks();
+    // Once per ask, and not over another dialog (it waits until that's
     // closed; nothing can move meanwhile)
-    if (m_scaleDialogShown || m_view->isDialogOpen()) {
+    if (!mismatch || asks == m_scaleAsksShown || m_view->isDialogOpen()) {
         return;
     }
-    m_scaleDialogShown = true;
+    m_scaleAsksShown = asks;
     m_model->setKeyMode(KeyMode::None);
     m_heldKeys.clear();
     const std::string label = m_model->config().read("Axis1Label", "Z");
@@ -144,6 +141,22 @@ void Controller::checkScaleMismatch()
             m_model->axisDecimals(1),
             m_model->axisUnitName(1));
     };
+    if (const auto jump = m_model->axis1ScaleMisreadJumpMm()) {
+        pressAnyKey(
+            fmt::format("{}'s scale is misreading", label),
+            { fmt::format(
+                  "Its reading jumped by {} with {} at rest, more than the {} allowed,",
+                  length(std::abs(*jump)),
+                  label,
+                  length(m_model->axis1ScaleMismatchLimitMm())),
+              "which the table can't have moved: so everything has stopped.",
+              "Interference, or a loose connection, can do this.",
+              "",
+              fmt::format(
+                  "Any key: keep {}'s position, and line the scale up with it again.", label) },
+            [this]() { m_model->keepAxis1MotorPosition(); });
+        return;
+    }
     const double position = m_model->getAxis1MotorPosition();
     std::vector<std::string> lines {
         fmt::format(
@@ -161,6 +174,11 @@ void Controller::checkScaleMismatch()
         "Y or Enter: use the scale's position (usually right after a stall).",
         fmt::format("N or Esc: keep {}'s position, and line the scale up with it again.", label),
     };
+    if (!m_model->axis1ScaleIsSteady()) {
+        lines.insert(
+            lines.end() - 2,
+            "The scale's reading is still changing: Y waits until it settles, and asks again.");
+    }
     m_view->openInput(
         Input::Type::OkCancel,
         fmt::format("{}'s scale and position disagree", label),

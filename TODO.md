@@ -2,6 +2,10 @@
 
 ## User interface
 
+### Add a "go to end"
+    - If a feature is defined, and zEnd is present, maybe pressing Z,G,E
+      could go to the end?
+
 ### Investigate Sound Output
 - [ ] Could be useful for warnings and prompts.
     - To test; whether the existing monitor's HDMI output would work
@@ -1859,11 +1863,45 @@ change.
           on a 1 GB Pi 3B, with lc's spinning motor threads holding cores 2
           and 3. Quit lc before building; if it happens again, build with
           `make release JOBS=2` (the user isn't convinced builds are usually
-          a problem, so the Makefile is left as it is for now). The
-          persistent journal is now on (`/var/log/journal`), so after any
-          lock-up, `journalctl -b -1` shows the end of the previous boot.
-          The first lock-up (just after starting lc, no build) is still
-          unexplained
+          a problem, so the Makefile is left as it is for now). The first
+          lock-up (just after starting lc, no build) is still unexplained
+        - **A third lock-up (15 Nov 2026), in two stages.** First lc
+          ignored keys while its display still updated, and alt-tab still
+          worked. Then, much later, the whole Pi locked solid: no ssh, and
+          REISUB didn't work either, so it was power cycled.
+          - **The lc part is explained and fixed.** With the lathe running,
+            X's scale read garbage: jumps of up to ±4000 mm every few seconds
+            for about 28 minutes, the same thing that makes TouchDRO need
+            re-zeroing after using the lathe. lc stopped and asked, as it
+            should. Then the dialog was answered with Y while the reading was
+            still jumping, so X's position was set to 4451 mm, a garbage
+            value. A new mismatch was found in the very next tick, before the
+            controller had seen the first one cleared, so its "dialog shown"
+            flag never reset. No dialog appeared, and every key except
+            Esc, Space, u and Ctrl-Q was refused for good.
+          - **The fixes.** The dialog is now shown once per ask (a count
+            from the model), not once per flag. Y, re-basing and finishing
+            moves only ever use a reading that has settled properly (flicker
+            of a count is fine); if it hasn't, Y waits and asks again.
+            `Axis1ScaleFaultMm` (5 mm on the mill) treats a jump at rest that
+            the table can't have made as a misread: everything stops at
+            once, and only the motor's position can be kept. Not yet tried
+            on the machine. (A misread while moving isn't detected. The
+            settle after the move would still catch a large difference.)
+          - **The Pi's hard lock is still unexplained.** The suspect: the
+            same interference reaching the Pi's USB through the scales' FTDI
+            link (Pi 3B USB is known for hard locks). Worth trying an
+            isolated link (e.g. an optocoupler on the Arduino's TX) or
+            ferrites, and finding where the lathe's interference gets in.
+          - **The persistent journal was never actually on.** Creating
+            `/var/log/journal` isn't enough on Raspberry Pi OS, which ships
+            a `Storage=volatile` setting. It took a drop-in,
+            `/etc/systemd/journald.conf.d/99-persistent.conf`, containing
+            `[Journal]`, `Storage=persistent` and `SyncIntervalSec=30s`, then
+            `sudo systemd-tmpfiles --create --prefix /var/log/journal` and
+            `sudo journalctl --flush`. It's on now (15 Nov 2026), so after
+            the next lock-up, `journalctl -b -1` shows the end of the
+            previous boot, losing at most about the last 30 s.
         - Nine of the settles hit the 3 s limit ("still changing"): the
           reading flickers at rest sometimes, so a settled value can be a
           count out
