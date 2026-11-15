@@ -1888,11 +1888,20 @@ change.
             once, and only the motor's position can be kept. Not yet tried
             on the machine. (A misread while moving isn't detected. The
             settle after the move would still catch a large difference.)
-          - **The Pi's hard lock is still unexplained.** The suspect: the
-            same interference reaching the Pi's USB through the scales' FTDI
-            link (Pi 3B USB is known for hard locks). Worth trying an
-            isolated link (e.g. an optocoupler on the Arduino's TX) or
-            ferrites, and finding where the lathe's interference gets in.
+          - **The Pi's hard lock is still unexplained.** Not interference:
+            the lathe wasn't running when lc's unresponsiveness turned into
+            the hard lock (it happened while lc was idle, during the
+            diagnosis). The common factor in all three lock-ups is the FTDI
+            link and lc's DRO reader, added on 13 Nov: every lock-up has come
+            since. The first was before the mill's motor threads were pinned,
+            so the pinning isn't the common factor. The Pi 3B's USB driver
+            (dwc_otg) is known for hard locks, and the sender streams about
+            24 readings a second. A dead USB stack would also take the USB
+            keyboard (so REISUB) with it, but ssh over Wi-Fi died too, and
+            Wi-Fi isn't on USB. Next: stream the kernel log to another machine
+            (`ssh lc-mill 'journalctl -kf'`) while lc runs; look for dwc_otg
+            or ftdi_sio errors; and, if lock-ups stay this frequent, a spell
+            with `Axis1Scale = none` to compare
           - **The persistent journal was never actually on.** Creating
             `/var/log/journal` isn't enough on Raspberry Pi OS, which ships
             a `Storage=volatile` setting. It took a drop-in,
