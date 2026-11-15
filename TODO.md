@@ -39,7 +39,8 @@
 - [x] It must be usable without a mouse, which is awkward at the machine.
       Everything works from the keyboard, and the menu from the gamepad too.
       The gamepad isn't read while a dialog is open; low priority, as it sits
-      next to the keyboard and is for the basics of machine control
+      next to the keyboard and is for the basics of machine control.
+      The mouse pointer is hidden in the full-screen (Pi) build
 - [ ] Proper menus and dialogs, now that Qt makes them possible. This replaces
       the old "implement a proper menu/dialog (see level_designer)" and
       "move all input to the new modal dialog system" items

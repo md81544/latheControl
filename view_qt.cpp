@@ -542,6 +542,9 @@ void ViewQt::initialise(const Model& model)
     d.widget->show();
 #else
     d.widget->showFullScreen();
+    // Everything is driven from the keyboard or gamepad, so hide the mouse
+    // pointer. An application-wide override also covers the dialogs
+    QGuiApplication::setOverrideCursor(Qt::BlankCursor);
 #endif
     // (The "offscreen" platform, used by the UI tests, has no windows to raise)
     if (QGuiApplication::platformName() != "offscreen") {
