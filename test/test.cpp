@@ -1946,6 +1946,61 @@ TEST_CASE("Commands: shut down is shown, but unavailable, in mock builds")
     REQUIRE(!mgo::isAvailable(*shutdown, model));
 }
 
+TEST_CASE("Commands: the memory slot commands need something in the slot")
+{
+    mgo::MockConfigReader config;
+    mgo::MockGpio gpio(false);
+    mgo::Model model(gpio, config);
+    model.initialise();
+    const auto commands = mgo::buildCommands(config);
+    const auto available = [&commands, &model](int k) {
+        const auto it = std::find_if(
+            commands.begin(), commands.end(), [k](const mgo::Command& c) { return c.key == k; });
+        REQUIRE(it != commands.end());
+        return mgo::isAvailable(*it, model);
+    };
+    const std::vector<int> axis1Keys { mgo::key::a1_ENTER, mgo::key::a1_f, mgo::key::a1_DELETE };
+    const std::vector<int> axis2Keys { mgo::key::a2_ENTER, mgo::key::a2_f, mgo::key::a2_DELETE };
+    const std::vector<int> bothKeys { mgo::key::aAll_ENTER, mgo::key::aAll_f, mgo::key::DELETE };
+
+    // An empty slot: none of them, but storing or entering a value is fine
+    for (const auto k : axis1Keys) {
+        REQUIRE(!available(k));
+    }
+    for (const auto k : axis2Keys) {
+        REQUIRE(!available(k));
+    }
+    for (const auto k : bothKeys) {
+        REQUIRE(!available(k));
+    }
+    REQUIRE(available(mgo::key::a1_m));
+    REQUIRE(available(mgo::key::a2_i));
+
+    // Only Z stored: Z's and both axes' commands, but not X's
+    model.axis1StorePosition();
+    for (const auto k : axis1Keys) {
+        REQUIRE(available(k));
+    }
+    for (const auto k : axis2Keys) {
+        REQUIRE(!available(k));
+    }
+    for (const auto k : bothKeys) {
+        REQUIRE(available(k));
+    }
+
+    // Another slot is empty again
+    model.selectNextMemorySlot();
+    REQUIRE(!available(mgo::key::a1_ENTER));
+    REQUIRE(!available(mgo::key::aAll_f));
+    model.selectPreviousMemorySlot();
+    REQUIRE(available(mgo::key::a1_ENTER));
+
+    // Cleared again
+    model.clearCurrentMemorySlot(mgo::Axis::Axis1);
+    REQUIRE(!available(mgo::key::a1_ENTER));
+    REQUIRE(!available(mgo::key::DELETE));
+}
+
 TEST_CASE("Model:   diameter, for the surface speed")
 {
     mgo::MockConfigReader config;

@@ -426,17 +426,30 @@ std::vector<Command> buildCommands(
     b.add(c, fmt::format("Store {} and {} in slot", a1, a2), key::m, BOTH);
     b.add(c, fmt::format("Store {} in slot", a1), key::a1_m, AXIS1);
     b.add(c, fmt::format("Store {} in slot", a2), key::a2_m, AXIS2);
-    b.add(c, fmt::format("Go to slot: {}", a1), key::a1_ENTER, AXIS1);
-    b.add(c, fmt::format("Go to slot: {}", a2), key::a2_ENTER, AXIS2);
-    b.add(c, fmt::format("Go to slot: {} and {}", a1, a2), key::aAll_ENTER, BOTH);
-    b.add(c, fmt::format("Fast return to slot: {}", a1), key::a1_f, AXIS1);
-    b.add(c, fmt::format("Fast return to slot: {}", a2), key::a2_f, AXIS2);
-    b.add(c, fmt::format("Fast return to slot: {} and {}", a1, a2), key::aAll_f, BOTH);
+    // Going to, returning to or clearing the current slot needs something in
+    // it. The commands for both axes act on each axis in turn, so they're
+    // only unavailable when neither axis has anything in the slot
+    const auto axis1SlotSet = [](const Model& m) {
+        return m.getAxis1MemoryAsPosition(m.getCurrentMemorySlot()).has_value();
+    };
+    const auto axis2SlotSet = [](const Model& m) {
+        return m.getAxis2MemoryAsPosition(m.getCurrentMemorySlot()).has_value();
+    };
+    const auto eitherSlotSet = [axis1SlotSet, axis2SlotSet](const Model& m) {
+        return axis1SlotSet(m) || axis2SlotSet(m);
+    };
+    b.add(c, fmt::format("Go to slot: {}", a1), key::a1_ENTER, AXIS1, axis1SlotSet);
+    b.add(c, fmt::format("Go to slot: {}", a2), key::a2_ENTER, AXIS2, axis2SlotSet);
+    b.add(c, fmt::format("Go to slot: {} and {}", a1, a2), key::aAll_ENTER, BOTH, eitherSlotSet);
+    b.add(c, fmt::format("Fast return to slot: {}", a1), key::a1_f, AXIS1, axis1SlotSet);
+    b.add(c, fmt::format("Fast return to slot: {}", a2), key::a2_f, AXIS2, axis2SlotSet);
+    b.add(
+        c, fmt::format("Fast return to slot: {} and {}", a1, a2), key::aAll_f, BOTH, eitherSlotSet);
     b.add(c, fmt::format("Enter a {} value for slot...", a1), key::a1_i, AXIS1);
     b.add(c, fmt::format("Enter a {} value for slot...", a2), key::a2_i, AXIS2);
-    b.add(c, fmt::format("Clear slot: {}", a1), key::a1_DELETE, AXIS1);
-    b.add(c, fmt::format("Clear slot: {}", a2), key::a2_DELETE, AXIS2);
-    b.add(c, fmt::format("Clear slot: {} and {}", a1, a2), key::DELETE, BOTH);
+    b.add(c, fmt::format("Clear slot: {}", a1), key::a1_DELETE, AXIS1, axis1SlotSet);
+    b.add(c, fmt::format("Clear slot: {}", a2), key::a2_DELETE, AXIS2, axis2SlotSet);
+    b.add(c, fmt::format("Clear slot: {} and {}", a1, a2), key::DELETE, BOTH, eitherSlotSet);
 
     c = "Position";
     b.add(c, fmt::format("Zero {}", a1), key::a1_z, AXIS1);
