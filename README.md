@@ -90,6 +90,20 @@ To move to an **absolute position**, press leader + `G` (for "go to") - for exam
 
 **Measuring the backlash** (with a linear scale on axis 1, e.g. the mill's X) - the menu's System category has "Measure Z's backlash (with its scale)" (`Tab`, `Y`, `B`). After a dialog warns that Z is about to move (make sure the tool is clear of the work), Z moves back and forth by 1 mm (or twice its backlash setting, if that's more), starting away from the chuck, and ends where it started, which takes about 20 seconds. After each reversal it compares how far the axis moved, by the scale, with how far it should have. Any shortfall is backlash which `Axis1BacklashCompensationSteps` doesn't cover (or, if it went further, the setting is too large). A dialog then gives the backlash in mm and in steps, to put in the config file, and how much the measurements varied (if by more than a few counts of the scale, measure again). Nothing else can move meanwhile, and `Space` stops it.
 
+**Sounds** (optional; `SoundAlert` and `SoundAlarm` in lc.cfg, on for both machines) - the program plays a sound through the monitor's HDMI speakers when it needs your attention. The alert (`sounds/alert.wav`) means it's waiting for you: a multi-pass (threading, turning, knurling, a radius or gear cutting) has paused between passes, finished, or arrived at its start. The alarm (`sounds/alarm.wav`) means something has gone wrong: a motor's driver has gone into alarm, a limit switch has been pressed, the scale disagrees with the motor, or a warning has appeared by itself (e.g. a multi-pass stopped, or the spindle is too fast for the thread). A warning which answers a key you pressed (e.g. "Stop the motors first") has no sound, nor do the dialogs you open, and the same warning sounds at most once every 10 seconds. The sound is played with `aplay` (`SoundPlayer` to change it), as the user who ran `sudo`, so that it reaches their desktop's sound server (PipeWire). Raspberry Pi OS turns the HDMI sound output off after about 10 seconds of quiet, and the start of the next sound can then be lost while it wakes up. To keep it on (tried on the lathe: a sound after 30 minutes' quiet played in full), create `~/.config/wireplumber/main.lua.d/51-disable-suspension.lua` containing:
+
+    rule = {
+      matches = {
+        { { "node.name", "matches", "alsa_output.*" } },
+      },
+      apply_properties = {
+        ["session.suspend-timeout-seconds"] = 0,
+      },
+    }
+    table.insert(alsa_monitor.rules, rule)
+
+then run `systemctl --user restart wireplumber`. (This is for WirePlumber 0.4, as on Bookworm: later versions use a different format.)
+
 **Retraction** - `R` retracts the X axis by `Axis2RetractionDistance` in lc.cfg (2 mm unless set; of X travel, not on the diameter). Press again to unretract. Retraction can be inwards for boring operations, see "Special functions" below. When boring a small hole, check that the back of the boring bar has room for it. A multi-pass (and threading passes) retracts differently: just clear of where it started, see below.
 
 **Locking an axis** - `ZK` or `XK` locks the axis in software, or unlocks it again; locked, its label is grey. Use it when the axis is locked physically (e.g. the cross-slide's lock), so that nothing tries to drive the stepper against the lock: X's open-loop stepper would lose its position without anything noticing. Nothing moves a locked axis: not the keys, memory returns, fast returns, retracts (including `ThreadingAutoRetract`), the current feature's go-tos, or a multi-pass. Each is refused, with a message to unlock it first. In a taper, X follows Z, so Z doesn't move while X is locked either. An axis can't be locked while it's moving, or while a multi-pass is cutting; one that's paused can be, and doesn't carry on until it's unlocked.

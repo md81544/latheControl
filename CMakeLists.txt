@@ -66,6 +66,7 @@ add_library(shared_with_test OBJECT
 	motionsequence.cpp
 	multipass.cpp
 	radius.cpp
+	soundcues.cpp
 	steppermotor.cpp
 	threadpitches.cpp
 	toollibrary.cpp

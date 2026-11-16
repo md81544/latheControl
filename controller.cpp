@@ -6,10 +6,17 @@
 #include "log.h"
 #include "view_qt.h"
 
+#include <QProcess>
+#include <QStringList>
+
 #include <cassert>
 #include <chrono>
 #include <cmath>
+#include <cstdlib>
+#include <filesystem>
 #include <utility>
+
+#include <unistd.h>
 
 namespace mgo {
 
@@ -21,6 +28,29 @@ Controller::Controller(Model* model)
           model->threadingAutoRetract(),
           model->axis1FinishesOnScale()))
 {
+    // (Sounds are off unless their files are set)
+    m_alertSound = model->config().read("SoundAlert", "");
+    m_alarmSound = model->config().read("SoundAlarm", "");
+#ifdef __APPLE__
+    m_soundPlayer = model->config().read("SoundPlayer", "afplay");
+#else
+    m_soundPlayer = model->config().read("SoundPlayer", "aplay -q");
+#endif
+    // lc runs as root (via sudo, for pigpio), but the sound server
+    // (PipeWire) runs in the user's session, which root's processes can't
+    // find. So the player runs as the user who ran sudo, pointed at their
+    // session
+    const char* sudoUser = std::getenv("SUDO_USER");
+    const char* sudoUid = std::getenv("SUDO_UID");
+    if (geteuid() == 0 && sudoUser && sudoUid) {
+        m_soundPlayer = fmt::format(
+            "sudo -u {} env XDG_RUNTIME_DIR=/run/user/{} {}", sudoUser, sudoUid, m_soundPlayer);
+    }
+    for (const std::string* file : { &m_alertSound, &m_alarmSound }) {
+        if (!file->empty() && !std::filesystem::exists(*file)) {
+            MGOLOG("Sound file not found: " << *file);
+        }
+    }
     m_view = std::make_unique<ViewQt>();
     m_view->setMenu(&m_menu);
     m_view->initialise(*m_model);
@@ -91,11 +121,39 @@ void Controller::tick()
 void Controller::tickBody()
 {
     processKeyPress();
+    const SoundState afterKeys = soundStateOf(*m_model);
     m_model->checkStatus();
     checkLimitSwitch();
     checkScaleMismatch();
     showBacklashReport();
+    if (const auto sound
+        = m_soundCues.update(afterKeys, soundStateOf(*m_model), SoundCues::Clock::now())) {
+        playSound(*sound);
+    }
     m_view->updateDisplay(*m_model);
+}
+
+void Controller::playSound(Sound sound)
+{
+    const std::string& file = sound == Sound::Alert ? m_alertSound : m_alarmSound;
+    if (file.empty() || m_soundPlayerFailed) {
+        return;
+    }
+    // In its own process, detached, so nothing here waits for it to finish
+    // (and it's kept off the motor threads' cores, as it inherits this
+    // thread's). With PipeWire's suspend turned off, the HDMI output stays
+    // awake, so the start of the sound isn't lost: see TODO.md, "Investigate Sound Output"
+    QStringList args = QProcess::splitCommand(QString::fromStdString(m_soundPlayer));
+    if (args.isEmpty()) {
+        return;
+    }
+    const QString program = args.takeFirst();
+    args << QString::fromStdString(file);
+    if (!QProcess::startDetached(program, args)) {
+        // (Once: e.g. the player isn't installed)
+        MGOLOG("Couldn't run the sound player: " << m_soundPlayer << " (no more sounds)");
+        m_soundPlayerFailed = true;
+    }
 }
 
 void Controller::confirmMeasureBacklash()

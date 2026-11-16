@@ -13,6 +13,7 @@
 #include "radius.h"
 #include "rotaryencoder.h"
 #include "scale.h"
+#include "soundcues.h"
 #include "steppermotor.h"
 #include "threadpitches.h"
 #include "toollibrary.h"
@@ -7113,4 +7114,79 @@ TEST_CASE("Model:   the unknown tool keeps the positions, until an axis is set w
     std::vector<std::string> errors;
     REQUIRE(!mgo::readToolLibrary(t.file.path, errors).currentIsKnown());
     REQUIRE(errors.empty());
+}
+
+TEST_CASE("Sound cues: the alarm and the alert")
+{
+    using mgo::Sound;
+    using mgo::SoundCues;
+    using mgo::SoundState;
+    using State = mgo::MultiPass::State;
+    SoundCues cues;
+    SoundCues::Clock::time_point t {};
+    const auto tick = [&](const SoundState& afterKeys, const SoundState& now) {
+        t += std::chrono::milliseconds(50);
+        return cues.update(afterKeys, now, t);
+    };
+    const SoundState quiet;
+    REQUIRE(!tick(quiet, quiet));
+
+    SECTION("A warning which appears by itself sounds the alarm, once")
+    {
+        const SoundState warned { .warning = "The spindle stopped" };
+        REQUIRE(tick(quiet, warned) == Sound::Alarm);
+        REQUIRE(!tick(warned, warned));
+    }
+    SECTION("A warning replying to a key has no sound")
+    {
+        const SoundState refused { .warning = "Stop the motors first" };
+        REQUIRE(!tick(refused, refused));
+    }
+    SECTION("The same warning flickering on and off sounds only now and then")
+    {
+        const SoundState warned { .warning = "Spindle too fast" };
+        REQUIRE(tick(quiet, warned) == Sound::Alarm);
+        REQUIRE(!tick(quiet, quiet));
+        REQUIRE(!tick(quiet, warned));
+        t += SoundCues::WARNING_REPEAT_INTERVAL;
+        REQUIRE(!tick(quiet, quiet));
+        REQUIRE(tick(quiet, warned) == Sound::Alarm);
+    }
+    SECTION("A fault, a limit switch or a scale mismatch sounds the alarm, even during the keys")
+    {
+        const SoundState faulted { .faulted = true };
+        REQUIRE(tick(faulted, faulted) == Sound::Alarm);
+        REQUIRE(!tick(faulted, faulted));
+        const SoundState limit { .limitSwitchTripped = true };
+        REQUIRE(tick(quiet, limit) == Sound::Alarm);
+        REQUIRE(!tick(limit, limit));
+        const SoundState asked { .scaleMismatchAsks = 1 };
+        REQUIRE(tick(quiet, asked) == Sound::Alarm);
+        REQUIRE(!tick(asked, asked));
+    }
+    SECTION("A multi-pass pausing or finishing sounds the alert")
+    {
+        const SoundState cutting { .multiPassState = State::Returning };
+        const SoundState paused { .multiPassState = State::Paused };
+        const SoundState finished { .multiPassState = State::Finished };
+        REQUIRE(tick(cutting, paused) == Sound::Alert);
+        REQUIRE(!tick(paused, paused));
+        REQUIRE(!tick(cutting, cutting));
+        REQUIRE(tick(cutting, finished) == Sound::Alert);
+        REQUIRE(!tick(finished, finished));
+    }
+    SECTION("Arriving at the start sounds the alert, but not being stopped on the way")
+    {
+        const SoundState moving { .movingToStart = true };
+        const SoundState arrived { .atStart = true };
+        REQUIRE(tick(moving, arrived) == Sound::Alert);
+        REQUIRE(!tick(moving, quiet));
+    }
+    SECTION("The alarm wins over the alert")
+    {
+        const SoundState cutting { .multiPassState = State::Cutting };
+        const SoundState stopped { .warning = "Multi-pass stopped: X stalled",
+                                   .multiPassState = State::Finished };
+        REQUIRE(tick(cutting, stopped) == Sound::Alarm);
+    }
 }

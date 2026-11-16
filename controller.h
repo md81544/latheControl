@@ -3,6 +3,7 @@
 #include "iview.h"
 #include "menu.h"
 #include "model.h"
+#include "soundcues.h"
 
 #include <chrono>
 #include <deque>
@@ -45,6 +46,15 @@ private:
     bool m_inTick { false };
     // Keys pressed while a motion sequence was running, to act on afterwards
     std::deque<int> m_heldKeys;
+    // Sounds (see SoundCues): the WAV files to play (none if empty), and the
+    // command which plays them (the file is added at the end)
+    SoundCues m_soundCues;
+    std::string m_alertSound;
+    std::string m_alarmSound;
+    std::string m_soundPlayer;
+    bool m_soundPlayerFailed { false };
+    // Plays a sound in the background, without waiting for it
+    void playSound(Sound sound);
     // Thrown by a tick, to be rethrown from run()
     std::exception_ptr m_tickException;
     Model* m_model; // non-owning

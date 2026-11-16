@@ -7,7 +7,22 @@
       could go to the end?
 
 ### Investigate Sound Output
-- [ ] Could be useful for warnings and prompts.
+- [x] Could be useful for warnings and prompts.
+    - **Done (2026-11-16), not yet tried on the machine:** `SoundAlert` and
+      `SoundAlarm` in the config (sounds/alert.wav and sounds/alarm.wav, on
+      for both machines). SoundCues (soundcues.*) decides from the model's
+      state each tick: the alert when a multi-pass pauses, finishes or
+      arrives at its start; the alarm for a motor fault, a limit switch, a
+      scale mismatch, or a warning which appears while checking the status
+      (not one replying to a key, which the user is already looking at). The
+      same warning sounds at most every 10 s, as some (the spindle too fast
+      for a thread) can flicker on and off. The controller runs the player
+      (`aplay -q` by default) detached, with QProcess, so nothing waits
+    - lc runs as root (sudo, for pigpio), and root's processes can't find
+      the user's PipeWire session, so the player runs as `sudo -u
+      $SUDO_USER env XDG_RUNTIME_DIR=/run/user/$SUDO_UID aplay -q <file>`.
+      Untested on the Pi: if no sound plays, try that command by hand from
+      a root shell, and check lc.log for "Couldn't run the sound player"
     - A sharper sound for warnings, and a gentler one when waiting for the
       user (e.g. Enter between passes). Config-driven and off by default, and
       played from the UI side, never from the motor or run-loop paths
