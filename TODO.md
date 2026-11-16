@@ -569,7 +569,7 @@
       X still only moves outwards and Z only towards the chuck, so the same
       approach works, the steep end being at the shoulder rather than at
       the start
-    - **Done (2026-11-16), not yet tried on the machine:** a second kind of
+    - **Done (2026-11-16):** a second kind of
       radius mode (`RadiusKind::Shoulder`; menu Modes, `F`, "Filleted
       shoulder"; only with `CurrentFeature`), sharing radius mode's model
       state, display and arc-to-tapers code rather than being a separate
@@ -607,6 +607,10 @@
       end. The return after each arc is along the height it ended at (for
       the last pass, the fillet's top, which the straight passes cut), so
       the tool rubs along a cut surface, as on the end
+    - **Tried on the machine:** a 2 mm fillet with a sharp right-hand
+      turning tool (nose radius 0) came out just as expected. With no nose
+      radius, the last pass's move up the face (X alone) wasn't used, so
+      that's still to try, with a tool whose nose radius is typed in
 
 ## Motion and timing (mostly in steppermotor.cpp)
 - [ ] Deceleration ramping. At the moment there's only acceleration, so
