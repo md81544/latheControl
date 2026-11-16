@@ -1410,6 +1410,38 @@ change.
       that only passed on a retry as flaky. `make test-quick` leaves them
       out. A test that isn't tagged and fails now and then should be noted
       by name, then fixed or tagged
+- [ ] **Try the latest Raspberry Pi OS, with libgpiod instead of pigpio.**
+      Both Pis are held on Bookworm, as later releases are believed to have
+      dropped pigpio. That also holds the Pi builds to Bookworm's compiler
+      and Qt (GCC 12 and Qt 6.4, as far as is known), which is why the code
+      uses `fmt::format` rather than `std::format`, and must avoid newer
+      C++23 library features and Qt APIs even though they build on the Mac.
+    - **Plan:** on a spare SD card (so the working one is untouched),
+      install the latest Raspberry Pi OS, and try a branch using libgpiod
+    - **What it has to replace:** only `gpio.cpp` uses pigpio, behind
+      `IGpio` (igpio.h), so nothing else should change. It uses pins as
+      outputs (`gpioSetMode`, `gpioWrite`: step, direction, enable), inputs
+      with pull-ups (`gpioSetPullUpDown`, `gpioRead`: alarm, limit
+      switches), microsecond delays and ticks (`gpioDelay`, `gpioTick`, for
+      the motor threads' step timing), and edge callbacks with timestamps
+      (`gpioSetAlertFuncEx`: the spindle encoder and the Z scale). libgpiod
+      (v2) covers each of these: bias settings for the pull-ups, and edge
+      events with kernel timestamps, read from a thread of our own
+    - **The risk is the edge events.** pigpio samples the pins by DMA (every
+      5 µs by default) and delivers callbacks in batches; libgpiod's events
+      come from interrupts, read by a thread, which must keep up with the
+      encoder at the highest spindle speed and not lose edges. It would
+      need its own core, or to share one carefully, as the motor threads
+      are pinned (see the motor-thread pinning notes under "Motion and
+      timing"). Measure lost pulses with threading at speed before
+      trusting it, as that's what showed up the pinning problem before
+    - **Also check:** stepping a motor with `gpiod` line writes is fast
+      enough (it goes through the kernel, unlike pigpio's direct register
+      writes), and the program no longer needs root (pigpio needs it;
+      libgpiod only needs access to /dev/gpiochip*), which would change how
+      it's started
+    - Would free the OS, the compiler (`std::format` and newer C++23) and Qt
+      to move on
 - [ ] Lots of refactoring still needed, as this grew a bit organically
 - [ ] (undecided) Replace all "Axis1..." and "Axis2..." references with an array, to
       allow for future expansion. Might be difficult owing to the axes'
