@@ -2150,6 +2150,26 @@ change.
             `sudo journalctl --flush`. It's on now (15 Nov 2026), so after
             the next lock-up, `journalctl -b -1` shows the end of the
             previous boot, losing at most about the last 30 s.
+        - **A fourth lock-up (16 Nov 2026, 15:19)**, during a multi-pass,
+          with X moving, about 20-30 s after lc started. The lathe wasn't
+          running. lc had started three times that afternoon without trouble.
+          Neither log shows the lock itself. The journal's last entry is lc's
+          start, and lc.log's last line comes 18 s later (from before the
+          multi-pass started). lc flushes each line, but only to the kernel,
+          which writes it to the SD card some seconds later, so a hard lock
+          loses the end of lc.log as well as the journal's last 30 s.
+          There were no USB, memory or kernel warnings beforehand, so the
+          lock was sudden. Like the first (just after lc started a test),
+          it came with a motor moving, so motion is a suspect alongside the
+          FTDI link. Also suspect: pigpio's DMA. pigpio uses DMA all the time
+          (not only for moves), and a clash with the kernel over DMA channels
+          can hard-lock a Pi. The mill's Pi 3B+ differs from the lathe's
+          Pi 4 there, and the lathe hasn't locked up. A log on the SD card
+          can't catch a sudden lock. Next: a serial console on GPIO 14/15 to
+          another machine. It gets the kernel's last messages (e.g. an RCU
+          stall or soft lockup report) without needing USB, the network or
+          the SD card. Until then, stream lc.log and the kernel log over ssh
+          (`tail -F lc.log`, `journalctl -kf`) during tests
         - Nine of the settles hit the 3 s limit ("still changing"): the
           reading flickers at rest sometimes, so a settled value can be a
           count out
