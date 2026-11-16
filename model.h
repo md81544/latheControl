@@ -283,8 +283,8 @@ public:
     // surface (X in, for the diameter; Z towards the chuck, for the end), as
     // its backlash must be taken up the same way each time, or is still moving
     bool recordToolTouch();
-    // Once all four touches are in: the tool's offsets (axis 1, axis 2)
-    std::optional<std::pair<double, double>> toolMeasurementOffsets() const;
+    // Once all four touches are in: the tool's offsets
+    std::optional<ToolOffsets> toolMeasurementOffsets() const;
     // Stores the tool measured, with its description and nose radius, and
     // makes it current. Returns why not, or empty
     std::string finishToolMeasurement(const std::string& description, double noseRadiusMm);

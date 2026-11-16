@@ -6926,8 +6926,8 @@ TEST_CASE("Model:   changing tool shifts the positions, keeping memories and the
     REQUIRE(t.model.toolTouchStep() == mgo::ToolTouchStep::Finished);
     const auto offsets = t.model.toolMeasurementOffsets();
     REQUIRE(offsets);
-    REQUIRE(offsets->first == Approx(-1.5).margin(0.0011));
-    REQUIRE(offsets->second == Approx(-0.4).margin(0.0011));
+    REQUIRE(offsets->axis1Mm == Approx(-1.5).margin(0.0011));
+    REQUIRE(offsets->axis2Mm == Approx(-0.4).margin(0.0011));
     REQUIRE(t.model.finishToolMeasurement("Left-hand turning tool", 0.2).empty());
     REQUIRE(!t.model.isMeasuringTool());
     REQUIRE(t.model.toolLibrary().current().number == 2);

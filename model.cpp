@@ -2296,7 +2296,7 @@ bool Model::recordToolTouch()
     return true;
 }
 
-std::optional<std::pair<double, double>> Model::toolMeasurementOffsets() const
+std::optional<ToolOffsets> Model::toolMeasurementOffsets() const
 {
     if (toolTouchStep() != ToolTouchStep::Finished || !m_toolMeasurement) {
         return std::nullopt;
@@ -2319,8 +2319,8 @@ std::string Model::finishToolMeasurement(const std::string& description, double 
     Tool tool { .number = number,
                 .description = description,
                 .noseRadiusMm = std::max(0.0, noseRadiusMm),
-                .axis1OffsetMm = offsets->first,
-                .axis2OffsetMm = offsets->second,
+                .axis1OffsetMm = offsets->axis1Mm,
+                .axis2OffsetMm = offsets->axis2Mm,
                 .measured = today() };
     if (tool.description.empty()) {
         tool.description = fmt::format("Tool {}", number);

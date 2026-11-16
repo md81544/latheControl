@@ -2,7 +2,6 @@
 
 #include <string>
 #include <string_view>
-#include <utility>
 #include <vector>
 
 namespace mgo {
@@ -40,6 +39,12 @@ struct ToolTouches {
     double axis2Mm { 0.0 };
 };
 
+// A tool's offsets (see Tool), in mm
+struct ToolOffsets {
+    double axis1Mm { 0.0 };
+    double axis2Mm { 0.0 };
+};
+
 class ToolLibrary {
 public:
     static constexpr int REFERENCE_TOOL = 1;
@@ -71,12 +76,12 @@ public:
     // are 0 again and the others' are from its new tip
     void store(Tool tool);
 
-    // The offsets (axis 1, axis 2) of a tool measured from another tool
+    // The offsets of a tool measured from another tool
     // (from), whose offsets are known: from touched the work at fromTouches,
     // then the tool being measured touched the same surfaces at toolTouches,
     // with the positions still as from's. The further the tool had to go to
     // touch them, the further back its tip is
-    static std::pair<double, double> measuredOffsets(
+    static ToolOffsets measuredOffsets(
         const Tool& from,
         const ToolTouches& fromTouches,
         const ToolTouches& toolTouches);

@@ -9,6 +9,7 @@
 #include <fstream>
 #include <optional>
 #include <sstream>
+#include <utility>
 
 #include <fcntl.h>
 #include <unistd.h>
@@ -141,7 +142,7 @@ void ToolLibrary::store(Tool tool)
     });
 }
 
-std::pair<double, double> ToolLibrary::measuredOffsets(
+ToolOffsets ToolLibrary::measuredOffsets(
     const Tool& from,
     const ToolTouches& fromTouches,
     const ToolTouches& toolTouches)
@@ -149,8 +150,8 @@ std::pair<double, double> ToolLibrary::measuredOffsets(
     // With the positions as from's, the tool's tip reads where from's would
     // be. It touched the surface at toolTouches, where from's touched at
     // fromTouches: so its tip is (fromTouches - toolTouches) from from's
-    return { from.axis1OffsetMm + fromTouches.axis1Mm - toolTouches.axis1Mm,
-             from.axis2OffsetMm + fromTouches.axis2Mm - toolTouches.axis2Mm };
+    return { .axis1Mm = from.axis1OffsetMm + fromTouches.axis1Mm - toolTouches.axis1Mm,
+             .axis2Mm = from.axis2OffsetMm + fromTouches.axis2Mm - toolTouches.axis2Mm };
 }
 
 std::string ToolLibrary::toText(const std::string& axis1Label, const std::string& axis2Label) const

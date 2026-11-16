@@ -1654,8 +1654,8 @@ void Controller::finishToolMeasurement()
     const std::string measured = fmt::format(
         "Its offsets from T{}: {}, {}",
         m_model->toolLibrary().current().number,
-        offsetText(1, offsets->first),
-        offsetText(2, offsets->second));
+        offsetText(1, offsets->axis1Mm),
+        offsetText(2, offsets->axis2Mm));
     m_model->stopAllMotors();
     if (const Tool* existing = m_model->toolLibrary().find(number)) {
         // Measured again: only its offsets change
