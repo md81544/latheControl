@@ -1291,6 +1291,20 @@ change.
       Pi (its threads are real-time). Eight `yes` processes plus the tests'
       spinning motor threads is more than the M2 has cores, so it's a
       harsher test than a busy desktop
+    - **`[timing]` tests are retried (2026-11-16).** A one-off failure in the
+      menu-only change's first `make test` run (the test wasn't noted) cost
+      several full re-runs. Ten runs of the whole suite with six `yes`
+      processes on the M2 all passed, so which tests fail now and then
+      can't be found by running them. Instead, the 13 tests whose results
+      depend on the mock spindle's and motors' threads keeping pace (the
+      ones that lock Z to the spindle, and the threading and knurling
+      passes) are tagged `[timing]`. Tests that only wait for a move to end
+      (with a generous deadline), or that use a fake clock, aren't.
+      `make test` runs the rest first, then each `[timing]` test on its own
+      (test/run_timing_tests.sh), retried up to three times, and lists any
+      that only passed on a retry as flaky. `make test-quick` leaves them
+      out. A test that isn't tagged and fails now and then should be noted
+      by name, then fixed or tagged
 - [ ] Lots of refactoring still needed, as this grew a bit organically
 - [ ] (undecided) Replace all "Axis1..." and "Axis2..." references with an array, to
       allow for future expansion. Might be difficult owing to the axes'

@@ -4196,7 +4196,7 @@ struct ThreadingTestModel {
 
 } // end anonymous namespace
 
-TEST_CASE("Threading: Z follows the spindle's position, even as its speed changes")
+TEST_CASE("Threading: Z follows the spindle's position, even as its speed changes", "[timing]")
 {
     ThreadingTestModel t(400);
     t.startPass(5'000); // (5mm, i.e. five revolutions)
@@ -4237,7 +4237,7 @@ TEST_CASE("Threading: Z follows the spindle's position, even as its speed change
     REQUIRE(t.model.getWarning().empty());
 }
 
-TEST_CASE("Threading: every pass starts at the same spindle angle")
+TEST_CASE("Threading: every pass starts at the same spindle angle", "[timing]")
 {
     ThreadingTestModel t(300);
     // Out, back and out again: each starts at a whole revolution
@@ -4252,7 +4252,7 @@ TEST_CASE("Threading: every pass starts at the same spindle angle")
     }
 }
 
-TEST_CASE("Threading: a pass follows a spindle turning the other way")
+TEST_CASE("Threading: a pass follows a spindle turning the other way", "[timing]")
 {
     // (Its pulse count goes down: the pass must wait for the count to come
     // down to its start, not up)
@@ -4273,7 +4273,7 @@ TEST_CASE("Threading: a pass follows a spindle turning the other way")
     }
 }
 
-TEST_CASE("Threading: a pass waits until it's known which way the spindle is turning")
+TEST_CASE("Threading: a pass waits until it's known which way the spindle is turning", "[timing]")
 {
     // Which way comes from how far the spindle's count has moved over the
     // last tenth of a second or so (not from the encoder's latest edge, which
@@ -4312,7 +4312,7 @@ TEST_CASE("Threading: a pass waits until it's known which way the spindle is tur
     REQUIRE(model.getWarning().find("which way") != std::string::npos);
 }
 
-TEST_CASE("Threading: Z's backlash is taken up before a pass reverses")
+TEST_CASE("Threading: Z's backlash is taken up before a pass reverses", "[timing]")
 {
     // More backlash than half the pitch (500 steps): taken up while following
     // the spindle, Z would fall far enough behind for the pass to be stopped
@@ -4335,7 +4335,7 @@ TEST_CASE("Threading: Z's backlash is taken up before a pass reverses")
     }
 }
 
-TEST_CASE("Threading: a pass stops if Z can't keep up with the spindle")
+TEST_CASE("Threading: a pass stops if Z can't keep up with the spindle", "[timing]")
 {
     ThreadingTestModel t(1'000);
     t.startPass(20'000);
@@ -4530,7 +4530,7 @@ TEST_CASE("Model:   threading passes are set up only in threading mode")
     REQUIRE(!model.multiPassMovingToStart());
 }
 
-TEST_CASE("Model:   threading passes, each locked to the spindle")
+TEST_CASE("Model:   threading passes, each locked to the spindle", "[timing]")
 {
     ThreadingTestModel t(300);
     REQUIRE(waitFor([&t] { return !t.model.isAxis1MotorRunning(); }, std::chrono::seconds(5)));
@@ -4628,7 +4628,7 @@ void runUntilMoved(ThreadingTestModel& t)
 
 } // end anonymous namespace
 
-TEST_CASE("Model:   spring passes after the threading passes")
+TEST_CASE("Model:   spring passes after the threading passes", "[timing]")
 {
     ThreadingTestModel t(300);
     REQUIRE(waitFor([&t] { return !t.model.isAxis1MotorRunning(); }, std::chrono::seconds(5)));
@@ -4788,7 +4788,7 @@ TEST_CASE("Model:   spring passes after the threading passes")
     REQUIRE(!t.model.springPassesAvailable());
 }
 
-TEST_CASE("Model:   threading passes with a constant area and a compound infeed")
+TEST_CASE("Model:   threading passes with a constant area and a compound infeed", "[timing]")
 {
     ThreadingTestModel t(300);
     REQUIRE(waitFor([&t] { return !t.model.isAxis1MotorRunning(); }, std::chrono::seconds(5)));
@@ -4855,7 +4855,7 @@ TEST_CASE("Model:   threading passes with a constant area and a compound infeed"
     t.model.stopAllMotors();
 }
 
-TEST_CASE("Model:   threading passes stop after a pass if the encoder loses pulses")
+TEST_CASE("Model:   threading passes stop after a pass if the encoder loses pulses", "[timing]")
 {
     ThreadingTestModel t(300);
     REQUIRE(waitFor([&t] { return !t.model.isAxis1MotorRunning(); }, std::chrono::seconds(5)));
@@ -4921,7 +4921,7 @@ TEST_CASE("Model:   threading passes stop after a pass if the encoder loses puls
     t.model.stopAllMotors();
 }
 
-TEST_CASE("Model:   threading passes stop if a pass can't start")
+TEST_CASE("Model:   threading passes stop if a pass can't start", "[timing]")
 {
     ThreadingTestModel t(300);
     REQUIRE(t.model
@@ -5088,7 +5088,7 @@ TEST_CASE("Model:   knurling is set up only in knurling mode, with a diameter")
     REQUIRE(!t.model.getKnurlLeadMm());
 }
 
-TEST_CASE("Model:   knurling passes, each start there and back, locked to the spindle")
+TEST_CASE("Model:   knurling passes, each start there and back, locked to the spindle", "[timing]")
 {
     ThreadingTestModel t(300);
     REQUIRE(waitFor([&t] { return !t.model.isAxis1MotorRunning(); }, std::chrono::seconds(5)));
@@ -5180,7 +5180,7 @@ TEST_CASE("Model:   knurling passes, each start there and back, locked to the sp
     REQUIRE(t.model.getMode() == mgo::Mode::Knurling);
 }
 
-TEST_CASE("Model:   knurling's spindle may turn slower than threading's")
+TEST_CASE("Model:   knurling's spindle may turn slower than threading's", "[timing]")
 {
     ThreadingTestModel t(300);
     // About 20 rpm: too slow for threading, but not for knurling. (The mock

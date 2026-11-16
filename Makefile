@@ -1,10 +1,11 @@
 # Makefile - CMake wrapper
 # Usage:
-#   make          -> debug build, with mocked GPIO (FAKE), plus the unit tests
-#   make release  -> release build against pigpio (Raspberry Pi only)
-#   make test     -> debug build, then run the unit tests
-#   make latest   -> pull this repo, then make release
-#   make clean    -> remove all build directories and the lc symlink
+#   make            -> debug build, with mocked GPIO (FAKE), plus the unit tests
+#   make release    -> release build against pigpio (Raspberry Pi only)
+#   make test       -> debug build, then run the unit tests (retrying [timing] ones)
+#   make test-quick -> as make test, but without the [timing] tests
+#   make latest     -> pull this repo, then make release
+#   make clean      -> remove all build directories and the lc symlink
 #
 # Debug and Release live in separate trees under BUILD_ROOT, so switching
 # between them no longer wipes the other. The lc and compile_commands.json
@@ -26,7 +27,7 @@ GENERATOR := Unix Makefiles
 MARKER    := Makefile
 JOBS      := $(shell nproc 2>/dev/null || sysctl -n hw.logicalcpu 2>/dev/null || echo 4)
 
-.PHONY: all debug fake release test latest clean
+.PHONY: all debug fake release test test-quick latest clean
 
 # $(call configure,<build dir>,<build type>,<FAKE ON/OFF>)
 # Runs CMake's configure step if the build tree hasn't been configured yet.
@@ -62,9 +63,16 @@ release:
 # ---------------------------------------------------------------------------
 # Test (debug build + run)
 # ---------------------------------------------------------------------------
-# Builds the app too, so a passing run means the app is up to date as well
-test: debug
-	@$(BUILD_DIR_DEBUG)/test/unit_test -d y
+# Builds the app too, so a passing run means the app is up to date as well.
+# Tests tagged [timing] depend on the mock's real-time threads keeping up, so
+# can fail now and then on a busy machine: they're run one at a time
+# afterwards, and a test only fails if it fails three times in a row
+test: test-quick
+	@test/run_timing_tests.sh $(BUILD_DIR_DEBUG)/test/unit_test
+
+# Everything but the [timing] tests, for a quick check while working
+test-quick: debug
+	@$(BUILD_DIR_DEBUG)/test/unit_test -d y "~[timing]"
 	@$(BUILD_DIR_DEBUG)/test/ui_test -d y
 
 # ---------------------------------------------------------------------------
