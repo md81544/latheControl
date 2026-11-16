@@ -534,13 +534,18 @@ public:
     // this, it counts as stopped. Lower for knurling, whose long lead needs
     // a very slow spindle
     float minimumSpindleRpm() const;
-    // Radius cutting (radius mode; see radius.h): a multi-pass whose passes
-    // are arcs about the radius's centre, each cut as a series of short
-    // tapers, from the current feature (the work's diameter and its faced
-    // end), which must be set. Set up on entering the mode; the passes are
-    // fixed then, from the feature as it is at the time
+    // Radius cutting (radius mode; see radius.h): a radius on the work's end,
+    // or a shoulder with a fillet (the setup's kind). A multi-pass whose
+    // passes are arcs about the radius's centre (and, for a shoulder,
+    // straight passes first), each cut as a series of short tapers, from the
+    // current feature (the work's diameter and its faced end), which must be
+    // set. Set up on entering the mode; the passes are fixed then, from the
+    // feature as it is at the time. A shoulder, once finished, leaves the
+    // feature's diameter as the finished diameter
     std::string setRadiusSetup(const RadiusSetup& setup);
     const RadiusSetup& getRadiusSetup() const;
+    // The radius of each pass's arc (see RadiusPlan::arcs)
+    const std::vector<double>& radiusPassArcs() const;
     // Whether radius cutting has been set up (in radius mode)
     bool radiusSet() const;
     // Why radius cutting can't be set up now (empty if it can): it needs the
@@ -736,6 +741,7 @@ private:
     // The radius's passes, and its multi-pass setup (see
     // activeMultiPassSetup())
     std::vector<MultiPassPath> m_radiusPasses;
+    std::vector<double> m_radiusArcs;
     MultiPassSetup m_radiusMultiPassSetup;
     MultiPass m_multiPass { *this };
     bool m_multiPassMovingToStart { false };

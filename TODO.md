@@ -560,7 +560,53 @@
       would confirm it, but the finish is good enough not to bother. X
       kept up, with no sign of it cutting deep near the end face. The
       full ball end hasn't been tried. Considered done; inside radii and
-      concave fillets would be new items
+      concave fillets would be new items (fillets: see the next item)
+- [ ] **A filleted shoulder: a step turned down, with a concave radius in the
+      corner.** A fillet is material that's left, not taken off, so it can't
+      be added to a shoulder already turned square: the mode turns the step
+      with it. Arcs about a centre outside the work, cut as chains of tapers
+      as for a radius on the end: along a concave fillet towards the chuck,
+      X still only moves outwards and Z only towards the chuck, so the same
+      approach works, the steep end being at the shoulder rather than at
+      the start
+    - **Done (2026-11-16), not yet tried on the machine:** a second kind of
+      radius mode (`RadiusKind::Shoulder`; menu Modes, `F`, "Filleted
+      shoulder"; only with `CurrentFeature`), sharing radius mode's model
+      state, display and arc-to-tapers code rather than being a separate
+      mode. The dialog asks for the finished diameter, the length to the
+      shoulder (from the end face), the fillet's radius, the depth per pass
+      and the nose radius. The passes: straight passes down to the fillet's
+      top, right up to the shoulder; straight passes down to the finished
+      diameter, stopping the radius short of the shoulder; then arcs about
+      the corner of the square block that leaves, growing by the depth per
+      pass up to the radius (concentric, so each takes off the same depth,
+      as the convex radius's shrinking arcs do). Once finished, the
+      feature's diameter is the finished diameter
+    - **Two engine changes:** a path may have its own start on Z
+      (`MultiPassPath::cutStart`): the arcs start just short of the block,
+      which may be a long way from the end, and Z goes there at full speed
+      rather than feeding through air. And a path's point may move X alone
+      (its Z the same as the last's): with a nose radius, the straight
+      passes to the shoulder leave the nose's shape in the corner at the
+      fillet's top, above where the last arc ends (square to the face, the
+      nose's centre the nose radius below the top), so the last pass goes
+      up the face to the top. That's at X's speed, which can't be set for
+      the move: it's only the nose radius long, taking off a sliver
+    - **Nose radius:** the nose's centre follows an arc the nose radius
+      *smaller* than the cut (on the inside of the curve), so the nose can't
+      be larger than the fillet. Arcs no larger than the nose aren't cut
+      (the nose would fill them); the first one that is takes them off too.
+      A nose the fillet's size makes the last pass just a move on to the
+      corner and up the face
+    - **The tool** must be able to face the shoulder (e.g. a 93° or 95°
+      approach angle), as it ends moving X outwards with Z still
+    - **To try on the machine:** whether the arcs' start, just short of the
+      block (by `FeatureStartClearance`), and the moves between passes there
+      are clear in practice; the finish at the fillet's top, where it meets
+      the face; and whether X keeps up near the shoulder, as it did on the
+      end. The return after each arc is along the height it ended at (for
+      the last pass, the fillet's top, which the straight passes cut), so
+      the tool rubs along a cut surface, as on the end
 
 ## Motion and timing (mostly in steppermotor.cpp)
 - [ ] Deceleration ramping. At the moment there's only acceleration, so
@@ -1055,7 +1101,8 @@ change.
           tapers (`MotionSequence` could run them) or proper arc
           synchronisation. Tool nose radius starts to matter here too.
           **Done** for a radius on the end, as a chain of tapers in the
-          multi-pass engine: see "Radius mode" under Multi-pass
+          multi-pass engine: see "Radius mode" under Multi-pass. And for a
+          fillet at a shoulder: see "A filleted shoulder" there
     - **Suggested first slice:** feature Ø and end Z with set and clear, their
       own display box, cleared on re-zero, fault or tool change, and used to
       pre-fill multi-pass

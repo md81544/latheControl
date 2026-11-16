@@ -147,6 +147,7 @@ bool menuOnly(int k)
         case key::f2p:
         case key::f2r:
         case key::f2o:
+        case key::f2f:
         case key::f2m:
         case key::f2k:
         case key::f2g:
@@ -475,9 +476,10 @@ std::vector<Command> buildCommands(
     b.add(c, "Threading...", key::f2t, BOTH, nullptr, 't');
     b.add(c, "Taper...", key::f2p, BOTH, nullptr, 'p');
     b.add(c, "Quick chamfer (45 deg taper)", key::h, BOTH, nullptr, 'h');
-    // (Only with the current feature, from which it's cut)
+    // (Only with the current feature, from which they're cut)
     if (config.readBool("CurrentFeature", false)) {
-        b.add(c, "Radius on the end (experimental)...", key::f2o, BOTH, nullptr, 'o');
+        b.add(c, "Radius on the end...", key::f2o, BOTH, nullptr, 'o');
+        b.add(c, "Filleted shoulder (experimental)...", key::f2f, BOTH, nullptr, 'f');
     }
     b.add(c, "Multi-pass (experimental)...", key::f2m, BOTH, nullptr, 'm');
     b.add(
@@ -514,7 +516,7 @@ std::vector<Command> buildCommands(
         [](const Model& m) {
             return m.getMode() == Mode::MultiPass
                 || (m.getMode() == Mode::Threading && m.threadingPassesSet())
-                || m.getMode() == Mode::Knurling || m.gearCuttingSet();
+                || m.getMode() == Mode::Knurling || m.gearCuttingSet() || m.radiusSet();
         },
         'g');
     b.add(c, fmt::format("{} retraction direction...", a2), key::f2r, BOTH, nullptr, 'r');

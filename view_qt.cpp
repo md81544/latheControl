@@ -1544,7 +1544,15 @@ void ViewQt::Impl::updateMultiPassData(const Model& model)
         position(2, range.feedStart),
         position(2, range.feedEnd));
     const RadiusSetup& radiusSetup = model.getRadiusSetup();
-    if (radius) {
+    const bool shoulder = radius && radiusSetup.kind == RadiusKind::Shoulder;
+    if (shoulder) {
+        // e.g. "Shoulder: Ø 20.00 mm to 12.00 mm, fillet 2.00 mm"
+        mode.text = fmt::format(
+            "Shoulder: Ø {} to {}, fillet {}",
+            xLength(2.0 * std::abs(range.feedStart)),
+            xLength(radiusSetup.finishedDiameter),
+            xLength(radiusSetup.radius));
+    } else if (radius) {
         // e.g. "Radius 5.00 mm on the end, Ø 20.00 mm"
         mode.text = fmt::format(
             "Radius {} on the end, Ø {}",
@@ -1687,12 +1695,22 @@ void ViewQt::Impl::updateMultiPassData(const Model& model)
             "{} fed in: {} in all",
             x,
             xLength(std::abs(model.getAxis2Position() - range.feedStart)));
-    } else if (radius && mp.pass() > 0) {
-        // Each pass is an arc a depth per pass larger than the next
-        const double arc
-            = radiusSetup.radius + (mp.totalPasses() - mp.pass()) * radiusSetup.depthPerPass;
-        misc3.text = fmt::format(
-            "This pass's radius: {} (finishing at {})", xLength(arc), xLength(radiusSetup.radius));
+    } else if (
+        radius && mp.pass() > 0 && mp.pass() <= static_cast<int>(model.radiusPassArcs().size())) {
+        // Each pass is an arc a depth per pass from the next (or, for a
+        // shoulder, first a straight pass, turning the step)
+        const double arc = model.radiusPassArcs()[mp.pass() - 1];
+        if (arc > 0.0) {
+            misc3.text = fmt::format(
+                "This pass's radius: {} (finishing at {})",
+                xLength(arc),
+                xLength(radiusSetup.radius));
+        } else {
+            misc3.text = fmt::format(
+                "Turning the step: Ø {} (finishing at {})",
+                xLength(2.0 * std::abs(mp.plan().paths.at(mp.pass() - 1).feedStart)),
+                xLength(radiusSetup.finishedDiameter));
+        }
     } else if (mp.pass() > 0) {
         misc3.text
             = fmt::format("{} {}: {}", x, feedsIn ? "fed in" : "stepped over", xLength(mp.fed()));

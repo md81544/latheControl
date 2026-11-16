@@ -114,12 +114,20 @@ struct MultiPassPathPoint {
 // The path of one pass (see MultiPassPlan::paths)
 struct MultiPassPath {
     // Where the feed axis is for the pass's start, with the cut axis at the
-    // plan's cutStart
+    // pass's start
     double feedStart { 0.0 };
     // Where the cut goes, in order. Each move goes in a straight line (a
-    // short taper), the feed axis following the cut axis. The cut axis must
-    // move on each, and only ever away from cutStart
+    // short taper), the feed axis following the cut axis. The cut axis only
+    // ever moves away from the pass's start. A point may move the feed axis
+    // alone (the cut axis staying where the last point left it), at the feed
+    // axis's speed: e.g. up a shoulder's face
     std::vector<MultiPassPathPoint> points;
+    // Where the cut axis starts the pass, and returns to, if not the plan's
+    // cutStart (e.g. nearer the work, if the pass is only on part of it).
+    // The feed axis moves to feedStart where the cut axis is (where the last
+    // pass returned to), then the cut axis moves here at full speed, as both
+    // are clear of the work
+    std::optional<double> cutStart;
 };
 
 // The parameters of a multi-pass
@@ -208,10 +216,11 @@ struct MultiPassPlan {
     double indexStart { 0.0 };
     // If not empty, one pass for each path (e.g. a radius, cut as a series of
     // short tapers), rather than feeding in by feedPerPass and cutting
-    // straight to cutEnd: the feed axis moves to the path's feedStart (with
-    // the cut axis at cutStart), the cut follows the path from point to
-    // point, and the cut axis returns to cutStart (retracting first, if the
-    // plan retracts) without the feed axis following. feedPerPass, feedEnd
+    // straight to cutEnd: the feed axis moves to the path's feedStart, the
+    // cut axis to the path's start (cutStart, unless the path has its own),
+    // the cut follows the path from point to point, and the cut axis returns
+    // to the path's start (retracting first, if the plan retracts) without
+    // the feed axis following. feedPerPass, feedEnd
     // and cutEnd are then only for display. A pass's path may end somewhere
     // else on the cut axis from another's. Only for Feed cuts, with a
     // motorised feed axis and none of the options above which shift, correct
@@ -467,6 +476,9 @@ private:
     // Moves on along the path to its next point (m_point), at the cut speed,
     // or the point's limit if that's slower
     void cutToPoint();
+    // Following a path: whether the point the cut is going to moves the feed
+    // axis alone (see MultiPassPath::points)
+    bool pointMovesFeedOnly() const;
     // Whether the cut or feed axis is at a position (see cutStepSize())
     bool cutAt(double target) const;
     bool feedAt(double target) const;

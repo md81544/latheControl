@@ -164,8 +164,9 @@ public:
     openGearDialog(const GearDialogInfo& info, std::function<void(std::optional<GearSetup>)> onDone)
         = 0;
     // The radius dialog: the radius, the depth per pass and the tool's nose
-    // radius. onDone gets the setup chosen (which planRadius() accepts with
-    // info's work), or nullopt if cancelled
+    // radius (for a shoulder, also the finished diameter and the length to
+    // the shoulder), for info.setup's kind. onDone gets the setup chosen (which planRadius()
+    // accepts with info's work), or nullopt if cancelled
     virtual void openRadiusDialog(
         const RadiusDialogInfo& info,
         std::function<void(std::optional<RadiusSetup>)> onDone) = 0;

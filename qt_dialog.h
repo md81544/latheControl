@@ -91,10 +91,10 @@ QDialog* openGearDialog(
     std::function<void(std::optional<GearSetup>)> onDone);
 
 // The radius dialog: the radius, the depth per pass and the tool's nose
-// radius, showing the work it's cut on (the current feature's diameter and
-// end) and how many passes it takes. Gives onDone the setup chosen, or
-// nullopt if cancelled. It can only be accepted with a setup which
-// planRadius() accepts
+// radius (for a shoulder, also the finished diameter and the length to the
+// shoulder, for info.setup's kind), showing the work it's cut on (the current feature's diameter
+// and end) and how many passes it takes. Gives onDone the setup chosen, or nullopt if cancelled. It
+// can only be accepted with a setup which planRadius() accepts
 QDialog* openRadiusDialog(
     QWidget* parent,
     const QString& fontFamily,

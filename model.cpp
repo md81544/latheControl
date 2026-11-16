@@ -3574,14 +3574,21 @@ std::string Model::setRadiusSetup(const RadiusSetup& setup)
     }
     m_radiusSetup = setup;
     m_radiusPasses = std::move(plan.passes);
+    m_radiusArcs = std::move(plan.arcs);
     m_multiPassRange = plan.range;
     m_radiusMultiPassSetup = {};
     m_radiusMultiPassSetup.retractBeforeMoveToStart = true;
     m_radiusSet = true;
     MGOLOG(
         fmt::format(
-            "Radius set up: radius {} on diameter {}, end Z {}, {} per pass, nose {}: {} passes, Z "
+            "Radius set up: {} {} on diameter {}, end Z {}, {} per pass, nose {}: {} passes, Z "
             "{} to {}, X {} to {}",
+            setup.kind == RadiusKind::Shoulder
+                ? fmt::format(
+                      "a shoulder {} from the end, down to diameter {}, with a fillet of radius",
+                      setup.shoulderLength,
+                      setup.finishedDiameter)
+                : std::string("radius"),
             setup.radius,
             work.diameter,
             work.workEndZ,
@@ -3598,6 +3605,11 @@ std::string Model::setRadiusSetup(const RadiusSetup& setup)
 const RadiusSetup& Model::getRadiusSetup() const
 {
     return m_radiusSetup;
+}
+
+const std::vector<double>& Model::radiusPassArcs() const
+{
+    return m_radiusArcs;
 }
 
 bool Model::radiusSet() const
@@ -3928,9 +3940,12 @@ void Model::multiPassGo()
         plan.indexStart = gearStartTooth();
     }
     if (radius) {
-        // Each pass is an arc, as a series of tapers. The return is along
-        // the work's diameter, which is clear of the work once the pass has
-        // cut (the radius is all inside it), so there's no retract
+        // Each pass is an arc, as a series of tapers (or, for a shoulder, a
+        // straight pass). On the end, the return is along the work's
+        // diameter, which is clear of the work once the pass has cut (the
+        // radius is all inside it). At a shoulder, it's along the height the
+        // pass ended at, which the pass (or the passes down to the fillet's
+        // top) cut. So there's no retract
         plan.paths = m_radiusPasses;
         plan.feedPerPass = m_radiusSetup.depthPerPass;
         plan.retract = false;
@@ -3954,9 +3969,13 @@ void Model::multiPassGo()
             threading      ? "Threading passes"
                 : knurling ? "Knurling passes"
                 : gear     ? "Gear cutting"
-                : radius
-                ? fmt::format("Radius {} (nose {})", m_radiusSetup.radius, m_radiusSetup.noseRadius)
-                : "Multi-pass",
+                : radius   ? fmt::format(
+                                 "{} {} (nose {})",
+                                 m_radiusSetup.kind == RadiusKind::Shoulder ? "Shoulder with a fillet"
+                                                                            : "Radius",
+                                 m_radiusSetup.radius,
+                                 m_radiusSetup.noseRadius)
+                           : "Multi-pass",
             plan.cutStart,
             plan.cutEnd,
             plan.feedStart,
@@ -4361,8 +4380,15 @@ void Model::multiPassFinished()
     // diameter at the end as it was: a start from the feature assumes the
     // diameter runs from the end)
     // (Not for a thread: its depth isn't a surface's diameter)
-    // (Nor for paths, e.g. a radius, which doesn't change the diameter)
+    // (Nor for paths, e.g. a radius, which doesn't change the diameter,
+    // unless it turned a shoulder: from the end, to the finished diameter)
     const MultiPassPlan& plan = m_multiPass.plan();
+    if (m_mode == Mode::Radius && m_radiusSet && m_radiusSetup.kind == RadiusKind::Shoulder
+        && m_featureX && !plan.paths.empty()) {
+        m_featureX = (*m_featureX < 0.0 ? -0.5 : 0.5) * m_radiusSetup.finishedDiameter;
+        MGOLOG(fmt::format("Feature diameter now {}", *getFeatureDiameterMm()));
+        return;
+    }
     if (!m_workEndZ || !m_xDiameterSet || plan.feedManual || plan.cut == MultiPassCut::Thread
         || !plan.paths.empty()) {
         return;

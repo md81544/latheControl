@@ -2461,7 +2461,9 @@ public:
         layout->setContentsMargins(16, 12, 16, 12);
         layout->setSpacing(10);
 
-        auto* title = new QLabel("Radius on the work's end", box);
+        const bool shoulder = m_setup.kind == RadiusKind::Shoulder;
+        auto* title
+            = new QLabel(shoulder ? "Shoulder with a fillet" : "Radius on the work's end", box);
         title->setFont(titleFont);
         title->setStyleSheet(PROMPT_STYLE);
         layout->addWidget(title);
@@ -2483,10 +2485,20 @@ public:
         grid->setHorizontalSpacing(12);
         grid->setVerticalSpacing(8);
         layout->addLayout(grid);
-        const char* names[ROW_COUNT] = { "Radius", "Depth per pass", "Tool nose radius" };
-        for (int r = 0; r < ROW_COUNT; ++r) {
-            Row& row = m_rows[r];
-            row.name = new QLabel(names[r], box);
+        if (shoulder) {
+            m_order = { FinishedDiameter, ShoulderLength, Radius, DepthPerPass, Nose };
+        } else {
+            m_order = { Radius, DepthPerPass, Nose };
+        }
+        const char* names[ROW_COUNT] = { "Finished diameter",
+                                         "Length to the shoulder",
+                                         shoulder ? "Fillet radius" : "Radius",
+                                         "Depth per pass",
+                                         "Tool nose radius" };
+        for (std::size_t n = 0; n < m_order.size(); ++n) {
+            const int r = static_cast<int>(n);
+            Row& row = m_rows[m_order[n]];
+            row.name = new QLabel(names[m_order[n]], box);
             row.name->setFont(labelFont);
             grid->addWidget(row.name, r, 0);
             row.edit = new QLineEdit(box);
@@ -2510,37 +2522,48 @@ public:
 
         auto* hint = new QLabel(
             QString::fromStdString(
-                "Up/Down: line   Enter: OK   Esc: cancel\n"
-                "Each pass is an arc, from the end face round to the diameter,\n"
-                "cut as a series of short tapers. The tool is as touched off\n"
-                "on the diameter and the end face."),
+                shoulder ? "Up/Down: line   Enter: OK   Esc: cancel\n"
+                           "The length is from the end face. Straight passes turn the\n"
+                           "step, then each pass is an arc in the corner, cut as a series\n"
+                           "of short tapers. The tool is as touched off on the diameter\n"
+                           "and the end face, and must be able to face the shoulder."
+                         : "Up/Down: line   Enter: OK   Esc: cancel\n"
+                           "Each pass is an arc, from the end face round to the diameter,\n"
+                           "cut as a series of short tapers. The tool is as touched off\n"
+                           "on the diameter and the end face."),
             box);
         hint->setFont(hintFont);
         hint->setStyleSheet(MP_HINT_STYLE);
         layout->addWidget(hint);
 
         // The values to start with (the nose radius may be 0, a sharp tool)
-        const auto setValue = [this](QLineEdit* edit, double mm, bool zeroToo) {
+        const auto setValue = [this](RowId r, double mm, bool zeroToo) {
             if (mm != 0.0 || zeroToo) {
-                edit->setText(QString::fromStdString(length(mm, 1)));
+                m_rows[r].edit->setText(
+                    QString::fromStdString(r == ShoulderLength ? zLength(mm, 1) : length(mm, 1)));
             }
         };
-        setValue(m_rows[Radius].edit, m_setup.radius, false);
-        setValue(m_rows[DepthPerPass].edit, m_setup.depthPerPass, false);
-        setValue(m_rows[Nose].edit, m_setup.noseRadius, true);
-        for (int r = 0; r < ROW_COUNT; ++r) {
+        for (const RowId r : m_order) {
+            // (The nose radius may be 0, a sharp tool)
+            setValue(r, value(r), r == Nose);
             QObject::connect(m_rows[r].edit, &QLineEdit::textEdited, this, [this, r] {
-                const double mm = typed(m_rows[r].edit).value_or(0.0) / m_info.feed.displayPerMm;
-                (r == Radius             ? m_setup.radius
-                     : r == DepthPerPass ? m_setup.depthPerPass
-                                         : m_setup.noseRadius) = mm;
+                // (The length to the shoulder is along Z, in Z's units)
+                const double perMm
+                    = r == ShoulderLength ? m_info.cut.displayPerMm : m_info.feed.displayPerMm;
+                value(r) = typed(m_rows[r].edit).value_or(0.0) / perMm;
                 refresh();
             });
         }
 
         refresh();
         // (Start where something needs typing)
-        setCurrentRow(m_setup.radius > 0.0 && m_setup.depthPerPass <= 0.0 ? DepthPerPass : Radius);
+        int first = 0;
+        for (int n = static_cast<int>(m_order.size()) - 1; n >= 0; --n) {
+            if (m_order[n] != Nose && value(m_order[n]) <= 0.0) {
+                first = n;
+            }
+        }
+        setCurrentRow(first);
         adjustSize();
         if (parent) {
             const QPoint centre = parent->mapToGlobal(parent->rect().center());
@@ -2574,6 +2597,8 @@ protected:
 
 private:
     enum RowId {
+        FinishedDiameter,
+        ShoulderLength,
         Radius,
         DepthPerPass,
         Nose,
@@ -2601,6 +2626,30 @@ private:
             "{:.{}f}", mm * m_info.feed.displayPerMm, m_info.feed.decimals + extraDecimals);
     }
 
+    // A length along Z (e.g. to the shoulder), in Z's display units
+    std::string zLength(double mm, int extraDecimals = 0) const
+    {
+        return fmt::format(
+            "{:.{}f}", mm * m_info.cut.displayPerMm, m_info.cut.decimals + extraDecimals);
+    }
+
+    // The setup's value a row edits
+    double& value(RowId r)
+    {
+        switch (r) {
+            case FinishedDiameter:
+                return m_setup.finishedDiameter;
+            case ShoulderLength:
+                return m_setup.shoulderLength;
+            case Radius:
+                return m_setup.radius;
+            case DepthPerPass:
+                return m_setup.depthPerPass;
+            default:
+                return m_setup.noseRadius;
+        }
+    }
+
     // A Z position, in Z's display units
     std::string position(double mm) const
     {
@@ -2613,11 +2662,12 @@ private:
         return fmt::format("{:.{}f}", value, decimals);
     }
 
+    // (row is an index into m_order)
     void setCurrentRow(int row)
     {
         m_current = row;
-        m_rows[row].edit->setFocus();
-        m_rows[row].edit->selectAll(); // (so typing replaces it)
+        m_rows[m_order[row]].edit->setFocus();
+        m_rows[m_order[row]].edit->selectAll(); // (so typing replaces it)
         refresh();
     }
 
@@ -2625,8 +2675,20 @@ private:
     {
         const RadiusPlan plan = planRadius(m_setup, m_info.work);
         const double workRadius = m_info.work.diameter / 2.0;
+        const bool shoulder = m_setup.kind == RadiusKind::Shoulder;
+        if (shoulder) {
+            // e.g. "the shoulder at Z -20.00"
+            m_rows[ShoulderLength].result->setText(
+                plan.error.empty() ? QString::fromStdString(
+                                         fmt::format(
+                                             "the shoulder at {} {}",
+                                             m_info.cut.label,
+                                             position(plan.range.cutEnd)))
+                                   : "");
+        }
         m_rows[Radius].result->setText(
-            m_setup.radius > 0.0 && std::abs(m_setup.radius - workRadius) <= MultiPass::TOLERANCE
+            !shoulder && m_setup.radius > 0.0
+                    && std::abs(m_setup.radius - workRadius) <= MultiPass::TOLERANCE
                 ? "a full ball end"
                 : "");
         m_rows[DepthPerPass].result->setText(
@@ -2636,10 +2698,11 @@ private:
                           "{} pass{}", plan.passes.size(), plan.passes.size() == 1 ? "" : "es"))
                 : "");
         m_rows[Nose].result->setText(m_setup.noseRadius <= 0.0 ? "a sharp tool" : "");
-        for (int row = 0; row < ROW_COUNT; ++row) {
-            m_rows[row].edit->setStyleSheet(
-                row == m_current ? MP_EDIT_CURRENT_STYLE : MP_EDIT_STYLE);
-            m_rows[row].name->setStyleSheet(row == m_current ? MP_CURRENT_STYLE : MP_LABEL_STYLE);
+        for (std::size_t n = 0; n < m_order.size(); ++n) {
+            const bool current = static_cast<int>(n) == m_current;
+            Row& row = m_rows[m_order[n]];
+            row.edit->setStyleSheet(current ? MP_EDIT_CURRENT_STYLE : MP_EDIT_STYLE);
+            row.name->setStyleSheet(current ? MP_CURRENT_STYLE : MP_LABEL_STYLE);
         }
         if (plan.error.empty()) {
             m_message->setStyleSheet(MP_HINT_STYLE);
@@ -2647,6 +2710,7 @@ private:
                 QString::fromStdString(
                     "In the mode, Enter moves to the start (off the end, on the\n"
                     "diameter); Enter again starts"));
+
         } else {
             m_message->setStyleSheet(MP_ERROR_STYLE);
             m_message->setText(QString::fromStdString(plan.error));
@@ -2669,7 +2733,7 @@ private:
         }
         if (qtKey == Qt::Key_Up || qtKey == Qt::Key_Down) {
             const int row = m_current + (qtKey == Qt::Key_Up ? -1 : 1);
-            if (row >= 0 && row < ROW_COUNT) {
+            if (row >= 0 && row < static_cast<int>(m_order.size())) {
                 setCurrentRow(row);
             }
             return true;
@@ -2684,7 +2748,10 @@ private:
     RadiusDialogInfo m_info;
     RadiusSetup m_setup;
     Row m_rows[ROW_COUNT];
-    int m_current { Radius };
+    // The rows shown, in order (a shoulder has more)
+    std::vector<RowId> m_order;
+    // (An index into m_order)
+    int m_current { 0 };
     QLabel* m_message { nullptr };
 };
 

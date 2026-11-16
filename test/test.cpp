@@ -6249,6 +6249,174 @@ TEST_CASE("Radius: what can't be cut")
 
 namespace {
 
+// A shoulder 20 mm from the end of a 20 mm bar, down to 12 mm, with a 2 mm
+// fillet: the fillet's top is 8 from the centre line, and it starts 18 from
+// the end
+mgo::RadiusSetup shoulderSetup(double noseRadius = 0.0)
+{
+    return { .kind = mgo::RadiusKind::Shoulder,
+             .radius = 2.0,
+             .depthPerPass = 0.5,
+             .noseRadius = noseRadius,
+             .finishedDiameter = 12.0,
+             .shoulderLength = 20.0 };
+}
+
+} // end anonymous namespace
+
+TEST_CASE("Radius: a shoulder is turned with straight passes, then the fillet in arcs")
+{
+    const mgo::RadiusPlan plan = mgo::planRadius(shoulderSetup(), radiusWork());
+    REQUIRE(plan.error.empty());
+    // Four passes down to the fillet's top (10 to 8), four down to the
+    // finished diameter (8 to 6), then four arcs (0.5 to 2)
+    REQUIRE(plan.passes.size() == 12);
+    REQUIRE(
+        plan.arcs
+        == std::vector<double> { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 1.0, 1.5, 2.0 });
+    REQUIRE(plan.range.cutStart == Approx(0.5));
+    REQUIRE(plan.range.cutEnd == Approx(-20.0));
+    REQUIRE(plan.range.feedStart == Approx(10.0));
+    REQUIRE(plan.range.feedEnd == Approx(6.0));
+    // The straight passes, from off the end: to the shoulder, then to where
+    // the fillet starts
+    for (std::size_t n = 0; n < 8; ++n) {
+        const mgo::MultiPassPath& path = plan.passes[n];
+        REQUIRE(!path.cutStart.has_value());
+        REQUIRE(path.feedStart == Approx(n < 4 ? 9.5 - 0.5 * n : 7.5 - 0.5 * (n - 4)));
+        REQUIRE(path.points.size() == 1);
+        REQUIRE(path.points[0].cut == Approx(n < 4 ? -20.0 : -18.0));
+        REQUIRE(path.points[0].feed == Approx(path.feedStart));
+    }
+    // Each arc starts just short of the block in the corner, goes on to its
+    // side, then round about its corner (Z -18, X 8) to its top, Z only ever
+    // moving towards the chuck and X outwards, every taper within the
+    // tolerance of the arc
+    const double tolerance = mgo::RADIUS_CHORD_TOLERANCE + 1e-6;
+    for (std::size_t n = 8; n < 12; ++n) {
+        const mgo::MultiPassPath& path = plan.passes[n];
+        const double arc = plan.arcs[n];
+        const auto off = [&](double z, double x) { return std::hypot(z + 18.0, x - 8.0) - arc; };
+        REQUIRE(path.cutStart.has_value());
+        REQUIRE(*path.cutStart == Approx(-17.5));
+        REQUIRE(path.feedStart == Approx(8.0 - arc).margin(tolerance));
+        REQUIRE(path.points.front().cut == Approx(-18.0).margin(tolerance));
+        REQUIRE(path.points.front().feed == Approx(path.feedStart));
+        double z = path.points.front().cut;
+        double x = path.points.front().feed;
+        for (std::size_t p = 1; p < path.points.size(); ++p) {
+            const mgo::MultiPassPathPoint& point = path.points[p];
+            REQUIRE(point.cut < z);
+            REQUIRE(point.feed > x);
+            REQUIRE(std::abs(off(point.cut, point.feed)) <= tolerance);
+            REQUIRE(std::abs(off((z + point.cut) / 2.0, (x + point.feed) / 2.0)) <= tolerance);
+            z = point.cut;
+            x = point.feed;
+        }
+        // It ends on the block's top (with a sharp tool, nothing's left above)
+        REQUIRE(z == Approx(-18.0 - arc).margin(tolerance));
+        REQUIRE(x == Approx(8.0).margin(tolerance));
+    }
+}
+
+TEST_CASE("Radius: a shoulder's nose radius")
+{
+    // The tip follows an arc the nose radius smaller than the cut, its
+    // centre moved towards the chuck and the centre line by the nose radius.
+    // The 0.5 mm arc is still cut (0.1 for the tip)
+    const mgo::RadiusPlan plan = mgo::planRadius(shoulderSetup(0.4), radiusWork());
+    REQUIRE(plan.error.empty());
+    REQUIRE(plan.passes.size() == 12);
+    const double tolerance = mgo::RADIUS_CHORD_TOLERANCE + 1e-6;
+    for (std::size_t n = 8; n < 12; ++n) {
+        const mgo::MultiPassPath& path = plan.passes[n];
+        const double tipArc = plan.arcs[n] - 0.4;
+        // On to the arc's start, the nose radius past the block's side
+        REQUIRE(path.points.front().cut == Approx(-18.4).margin(tolerance));
+        const std::size_t arcEnd = n == 11 ? path.points.size() - 1 : path.points.size();
+        for (std::size_t p = 0; p < arcEnd; ++p) {
+            const mgo::MultiPassPathPoint& point = path.points[p];
+            REQUIRE(std::abs(std::hypot(point.cut + 18.4, point.feed - 7.6) - tipArc) <= tolerance);
+        }
+    }
+    // The last pass ends by going up the shoulder's face, X alone, to the
+    // fillet's top: the arc ends the nose radius below it
+    const mgo::MultiPassPath& last = plan.passes.back();
+    const mgo::MultiPassPathPoint& up = last.points.back();
+    const mgo::MultiPassPathPoint& before = last.points[last.points.size() - 2];
+    REQUIRE(before.cut == Approx(-20.0).margin(tolerance));
+    REQUIRE(before.feed == Approx(7.6).margin(tolerance));
+    REQUIRE(up.cut == before.cut);
+    REQUIRE(up.feed == Approx(8.0));
+    // (Only on the last pass)
+    REQUIRE(plan.passes[10].points.back().feed == Approx(7.6).margin(tolerance));
+
+    // A nose as big as the fillet: arcs it would fill aren't cut, and the
+    // last is just on to the corner and up the face
+    const mgo::RadiusPlan full = mgo::planRadius(shoulderSetup(2.0), radiusWork());
+    REQUIRE(full.error.empty());
+    REQUIRE(full.passes.size() == 9);
+    const mgo::MultiPassPath& corner = full.passes.back();
+    REQUIRE(corner.feedStart == Approx(6.0));
+    REQUIRE(corner.points.size() == 2);
+    REQUIRE(corner.points[0].cut == Approx(-20.0));
+    REQUIRE(corner.points[0].feed == Approx(6.0));
+    REQUIRE(corner.points[1].cut == Approx(-20.0));
+    REQUIRE(corner.points[1].feed == Approx(8.0));
+}
+
+TEST_CASE("Radius: a fillet that starts at the end face, or fills the step")
+{
+    // The fillet as long as the shoulder is from the end: no passes down to
+    // the finished diameter, as there's nothing in front of the fillet
+    auto setup = shoulderSetup();
+    setup.shoulderLength = 2.0;
+    mgo::RadiusPlan plan = mgo::planRadius(setup, radiusWork());
+    REQUIRE(plan.error.empty());
+    REQUIRE(plan.passes.size() == 8);
+    REQUIRE(*plan.passes[4].cutStart == Approx(0.5));
+    // The fillet as big as the step: no passes down to its top
+    setup = shoulderSetup();
+    setup.radius = 4.0;
+    plan = mgo::planRadius(setup, radiusWork());
+    REQUIRE(plan.error.empty());
+    REQUIRE(plan.passes.size() == 16);
+    REQUIRE(plan.passes.front().points[0].cut == Approx(-16.0));
+}
+
+TEST_CASE("Radius: shoulders that can't be cut")
+{
+    const auto error
+        = [](const mgo::RadiusSetup& setup) { return mgo::planRadius(setup, radiusWork()).error; };
+    REQUIRE(error(shoulderSetup()).empty());
+    auto setup = shoulderSetup();
+    setup.finishedDiameter = 0.0;
+    REQUIRE(error(setup) == "Type the finished diameter");
+    setup = shoulderSetup();
+    setup.finishedDiameter = 20.0;
+    REQUIRE(error(setup) == "The finished diameter must be less than the work's (20.000)");
+    setup = shoulderSetup();
+    setup.shoulderLength = 0.0;
+    REQUIRE(error(setup) == "Type the length to the shoulder");
+    setup = shoulderSetup();
+    setup.radius = 4.1;
+    REQUIRE(error(setup) == "The radius can't be more than the step's height (4.000)");
+    setup = shoulderSetup();
+    setup.shoulderLength = 1.9;
+    REQUIRE(error(setup) == "The radius can't be more than the length to the shoulder");
+    setup = shoulderSetup();
+    setup.noseRadius = 2.1;
+    REQUIRE(error(setup) == "The tool's nose radius can't be more than the fillet's radius");
+    setup = shoulderSetup();
+    setup.depthPerPass = 0.0;
+    REQUIRE(error(setup) == "Type the depth per pass");
+    setup = shoulderSetup();
+    setup.depthPerPass = 0.01;
+    REQUIRE(error(setup).ends_with("passes: make the depth per pass larger"));
+}
+
+namespace {
+
 // Two passes, each along a path of two points
 mgo::MultiPassPlan pathPlan()
 {
@@ -6293,6 +6461,36 @@ TEST_CASE("MultiPass: following paths")
     REQUIRE(machine.feedPosition() == Approx(5.0));
 }
 
+TEST_CASE("MultiPass: a path with its own start, and a point moving the feed axis alone")
+{
+    FakeMultiPassMachine machine;
+    mgo::MultiPass mp(machine);
+    auto plan = pathPlan();
+    // The first pass starts nearer the work, and ends up a face
+    plan.paths[0] = { .feedStart = 4.5,
+                      .points = { { .cut = -1.0, .feed = 4.5 }, { .cut = -1.0, .feed = 5.0 } },
+                      .cutStart = -0.5 };
+    REQUIRE(mp.start(plan).empty());
+    machine.run(mp);
+    REQUIRE(mp.state() == mgo::MultiPass::State::Finished);
+    // The feed axis to the path's start, then the cut axis there at full
+    // speed, then along the path, then back to the path's start. The next
+    // pass starts at the plan's start
+    REQUIRE(
+        machine.log
+        == Log { "feed 4.5",
+                 "cut -0.5 at 1000",
+                 "cut -1 at 40",
+                 "feed 5",
+                 "cut -0.5 at 1000",
+                 "feed 4",
+                 "cut 0 at 1000",
+                 "cut -1 at 40",
+                 "cut -3 at 40 following -0.5",
+                 "cut 0 at 1000" });
+    REQUIRE(machine.cutSpeed() == Approx(40.0));
+}
+
 TEST_CASE("MultiPass: a speed set while following a path is used from then on")
 {
     FakeMultiPassMachine machine;
@@ -6317,7 +6515,13 @@ TEST_CASE("MultiPass: paths it won't follow")
     mgo::MultiPass mp(machine);
     auto plan = pathPlan();
     plan.paths[1].points[1].cut = -0.5; // (back towards the start)
-    REQUIRE(mp.start(plan) == "A path's cut axis must move away from the start at every point");
+    REQUIRE(mp.start(plan) == "A path's cut axis can't move back towards its start");
+    plan = pathPlan();
+    plan.paths[1].points[1] = plan.paths[1].points[0]; // (going nowhere)
+    REQUIRE(mp.start(plan) == "Each point of a path must move an axis");
+    plan = pathPlan();
+    plan.paths[1].cutStart = -1.0; // (its first point is there already, X too)
+    REQUIRE(mp.start(plan) == "Each point of a path must move an axis");
     plan = pathPlan();
     plan.paths[0].points.clear();
     REQUIRE(mp.start(plan) == "A path has no points");
@@ -6433,5 +6637,72 @@ TEST_CASE("Model:   radius cutting, every pass round an arc")
     REQUIRE(model.getAxis2MotorPosition() >= 5.0 - 0.0001);
     REQUIRE(model.getAxis2MotorPosition() <= 5.0 + mgo::RADIUS_CHORD_TOLERANCE + 0.0011);
     REQUIRE(model.getFeatureDiameterMm() == Approx(10.0));
+    REQUIRE(model.getAxis1MotorSpeed() == Approx(40.0));
+}
+
+TEST_CASE("Model:   radius cutting, a shoulder with a fillet")
+{
+    auto config = featureConfig();
+    mgo::MockGpio gpio(false);
+    mgo::Model model(gpio, config);
+    model.initialise();
+    model.setAxis1MotorSpeed(40.0);
+    model.setAxis2MotorSpeed(20.0);
+    // A 10 mm bar, its end at Z 0 (Z negative towards the chuck)
+    model.setAxis2Position(5.0);
+    model.diameterIsSet();
+    model.markWorkEnd();
+    model.changeMode(mgo::Mode::Radius);
+    // Down to 8 mm, 3 mm from the end, with a 0.5 mm fillet (its top at 4.5
+    // from the centre line, starting 2.5 from the end): two passes to the
+    // fillet's top, two to the finished diameter, then arcs of 0.2 and 0.5,
+    // with a 0.1 mm nose radius
+    REQUIRE(model
+                .setRadiusSetup(
+                    { .kind = mgo::RadiusKind::Shoulder,
+                      .radius = 0.5,
+                      .depthPerPass = 0.3,
+                      .noseRadius = 0.1,
+                      .finishedDiameter = 8.0,
+                      .shoulderLength = 3.0 })
+                .empty());
+    REQUIRE(model.radiusPassArcs() == std::vector<double> { 0.0, 0.0, 0.0, 0.0, 0.2, 0.5 });
+
+    model.multiPassGo(); // (to the start)
+    REQUIRE(runUntilAtStart(model));
+    model.multiPassGo();
+    REQUIRE(model.getWarning().empty());
+    REQUIRE(model.multiPass().totalPasses() == 6);
+
+    // While cutting, Z never goes further than the shoulder, nor X below the
+    // finished diameter; on the arcs, never nearer the chuck than the
+    // fillet's start, and the tip stays on its arc (the fillet less the nose
+    // radius, about Z -2.6, X 4.4: see planRadius())
+    double furthestOff = 0.0;
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
+    while (model.multiPass().inProgress()) {
+        REQUIRE(std::chrono::steady_clock::now() < deadline);
+        model.checkStatus();
+        const double z = model.getAxis1MotorPosition();
+        const double x = model.getAxis2MotorPosition();
+        REQUIRE(z >= -3.0 - mgo::RADIUS_CHORD_TOLERANCE - 0.0011);
+        REQUIRE(x >= 4.0 - 0.0011);
+        const int pass = model.multiPass().pass();
+        if (pass == 6 && model.multiPass().state() == mgo::MultiPass::State::Cutting && z < -2.6
+            && x < 4.4) {
+            furthestOff = std::max(furthestOff, std::abs(std::hypot(z + 2.6, x - 4.4) - 0.4));
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    INFO(model.multiPass().message());
+    REQUIRE(model.multiPass().state() == mgo::MultiPass::State::Finished);
+    REQUIRE(model.getWarning().empty());
+    REQUIRE(furthestOff < 0.02);
+    // The last pass went up the shoulder's face to the fillet's top, then
+    // back to just short of the fillet
+    REQUIRE(model.getAxis1MotorPosition() == Approx(-2.0).margin(0.0001));
+    REQUIRE(model.getAxis2MotorPosition() == Approx(4.5).margin(0.0011));
+    // The step is turned from the end: that's the feature's diameter now
+    REQUIRE(model.getFeatureDiameterMm() == Approx(8.0));
     REQUIRE(model.getAxis1MotorSpeed() == Approx(40.0));
 }

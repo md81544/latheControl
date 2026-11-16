@@ -1094,6 +1094,83 @@ TEST_CASE("UI: radius on the end through the controller")
     REQUIRE(!model.multiPass().inProgress());
 }
 
+TEST_CASE("UI: a shoulder with a fillet through the controller")
+{
+    MapConfigReader config { { { "CurrentFeature", "true" } } };
+    mgo::MockGpio gpio { false };
+    mgo::Model model { gpio, config };
+    mgo::Controller controller(&model);
+    QWidget* w = mainWindow();
+    REQUIRE(w);
+    model.setAxis1MotorSpeed(40.0);
+    model.setAxis2MotorSpeed(20.0);
+
+    // A 10 mm bar, its end at Z 0. Down to 8 mm, 3 mm from the end, with a
+    // 0.5 mm fillet, 0.3 per pass, with a 0.1 mm nose radius
+    model.setAxis2Position(5.0);
+    model.diameterIsSet();
+    model.markWorkEnd();
+    whenDialogShows([](QWidget* dialog) {
+        typeInto(dialog, "8");
+        key(dialog, Qt::Key_Down);
+        typeInto(dialog, "3");
+        key(dialog, Qt::Key_Down);
+        typeInto(dialog, "0.5");
+        key(dialog, Qt::Key_Down);
+        // (Not without a depth per pass)
+        key(dialog, Qt::Key_Return);
+        REQUIRE(dialog->isVisible());
+        typeInto(dialog, "0.3");
+        key(dialog, Qt::Key_Down);
+        typeInto(dialog, "0.1");
+        snapshot(dialog, "shoulder");
+        key(dialog, Qt::Key_Return);
+    });
+    press(w, controller, Qt::Key_Tab);
+    press(w, controller, Qt::Key_M);
+    press(w, controller, Qt::Key_F);
+    REQUIRE(waitForDialogToClose());
+    REQUIRE(model.getMode() == mgo::Mode::Radius);
+    REQUIRE(model.radiusSet());
+    const mgo::RadiusSetup& setup = model.getRadiusSetup();
+    REQUIRE(setup.kind == mgo::RadiusKind::Shoulder);
+    REQUIRE(setup.finishedDiameter == Approx(8.0));
+    REQUIRE(setup.shoulderLength == Approx(3.0));
+    REQUIRE(setup.radius == Approx(0.5));
+    REQUIRE(setup.depthPerPass == Approx(0.3));
+    REQUIRE(setup.noseRadius == Approx(0.1));
+
+    press(w, controller, Qt::Key_Return);
+    REQUIRE(
+        QTest::qWaitFor(
+            [&] {
+                controller.tick();
+                return !model.multiPassMovingToStart();
+            },
+            10'000));
+    REQUIRE(model.multiPassAtStart());
+    press(w, controller, Qt::Key_Return);
+    REQUIRE(model.multiPass().inProgress());
+    REQUIRE(model.multiPass().totalPasses() == 6);
+    controller.tick();
+    snapshot(w, "shoulder_mode");
+    press(w, controller, Qt::Key_Space);
+    REQUIRE(!model.multiPass().inProgress());
+
+    // The radius on the end starts from what was typed for the shoulder
+    whenDialogShows([](QWidget* dialog) {
+        snapshot(dialog, "radius_after_shoulder");
+        key(dialog, Qt::Key_Return);
+    });
+    press(w, controller, Qt::Key_Tab);
+    press(w, controller, Qt::Key_M);
+    press(w, controller, Qt::Key_O);
+    REQUIRE(waitForDialogToClose());
+    REQUIRE(model.radiusSet());
+    REQUIRE(model.getRadiusSetup().kind == mgo::RadiusKind::End);
+    REQUIRE(model.getRadiusSetup().radius == Approx(0.5));
+}
+
 TEST_CASE("UI: radius isn't in the menu without the current feature")
 {
     TestModel tm;
@@ -1103,6 +1180,7 @@ TEST_CASE("UI: radius isn't in the menu without the current feature")
     press(w, controller, Qt::Key_Tab);
     press(w, controller, Qt::Key_M);
     press(w, controller, Qt::Key_O);
+    press(w, controller, Qt::Key_F);
     press(w, controller, Qt::Key_Escape);
     REQUIRE(tm.model.getMode() == mgo::Mode::None);
 }

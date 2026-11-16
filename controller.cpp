@@ -1002,7 +1002,8 @@ void Controller::processKey(int t)
                         });
                     break;
                 }
-            case key::f2o: // radius mode
+            case key::f2o: // radius mode: a radius on the work's end
+            case key::f2f: // radius mode: a shoulder with a fillet
                 {
                     if (m_model->config().readBool("DisableAxis2", false)) {
                         break;
@@ -1018,6 +1019,9 @@ void Controller::processKey(int t)
                                             .feed = mp.feed,
                                             .work = m_model->radiusWork(),
                                             .setup = m_model->getRadiusSetup() };
+                    // (The radius, depth and nose radius carry over from the
+                    // other kind, if that was used last)
+                    info.setup.kind = kp == key::f2f ? RadiusKind::Shoulder : RadiusKind::End;
                     m_view->openRadiusDialog(info, [this](std::optional<RadiusSetup> setup) {
                         if (!setup) {
                             return;

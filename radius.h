@@ -7,41 +7,75 @@
 
 namespace mgo {
 
-// Radius cutting (lathe): a convex radius on the corner of the work's end,
-// from a radius of 0.5 mm or so up to a full ball end (a radius of half the
-// diameter). It starts from the current feature: with the end faced and the
-// diameter set, the program knows where the corner is, so nothing else needs
-// setting up.
+// Radius cutting (lathe), of two kinds. Both start from the current feature:
+// with the end faced and the diameter set, the program knows where the work
+// is, so nothing else needs setting up.
 //
-// Each pass is an arc about the finished radius's centre, starting at the
-// largest that still touches the corner and stepping in by the depth per pass
-// to the finished radius, so every pass takes off about the same depth. Each
-// arc is clipped to the work: it starts on the end face and ends on the
-// diameter, so the first passes are short and nearly straight (light taper
-// cuts across the corner), and the last runs from the end face round to the
-// diameter. Each arc is cut as a series of short tapers (see
+// A radius on the end: a convex radius on the corner of the work's end, from
+// a radius of 0.5 mm or so up to a full ball end (a radius of half the
+// diameter). Each pass is an arc about the finished radius's centre, starting
+// at the largest that still touches the corner and stepping in by the depth
+// per pass to the finished radius, so every pass takes off about the same
+// depth. Each arc is clipped to the work: it starts on the end face and ends
+// on the diameter, so the first passes are short and nearly straight (light
+// taper cuts across the corner), and the last runs from the end face round to
+// the diameter.
+//
+// A shoulder with a fillet: a step turned down from the work's diameter, with
+// a concave radius (a fillet) in the corner where the smaller diameter meets
+// the shoulder. The fillet is material that's left, not taken off, so it
+// can't be added to a shoulder that's already square: the step is turned
+// with it. First, straight passes down to the height of the fillet's top,
+// right up to the shoulder; then straight passes down to the finished
+// diameter, stopping the radius short of the shoulder. That leaves a square
+// block in the corner, the radius on each side, of which the fillet is what's
+// left after taking off a quarter of a circle about the corner of the block
+// nearest the work's end, out from the finished diameter. Then each pass is
+// an arc about that corner, growing by the depth per pass up to the radius,
+// so again every pass takes off about the same depth. Each starts on the
+// block's side (towards the work's end) and ends on its top, and starts from
+// just short of the block rather than from the work's end, which may be a
+// long way off.
+//
+// Either way, each arc is cut as a series of short tapers (see
 // MultiPassPlan::paths), as tapers are what the machine already does well: X
 // follows Z at a fixed ratio on each. X only moves outwards and Z only towards
 // the chuck during a cut, so neither reverses (and takes up its backlash) part
-// way.
-//
-// Near the end face the arc is almost square to Z, so X has to move many times
+// way. Where an arc is steep (near the end face on the end, or near the
+// shoulder in a fillet), it's almost square to Z, so X has to move many times
 // as fast as Z: Z is slowed there so that X can keep up (see
-// RadiusWork::xMaxSpeed), as an X lagging behind would cut too deep.
+// RadiusWork::xMaxSpeed), as an X lagging behind would cut too deep (on the
+// end) or leave the fillet proud (at a shoulder).
+
+// Which kind of radius (see above)
+enum class RadiusKind {
+    // A convex radius on the corner of the work's end
+    End,
+    // A step down from the work's diameter, with a concave radius (a fillet)
+    // where it meets the shoulder
+    Shoulder
+};
 
 // What the radius dialog chooses. Lengths are in mm
 struct RadiusSetup {
+    RadiusKind kind { RadiusKind::End };
     double radius { 0.0 };
     double depthPerPass { 0.0 };
     // The tool's nose radius (0 for a sharp tool). The path is offset to
     // allow for it, assuming the tool was touched off on the diameter and
-    // the end face, as a right-hand turning tool is
+    // the end face, as a right-hand turning tool is. For a fillet, it can't
+    // be more than the fillet's radius, which it would cut too big
     double noseRadius { 0.0 };
+    // A shoulder only: the diameter the step is turned down to, and how far
+    // the shoulder is from the work's end (towards the chuck)
+    double finishedDiameter { 0.0 };
+    double shoulderLength { 0.0 };
 };
 
 // Where the work is, from the current feature, and what the machine can do
 struct RadiusWork {
-    // The work's diameter, and the Z of its (faced) end
+    // The work's diameter (for a shoulder, the diameter it's turned down
+    // from), and the Z of its (faced) end
     double diameter { 0.0 };
     double workEndZ { 0.0 };
     // +1 if Z's position increases towards the chuck, -1 if it decreases
@@ -72,12 +106,17 @@ constexpr double RADIUS_MAX_SEGMENT_DEG = 10.0;
 constexpr int RADIUS_MAX_PASSES = 500;
 
 // A radius's passes, and the multi-pass's range for display and the move to
-// the start: Z from off the end face to the end of the last pass, and X from
-// the work's diameter (where the tool goes for the start) to where the last
-// pass starts. Or, if error isn't empty, why it can't be cut
+// the start: Z from off the end face to the end of the last pass (on the end)
+// or the shoulder, and X from the work's diameter (where the tool goes for the
+// start) to where the last pass starts (on the end) or the finished diameter.
+// Or, if error isn't empty, why it can't be cut
 struct RadiusPlan {
     MultiPassRange range;
     std::vector<MultiPassPath> passes;
+    // For each pass, the radius of the arc it cuts (as the finished radius
+    // is measured, without the nose radius), or 0 for a straight pass (in a
+    // shoulder, turning the step)
+    std::vector<double> arcs;
     std::string error;
 };
 RadiusPlan planRadius(const RadiusSetup& setup, const RadiusWork& work);

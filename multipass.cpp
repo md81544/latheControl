@@ -322,12 +322,18 @@ std::string MultiPass::start(const MultiPassPlan& plan)
             if (path.points.empty()) {
                 return "A path has no points";
             }
-            double cut = plan.cutStart;
+            double cut = path.cutStart.value_or(plan.cutStart);
+            double feed = path.feedStart;
             for (const MultiPassPathPoint& point : path.points) {
-                if ((point.cut - cut) * direction < TOLERANCE) {
-                    return "A path's cut axis must move away from the start at every point";
+                const double along = (point.cut - cut) * direction;
+                if (along <= -TOLERANCE) {
+                    return "A path's cut axis can't move back towards its start";
+                }
+                if (along < TOLERANCE && std::abs(point.feed - feed) < TOLERANCE) {
+                    return "Each point of a path must move an axis";
                 }
                 cut = point.cut;
+                feed = point.feed;
             }
         }
     }
@@ -442,10 +448,12 @@ void MultiPass::update()
         case State::Finished:
             return;
         case State::Cutting:
-            if (m_machine.cutMoving()) {
+            if (m_machine.cutMoving() || (pointMovesFeedOnly() && feedMoving)) {
                 return;
             }
-            if (!cutAt(cutTarget())) {
+            if (!cutAt(cutTarget())
+                || (pointMovesFeedOnly()
+                    && !feedAt(m_plan.paths.at(m_pass - 1).points.at(m_point).feed))) {
                 abandon("The cut stopped short of its end");
                 return;
             }
@@ -689,6 +697,16 @@ bool MultiPass::followsPaths() const
     return !m_plan.paths.empty();
 }
 
+bool MultiPass::pointMovesFeedOnly() const
+{
+    if (!followsPaths() || m_state != State::Cutting) {
+        return false;
+    }
+    const auto& points = m_plan.paths.at(m_pass - 1).points;
+    const double from = m_point == 0 ? m_passCutStart : points.at(m_point - 1).cut;
+    return std::abs(points.at(m_point).cut - from) < TOLERANCE;
+}
+
 double MultiPass::cutTarget() const
 {
     if (followsPaths()) {
@@ -782,6 +800,9 @@ void MultiPass::positionAndCut()
 {
     // (With a compound infeed, the deeper the feed axis, the further along)
     m_passCutStart = m_plan.cutStart + m_plan.cutShiftPerFeed * fed();
+    if (followsPaths()) {
+        m_passCutStart = m_plan.paths.at(m_pass - 1).cutStart.value_or(m_plan.cutStart);
+    }
     if (cutAt(m_passCutStart)) {
         startCut();
         return;
@@ -820,6 +841,11 @@ void MultiPass::cutToPoint()
         m_cutSpeed = m_machine.cutSpeed();
     }
     const MultiPassPathPoint& point = m_plan.paths.at(m_pass - 1).points.at(m_point);
+    if (pointMovesFeedOnly()) {
+        // (The cut axis's speed stays as it was, for the next point)
+        m_machine.feedMoveTo(point.feed);
+        return;
+    }
     double speed = m_cutSpeed;
     if (point.maxCutSpeed > 0.0) {
         speed = std::min(speed, point.maxCutSpeed);
