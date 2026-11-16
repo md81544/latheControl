@@ -70,8 +70,8 @@
 - [x] A key that brings up all the options available *now*
     - **Done:** `Tab` opens a menu of every command, with its shortcut, built
       from one table of commands (commands.cpp) so it can't drift out of date.
-      Commands not available at the moment (e.g. in Setup mode, or on a
-      locked axis) are greyed out. It never blocks: motors keep running,
+      Commands not available at the moment (e.g. threading passes outside
+      threading mode, or on a locked axis) are greyed out. It never blocks: motors keep running,
       Space still stops everything, and rapids and their dead-man stops still
       work. Choosing a command acts exactly as its shortcut does. Rapids are
       deliberately not in the menu, as they rely on holding the keys down
@@ -684,7 +684,8 @@
           (deflection / spring). Ramping isn't worth doing
         - Out by a consistent amount after a change of direction: X's
           backlash compensation (`Axis2BacklashCompensationSteps`) is off;
-          re-measure it in Setup mode (`Tab` `M` `S`)
+          re-measure it with a dial indicator (Setup mode, which
+          showed the motor steps for this, was removed on 16 Nov 2026)
         - Wanders after fast or long moves: steps are being lost, so ramping
           (or a lower maximum X speed) is worth doing
     - Related idea, for sizing: after setting the measured diameter, type the

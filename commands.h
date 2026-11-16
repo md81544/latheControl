@@ -4,6 +4,7 @@
 
 #include <functional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace mgo {
@@ -35,7 +36,8 @@ char categoryHotkey(const std::string& category);
 
 // All the commands available from the menu, in menu order, worded for this
 // config (e.g. axis names, and speed preset values). Commands for an axis
-// disabled in the config are left out.
+// disabled in the config are left out, as are those of a disabled mode
+// (DisabledModes).
 // units: the display units, used in commands' descriptions (e.g. nudge amounts)
 // threadingAutoRetract: whether it's on, as the menu shows (see
 // Model::threadingAutoRetract()); likewise axis1FinishOnScale (see
@@ -46,10 +48,19 @@ std::vector<Command> buildCommands(
     bool threadingAutoRetract = false,
     bool axis1FinishOnScale = false);
 
-// Whether a key is allowed in the current mode (e.g. only motion keys in
-// Setup mode; no X motion while X is retracted). Used by the controller to
-// filter key presses, and by the menu
+// Whether a key is allowed in the current mode (e.g. no X motion while X is
+// retracted, nor a mode's keys if the config disables it). Used by the
+// controller to filter key presses, and by the menu
 bool keyAllowedInCurrentMode(int key, const Model& model);
+
+// Whether the config's DisabledModes (e.g. "threading, taper, chamfer,
+// knurling" on the mill) names a mode: threading, taper, chamfer (quick
+// chamfer), multipass or knurling. Case doesn't matter
+bool modeDisabled(const IConfigReader& config, std::string_view mode);
+
+// Whether a key starts (or belongs to) a mode the config disables. Such
+// commands are left out of the menu, and their keys ignored
+bool keyDisabledByConfig(int key, const IConfigReader& config);
 
 // Whether a command can be used right now
 bool isAvailable(const Command& command, const Model& model);

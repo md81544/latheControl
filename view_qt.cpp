@@ -1497,22 +1497,6 @@ void ViewQt::Impl::updateTextFromModel(const Model& model)
                 }
                 break;
             }
-        case Mode::Setup:
-            {
-                // TODO probably remove this
-                mode.text = "Setup";
-                misc1.text = "This mode allows you to determine backlash compensation";
-                misc2.text = "Use a dial indicator to find number of steps backlash per axis";
-                misc3.text = "REMEMBER to unset any previous-set backlash figures in config!";
-                misc4.text = "";
-                misc5.text = fmt::format(
-                    "Z step: {}   X step: {}",
-                    model.getAxis1MotorCurrentStep(),
-                    model.getAxis2MotorCurrentStep());
-                misc6.text = "";
-                warning.text = "Press Esc to exit setup";
-                break;
-            }
         case Mode::Threading:
             {
                 if (model.threadingPassesSet()) {

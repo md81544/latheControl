@@ -866,13 +866,6 @@ void Controller::processKey(int t)
                     m_menu.open();
                     break;
                 }
-            case key::f2s: // setup mode
-                {
-                    m_model->setAxis1MotorSpeed(0.8f);
-                    m_model->setAxis2MotorSpeed(1.f);
-                    m_model->changeMode(Mode::Setup);
-                    break;
-                }
             case key::f2t: // threading mode
                 {
                     if (m_model->config().readBool("DisableAxis2", false)) {

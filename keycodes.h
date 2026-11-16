@@ -161,7 +161,6 @@ constexpr int aAll_DELETE = key::DELETE + 0x4000;
 
 // Commands with no shortcut of their own, chosen from the menu. The f2 names
 // are from the F2 leader key they used to follow
-constexpr int f2s = 7001; // setup
 constexpr int f2t = 7002; // threading
 constexpr int f2p = 7003; // taPer
 constexpr int f2r = 7004; // X retraction mode

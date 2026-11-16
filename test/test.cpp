@@ -1754,15 +1754,50 @@ TEST_CASE("Commands: keys allowed in the current mode")
     mgo::Model model(gpio, config);
     model.initialise();
     REQUIRE(mgo::keyAllowedInCurrentMode(mgo::key::a1_g, model));
-    // In Setup mode, only motion and stop keys (and Esc etc) are allowed
-    model.changeMode(mgo::Mode::Setup);
-    REQUIRE(!mgo::keyAllowedInCurrentMode(mgo::key::a1_g, model));
-    REQUIRE(mgo::keyAllowedInCurrentMode(mgo::key::LEFT, model));
-    REQUIRE(mgo::keyAllowedInCurrentMode(mgo::key::ESC, model));
-    model.changeMode(mgo::Mode::None);
+    REQUIRE(mgo::keyAllowedInCurrentMode(mgo::key::f2t, model));
     // No X motion while X is retracted
     model.setIsAxis2Retracted(true);
     REQUIRE(!mgo::keyAllowedInCurrentMode(mgo::key::UP, model));
+    REQUIRE(mgo::keyAllowedInCurrentMode(mgo::key::LEFT, model));
+}
+
+TEST_CASE("Commands: modes disabled in the config")
+{
+    // As on the mill: no threading, tapers, chamfers or knurling, but
+    // multi-pass stays (e.g. for facing or slots)
+    TestConfigReader config({ { "DisabledModes", "Threading, taper,chamfer  knurling" } });
+    REQUIRE(mgo::modeDisabled(config, "threading"));
+    REQUIRE(mgo::modeDisabled(config, "taper"));
+    REQUIRE(mgo::modeDisabled(config, "chamfer"));
+    REQUIRE(mgo::modeDisabled(config, "knurling"));
+    REQUIRE(!mgo::modeDisabled(config, "multipass"));
+    REQUIRE(!mgo::modeDisabled(mgo::MockConfigReader(), "threading"));
+
+    // Left out of the menu: threading's passes and auto-retract too
+    const std::vector<mgo::Command> commands = mgo::buildCommands(config);
+    const auto inMenu = [&](int key) {
+        return std::ranges::any_of(commands, [key](const mgo::Command& c) { return c.key == key; });
+    };
+    for (const int key : { mgo::key::f2t,
+                           mgo::key::threadingPasses,
+                           mgo::key::toggleThreadingAutoRetract,
+                           mgo::key::f2p,
+                           mgo::key::h,
+                           mgo::key::f2k }) {
+        REQUIRE(!inMenu(key));
+    }
+    REQUIRE(inMenu(mgo::key::f2m));
+    REQUIRE(inMenu(mgo::key::f2r));
+
+    // And their keys do nothing (e.g. h, the quick chamfer's shortcut)
+    mgo::MockGpio gpio(false);
+    mgo::Model model(gpio, config);
+    model.initialise();
+    REQUIRE(!mgo::keyAllowedInCurrentMode(mgo::key::h, model));
+    REQUIRE(!mgo::keyAllowedInCurrentMode(mgo::key::H, model));
+    REQUIRE(!mgo::keyAllowedInCurrentMode(mgo::key::f2t, model));
+    REQUIRE(!mgo::keyAllowedInCurrentMode(mgo::key::toggleThreadingAutoRetract, model));
+    REQUIRE(mgo::keyAllowedInCurrentMode(mgo::key::f2m, model));
     REQUIRE(mgo::keyAllowedInCurrentMode(mgo::key::LEFT, model));
 }
 
@@ -1866,10 +1901,11 @@ TEST_CASE("Menu: hotkeys")
     menu.handleKey(mgo::key::ESC, model);
     menu.open();
     menu.handleKey(mgo::key::m, model);
-    model.changeMode(mgo::Mode::Setup); // only motion allowed
-    REQUIRE(menu.handleKey(mgo::key::t, model).type == Type::None);
+    // (Threading passes: only in threading mode. After threading, taper,
+    // quick chamfer and multi-pass)
+    REQUIRE(menu.handleKey(mgo::key::n, model).type == Type::None);
     REQUIRE(menu.isOpen());
-    REQUIRE(menu.selection() == 0);
+    REQUIRE(menu.selection() == 4);
 }
 
 TEST_CASE("Commands: menu hotkeys are unique within each list")

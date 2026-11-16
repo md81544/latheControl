@@ -63,6 +63,30 @@ std::string keyName(int k)
     }
 }
 
+// The mode a key starts or belongs to, as named in the config's
+// DisabledModes, or empty if it isn't one which can be disabled. Threading's
+// passes and its auto-retract go with it
+std::string_view modeNameForKey(int k)
+{
+    switch (k) {
+        case key::f2t:
+        case key::threadingPasses:
+        case key::toggleThreadingAutoRetract:
+            return "threading";
+        case key::f2p:
+            return "taper";
+        case key::h:
+        case key::H:
+            return "chamfer";
+        case key::f2m:
+            return "multipass";
+        case key::f2k:
+            return "knurling";
+        default:
+            return {};
+    }
+}
+
 std::string leaderKeyName(const IConfigReader& config, const std::string& setting, long defaultKey)
 {
     const long k = static_cast<long>(config.readLong(setting, defaultKey));
@@ -75,6 +99,7 @@ public:
     explicit CommandListBuilder(const IConfigReader& config)
         : m_axis1Enabled(!config.readBool("DisableAxis1", false))
         , m_axis2Enabled(!config.readBool("DisableAxis2", false))
+        , m_config(config)
     {
     }
 
@@ -89,7 +114,8 @@ public:
         char hotkey = 0,
         bool isToggle = false)
     {
-        if (((axes & 1) && !m_axis1Enabled) || ((axes & 2) && !m_axis2Enabled)) {
+        if (((axes & 1) && !m_axis1Enabled) || ((axes & 2) && !m_axis2Enabled)
+            || keyDisabledByConfig(key, m_config)) {
             return;
         }
         Command c { category, description, key };
@@ -109,6 +135,7 @@ public:
 private:
     bool m_axis1Enabled;
     bool m_axis2Enabled;
+    const IConfigReader& m_config;
     std::vector<Command> m_commands;
 };
 
@@ -118,6 +145,41 @@ constexpr int BOTH = AXIS1 | AXIS2;
 constexpr int NONE = 0;
 
 } // end anonymous namespace
+
+bool modeDisabled(const IConfigReader& config, std::string_view mode)
+{
+    // A list such as "threading, taper": split on commas and spaces
+    const std::string list = config.read("DisabledModes", "");
+    std::size_t i = 0;
+    while (i < list.size()) {
+        while (i < list.size()
+               && (list[i] == ',' || std::isspace(static_cast<unsigned char>(list[i])))) {
+            ++i;
+        }
+        std::size_t end = i;
+        while (end < list.size() && list[end] != ','
+               && !std::isspace(static_cast<unsigned char>(list[end]))) {
+            ++end;
+        }
+        if (end > i) {
+            std::string name = list.substr(i, end - i);
+            for (char& ch : name) {
+                ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+            }
+            if (name == mode) {
+                return true;
+            }
+        }
+        i = end;
+    }
+    return false;
+}
+
+bool keyDisabledByConfig(int key, const IConfigReader& config)
+{
+    const std::string_view mode = modeNameForKey(key);
+    return !mode.empty() && modeDisabled(config, mode);
+}
 
 char categoryHotkey(const std::string& category)
 {
@@ -142,7 +204,6 @@ namespace {
 bool menuOnly(int k)
 {
     switch (k) {
-        case key::f2s:
         case key::f2t:
         case key::f2p:
         case key::f2r:
@@ -239,6 +300,11 @@ std::vector<const Command*> commandsForLeader(const std::vector<Command>& comman
 
 bool keyAllowedInCurrentMode(int k, const Model& model)
 {
+    // A mode the config has turned off (DisabledModes): not in the menu, and
+    // its keys do nothing
+    if (keyDisabledByConfig(k, model.config())) {
+        return false;
+    }
     // The mode means some keys are ignored, for instance in
     // threading, you cannot change the speed of the z-axis as
     // that would affect the thread pitch
@@ -386,10 +452,6 @@ bool keyAllowedInCurrentMode(int k, const Model& model)
         && (k == key::UP || k == key::DOWN || k == key::W || k == key::w || k == key::s
             || k == key::S)) {
         return false;
-    }
-    if (model.getMode() == Mode::Setup) {
-        return k == key::LEFT || k == key::RIGHT || k == key::UP || k == key::DOWN
-            || k == key::SPACE;
     }
     return true;
 }
@@ -584,7 +646,6 @@ std::vector<Command> buildCommands(
         },
         'g');
     b.add(c, fmt::format("{} retraction direction...", a2), key::f2r, BOTH, nullptr, 'r');
-    b.add(c, "Setup (measure backlash)", key::f2s, NONE, nullptr, 's');
     b.add(c, "Exit mode", key::ESC, NONE, nullptr, 'x');
 
     // The hotkeys are the axes' names (e.g. z and x on the lathe)

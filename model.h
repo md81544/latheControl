@@ -46,7 +46,6 @@ constexpr const char* DEFAULT_GENERAL_STATUS = "Tab or F1: menu";
 // "Modes" allow for special behaviour (like threading and tapering)
 enum class Mode {
     None,
-    Setup,
     Threading,
     Taper,
     Radius, // Radius cutting (see Model::setRadiusSetup())
