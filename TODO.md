@@ -2170,6 +2170,16 @@ change.
           stall or soft lockup report) without needing USB, the network or
           the SD card. Until then, stream lc.log and the kernel log over ssh
           (`tail -F lc.log`, `journalctl -kf`) during tests
+        - **Decided (16 Nov 2026): the mill gets a Pi 4 (4 GB), as the
+          lathe has.** This removes the 3B+'s USB driver (dwc_otg) and its
+          DMA setup in one go, and the lathe's Pi 4 has never locked up with
+          the same code and pigpio. It also gives the RAM for builds. (Not a
+          Pi 5: pigpio doesn't support it.) Active heatsinks are ordered for
+          both Pis (the 3B+ had hit its soft temperature limit), and the
+          enclosures, which also hold the stepper drivers and PSUs, need
+          fans. If the mill doesn't lock up on the Pi 4, put the cause down
+          to the 3B+ and leave it there. If it does, the serial console is
+          next
         - Nine of the settles hit the 3 s limit ("still changing"): the
           reading flickers at rest sometimes, so a settled value can be a
           count out
