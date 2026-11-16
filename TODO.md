@@ -8,7 +8,41 @@
 
 ### Investigate Sound Output
 - [ ] Could be useful for warnings and prompts.
-    - To test; whether the existing monitor's HDMI output would work
+    - A sharper sound for warnings, and a gentler one when waiting for the
+      user (e.g. Enter between passes). Config-driven and off by default, and
+      played from the UI side, never from the motor or run-loop paths
+    - **HDMI works (2026-11-16):** Pi OS is set to send sound over HDMI, and a
+      generated tone played with aplay is nice and loud from the monitors on
+      both machines
+    - **The output goes to sleep:** after a pause, the start of a sound was
+      sometimes lost while the output woke up. On the lathe, `pactl list
+      sinks` showed why: WirePlumber suspends the HDMI sinks (there are two)
+      within about 10 s of the last sound, and the next sound wakes them
+      from cold
+    - **Fixed on the lathe (2026-11-16)** by turning WirePlumber's suspend
+      off for the ALSA outputs. The sinks then stay IDLE, and a sound played
+      a minute after the last one was heard in full. The file is
+      `~/.config/wireplumber/main.lua.d/51-disable-suspension.lua`, then
+      `systemctl --user restart wireplumber`:
+
+            rule = {
+              matches = {
+                { { "node.name", "matches", "alsa_output.*" } },
+              },
+              apply_properties = {
+                ["session.suspend-timeout-seconds"] = 0,
+              },
+            }
+            table.insert(alsa_monitor.rules, rule)
+
+        - This is WirePlumber 0.4's format (Bookworm). 0.5 (Trixie) uses
+          `.conf` files instead, so it needs redoing after an OS upgrade.
+          It should go in the README's setup notes once sound is in lc
+        - A sound played 30 minutes after the last one was also heard in
+          full, so the monitor doesn't mute its own audio while the sink is
+          idle. lc can just play its sounds when needed, with no stream
+          held open
+        - Still to do: the same config on the mill
 
 ### Make the interface less cryptic
 - [ ] A modification to recent changes:
