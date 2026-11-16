@@ -1686,6 +1686,25 @@ change.
               at most just over one, and usually much less. (Gear cutting's
               indexed starts are still in order.) Not yet tried on the
               machine
+        - **A faster Z for knurling doesn't work as it is (2026-11-16).** At
+          70 rpm, Z's speed limits the angle: 45° on Ø 17.5 would need Z at
+          3,850 mm/min, beyond even the motor thread's ceiling of 3,000 rpm
+          (a 20 µs step), and Ø 10 about 2,750 rpm. Raising
+          `Axis1MaxMotorRpm` from 1000 to 1400 only brought the angle
+          suggested for that bar down from 79° to 77°, and Z stalled into
+          alarm on the passes, though fast moves at 1400 (which ramp) were
+          fine. So it's a pass's start from rest straight to full speed
+          that Z can't do, not the speed itself. Set back to 1000
+            - **Idea (low priority): a ramped start for knurling passes.**
+              Each cut starts a few millimetres further off the work, and Z
+              ramps up while following the spindle (stepperControl's follow
+              mode allows ramping): it falls behind at first, then catches
+              up before the tool reaches the work. That needs Z's top speed
+              well above the speed the lead needs (to catch up), so it would
+              want a knurling-only Z limit (e.g. `KnurlingMaxZSpeed`), so
+              rapids and other moves stay as they are. The lag check, a
+              quarter of a turn, would need to allow for the run-up. The
+              cut back would need a run-up at the chuck end too
 - [x] Add ability to add new thread pitches without recompilation. Move the
       definitions in threadpitches.h into separate config file (threadpitches.cfg)
       which is loaded at program start.
