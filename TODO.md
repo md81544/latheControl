@@ -1125,7 +1125,9 @@ change.
       Also "Measure a tool again" and "Describe the current tool". Kept in
       `ToolLibraryFile` (tools.cfg, not in git), plain text, written
       through a temporary file and a rename, keeping the one before as .bak.
-      The radius dialogs start with the current tool's nose radius
+      The radius dialogs start with the current tool's nose radius.
+      **Tried on the lathe (2026-11-16):** two tools, measured by scratch
+      tests; changing between them was very repeatable
         - **Decision: offsets, not datums, are stored.** A tool change is a
           re-base (nothing moves): each motor's step count shifts by the
           difference, in whole steps per tool, so going to a tool and back
