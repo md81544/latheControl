@@ -490,6 +490,10 @@ struct ViewQt::Impl {
 
     // The current feature (diameter and work end), when either is set
     void drawFeature(std::vector<DrawItem>& frame, const Model& model) const;
+    // The tool in use (with the tool library)
+    void drawTool(std::vector<DrawItem>& frame, const Model& model) const;
+    // While measuring a tool: its steps, in the mode's lines
+    void updateToolMeasurementData(const Model& model);
 
     std::vector<TextItem> memoryLabel;
     TextItem axis1MemoryLabel;
@@ -1015,6 +1019,94 @@ void ViewQt::Impl::drawFeature(std::vector<DrawItem>& frame, const Model& model)
         workEnd ? model.config().read("Axis1Label", "Z") + " " + length(1, *workEnd) : "-");
 }
 
+void ViewQt::Impl::drawTool(std::vector<DrawItem>& frame, const Model& model) const
+{
+    if (!model.toolLibraryEnabled()) {
+        return;
+    }
+    const Tool& tool = model.toolLibrary().current();
+    // At the top right, above the memory slots, clear of the mode's name and
+    // RETRACTED (which are further left)
+    constexpr float boxX = 1010.f;
+    constexpr float boxY = 112.f;
+    constexpr float boxWidth = 255.f;
+    constexpr float boxHeight = 112.f;
+    constexpr float margin = 12.f;
+    const QColor grey(128, 128, 128);
+    const QColor value(0, 192, 0);
+    frame.push_back(RectItem { QRectF(boxX, boxY, boxWidth, boxHeight), QColor(20, 20, 20), grey });
+    frame.push_back(TextItem { QPointF(boxX + margin, boxY + 8.f), 18, grey, "Tool" });
+    const bool known = model.toolLibrary().currentIsKnown();
+    if (!known) {
+        // The positions still read the last tool's tip, if they haven't been
+        // set since (see Model::positionsTool())
+        if (const auto positions = model.positionsTool()) {
+            TextItem as { QPointF(boxX + margin, boxY + 8.f),
+                          18,
+                          grey,
+                          fmt::format("positions: T{}", *positions) };
+            as.rightAlignWidth = boxWidth - 2.f * margin;
+            frame.push_back(as);
+        }
+    }
+    // Its number, large (in yellow if it isn't in the library), with the
+    // nose radius on the right
+    frame.push_back(
+        TextItem { QPointF(boxX + margin, boxY + 30.f),
+                   40,
+                   known ? value : YELLOW,
+                   known ? fmt::format("T{}", tool.number) : std::string("T?") });
+    if (known) {
+        TextItem radius { QPointF(boxX + margin, boxY + 44.f),
+                          22,
+                          grey,
+                          fmt::format("r {:.2f} mm", tool.noseRadiusMm) };
+        radius.rightAlignWidth = boxWidth - 2.f * margin;
+        frame.push_back(radius);
+    }
+    // (The font is fixed-width: about 21 characters fit)
+    constexpr std::size_t maxChars = 21;
+    std::string description = tool.description;
+    if (description.size() > maxChars) {
+        description = description.substr(0, maxChars - 2) + "..";
+    }
+    frame.push_back(TextItem { QPointF(boxX + margin, boxY + 80.f), 18, WHITE, description });
+}
+
+void ViewQt::Impl::updateToolMeasurementData(const Model& model)
+{
+    const ToolLibrary& library = model.toolLibrary();
+    const int from = library.current().number;
+    const int number = model.toolMeasurementNumber();
+    const std::string z = model.config().read("Axis1Label", "Z");
+    const std::string x = model.config().read("Axis2Label", "X");
+    const auto step = model.toolTouchStep();
+    mode.text = fmt::format(
+        "Measuring T{}{} from T{}: Enter records, Esc cancels",
+        number,
+        library.find(number) ? "" : " (new)",
+        from);
+    // Each step, marked as done or to do next (kept short: the boxes are to
+    // their right)
+    const auto line = [step](ToolTouchStep s, const std::string& text) {
+        if (step > s) {
+            return "  done: " + text;
+        }
+        return (step == s ? "> " : "  ") + text;
+    };
+    misc1.text = line(
+        ToolTouchStep::ReferenceDiameter, fmt::format("T{}: touch the diameter ({} in)", from, x));
+    misc2.text = line(
+        ToolTouchStep::ReferenceEnd, fmt::format("T{}: touch the end ({} to chuck)", from, z));
+    misc3.text = line(
+        ToolTouchStep::ToolDiameter,
+        fmt::format("change to T{}, touch the diameter ({} in)", number, x));
+    misc4.text
+        = line(ToolTouchStep::ToolEnd, fmt::format("T{}: touch the end ({} to chuck)", number, z));
+    misc5.text = "";
+    misc6.text = "Only scratch the surfaces. External tools only, so far";
+}
+
 void ViewQt::Impl::drawLeaderHints(std::vector<DrawItem>& frame, const Model& model) const
 {
     // In the same place as the menu
@@ -1215,10 +1307,11 @@ void ViewQt::updateDisplay(const Model& model)
         } else {
             d.axis2MemoryLabel.colour = QColor(128, 128, 128);
         }
-        if (model.getMode() != Mode::None) {
+        if (model.getMode() != Mode::None || model.isMeasuringTool()) {
             draw(d.mode);
         }
         d.drawFeature(frame, model);
+        d.drawTool(frame, model);
         draw(d.misc1);
         draw(d.misc2);
         draw(d.misc3);
@@ -1492,6 +1585,10 @@ void ViewQt::Impl::updateTextFromModel(const Model& model)
                 misc4.text = "";
                 misc5.text = "";
                 misc6.text = "";
+                // (Measuring a tool needs no mode: see Model::startToolMeasurement())
+                if (model.isMeasuringTool()) {
+                    updateToolMeasurementData(model);
+                }
                 warning.text = model.getWarning();
                 if (!model.getWarning().empty()) {
                     warning.colour = ++iteration % 6 < 3 ? RED : YELLOW;

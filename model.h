@@ -11,6 +11,7 @@
 #include "scale.h"
 #include "steppermotor.h"
 #include "threadpitches.h"
+#include "toollibrary.h"
 #include "units.h"
 
 #include <chrono>
@@ -80,6 +81,18 @@ enum class ZDirection {
 enum class Axis {
     Axis1,
     Axis2
+};
+
+// The touches which measure a tool's offsets, in order (see
+// Model::startToolMeasurement()): the current tool on the work's diameter,
+// then on its end; then, after changing tool, the tool being measured on the
+// same diameter and end
+enum class ToolTouchStep {
+    ReferenceDiameter,
+    ReferenceEnd,
+    ToolDiameter,
+    ToolEnd,
+    Finished
 };
 
 // Threading: what to do with X when a pass's Z move ends (with ThreadingAutoRetract).
@@ -218,6 +231,64 @@ public:
     bool featureGoToAllowed() const;
     // The work's end Z, or (if clear) off it by FeatureStartClearance
     std::optional<double> featureWorkEndTarget(bool clear) const;
+
+    // The tool library (lathe; ToolLibrary in the config: see toollibrary.h),
+    // read from ToolLibraryFile at initialise()
+    bool toolLibraryEnabled() const;
+    const ToolLibrary& toolLibrary() const;
+    // Why the tool can't be changed now (empty if it can): not while anything
+    // is moving, during a multi-pass, in a mode other than multi-pass or
+    // radius, or while measuring a tool
+    std::string toolChangeUnavailable() const;
+    // Changes the current tool. The axes' positions shift by the difference
+    // between the two tools' offsets (nothing moves), so memory slots, the
+    // current feature, a multi-pass's start and so on stay where they were
+    // on the work, now for the new tool's tip. Saves the library. Returns why
+    // not (also shown as a warning), or empty.
+    // number may be ToolLibrary::UNKNOWN_TOOL, whose offsets aren't known:
+    // nothing shifts, and the positions still read the last tool's tip (see
+    // positionsTool()). Changing from it to a tool in the library shifts
+    // from that tool's offsets, unless an axis was zeroed or its position set
+    // meanwhile: that axis's positions read the unknown tool's tip, so they
+    // can't be shifted, and what was set on the work with it is cleared (see
+    // toolChangeClears())
+    std::string selectTool(int number);
+    // What changing to a tool would clear (see selectTool()): X measured from
+    // the centre and the feature's diameter, and the work's end
+    std::pair<bool, bool> toolChangeClears(int number) const;
+    // The tool whose tip both axes' positions read: the tool in use, or
+    // while the unknown tool is, the one before it. nullopt if that's the
+    // unknown tool, for either axis
+    std::optional<int> positionsTool() const;
+    // Changes a tool's description and nose radius, and saves the library.
+    // Returns why not, or empty
+    std::string editTool(int number, const std::string& description, double noseRadiusMm);
+    // Measuring a tool's offsets from the current tool's (external tools only,
+    // so far). There are four touches (see ToolTouchStep), each recorded with
+    // recordToolTouch(); then finishToolMeasurement() stores the tool and
+    // makes it current. Meanwhile, the axes can be moved as usual, but
+    // nothing else can be done (see keyAllowedInCurrentMode()). Only with no
+    // mode, nothing moving, and X not retracted, with an outwards retraction
+    // (as for an external tool). number may be a new tool's, or one already
+    // in the library (but not the current tool). Returns why not (also shown
+    // as a warning), or empty
+    std::string toolMeasurementUnavailable(int number) const;
+    std::string startToolMeasurement(int number);
+    bool isMeasuringTool() const;
+    // The tool being measured (0 if none)
+    int toolMeasurementNumber() const;
+    ToolTouchStep toolTouchStep() const;
+    // Records the step's touch, where the axes are now. False (with a warning
+    // saying why) if the axis being touched didn't last move towards the
+    // surface (X in, for the diameter; Z towards the chuck, for the end), as
+    // its backlash must be taken up the same way each time, or is still moving
+    bool recordToolTouch();
+    // Once all four touches are in: the tool's offsets (axis 1, axis 2)
+    std::optional<std::pair<double, double>> toolMeasurementOffsets() const;
+    // Stores the tool measured, with its description and nose radius, and
+    // makes it current. Returns why not, or empty
+    std::string finishToolMeasurement(const std::string& description, double noseRadiusMm);
+    void cancelToolMeasurement();
 
     // Getters/setters:
     XDirection getRetractionDirection() const;
@@ -703,6 +774,20 @@ private:
     // feature's surface (so its diameter is twice this), and the work's end Z
     std::optional<double> m_featureX;
     std::optional<double> m_workEndZ;
+    // See toolLibrary()
+    ToolLibrary m_toolLibrary;
+    // The tool whose tip each axis's positions read (see positionsTool()):
+    // the tool in use when the axis was last zeroed or set, or changed to
+    int m_axis1PositionsTool { ToolLibrary::REFERENCE_TOOL };
+    int m_axis2PositionsTool { ToolLibrary::REFERENCE_TOOL };
+    // While measuring a tool (see startToolMeasurement()): which, and the
+    // positions touched so far, in ToolTouchStep's order (for the diameter,
+    // axis 2's; for the end, axis 1's)
+    struct ToolMeasurement {
+        int number { 0 };
+        std::vector<double> touches;
+    };
+    std::optional<ToolMeasurement> m_toolMeasurement;
     DisplayUnits m_displayUnits { DisplayUnits::Metric };
     double m_axis1LastRelativeMove { 0.0 };
     double m_axis2LastRelativeMove { 0.0 };
@@ -857,6 +942,12 @@ private:
     // X is no longer known to be measured from the centre
     void clearDiameter();
     void clearMotorFault(Axis axis);
+    // Shifts an axis's positions from one tool's offset to another's (see
+    // selectTool())
+    void shiftPositionsForTool(Axis axis, double fromMm, double toMm);
+    // Writes the tool library to ToolLibraryFile. Returns why not (also
+    // shown as a warning), or empty
+    std::string saveToolLibrary();
     // IMultiPassMachine: the cut axis is axis 1, and the feed axis is axis 2.
     // (Whether they're moving is as seen by checkStatus(), so the multi-pass
     // only moves on once checkStatus() has dealt with a move's end, e.g.

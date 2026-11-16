@@ -124,9 +124,9 @@ char categoryHotkey(const std::string& category)
     // Modes is M (it's likely to be the most used); the others use a letter
     // from their name not taken by another
     static const std::vector<std::pair<std::string, char>> hotkeys {
-        { "Move", 'v' },    { "Nudge", 'n' },      { "Speed", 's' },
-        { "Memory", 'e' },  { "Position", 'p' },   { "Modes", 'm' },
-        { "Feature", 'f' }, { "Axis locks", 'l' }, { "System", 'y' },
+        { "Move", 'v' },       { "Nudge", 'n' },  { "Speed", 's' },   { "Memory", 'e' },
+        { "Position", 'p' },   { "Modes", 'm' },  { "Feature", 'f' }, { "Tool library", 't' },
+        { "Axis locks", 'l' }, { "System", 'y' },
     };
     for (const auto& [name, hotkey] : hotkeys) {
         if (name == category) {
@@ -161,6 +161,11 @@ bool menuOnly(int k)
         case key::featureDiameter:
         case key::featureEnd:
         case key::featureEndExact:
+        case key::toolNew:
+        case key::toolMeasureAgain:
+        case key::toolTouch:
+        case key::toolCancelMeasuring:
+        case key::toolEdit:
             return true;
         default:
             return false;
@@ -265,6 +270,65 @@ bool keyAllowedInCurrentMode(int k, const Model& model)
             case key::CtrlQ:
             case key::ESC:
             case key::SPACE:
+            case key::u:
+            case key::U:
+                return true;
+            default:
+                return false;
+        }
+    }
+    // While measuring a tool, the axes can be moved (to touch the work), but
+    // nothing else may change positions or modes until it's finished or
+    // cancelled. (Enter records each touch, and Esc cancels.) No leader keys,
+    // so the axes' own commands (e.g. a zero) can't follow them
+    if (model.isMeasuringTool()) {
+        switch (k) {
+            case key::CtrlQ:
+            case key::ESC:
+            case key::ENTER:
+            case key::SPACE:
+            case key::toolTouch:
+            case key::toolCancelMeasuring:
+            case key::LEFT:
+            case key::RIGHT:
+            case key::UP:
+            case key::DOWN:
+            case key::AltLeft:
+            case key::AltRight:
+            case key::AltUp:
+            case key::AltDown:
+            case key::a:
+            case key::A:
+            case key::AltA:
+            case key::d:
+            case key::D:
+            case key::AltD:
+            case key::w:
+            case key::W:
+            case key::AltW:
+            case key::s:
+            case key::S:
+            case key::AltS:
+            case key::EQUALS:
+            case key::MINUS:
+            case key::ONE:
+            case key::TWO:
+            case key::THREE:
+            case key::FOUR:
+            case key::FIVE:
+            case key::SIX:
+            case key::SEVEN:
+            case key::EIGHT:
+            case key::NINE:
+            case key::ZERO:
+            case key::js_left:
+            case key::js_right:
+            case key::js_up:
+            case key::js_down:
+            case key::js_rapid_left:
+            case key::js_rapid_right:
+            case key::js_rapid_up:
+            case key::js_rapid_down:
             case key::u:
             case key::U:
                 return true;
@@ -587,6 +651,33 @@ std::vector<Command> buildCommands(
                 return m.getFeatureDiameterMm().has_value() || m.getWorkEndZ().has_value();
             },
             'c');
+    }
+
+    // (Only on a lathe, with ToolLibrary in the config)
+    if (config.readBool("ToolLibrary", false)) {
+        c = "Tool library";
+        const auto canChange = [](const Model& m) { return m.toolChangeUnavailable().empty(); };
+        const auto measuring = [](const Model& m) { return m.isMeasuringTool(); };
+        b.add(c, "Change tool...", key::t, BOTH, canChange, 'c');
+        b.add(c, "Define a new tool (measure it)...", key::toolNew, BOTH, canChange, 'n');
+        b.add(
+            c,
+            "Measure a tool again...",
+            key::toolMeasureAgain,
+            BOTH,
+            [](const Model& m) {
+                return m.toolChangeUnavailable().empty() && m.toolLibrary().tools().size() > 1;
+            },
+            'm');
+        b.add(
+            c,
+            "Describe the current tool...",
+            key::toolEdit,
+            BOTH,
+            [](const Model& m) { return !m.isMeasuringTool() && m.toolLibrary().currentIsKnown(); },
+            'd');
+        b.add(c, "Record the touch (Enter)", key::toolTouch, BOTH, measuring, 'r');
+        b.add(c, "Cancel measuring (Esc)", key::toolCancelMeasuring, BOTH, measuring, 'a');
     }
 
     c = "Axis locks";

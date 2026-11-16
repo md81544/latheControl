@@ -1045,7 +1045,7 @@ change.
       to as well, offered as a multi-pass's Z end, and shown in the box. A
       step towards "Single feature vs many" (a list of segments)
     - Still to do from below: the warning when the tool goes inside the Ø
-      with the spindle running, tools (and clearing on a tool change), and
+      with the spindle running, and
       chamfers / radii from the feature Temporary: kept
       for this session only, never saved across a restart. Its purpose is to
       help the operator while they make one particular feature.
@@ -1110,6 +1110,64 @@ change.
 - [ ] **Current tool and a tool database.** The program has no idea when the
       tool is changed, but the feature values above belong to the tool that
       touched off. A different tool will be out by its offset.
+    - **Done (2026-11-16), in the mock build only:** a first slice, on with
+      `ToolLibrary = true` (lc.cfg), in `toollibrary.*`. A "Tool library"
+      menu category (`T` in the menu) and a "Tool" box at the top right.
+      `T` changes tool (a list of the tools), shifting Z and X by the
+      difference between the two tools' offsets. "Define a new tool"
+      measures one from the tool in use by scratch tests: the tool in use
+      touches the diameter and the end (`Enter` after each), then the new
+      tool does the same, and it asks for the description and nose radius.
+      Also "Measure a tool again" and "Describe the current tool". Kept in
+      `ToolLibraryFile` (tools.cfg, not in git), plain text, written
+      through a temporary file and a rename, keeping the one before as .bak.
+      The radius dialogs start with the current tool's nose radius
+        - **Decision: offsets, not datums, are stored.** A tool change is a
+          re-base (nothing moves): each motor's step count shifts by the
+          difference, in whole steps per tool, so going to a tool and back
+          always comes back to the same step. As memory slots, breadcrumbs,
+          the feature and multi-pass setups are all positions on the work,
+          they carry over to the new tool's tip, and nothing is cleared (so
+          "a tool change clears the feature", above, isn't needed)
+        - **Decision: scratch tests first, not a dial indicator.** Each
+          tool touches the same diameter and end, as the user already does
+          to set up a job. A dial indicator could be added later as another
+          way to measure
+        - **Decision: measured from the tool in use, not only tool 1.** The
+          offsets are still stored from tool 1, but any tool in the library
+          can be the one measured from. So tool 1 can be measured again
+          from another tool (e.g. after a new insert), which moves every
+          offset so they're from its new tip, rather than every tool having
+          to be measured again
+        - **Decision: external tools only, for now.** The touches are on the
+          outside diameter, which a boring bar can't reach: the dialog says
+          so, and measuring is refused with a boring retraction. Each
+          diameter touch must have X moving in, and each end touch Z
+          moving towards the chuck (the motor's last direction), or it's
+          refused, so the backlash is taken up the same way for every tool
+        - **Decision: measuring isn't a mode.** The axes move as usual
+          (keys, nudges, speeds, the gamepad), but nothing else: no leader
+          keys, zeros, position sets, memories or modes. `Enter` records
+          each touch and `Esc` cancels. A tool change is refused in modes
+          other than multi-pass and radius (whose passes are on the work,
+          so carry over), and during a multi-pass
+        - **Done (2026-11-16):** an unknown tool (`T?`, last in `T`'s list),
+          for one not in the library. **Decision:** each axis remembers whose
+          tip its positions read (the tool in use when it was last zeroed,
+          set or changed to). Changing to the unknown tool shifts nothing, so
+          they still read the last tool's ("positions: T1" in the box), and
+          changing back to a tool in the library shifts from that tool's
+          offsets: nothing set on the work is lost, e.g. on the way to a
+          knurling tool and back. Only an axis zeroed or set while the
+          unknown tool was in use can't be shifted: changing to a tool in
+          the library then clears what was set along it (the work's end, or
+          the diameter), asking first if it's part of the feature. Memory
+          slots are kept, as they were before there were tools
+        - Still to do: tip orientation, tool types, widths (parting and
+          grooving), invalidating offsets ("toolpost moved", a tool
+          adjusted), deleting a tool, and boring bars (touched on a bore's
+          diameter instead). Also, the nose radius could correct tapers and
+          chamfers
     - **Current tool:** the user picks the tool in use (number and
       description), and it's shown prominently on screen. Changing tool
       must be very easy: a single keypress, not a trip through menus. `T`

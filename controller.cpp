@@ -8,6 +8,7 @@
 
 #include <cassert>
 #include <chrono>
+#include <cmath>
 #include <utility>
 
 namespace mgo {
@@ -480,6 +481,11 @@ void Controller::processKey(int t)
                     break;
                 }
             case key::ENTER:
+                // (While measuring a tool, Enter records each touch)
+                if (m_model->isMeasuringTool()) {
+                    recordToolTouch();
+                    break;
+                }
                 if (m_model->getMode() == Mode::MultiPass
                     || (m_model->getMode() == Mode::Threading && m_model->threadingPassesSet())
                     || m_model->getMode() == Mode::Knurling || m_model->gearCuttingSet()
@@ -1022,6 +1028,10 @@ void Controller::processKey(int t)
                     // (The radius, depth and nose radius carry over from the
                     // other kind, if that was used last)
                     info.setup.kind = kp == key::f2f ? RadiusKind::Shoulder : RadiusKind::End;
+                    // With the tool library, the nose radius is the current tool's
+                    if (m_model->toolLibraryEnabled() && m_model->toolLibrary().currentIsKnown()) {
+                        info.setup.noseRadius = m_model->toolLibrary().current().noseRadiusMm;
+                    }
                     m_view->openRadiusDialog(info, [this](std::optional<RadiusSetup> setup) {
                         if (!setup) {
                             return;
@@ -1193,6 +1203,11 @@ void Controller::processKey(int t)
                 }
             case key::ESC: // return to normal mode
                 {
+                    // (While measuring a tool, Esc only cancels that)
+                    if (m_model->isMeasuringTool()) {
+                        m_model->cancelToolMeasurement();
+                        break;
+                    }
                     // Cancel any retract as well
                     m_model->setIsAxis2Retracted(false);
                     m_model->changeMode(Mode::None);
@@ -1205,6 +1220,37 @@ void Controller::processKey(int t)
                     // e.g. turns ramping off, as X is synchronised to Z)
                     m_model->setTaperAngle(-45.0);
                     m_model->changeMode(Mode::Taper);
+                    break;
+                }
+            case key::t: // change tool (tool library)
+            case key::T:
+                {
+                    chooseTool();
+                    break;
+                }
+            case key::toolNew:
+                {
+                    confirmMeasureTool(m_model->toolLibrary().nextFreeNumber(), true);
+                    break;
+                }
+            case key::toolMeasureAgain:
+                {
+                    pickToolToMeasure();
+                    break;
+                }
+            case key::toolTouch:
+                {
+                    recordToolTouch();
+                    break;
+                }
+            case key::toolCancelMeasuring:
+                {
+                    m_model->cancelToolMeasurement();
+                    break;
+                }
+            case key::toolEdit:
+                {
+                    describeCurrentTool();
                     break;
                 }
             case key::a1_k: // lock axis 1
@@ -1430,6 +1476,269 @@ void Controller::confirmFeatureLoss(
     lines.push_back("");
     lines.push_back("Enter (or Y): go ahead   Esc (or N): cancel");
     okCancel("Clear the current feature?", std::move(lines), std::move(action));
+}
+
+namespace {
+
+// About as many characters as fit across a dialog's lines (see qt_dialog.cpp)
+constexpr std::size_t DIALOG_LINE_LENGTH = 46;
+
+// text split into lines of up to width characters, at spaces (a word longer
+// than that has a line of its own)
+std::vector<std::string> wrapText(const std::string& text, std::size_t width)
+{
+    std::vector<std::string> lines;
+    std::string line;
+    std::size_t start = 0;
+    while (start < text.size()) {
+        auto end = text.find(' ', start);
+        if (end == std::string::npos) {
+            end = text.size();
+        }
+        const std::string word = text.substr(start, end - start);
+        if (!line.empty() && line.size() + 1 + word.size() > width) {
+            lines.push_back(line);
+            line.clear();
+        }
+        line += (line.empty() ? "" : " ") + word;
+        start = end + 1;
+    }
+    if (!line.empty()) {
+        lines.push_back(line);
+    }
+    return lines;
+}
+
+} // end anonymous namespace
+
+std::string Controller::offsetText(int axis, double mm) const
+{
+    double value = m_model->toDisplayUnits(axis, mm);
+    const int decimals = m_model->axisDecimals(axis) + 1;
+    // (Not "-0.000")
+    if (std::abs(value) < 0.5 * std::pow(10.0, -decimals)) {
+        value = 0.0;
+    }
+    return fmt::format(
+        "{} {:+.{}f} {}",
+        m_model->config().read(axis == 1 ? "Axis1Label" : "Axis2Label", axis == 1 ? "Z" : "X"),
+        value,
+        decimals,
+        m_model->axisUnitName(axis));
+}
+
+void Controller::chooseTool()
+{
+    if (!m_model->toolLibraryEnabled()) {
+        // (As for any other key without a use)
+        m_model->stopAllMotors();
+        return;
+    }
+    if (const std::string why = m_model->toolChangeUnavailable(); !why.empty()) {
+        auto lines = wrapText(why, DIALOG_LINE_LENGTH);
+        lines.insert(lines.end(), { "", "Press a key" });
+        pressAnyKey("Change tool", std::move(lines), [] { });
+        return;
+    }
+    const ToolLibrary& library = m_model->toolLibrary();
+    std::vector<std::string> items;
+    std::vector<int> numbers;
+    for (const Tool& t : library.tools()) {
+        items.push_back(
+            fmt::format(
+                "T{} {}{}",
+                t.number,
+                t.description,
+                t.number == library.current().number ? " (in use)" : ""));
+        numbers.push_back(t.number);
+    }
+    // (Last, as it's used least: e.g. for a tool not measured yet)
+    items.push_back(fmt::format("T? Unknown tool{}", library.currentIsKnown() ? "" : " (in use)"));
+    numbers.push_back(ToolLibrary::UNKNOWN_TOOL);
+    listPicker(
+        "Which tool is in the toolpost?",
+        std::move(items),
+        [this, numbers](std::optional<std::size_t> picked) {
+            if (!picked || *picked >= numbers.size()) {
+                return;
+            }
+            const int number = numbers.at(*picked);
+            // (Positions set with the unknown tool can't be shifted to the
+            // new tool's, so what was set on the work with them goes)
+            const auto [diameter, workEnd] = m_model->toolChangeClears(number);
+            confirmFeatureLoss(
+                "Changing from positions set with an unknown tool",
+                diameter,
+                workEnd,
+                [this, number] { m_model->selectTool(number); });
+        });
+}
+
+void Controller::confirmMeasureTool(int number, bool isNew)
+{
+    const std::string title = isNew ? fmt::format("Define a new tool, T{}", number)
+                                    : fmt::format("Measure T{} again", number);
+    if (const std::string why = m_model->toolMeasurementUnavailable(number); !why.empty()) {
+        auto lines = wrapText(why, DIALOG_LINE_LENGTH);
+        lines.insert(lines.end(), { "", "Press a key" });
+        pressAnyKey(title, std::move(lines), [] { });
+        return;
+    }
+    const Tool& from = m_model->toolLibrary().current();
+    const std::string z = m_model->config().read("Axis1Label", "Z");
+    const std::string x = m_model->config().read("Axis2Label", "X");
+    okCancel(
+        title,
+        { "Its offsets are measured from the tool in use,",
+          fmt::format("T{} ({}), by touching the same", from.number, from.description),
+          "surfaces with each: the work's diameter and end.",
+          "",
+          "ONLY EXTERNAL TOOLS can be measured so far",
+          "(e.g. turning, facing or chamfering tools):",
+          "not boring bars, which can't reach the outside.",
+          "",
+          "Then, pressing Enter after each touch:",
+          fmt::format("1. T{} on the diameter, moving {} in", from.number, x),
+          fmt::format("2. T{} on the end, moving {} towards the chuck", from.number, z),
+          fmt::format("3. Change to T{}: on the same diameter", number),
+          fmt::format("4. T{} on the same end", number),
+          "",
+          "Only scratch the surfaces: a cut would change",
+          "them. The axes move as usual meanwhile.",
+          "",
+          "Enter (or Y): start   Esc (or N): cancel" },
+        [this, number] { m_model->startToolMeasurement(number); });
+}
+
+void Controller::pickToolToMeasure()
+{
+    const ToolLibrary& library = m_model->toolLibrary();
+    std::vector<std::string> items;
+    std::vector<int> numbers;
+    for (const Tool& t : library.tools()) {
+        // (The tool in use is what the others are measured from)
+        if (t.number == library.current().number) {
+            continue;
+        }
+        items.push_back(fmt::format("T{} {}", t.number, t.description));
+        numbers.push_back(t.number);
+    }
+    if (numbers.empty()) {
+        return;
+    }
+    listPicker(
+        "Measure which tool again?",
+        std::move(items),
+        [this, numbers](std::optional<std::size_t> picked) {
+            if (picked && *picked < numbers.size()) {
+                confirmMeasureTool(numbers.at(*picked), false);
+            }
+        });
+}
+
+void Controller::recordToolTouch()
+{
+    // (If it's refused, the warning says why)
+    if (m_model->recordToolTouch() && m_model->toolTouchStep() == ToolTouchStep::Finished) {
+        finishToolMeasurement();
+    }
+}
+
+void Controller::finishToolMeasurement()
+{
+    const auto offsets = m_model->toolMeasurementOffsets();
+    if (!offsets) {
+        return;
+    }
+    const int number = m_model->toolMeasurementNumber();
+    const std::string measured = fmt::format(
+        "Its offsets from T{}: {}, {}",
+        m_model->toolLibrary().current().number,
+        offsetText(1, offsets->first),
+        offsetText(2, offsets->second));
+    m_model->stopAllMotors();
+    if (const Tool* existing = m_model->toolLibrary().find(number)) {
+        // Measured again: only its offsets change
+        const Tool tool = *existing;
+        m_view->openInput(
+            Input::Type::OkCancel,
+            fmt::format("T{} measured again", number),
+            { measured,
+              fmt::format(
+                  "(They were {}, {},",
+                  offsetText(1, tool.axis1OffsetMm),
+                  offsetText(2, tool.axis2OffsetMm)),
+              fmt::format(
+                  "measured {}.)", tool.measured.empty() ? "on an unknown date" : tool.measured),
+              "",
+              fmt::format("Enter (or Y): keep them, with T{} in use", number),
+              "Esc (or N): discard them" },
+            [this, tool](const Input::Return& rc) {
+                if (rc.cancelled) {
+                    m_model->cancelToolMeasurement();
+                    return;
+                }
+                m_model->finishToolMeasurement(tool.description, tool.noseRadiusMm);
+            });
+        return;
+    }
+    // A new tool: what it is, then its nose radius
+    m_view->openInput(
+        Input::Type::Text,
+        fmt::format("T{} measured: describe it", number),
+        { measured, "", "Enter: next (its nose radius)", "Esc: discard the measurement" },
+        [this, number](const Input::Return& rc) {
+            if (rc.cancelled) {
+                m_model->cancelToolMeasurement();
+                return;
+            }
+            const std::string description = rc.text;
+            m_view->openInput(
+                Input::Type::Numeric,
+                fmt::format("T{}'s nose radius (mm)", number),
+                { "0 for a sharp tool",
+                  "",
+                  fmt::format("Enter: store T{}, in use from now", number),
+                  "Esc: discard the measurement" },
+                [this, description](const Input::Return& radius) {
+                    if (radius.cancelled) {
+                        m_model->cancelToolMeasurement();
+                        return;
+                    }
+                    m_model->finishToolMeasurement(description, radius.number);
+                },
+                "0");
+        });
+}
+
+void Controller::describeCurrentTool()
+{
+    if (!m_model->toolLibraryEnabled() || m_model->isMeasuringTool()
+        || !m_model->toolLibrary().currentIsKnown()) {
+        return;
+    }
+    const Tool tool = m_model->toolLibrary().current();
+    m_model->stopAllMotors();
+    m_view->openInput(
+        Input::Type::Text,
+        fmt::format("T{}'s description", tool.number),
+        { "Enter: next (its nose radius)   Esc: cancel" },
+        [this, tool](const Input::Return& rc) {
+            if (rc.cancelled) {
+                return;
+            }
+            const std::string description = rc.text;
+            getNumericInput(
+                fmt::format("T{}'s nose radius (mm)", tool.number),
+                { "0 for a sharp tool" },
+                tool.noseRadiusMm,
+                [this, tool, description](const NumericInputReturn& radius) {
+                    if (!radius.cancelled) {
+                        m_model->editTool(tool.number, description, radius.value);
+                    }
+                });
+        },
+        tool.description);
 }
 
 } // end namespace

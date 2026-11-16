@@ -64,6 +64,22 @@ private:
     // Asks which to believe when axis 1's scale and motor disagree (see
     // Model::axis1ScaleMismatchMm()), or says its scale is misreading
     void checkScaleMismatch();
+    // The tool library (see Model::toolLibrary()):
+    // Asks which tool is now in the toolpost, and changes to it
+    void chooseTool();
+    // Explains measuring a tool (number: a new tool's, or isNew false, one
+    // already in the library), and starts it if the user agrees
+    void confirmMeasureTool(int number, bool isNew);
+    // Asks which tool to measure again
+    void pickToolToMeasure();
+    // Enter while measuring: records the touch, and once all are in, asks
+    // for what's still needed to store the tool (see finishToolMeasurement())
+    void recordToolTouch();
+    void finishToolMeasurement();
+    // Asks for the current tool's description and nose radius
+    void describeCurrentTool();
+    // e.g. "Z -1.234 mm", for an offset on an axis (1 or 2)
+    std::string offsetText(int axis, double mm) const;
     // e.g. " (mm)" or " (in)": the units an axis's values are typed in
     std::string unitsSuffix(int axisNumber) const;
     int checkKeyAllowedForMode(int key);

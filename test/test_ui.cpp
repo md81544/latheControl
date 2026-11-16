@@ -2532,3 +2532,116 @@ TEST_CASE("UI: the table carrying on into the slack is allowed for")
     REQUIRE(*t.model.axis1ScaleMismatchMm() == Approx(-0.3).margin(0.011));
     REQUIRE(t.model.axis1ScaleMismatchLimitMm() == Approx(0.2));
 }
+
+TEST_CASE("UI: defining a new tool, then changing tool")
+{
+    const std::string path
+        = (std::filesystem::temp_directory_path() / "lc_ui_test_tools.cfg").string();
+    std::error_code ec;
+    std::filesystem::remove(path, ec);
+    std::filesystem::remove(path + ".bak", ec);
+    MapConfigReader config {
+        { { "ToolLibrary", "true" }, { "ToolLibraryFile", path }, { "CurrentFeature", "true" } }
+    };
+    mgo::MockGpio gpio { false };
+    mgo::Model model { gpio, config };
+    mgo::Controller controller(&model);
+    QWidget* w = mainWindow();
+    REQUIRE(w);
+    const auto snapshotWindow = [&](const std::string& name) {
+        if (const char* dir = std::getenv("LC_SNAPSHOT_DIR")) {
+            controller.tick();
+            QTest::qWait(150);
+            w->grab().save(QString::fromStdString(std::string(dir) + "/" + name + ".png"));
+        }
+    };
+    model.axis1SetSpeed(500.0);
+    model.axis2SetSpeed(500.0);
+    model.setAxis2Position(10.0);
+    model.diameterIsSet();
+    model.markWorkEnd();
+    const auto moveTo = [&model](double z, double x) {
+        model.axis1GoToPosition(z);
+        model.axis1Wait();
+        model.axis2GoToPosition(x);
+        model.axis2Wait();
+    };
+
+    // The menu's Tool library, then New, which explains and asks first
+    press(w, controller, Qt::Key_Tab);
+    press(w, controller, Qt::Key_T);
+    snapshotWindow("menu_tools");
+    bool explained = false;
+    whenDialogShows([&explained](QWidget* dialog) {
+        explained = dialogText(dialog).contains("ONLY EXTERNAL TOOLS");
+        snapshot(dialog, "tool_new");
+        QTest::keyClick(inputWidget(dialog), Qt::Key_Return);
+    });
+    press(w, controller, Qt::Key_N);
+    REQUIRE(explained);
+    REQUIRE(model.isMeasuringTool());
+    REQUIRE(model.toolMeasurementNumber() == 2);
+
+    // Keys which would change positions are refused meanwhile (Z Z would zero Z)
+    press(w, controller, Qt::Key_Z);
+    press(w, controller, Qt::Key_Z);
+    REQUIRE(model.getWorkEndZ() == Approx(0.0));
+
+    // Tool 1 on the diameter (X in) and the end (Z towards the chuck), each
+    // recorded with Enter
+    moveTo(0.2, 10.2);
+    moveTo(0.2, 10.0);
+    press(w, controller, Qt::Key_Return);
+    moveTo(0.2, 9.0);
+    moveTo(0.0, 9.0);
+    press(w, controller, Qt::Key_Return);
+    REQUIRE(model.toolTouchStep() == mgo::ToolTouchStep::ToolDiameter);
+    snapshotWindow("tool_measuring");
+    // Tool 2: 1 further towards the chuck, and 0.5 further in
+    moveTo(1.2, 10.7);
+    moveTo(1.2, 10.5);
+    press(w, controller, Qt::Key_Return);
+    moveTo(1.2, 9.0);
+    // Then its description and nose radius
+    whenDialogShows([](QWidget* dialog) {
+        snapshot(dialog, "tool_describe");
+        typeInto(dialog, "Left-hand turning tool");
+        whenDialogShows([](QWidget* radius) {
+            typeInto(radius, "0.2");
+            QTest::keyClick(inputWidget(radius), Qt::Key_Return);
+        });
+        QTest::keyClick(inputWidget(dialog), Qt::Key_Return);
+    });
+    moveTo(1.0, 9.0);
+    press(w, controller, Qt::Key_Return);
+    REQUIRE(waitForDialogToClose());
+    REQUIRE(!model.isMeasuringTool());
+    REQUIRE(model.toolLibrary().current().number == 2);
+    REQUIRE(model.toolLibrary().current().description == "Left-hand turning tool");
+    REQUIRE(model.toolLibrary().current().noseRadiusMm == Approx(0.2));
+    // Tool 2 is on the end, which reads Z 0 again
+    REQUIRE(model.getAxis1MotorPosition() == Approx(0.0).margin(0.0011));
+    snapshotWindow("tool_in_use");
+
+    // T: back to tool 1 (the first in the list)
+    whenDialogShows([](QWidget* dialog) {
+        snapshot(dialog, "tool_change");
+        QTest::keyClick(inputWidget(dialog), Qt::Key_Return);
+    });
+    press(w, controller, Qt::Key_T);
+    REQUIRE(model.toolLibrary().current().number == 1);
+    REQUIRE(model.getAxis1MotorPosition() == Approx(1.0).margin(0.0011));
+
+    // T: the unknown tool (last in the list). Nothing shifts
+    whenDialogShows([](QWidget* dialog) {
+        key(dialog, Qt::Key_Down, 2);
+        QTest::keyClick(inputWidget(dialog), Qt::Key_Return);
+    });
+    press(w, controller, Qt::Key_T);
+    REQUIRE(!model.toolLibrary().currentIsKnown());
+    REQUIRE(model.getAxis1MotorPosition() == Approx(1.0).margin(0.0011));
+    snapshotWindow("tool_unknown");
+
+    std::filesystem::remove(path, ec);
+    std::filesystem::remove(path + ".bak", ec);
+}

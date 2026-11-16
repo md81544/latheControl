@@ -68,6 +68,7 @@ add_library(shared_with_test OBJECT
 	radius.cpp
 	steppermotor.cpp
 	threadpitches.cpp
+	toollibrary.cpp
 	cpuaffinity.cpp
 )
 target_link_libraries(shared_with_test PUBLIC

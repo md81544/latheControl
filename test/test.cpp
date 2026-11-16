@@ -15,6 +15,7 @@
 #include "scale.h"
 #include "steppermotor.h"
 #include "threadpitches.h"
+#include "toollibrary.h"
 
 #include <fmt/format.h>
 
@@ -22,6 +23,7 @@
 #include <chrono>
 #include <cmath>
 #include <ctime>
+#include <filesystem>
 #include <map>
 #include <optional>
 #include <set>
@@ -6705,4 +6707,410 @@ TEST_CASE("Model:   radius cutting, a shoulder with a fillet")
     // The step is turned from the end: that's the feature's diameter now
     REQUIRE(model.getFeatureDiameterMm() == Approx(8.0));
     REQUIRE(model.getAxis1MotorSpeed() == Approx(40.0));
+}
+
+// The tool library (see toollibrary.h)
+
+namespace {
+
+// A file in the temporary directory, removed (with its backup) afterwards
+struct TemporaryToolFile {
+    std::string path;
+    explicit TemporaryToolFile(const std::string& name)
+        : path((std::filesystem::temp_directory_path() / ("lc_test_" + name + ".cfg")).string())
+    {
+        remove();
+    }
+    ~TemporaryToolFile()
+    {
+        remove();
+    }
+    void remove() const
+    {
+        std::error_code ec;
+        std::filesystem::remove(path, ec);
+        std::filesystem::remove(path + ".bak", ec);
+        std::filesystem::remove(path + ".new", ec);
+    }
+};
+
+} // end anonymous namespace
+
+TEST_CASE("Tools:   a new library has only the reference tool, which is current")
+{
+    mgo::ToolLibrary library;
+    REQUIRE(library.tools().size() == 1);
+    REQUIRE(library.current().number == 1);
+    REQUIRE(library.current().axis1OffsetMm == 0.0);
+    REQUIRE(library.nextFreeNumber() == 2);
+    REQUIRE(!library.setCurrent(2));
+    library.store({ .number = 3, .description = "Parting tool" });
+    library.store({ .number = 2, .description = "Left-hand turning tool" });
+    REQUIRE(library.tools().size() == 3);
+    // (In number order)
+    REQUIRE(library.tools().at(1).number == 2);
+    REQUIRE(library.nextFreeNumber() == 4);
+    REQUIRE(library.setCurrent(3));
+    REQUIRE(library.current().description == "Parting tool");
+    // Storing a tool again replaces it
+    library.store({ .number = 3, .description = "Parting tool, 2 mm" });
+    REQUIRE(library.tools().size() == 3);
+    REQUIRE(library.find(3)->description == "Parting tool, 2 mm");
+}
+
+TEST_CASE("Tools:   offsets measured from touches")
+{
+    // Tool 1 touched the end at Z 0 and the diameter at X 10. With the same
+    // positions, the new tool touched them at Z 1.5 and X 9.6: its tip is
+    // 1.5 lower than tool 1's in Z, and 0.4 higher in X
+    const mgo::Tool reference { .number = 1 };
+    const auto [z, x] = mgo::ToolLibrary::measuredOffsets(
+        reference, { .axis1Mm = 0.0, .axis2Mm = 10.0 }, { .axis1Mm = 1.5, .axis2Mm = 9.6 });
+    REQUIRE(z == Approx(-1.5));
+    REQUIRE(x == Approx(0.4));
+    // Measured from another tool, its offsets are added
+    const mgo::Tool other { .number = 2, .axis1OffsetMm = 2.0, .axis2OffsetMm = -1.0 };
+    const auto [z2, x2] = mgo::ToolLibrary::measuredOffsets(
+        other, { .axis1Mm = 0.0, .axis2Mm = 10.0 }, { .axis1Mm = 1.5, .axis2Mm = 9.6 });
+    REQUIRE(z2 == Approx(0.5));
+    REQUIRE(x2 == Approx(-0.6));
+}
+
+TEST_CASE("Tools:   measuring the reference tool again moves every tool's offsets")
+{
+    mgo::ToolLibrary library;
+    library.store({ .number = 2, .axis1OffsetMm = 1.0, .axis2OffsetMm = 2.0 });
+    library.store({ .number = 3, .axis1OffsetMm = -1.0, .axis2OffsetMm = 0.5 });
+    // The reference tool's tip is now 0.1 further in Z (e.g. a new insert)
+    library.store({ .number = 1, .description = "New insert", .axis1OffsetMm = 0.1 });
+    REQUIRE(library.find(1)->axis1OffsetMm == 0.0);
+    REQUIRE(library.find(1)->axis2OffsetMm == 0.0);
+    REQUIRE(library.find(1)->description == "New insert");
+    REQUIRE(library.find(2)->axis1OffsetMm == Approx(0.9));
+    REQUIRE(library.find(2)->axis2OffsetMm == Approx(2.0));
+    REQUIRE(library.find(3)->axis1OffsetMm == Approx(-1.1));
+}
+
+TEST_CASE("Tools:   the library's file, written and read back")
+{
+    mgo::ToolLibrary library;
+    library.store({ .number = 1, .description = "Right-hand turning tool", .noseRadiusMm = 0.4 });
+    library.store(
+        { .number = 2,
+          .description = "Threading | 60 deg",
+          .noseRadiusMm = 0.0,
+          .axis1OffsetMm = -1.2345,
+          .axis2OffsetMm = 0.5678,
+          .measured = "2026-11-16" });
+    REQUIRE(library.setCurrent(2));
+    const std::string text = library.toText();
+    std::vector<std::string> errors;
+    const auto read = mgo::ToolLibrary::fromText(text, errors);
+    REQUIRE(errors.empty());
+    REQUIRE(read.tools().size() == 2);
+    REQUIRE(read.current().number == 2);
+    const mgo::Tool* two = read.find(2);
+    REQUIRE(two);
+    // (A | in the description is kept: it's the last field)
+    REQUIRE(two->description == "Threading | 60 deg");
+    REQUIRE(two->axis1OffsetMm == Approx(-1.2345));
+    REQUIRE(two->axis2OffsetMm == Approx(0.5678));
+    REQUIRE(two->measured == "2026-11-16");
+    REQUIRE(read.find(1)->noseRadiusMm == Approx(0.4));
+    REQUIRE(read.find(1)->description == "Right-hand turning tool");
+}
+
+TEST_CASE("Tools:   lines of the file which can't be read are left out, with errors")
+{
+    std::vector<std::string> errors;
+    const auto library = mgo::ToolLibrary::fromText(
+        "# A comment\n"
+        "Current = 7\n"
+        "1 | 0.5 | 0 | 0.4 |  | Reference\n"
+        "2 | -1 | 0.5 | 0.2 | 2026-11-16 | Good\n"
+        "2 | -1 | 0.5 | 0.2 | 2026-11-16 | Twice\n"
+        "3 | x | 0.5 | 0.2 | | Not a number\n"
+        "100 | 0 | 0 | 0 | | Too high\n"
+        "4 | 0 | 0 | 0\n",
+        errors);
+    // The reference tool's offsets are ignored; tools 2 (once) and 1 are kept
+    REQUIRE(library.tools().size() == 2);
+    REQUIRE(library.find(1)->axis1OffsetMm == 0.0);
+    REQUIRE(library.find(2)->description == "Good");
+    // Tool 7 isn't there, so tool 1 stays current
+    REQUIRE(library.current().number == 1);
+    REQUIRE(errors.size() == 6);
+    REQUIRE(errors.at(0).starts_with("Line 3:"));
+}
+
+TEST_CASE("Tools:   saving the library keeps the file it replaces")
+{
+    TemporaryToolFile file("tools_save");
+    std::vector<std::string> errors;
+    // (No file yet: not an error)
+    auto library = mgo::readToolLibrary(file.path, errors);
+    REQUIRE(errors.empty());
+    REQUIRE(library.tools().size() == 1);
+    library.store({ .number = 2, .description = "First" });
+    REQUIRE(mgo::writeToolLibrary(library, file.path).empty());
+    REQUIRE(!std::filesystem::exists(file.path + ".bak"));
+    library.store({ .number = 2, .description = "Second" });
+    REQUIRE(mgo::writeToolLibrary(library, file.path).empty());
+    REQUIRE(mgo::readToolLibrary(file.path, errors).find(2)->description == "Second");
+    REQUIRE(mgo::readToolLibrary(file.path + ".bak", errors).find(2)->description == "First");
+    REQUIRE(errors.empty());
+}
+
+namespace {
+
+// A model with the tool library (and the current feature), its file in the
+// temporary directory: the work's end at Z 0, 20 diameter (X 10), with
+// tool 1
+struct ToolModel {
+    TemporaryToolFile file;
+    TestConfigReader config;
+    mgo::MockGpio gpio { false };
+    mgo::Model model { gpio, config };
+    explicit ToolModel(const std::string& name)
+        : file(name)
+        , config(
+              { { "ToolLibrary", "true" },
+                { "ToolLibraryFile", file.path },
+                { "CurrentFeature", "true" } })
+    {
+        model.initialise();
+        model.axis1SetSpeed(200.0);
+        model.axis2SetSpeed(200.0);
+        model.setAxis2Position(10.0);
+        model.diameterIsSet();
+        model.markWorkEnd();
+    }
+    void moveTo(double z, double x)
+    {
+        model.axis1GoToPosition(z);
+        model.axis2GoToPosition(x);
+        REQUIRE(runUntilStopped(model));
+    }
+    // Touches the diameter at X x, coming in (X goes down into the work)
+    // from 0.2 out; then the end at Z z, coming in (Z goes down towards the
+    // chuck) from 0.2 off it, with X 1 deeper than the diameter
+    void touch(double z, double x)
+    {
+        moveTo(z + 0.2, x + 0.2);
+        moveTo(z + 0.2, x);
+        REQUIRE(model.recordToolTouch());
+        moveTo(z + 0.2, x - 1.0);
+        moveTo(z, x - 1.0);
+        REQUIRE(model.recordToolTouch());
+    }
+};
+
+} // end anonymous namespace
+
+TEST_CASE("Model:   changing tool shifts the positions, keeping memories and the feature")
+{
+    ToolModel t("tools_change");
+    // (No file yet: tool 1 only)
+    REQUIRE(t.model.toolLibrary().tools().size() == 1);
+    REQUIRE(t.model.toolChangeUnavailable().empty());
+    t.model.axis1StorePosition();
+    t.model.axis2StorePosition();
+
+    // Tool 2's tip is 1.5 further towards the chuck than tool 1's, and 0.4
+    // further in (towards the centre), so it touches with Z 1.5 further from
+    // the chuck and X 0.4 further out. (Both axes' positions go down towards
+    // the chuck and the centre)
+    REQUIRE(t.model.startToolMeasurement(2).empty());
+    t.touch(0.0, 10.0);
+    t.touch(1.5, 10.4);
+    REQUIRE(t.model.toolTouchStep() == mgo::ToolTouchStep::Finished);
+    const auto offsets = t.model.toolMeasurementOffsets();
+    REQUIRE(offsets);
+    REQUIRE(offsets->first == Approx(-1.5).margin(0.0011));
+    REQUIRE(offsets->second == Approx(-0.4).margin(0.0011));
+    REQUIRE(t.model.finishToolMeasurement("Left-hand turning tool", 0.2).empty());
+    REQUIRE(!t.model.isMeasuringTool());
+    REQUIRE(t.model.toolLibrary().current().number == 2);
+
+    // Tool 2 is at the end (Z 1.5 with tool 1's positions): it now reads 0,
+    // the work's end, as tool 1 did there
+    REQUIRE(t.model.getAxis1MotorPosition() == Approx(0.0).margin(0.0011));
+    REQUIRE(t.model.getAxis2MotorPosition() == Approx(9.0).margin(0.0011));
+    // The memory slot and the feature are where they were on the work
+    REQUIRE(t.model.getAxis1MemoryAsPosition(0) == Approx(0.0));
+    REQUIRE(t.model.getAxis2MemoryAsPosition(0) == Approx(10.0));
+    REQUIRE(t.model.getFeatureDiameterMm() == Approx(20.0));
+    REQUIRE(t.model.getWorkEndZ() == Approx(0.0));
+    // X is still measured from the centre
+    REQUIRE(t.model.getDiameterMm() == Approx(18.0).margin(0.0021));
+
+    // Back to tool 1: back to the same steps
+    const long z2 = t.model.getAxis1MotorCurrentStep();
+    const long x2 = t.model.getAxis2MotorCurrentStep();
+    REQUIRE(t.model.selectTool(1).empty());
+    REQUIRE(t.model.getAxis1MotorPosition() == Approx(1.5).margin(0.0011));
+    REQUIRE(t.model.selectTool(2).empty());
+    REQUIRE(t.model.getAxis1MotorCurrentStep() == z2);
+    REQUIRE(t.model.getAxis2MotorCurrentStep() == x2);
+
+    // The library was saved, with tool 2 current
+    std::vector<std::string> errors;
+    const auto saved = mgo::readToolLibrary(t.file.path, errors);
+    REQUIRE(errors.empty());
+    REQUIRE(saved.current().number == 2);
+    REQUIRE(saved.find(2)->description == "Left-hand turning tool");
+    REQUIRE(saved.find(2)->noseRadiusMm == Approx(0.2));
+    REQUIRE(saved.find(2)->axis1OffsetMm == Approx(-1.5).margin(0.0011));
+    REQUIRE(!saved.find(2)->measured.empty());
+}
+
+TEST_CASE("Model:   a touch is refused unless the axis came in towards the surface")
+{
+    ToolModel t("tools_direction");
+    REQUIRE(t.model.startToolMeasurement(2).empty());
+    // X moved out on to the diameter: refused, as its backlash would be
+    // taken up the other way
+    t.moveTo(0.2, 9.8);
+    t.moveTo(0.2, 10.0);
+    REQUIRE(!t.model.recordToolTouch());
+    REQUIRE(!t.model.getWarning().empty());
+    REQUIRE(t.model.toolTouchStep() == mgo::ToolTouchStep::ReferenceDiameter);
+    t.moveTo(0.2, 10.2);
+    t.moveTo(0.2, 10.0);
+    REQUIRE(t.model.recordToolTouch());
+    REQUIRE(t.model.getWarning().empty());
+    // Z moved away from the chuck on to the end: refused
+    t.moveTo(-0.2, 9.0);
+    t.moveTo(0.0, 9.0);
+    REQUIRE(!t.model.recordToolTouch());
+    REQUIRE(t.model.toolTouchStep() == mgo::ToolTouchStep::ReferenceEnd);
+    t.model.cancelToolMeasurement();
+    REQUIRE(!t.model.isMeasuringTool());
+    REQUIRE(t.model.toolLibrary().tools().size() == 1);
+}
+
+TEST_CASE("Model:   when a tool can't be changed or measured")
+{
+    ToolModel t("tools_unavailable");
+    // Not the tool in use (the others are measured from it)
+    REQUIRE(!t.model.toolMeasurementUnavailable(1).empty());
+    REQUIRE(t.model.toolMeasurementUnavailable(2).empty());
+    // Not with a boring retraction: external tools only
+    t.model.setRetractionDirection(mgo::XDirection::Inwards);
+    REQUIRE(!t.model.toolMeasurementUnavailable(2).empty());
+    t.model.setRetractionDirection(mgo::XDirection::Outwards);
+    // Not while threading
+    t.model.changeMode(mgo::Mode::Threading);
+    REQUIRE(!t.model.toolChangeUnavailable().empty());
+    REQUIRE(!t.model.selectTool(1).empty());
+    t.model.changeMode(mgo::Mode::None);
+    // Not while measuring; and entering a mode cancels measuring
+    REQUIRE(t.model.startToolMeasurement(2).empty());
+    REQUIRE(!t.model.toolChangeUnavailable().empty());
+    t.model.changeMode(mgo::Mode::Taper);
+    REQUIRE(!t.model.isMeasuringTool());
+    t.model.changeMode(mgo::Mode::None);
+    // Not without the tool library
+    TestConfigReader config({});
+    mgo::MockGpio gpio(false);
+    mgo::Model model(gpio, config);
+    model.initialise();
+    REQUIRE(!model.toolLibraryEnabled());
+    REQUIRE(!model.toolChangeUnavailable().empty());
+}
+
+TEST_CASE("Model:   measuring the reference tool again from another tool")
+{
+    ToolModel t("tools_reference");
+    REQUIRE(t.model.startToolMeasurement(2).empty());
+    t.touch(0.0, 10.0);
+    t.touch(1.0, 10.5);
+    REQUIRE(t.model.finishToolMeasurement("Tool 2", 0.0).empty());
+    // With tool 2 in use, tool 1 is measured again, after its tip has been
+    // changed: it's now 0.2 further in (towards the centre) than before
+    REQUIRE(t.model.startToolMeasurement(1).empty());
+    t.touch(0.0, 9.0);
+    // (Tool 1's tip used to be 0.5 further out than tool 2's; it's now 0.3)
+    t.touch(-1.0, 8.7);
+    REQUIRE(t.model.finishToolMeasurement("Reference, new insert", 0.4).empty());
+    const auto& library = t.model.toolLibrary();
+    REQUIRE(library.current().number == 1);
+    REQUIRE(library.find(1)->axis2OffsetMm == 0.0);
+    REQUIRE(library.find(1)->description == "Reference, new insert");
+    REQUIRE(library.find(2)->axis1OffsetMm == Approx(-1.0).margin(0.0011));
+    REQUIRE(library.find(2)->axis2OffsetMm == Approx(-0.3).margin(0.0011));
+    // Tool 1 is at the end it touched, which tool 2 read as Z 0
+    REQUIRE(t.model.getAxis1MotorPosition() == Approx(0.0).margin(0.0011));
+}
+
+TEST_CASE("Tools:   the unknown tool, current but not in the library")
+{
+    mgo::ToolLibrary library;
+    REQUIRE(library.currentIsKnown());
+    REQUIRE(library.setCurrent(mgo::ToolLibrary::UNKNOWN_TOOL));
+    REQUIRE(!library.currentIsKnown());
+    REQUIRE(library.current().number == mgo::ToolLibrary::UNKNOWN_TOOL);
+    REQUIRE(library.current().description == "Unknown tool");
+    REQUIRE(!library.find(mgo::ToolLibrary::UNKNOWN_TOOL));
+    // (Still only the reference tool in the library)
+    REQUIRE(library.tools().size() == 1);
+    // Kept in the file
+    std::vector<std::string> errors;
+    const auto read = mgo::ToolLibrary::fromText(library.toText(), errors);
+    REQUIRE(errors.empty());
+    REQUIRE(!read.currentIsKnown());
+}
+
+TEST_CASE("Model:   the unknown tool keeps the positions, until an axis is set with it")
+{
+    ToolModel t("tools_unknown");
+    REQUIRE(t.model.startToolMeasurement(2).empty());
+    t.touch(0.0, 10.0);
+    t.touch(1.5, 10.4);
+    REQUIRE(t.model.finishToolMeasurement("Tool 2", 0.0).empty());
+    const long z2 = t.model.getAxis1MotorCurrentStep();
+    const long x2 = t.model.getAxis2MotorCurrentStep();
+
+    // To the unknown tool: nothing shifts, and the positions are still
+    // tool 2's
+    REQUIRE(t.model.toolChangeClears(mgo::ToolLibrary::UNKNOWN_TOOL) == std::pair { false, false });
+    REQUIRE(t.model.selectTool(mgo::ToolLibrary::UNKNOWN_TOOL).empty());
+    REQUIRE(!t.model.toolLibrary().currentIsKnown());
+    REQUIRE(t.model.positionsTool() == 2);
+    REQUIRE(t.model.getAxis1MotorCurrentStep() == z2);
+    REQUIRE(t.model.getAxis2MotorCurrentStep() == x2);
+    // Tools are measured from one in the library
+    REQUIRE(!t.model.toolMeasurementUnavailable(3).empty());
+    // Back to tool 2, nothing set meanwhile: as it was, feature and all
+    REQUIRE(t.model.toolChangeClears(2) == std::pair { false, false });
+    REQUIRE(t.model.selectTool(2).empty());
+    REQUIRE(t.model.getAxis1MotorCurrentStep() == z2);
+    REQUIRE(t.model.getAxis2MotorCurrentStep() == x2);
+    REQUIRE(t.model.getWorkEndZ() == Approx(0.0));
+    REQUIRE(t.model.getFeatureDiameterMm() == Approx(20.0));
+    // Via the unknown tool to tool 1: shifted from tool 2's offsets
+    REQUIRE(t.model.selectTool(mgo::ToolLibrary::UNKNOWN_TOOL).empty());
+    REQUIRE(t.model.selectTool(1).empty());
+    REQUIRE(t.model.getAxis1MotorPosition() == Approx(1.5).margin(0.0011));
+
+    // With the unknown tool, Z is zeroed: Z's positions are now its, so
+    // changing to tool 1 can't shift Z, and the work's end (set with tool
+    // 1) goes. X is still tool 1's, so shifts as usual, keeping its diameter
+    REQUIRE(t.model.selectTool(mgo::ToolLibrary::UNKNOWN_TOOL).empty());
+    t.model.axis1Zero();
+    t.model.markWorkEnd();
+    REQUIRE(!t.model.positionsTool());
+    REQUIRE(t.model.toolChangeClears(2) == std::pair { false, true });
+    REQUIRE(t.model.selectTool(2).empty());
+    REQUIRE(t.model.getAxis1MotorPosition() == Approx(0.0).margin(0.0001));
+    REQUIRE(!t.model.getWorkEndZ());
+    REQUIRE(t.model.getFeatureDiameterMm() == Approx(20.0));
+    REQUIRE(t.model.getAxis2MotorCurrentStep() == x2);
+    REQUIRE(t.model.positionsTool() == 2);
+
+    // The unknown tool is saved as the one in use
+    REQUIRE(t.model.selectTool(mgo::ToolLibrary::UNKNOWN_TOOL).empty());
+    std::vector<std::string> errors;
+    REQUIRE(!mgo::readToolLibrary(t.file.path, errors).currentIsKnown());
+    REQUIRE(errors.empty());
 }

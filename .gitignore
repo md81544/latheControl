@@ -41,3 +41,7 @@ tags
 *.log.previous
 lldb-mi
 .cache/
+# The tool library, which the program writes (see ToolLibraryFile)
+tools.cfg
+tools.cfg.bak
+tools.cfg.new

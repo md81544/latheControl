@@ -7,6 +7,7 @@
 #include <cassert>
 #include <chrono>
 #include <cmath>
+#include <ctime>
 #include <sstream>
 #include <utility>
 
@@ -292,6 +293,26 @@ void Model::initialise()
             count += c.threads.size();
         }
         MGOLOG(fmt::format("{} thread sizes read from {}", count, threadsFile));
+    }
+    if (toolLibraryEnabled()) {
+        const std::string toolsFile = m_config.read("ToolLibraryFile", "tools.cfg");
+        std::vector<std::string> errors;
+        m_toolLibrary = readToolLibrary(toolsFile, errors);
+        for (const auto& e : errors) {
+            MGOLOG("*** Warning *** " << e);
+        }
+        if (!errors.empty()) {
+            m_warning = "Some of the tool library couldn't be read (see lc.log)";
+        }
+        // (Positions are as at start-up, set with the tool in use)
+        m_axis1PositionsTool = m_toolLibrary.current().number;
+        m_axis2PositionsTool = m_toolLibrary.current().number;
+        MGOLOG(
+            fmt::format(
+                "{} tools read from {}; T{} is current",
+                m_toolLibrary.tools().size(),
+                toolsFile,
+                m_toolLibrary.current().number));
     }
 
     configureAxis1Scale();
@@ -682,6 +703,10 @@ std::string Model::getFaultMessage() const
 
 void Model::changeMode(Mode mode)
 {
+    // (Measuring a tool needs no mode: see startToolMeasurement())
+    if (mode != Mode::None) {
+        cancelToolMeasurement();
+    }
     if (mode != Mode::None || m_multiPass.inProgress() || m_multiPassMovingToStart) {
         // (Leaving multi-pass mode part way through stops it, too, as it
         // does a move to its start)
@@ -1250,6 +1275,9 @@ void Model::axis1Nudge(ZDirection direction, double nudgeAmountMm)
 
 void Model::axis1Zero()
 {
+    // (The positions now read the tip of the tool in use, which may be the
+    // unknown tool: see positionsTool())
+    m_axis1PositionsTool = m_toolLibrary.current().number;
     if (m_mode == Mode::Taper) {
         changeMode(Mode::None);
     }
@@ -1496,6 +1524,9 @@ void Model::axis2Stop()
 
 void Model::axis2Zero()
 {
+    // (The positions now read the tip of the tool in use, which may be the
+    // unknown tool: see positionsTool())
+    m_axis2PositionsTool = m_toolLibrary.current().number;
     if (m_mode == Mode::Taper) {
         changeMode(Mode::None);
     }
@@ -1969,6 +2000,356 @@ void Model::featureGoToWorkEnd(bool clear)
     axis1GoToPosition(*z);
 }
 
+namespace {
+
+// Today's date, as YYYY-MM-DD
+std::string today()
+{
+    const std::time_t now = std::time(nullptr);
+    std::tm local {};
+    localtime_r(&now, &local);
+    char date[16];
+    std::strftime(date, sizeof(date), "%Y-%m-%d", &local);
+    return date;
+}
+
+// +1 if the motor's last move made its position (in mm) go up, or -1 if down
+int lastMoveSign(const StepperMotor& motor)
+{
+    const int steps = motor.getDirection() == Direction::forward ? 1 : -1;
+    return motor.getConversionFactor() > 0.0 ? steps : -steps;
+}
+
+} // end anonymous namespace
+
+bool Model::toolLibraryEnabled() const
+{
+    return m_config.readBool("ToolLibrary", false) && !m_config.readBool("DisableAxis1", false)
+        && !m_config.readBool("DisableAxis2", false);
+}
+
+const ToolLibrary& Model::toolLibrary() const
+{
+    return m_toolLibrary;
+}
+
+std::string Model::toolChangeUnavailable() const
+{
+    if (!toolLibraryEnabled()) {
+        return "The tool library isn't turned on (ToolLibrary in the config)";
+    }
+    if (m_toolMeasurement) {
+        return "Finish measuring the tool first (or Esc to cancel it)";
+    }
+    // (In multi-pass or radius mode, the passes' positions are on the work,
+    // so carry over to the new tool, as memory slots do)
+    if (m_mode != Mode::None && m_mode != Mode::MultiPass && m_mode != Mode::Radius) {
+        return "Leave the mode first (Esc)";
+    }
+    if (m_multiPass.inProgress() || m_multiPassMovingToStart) {
+        return "Not during a multi-pass";
+    }
+    if (m_axis1Motor->isRunning() || m_axis2Motor->isRunning() || m_motionSequence.isRunning()
+        || m_axis1Finish || m_backlashMeasurement) {
+        return "Stop the motors first";
+    }
+    return "";
+}
+
+void Model::shiftPositionsForTool(Axis axis, double fromMm, double toMm)
+{
+    StepperMotor& motor = axis == Axis::Axis1 ? *m_axis1Motor : *m_axis2Motor;
+    // In whole steps for each tool, so changing to a tool and back again
+    // always comes back to the same step
+    const double factor = motor.getConversionFactor();
+    const long steps = std::lround(toMm / factor) - std::lround(fromMm / factor);
+    if (steps != 0) {
+        motor.setPosition(static_cast<double>(motor.getCurrentStep() + steps) * factor);
+    }
+    if (axis == Axis::Axis1) {
+        m_axis1MotorLog.step = m_axis1Motor->getCurrentStep();
+        if (m_axis1Scale) {
+            // (As for a position set: the scale is lined up with the motor again)
+            m_axis1Scale->realign();
+        }
+    } else {
+        m_axis2MotorLog.step = m_axis2Motor->getCurrentStep();
+    }
+    // Unlike a position set, nothing is cleared: memory slots, breadcrumbs,
+    // the current feature and so on are all positions on the work, which the
+    // new tool's tip now reads, and X is still measured from the centre if it
+    // was before
+}
+
+std::string Model::saveToolLibrary()
+{
+    const std::string path = m_config.read("ToolLibraryFile", "tools.cfg");
+    const std::string error = writeToolLibrary(
+        m_toolLibrary, path, m_config.read("Axis1Label", "Z"), m_config.read("Axis2Label", "X"));
+    if (!error.empty()) {
+        MGOLOG("*** Warning *** " << error);
+        m_warning = "The tool library couldn't be saved (see lc.log)";
+        return m_warning;
+    }
+    return "";
+}
+
+std::pair<bool, bool> Model::toolChangeClears(int number) const
+{
+    // (Only changing to a tool in the library, when an axis's positions
+    // read the unknown tool's tip)
+    if (number == ToolLibrary::UNKNOWN_TOOL || number == m_toolLibrary.current().number) {
+        return { false, false };
+    }
+    return { m_axis2PositionsTool == ToolLibrary::UNKNOWN_TOOL,
+             m_axis1PositionsTool == ToolLibrary::UNKNOWN_TOOL };
+}
+
+std::optional<int> Model::positionsTool() const
+{
+    if (m_axis1PositionsTool != m_axis2PositionsTool
+        || m_axis1PositionsTool == ToolLibrary::UNKNOWN_TOOL) {
+        return std::nullopt;
+    }
+    return m_axis1PositionsTool;
+}
+
+std::string Model::selectTool(int number)
+{
+    if (std::string why = toolChangeUnavailable(); !why.empty()) {
+        m_warning = why;
+        return why;
+    }
+    const bool toUnknown = number == ToolLibrary::UNKNOWN_TOOL;
+    const Tool* to = m_toolLibrary.find(number);
+    if (!toUnknown && !to) {
+        m_warning = fmt::format("There's no tool {}", number);
+        return m_warning;
+    }
+    const int from = m_toolLibrary.current().number;
+    if (from == number) {
+        return "";
+    }
+    m_toolLibrary.setCurrent(number);
+    m_warning = "";
+    if (toUnknown) {
+        // Its offsets aren't known, so nothing can be shifted: the positions
+        // still read the last tool's tip (see positionsTool()), until an
+        // axis is zeroed or its position set
+        MGOLOG(fmt::format("Tool changed from T{} to an unknown tool", from));
+        return saveToolLibrary();
+    }
+    // Each axis shifts from the tool its positions read, if that's known.
+    // If they read the unknown tool's tip (it was zeroed or set with that
+    // tool), there's nothing to shift from: the positions are left as they
+    // are, but what was set on the work with the unknown tool is cleared
+    const Tool* axis1From = m_toolLibrary.find(m_axis1PositionsTool);
+    const Tool* axis2From = m_toolLibrary.find(m_axis2PositionsTool);
+    if (axis1From) {
+        shiftPositionsForTool(Axis::Axis1, axis1From->axis1OffsetMm, to->axis1OffsetMm);
+    } else {
+        clearWorkEnd();
+    }
+    if (axis2From) {
+        shiftPositionsForTool(Axis::Axis2, axis2From->axis2OffsetMm, to->axis2OffsetMm);
+    } else {
+        // (X is no longer known to be measured from the centre, either)
+        clearDiameter();
+    }
+    MGOLOG(
+        fmt::format(
+            "Tool changed from T{} to T{} ({}): {} {}, {} {}",
+            from,
+            to->number,
+            to->description,
+            m_config.read("Axis1Label", "Z"),
+            axis1From ? fmt::format(
+                            "shifted by {:.4f} (from T{})",
+                            to->axis1OffsetMm - axis1From->axis1OffsetMm,
+                            axis1From->number)
+                      : std::string("not shifted (set with an unknown tool)"),
+            m_config.read("Axis2Label", "X"),
+            axis2From ? fmt::format(
+                            "shifted by {:.4f} (from T{})",
+                            to->axis2OffsetMm - axis2From->axis2OffsetMm,
+                            axis2From->number)
+                      : std::string("not shifted (set with an unknown tool)")));
+    m_axis1PositionsTool = number;
+    m_axis2PositionsTool = number;
+    return saveToolLibrary();
+}
+
+std::string Model::editTool(int number, const std::string& description, double noseRadiusMm)
+{
+    const Tool* existing = m_toolLibrary.find(number);
+    if (!existing) {
+        m_warning = fmt::format("There's no tool {}", number);
+        return m_warning;
+    }
+    Tool tool = *existing;
+    tool.description = description;
+    tool.noseRadiusMm = std::max(0.0, noseRadiusMm);
+    m_toolLibrary.store(std::move(tool));
+    return saveToolLibrary();
+}
+
+std::string Model::toolMeasurementUnavailable(int number) const
+{
+    if (std::string why = toolChangeUnavailable(); !why.empty()) {
+        return why;
+    }
+    if (m_mode != Mode::None) {
+        return "Leave the mode first (Esc)";
+    }
+    if (number < ToolLibrary::REFERENCE_TOOL || number > ToolLibrary::MAX_TOOL) {
+        return "The tool library is full";
+    }
+    if (!m_toolLibrary.currentIsKnown()) {
+        return "Tools are measured from one in the library: change to one first";
+    }
+    if (number == m_toolLibrary.current().number) {
+        return fmt::format("T{} is the tool in use: it's measured from another tool", number);
+    }
+    if (m_xRetractionDirection != XDirection::Outwards) {
+        return "Only external tools can be measured so far (the retraction is set for boring)";
+    }
+    if (m_axis2Retracted) {
+        return "Unretract " + m_config.read("Axis2Label", "X") + " first";
+    }
+    if (isAxisLocked(1) || isAxisLocked(2)) {
+        return "Unlock the axes first";
+    }
+    return "";
+}
+
+std::string Model::startToolMeasurement(int number)
+{
+    if (std::string why = toolMeasurementUnavailable(number); !why.empty()) {
+        m_warning = why;
+        return why;
+    }
+    m_toolMeasurement = ToolMeasurement { .number = number, .touches = {} };
+    m_warning = "";
+    MGOLOG(fmt::format("Measuring T{} from T{}", number, m_toolLibrary.current().number));
+    return "";
+}
+
+bool Model::isMeasuringTool() const
+{
+    return m_toolMeasurement.has_value();
+}
+
+int Model::toolMeasurementNumber() const
+{
+    return m_toolMeasurement ? m_toolMeasurement->number : 0;
+}
+
+ToolTouchStep Model::toolTouchStep() const
+{
+    if (!m_toolMeasurement) {
+        return ToolTouchStep::Finished;
+    }
+    return static_cast<ToolTouchStep>(std::min<std::size_t>(m_toolMeasurement->touches.size(), 4));
+}
+
+bool Model::recordToolTouch()
+{
+    const ToolTouchStep step = toolTouchStep();
+    if (!m_toolMeasurement || step == ToolTouchStep::Finished) {
+        return false;
+    }
+    if (m_axis1Motor->isRunning() || m_axis2Motor->isRunning() || m_motionSequence.isRunning()) {
+        m_warning = "Wait for the axes to stop";
+        return false;
+    }
+    const bool diameter
+        = step == ToolTouchStep::ReferenceDiameter || step == ToolTouchStep::ToolDiameter;
+    double position = 0.0;
+    if (diameter) {
+        // The tool comes in on to the diameter, so X's backlash is taken up
+        // the same way for each tool
+        if (lastMoveSign(*m_axis2Motor) != static_cast<int>(axis2IntoWorkSign())) {
+            m_warning = "Touch the diameter moving " + m_config.read("Axis2Label", "X")
+                + " in (back off, and come in again)";
+            return false;
+        }
+        position = m_axis2Motor->getPosition();
+    } else {
+        // Likewise Z, on to the end, towards the chuck
+        const int towardsChuck
+            = m_config.read("Axis1TowardsChuck", "negative") == "positive" ? 1 : -1;
+        if (lastMoveSign(*m_axis1Motor) != towardsChuck) {
+            m_warning = "Touch the end moving " + m_config.read("Axis1Label", "Z")
+                + " towards the chuck (back off, and come in again)";
+            return false;
+        }
+        position = m_axis1Motor->getPosition();
+    }
+    m_toolMeasurement->touches.push_back(position);
+    m_warning = "";
+    MGOLOG(
+        fmt::format(
+            "Tool measurement: touch {} at {} {:.4f}",
+            m_toolMeasurement->touches.size(),
+            m_config.read(diameter ? "Axis2Label" : "Axis1Label", diameter ? "X" : "Z"),
+            position));
+    return true;
+}
+
+std::optional<std::pair<double, double>> Model::toolMeasurementOffsets() const
+{
+    if (toolTouchStep() != ToolTouchStep::Finished || !m_toolMeasurement) {
+        return std::nullopt;
+    }
+    const auto& t = m_toolMeasurement->touches;
+    return ToolLibrary::measuredOffsets(
+        m_toolLibrary.current(),
+        ToolTouches { .axis1Mm = t.at(1), .axis2Mm = t.at(0) },
+        ToolTouches { .axis1Mm = t.at(3), .axis2Mm = t.at(2) });
+}
+
+std::string Model::finishToolMeasurement(const std::string& description, double noseRadiusMm)
+{
+    const auto offsets = toolMeasurementOffsets();
+    if (!offsets) {
+        return "The tool hasn't been measured";
+    }
+    const int number = m_toolMeasurement->number;
+    m_toolMeasurement.reset();
+    Tool tool { .number = number,
+                .description = description,
+                .noseRadiusMm = std::max(0.0, noseRadiusMm),
+                .axis1OffsetMm = offsets->first,
+                .axis2OffsetMm = offsets->second,
+                .measured = today() };
+    if (tool.description.empty()) {
+        tool.description = fmt::format("Tool {}", number);
+    }
+    MGOLOG(
+        fmt::format(
+            "T{} ({}) measured from T{}: offsets {:.4f}, {:.4f}",
+            number,
+            tool.description,
+            m_toolLibrary.current().number,
+            tool.axis1OffsetMm,
+            tool.axis2OffsetMm));
+    // (The current tool's offsets change too, if it's the reference tool
+    // that's been measured: see ToolLibrary::store(). Its tip hasn't moved,
+    // so the positions mustn't: the shift below is worked out from the
+    // offsets as they are now, which keep their differences)
+    m_toolLibrary.store(std::move(tool));
+    // The tool measured is the one in the toolpost now
+    return selectTool(number);
+}
+
+void Model::cancelToolMeasurement()
+{
+    if (m_toolMeasurement) {
+        MGOLOG(fmt::format("Measuring T{} cancelled", m_toolMeasurement->number));
+    }
+    m_toolMeasurement.reset();
+}
+
 XDirection Model::getRetractionDirection() const
 {
     return m_xRetractionDirection;
@@ -2243,6 +2624,9 @@ void Model::setAxis2MotorSpeed(double speed)
 
 void Model::setAxis1Position(double mm)
 {
+    // (The positions now read the tip of the tool in use, which may be the
+    // unknown tool: see positionsTool())
+    m_axis1PositionsTool = m_toolLibrary.current().number;
     MGOLOG(
         fmt::format(
             "{} position set to {:.4f} (was {:.4f})",
@@ -2260,6 +2644,9 @@ void Model::setAxis1Position(double mm)
 
 void Model::setAxis2Position(double mm)
 {
+    // (The positions now read the tip of the tool in use, which may be the
+    // unknown tool: see positionsTool())
+    m_axis2PositionsTool = m_toolLibrary.current().number;
     MGOLOG(
         fmt::format(
             "{} position set to {:.4f} (was {:.4f})",

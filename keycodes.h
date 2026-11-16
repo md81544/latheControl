@@ -181,6 +181,11 @@ constexpr int f2g = 7018; // gear cutting mode
 constexpr int measureAxis1Backlash = 7019; // measure axis 1's backlash with its scale
 constexpr int toggleAxis1FinishOnScale = 7020; // finish axis 1's moves on its scale: on / off
 constexpr int f2f = 7021; // radius mode (a shoulder with a fillet)
+constexpr int toolNew = 7022; // tool library: define a new tool (measuring it)
+constexpr int toolMeasureAgain = 7023; // tool library: measure a tool again
+constexpr int toolTouch = 7024; // tool library: record a touch, while measuring (Enter)
+constexpr int toolCancelMeasuring = 7025; // tool library: cancel measuring (Esc)
+constexpr int toolEdit = 7026; // tool library: the current tool's description and nose radius
 
 // Joystick specific "keys"
 // Note some joystick commands just return regular keycodes.
