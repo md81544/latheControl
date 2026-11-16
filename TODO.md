@@ -1418,6 +1418,20 @@ change.
       C++23 library features and Qt APIs even though they build on the Mac.
     - **Plan:** on a spare SD card (so the working one is untouched),
       install the latest Raspberry Pi OS, and try a branch using libgpiod
+    - **No hurry:** Bookworm (Debian 12) has long-term support until about
+      mid-2028, so this can be done carefully, a step at a time
+    - **The GPIO library first, then the OS.** libgpiod is in Bookworm too
+      (1.6, as far as is known; v2 came later), so a libgpiod `IGpio` can be
+      tried on the same SD card and hardware, chosen at build time, and
+      compared with pigpio directly. Once it works, the OS change is mostly a
+      rebuild. (Written against 1.6, it would need moving to v2's API for
+      the latest OS, but that's a small amount of code)
+    - **The mill first.** Its Pi only steps motors: it has no input pins
+      wired (2026-11-16), its scales come over serial, and it has no
+      spindle encoder. So it tries the stepping without the hard part (the
+      inputs with pull-ups are only tried on the lathe). If that's
+      good, the lathe's encoder is the only new risk left, and can be
+      measured on its own
     - **What it has to replace:** only `gpio.cpp` uses pigpio, behind
       `IGpio` (igpio.h), so nothing else should change. It uses pins as
       outputs (`gpioSetMode`, `gpioWrite`: step, direction, enable), inputs
