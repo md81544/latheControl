@@ -37,7 +37,7 @@ To run unit tests, `make test`.
 Note that the software will take the pin high then low for each pulse to the stepper motor, so the pins you specify in the config file should be connected to the positive inputs for the stepper controller. All the negative input pins should be tied together and connected to the Pi's GND pin.
 
 ## Running, and Performance
-This is designed to run on a stock Raspberry Pi 3 Model B. Usage of the GPIO pins (via the pigpio library) requires root privileges, so run the program via `sudo`.
+This is designed to run on a stock Raspberry Pi 3 Model B or later: the lathe's runs on a Pi 4 Model B, and the mill's on a Pi 3 Model B+. Usage of the GPIO pins (via the pigpio library) requires root privileges, so run the program via `sudo`.
 
 This program is very time-critical. You shouldn't need to use `nice`, as, internally, it sets the critical background (motor-related) threads to realtime scheduling.
 
