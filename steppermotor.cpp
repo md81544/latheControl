@@ -332,7 +332,11 @@ void StepperMotor::setRpm(double rpm, bool noLock)
         m_wake.notify_all();
         return;
     }
-    if (m_useRamping && rpm > m_rpm) {
+    // A ramp starts at the ramped speed: until 2026-11-17 the delay was set
+    // from the target speed here, so the first step of every ramped move went
+    // at full speed, and only the next dropped back to start the ramp
+    const bool ramping = m_useRamping && rpm > m_rpm;
+    if (ramping) {
         // We don't start ramping from zero
         m_rampedRpm = m_maxRpm * RAMP_START_FRACTION;
         if (m_rampedRpm > rpm) {
@@ -340,7 +344,7 @@ void StepperMotor::setRpm(double rpm, bool noLock)
         }
     }
     m_rpm = rpm;
-    m_delay = calculateDelayValue(m_rpm);
+    m_delay = calculateDelayValue(ramping ? m_rampedRpm.load() : rpm);
     if (m_usingMockLinearScale) {
         // Keep the mock linear scale's speed in step with this motor
         const double motorSpeedMmPerSec = getSpeed() / 60.0;

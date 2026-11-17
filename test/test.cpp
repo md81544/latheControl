@@ -386,6 +386,26 @@ TEST_CASE("Stepper: Check motor speed ramping")
     }
 }
 
+TEST_CASE("Stepper: a ramped move's first step is at the ramp's starting speed")
+{
+    mgo::MockGpio gpio(false);
+    // (1000 steps per revolution, so the delay is 30000 / rpm)
+    mgo::StepperMotor motor(gpio, 0, 0, 0, 1'000, 1.0, 1'000.0);
+    motor.setRpm(1'000.0);
+    // Not at full speed (a delay of 30), but where the ramp starts: 40% of it
+    REQUIRE(motor.getDelay() == 75);
+    // Slowing down doesn't ramp, so it's at once
+    motor.setRpm(100.0);
+    REQUIRE(motor.getDelay() == 300);
+    // Nor does speeding up to below where a ramp starts
+    motor.setRpm(200.0);
+    REQUIRE(motor.getDelay() == 150);
+    // With ramping off, full speed at once
+    motor.enableRamping(false);
+    motor.setRpm(1'000.0);
+    REQUIRE(motor.getDelay() == 30);
+}
+
 TEST_CASE("Stepper: Check motor synchronisation")
 {
     mgo::MockGpio gpio(false);
