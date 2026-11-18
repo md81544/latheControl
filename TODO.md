@@ -1658,8 +1658,11 @@ change.
         - Not allowed during a multi-pass (nor are any other keys but a
           few), though zeroing a manual axis moves nothing. The slot and
           face/pocket modes may want Z zeroed at a pause
-    - **To try on the mill:** each scale's direction (`Axis3ScaleReversed`,
-      `Axis4ScaleReversed`) and counts per mm (the nominal 2560 per inch so
+    - **Seen on the mill (18 Nov 2026):** Z's scale counts up as the tool
+      goes down, so `Axis4ScaleReversed` is now true, following the usual
+      convention that Z goes negative towards the work
+    - **To try on the mill:** Y's direction (`Axis3ScaleReversed`: +Y is
+      the table moving towards you) and each scale's counts per mm (the nominal 2560 per inch so
       far: calibrate against a known move, as for X), and that the y and z
       leader keys don't clash with anything in use
 - [x] `axis.cpp` / `axis.h` are compiled but unused, and their `mgo::Axis`
