@@ -947,6 +947,23 @@
       backlash doesn't come into it yet. Lathe only, and off unless the
       config enables it
 - [ ] Support the enable pin for each motor
+    - **Not used yet:** `Axis1GpioEnablePin` and `Axis2GpioEnablePin` are
+      read and passed to the GPIO layer, but nothing calls
+      `setEnablePin()`, so the pins are never driven. Both configs set them
+      to `0`, which is only harmless because of that: GPIO0 is a real pin
+      (the HAT ID EEPROM's data line). When this is done, an empty setting
+      (as `LimitSwitchPin` uses) should mean "no enable pin", so a config
+      left at `0` can't start driving GPIO0
+    - **Mill wiring (planned 18 Nov 2026, while fitting its Pi 4):** ENA
+      for Axis1 (the table's X) on GPIO11 and for Axis2 (the rotary table,
+      A) on GPIO16, ready for when the program drives them. GPIO11 is
+      SPI0's clock, which is free as SPI0 has to be off anyway (X's step
+      and reverse are on GPIO10 and GPIO9). Until the program drives them they stay inputs with their
+      default pull-downs, so no current flows through ENA, which most
+      drivers (the HSS57 and DM-series) treat as enabled. Check that on the
+      machine. The Pi drives 3.3V: step and direction work at that level on
+      these drivers, so ENA probably will too, but check it with a meter
+      once it's driven
 - [ ] **Motor stalls: stop when the driver goes into its error mode.** At the
       moment, if a motor stalls and its driver goes into error mode, the
       driver ignores further step pulses but the program carries on counting
@@ -1016,6 +1033,12 @@
     - **To test** on the machine, along with the enable and alarm pins:
       that a switch stops the motors at rapid speed, the dialog, and moving
       off the switch after clearing.
+    - **Mill wiring (planned 18 Nov 2026, while fitting its Pi 4):** the
+      limit switches on GPIO2 (`LimitSwitchPin = 2`,
+      `LimitSwitchActiveLevel = high`). GPIO2 is I2C's SDA, so it has a
+      fixed 1.8kΩ pull-up to 3.3V on the board, which suits normally-closed
+      switches to GND and helps on a long cable. I2C must stay disabled in
+      raspi-config (the default)
 - [ ] Consider some form of switch or sensor to prevent carriage movement
       outside specific points (or mandate position checks at start-up to do
       this in software only?)
@@ -2338,6 +2361,13 @@ change.
           fans. If the mill doesn't lock up on the Pi 4, put the cause down
           to the 3B+ and leave it there. If it does, the serial console is
           next
+        - **Fitted (18 Nov 2026):** the Pi 4, with a fresh Bookworm on a
+          new SD card, X11 rather than Wayland, and lc at
+          `~/src/latheControl`. A clean `make release` was noticeably
+          faster. X, A and the scales work as before. Still to do: watch for
+          lock-ups over longer runs, repeat the multi-pass return stall
+          test (under Multi-pass), and wire the enable pins and limit
+          switches (GPIO11, GPIO16, GPIO2; see Motion and timing)
         - Nine of the settles hit the 3 s limit ("still changing"): the
           reading flickers at rest sometimes, so a settled value can be a
           count out
