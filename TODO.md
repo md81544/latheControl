@@ -244,6 +244,34 @@
       try:** the reversal by hand, then the 5 mm multi-pass, and whether
       the clunk has gone. If it still stalls, try a lower take-up speed.
       Re-basing during a multi-pass is still wanted, as a backstop
+    - **Tried on the mill (18 Nov 2026): it works.** 40 multi-pass passes
+      at 100 mm/min take-up with no stalls, where five or more would have
+      been expected before. But X drifted from its scale, steadily: lc.log
+      (5 mm cuts at 100 mm/min, returns at 1000 mm/min) shows the table
+      9-11 counts (about 0.1 mm) further positive than the motor after
+      every return, so the 0.456 mm check stopped the run every five passes
+      (+0.089, +0.179, +0.288, +0.387, +0.497 mm). A wrong backlash setting
+      or conversion can't do that, as they cancel over a round trip: it has
+      to be one-way. The suspect is the return's dead stop from full speed
+      (cf. "stops at speed overshoot", under Miscellaneous), with the motor
+      dragged on by the leadscrew's momentum, or X's pulley slipping on its
+      shaft again. **To try:** each leg by hand (5 mm at 100 mm/min, wait
+      for the settle in lc.log, then back at full speed and wait), to see
+      which leg gains; a run with `Axis1MaxMotorRpm` at 400, to see whether
+      the drift shrinks; and a line scribed across the pulley and shaft. If
+      it's the stop, "Deceleration ramping" (Motion and timing) is the fix;
+      re-basing during a multi-pass would only hide it
+    - **Second run (18 Nov 2026):** 6 mm cuts at 140 mm/min, returns at
+      1000 mm/min, about 39 passes with no pauses: the table ended 4.51 mm
+      ahead of the motor in the return's direction (about 0.115 mm a pass).
+      There's an audible "clunk" at each return's dead stop, and the pulley
+      is ruled out (the grub screw was lined up on the shaft's flat, and
+      was still on it afterwards). So the stop from full speed is the prime
+      suspect. **And nothing caught it during the run:** with no pauses, X
+      never rested long enough for the scale to settle, so the mismatch
+      check never ran, and the 4.5 mm only showed after Space. So a check
+      (or re-basing) during a multi-pass is needed as a backstop, even once
+      the cause is fixed
     - **Slot:** cut along X, pause (re-basing X), the user feeds Z down,
       cut back at cutting speed, pause again (re-basing X), and repeat until
       the full depth. Each end of the slot finishes on X's scale (backing
