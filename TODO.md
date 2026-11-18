@@ -192,6 +192,66 @@
       `processModeInputKeys()`, now removed)
 
 ## Multi-pass (experimental)
+- [ ] **Slot and face/pocket modes for the mill.** Rather than the generic
+      multi-pass, the mill gets modes for what it's actually used for, built
+      on the multi-pass engine with extra options. Once they work, the
+      generic multi-pass mode is turned off in lc_mill.cfg (the lathe keeps
+      it, as it's really turning and boring between two memory slots).
+    - **Why (18 Nov 2026):** repeating a slot cut on the mill with a pause
+      between passes, X drifted from its scale by up to several hundred
+      microns over several passes. During a multi-pass, X is never re-based
+      from its scale (only once it's finished), nor finished on the scale.
+      Only the mismatch check runs, and only where X rests long enough for
+      the scale to settle (the pauses, not the quick reversal after a cut).
+      Its limit is `Axis1ScaleWarnMm` (0.2 mm), plus the backlash setting
+      (820 steps, 0.256 mm) when the table is ahead of the motor the way it
+      last moved, so up to about 0.46 mm that way passes unnoticed. Two
+      possible causes, not yet told apart: lost steps (they would build up
+      from pass to pass; X was seen stalling at the start of multi-pass
+      returns on 17 Nov 2026, perhaps in the backlash take-up),
+      or climb cuts pulling the table into the slack (about the same size
+      each time, and depending on direction). lc.log's differences at each
+      settle should tell which
+    - **Slot:** cut along X, pause (re-basing X), the user feeds Z down,
+      cut back at cutting speed, pause again (re-basing X), and repeat until
+      the full depth. Each end of the slot finishes on X's scale (backing
+      off along the slot and approaching again if it went past), so its
+      length is right. The pause shows the depth from Z's scale (e.g.
+      "Z: 0.15 of 0.20 mm this pass, 1.35 of 2.00 total")
+    - **Face/pocket:** start and end off the work (facing) or at the
+      pocket's walls (a pocket, where finishing on the scale matters). X
+      cuts both ways, pausing at each end for the user to step Y over, until
+      Y reaches Y2; then the user feeds Z down, and it repeats back across
+      in Y (zig-zag in Y as well as X, to save winding Y back for every
+      layer), until the final depth. Y's steps are the user's choice at
+      each pause; the mode follows Y's and Z's scales rather than a fixed
+      plan, so it only needs Y2 and the final Z (typed, or from where the
+      axis is now)
+    - **Climb cut warning:** at each pause, the mode tells from what
+      changed what kind of pass comes next: Z down is full width (no
+      warning); Y only is a side cut, with the material on the side Y moved
+      towards; nothing changed is a spring pass. The spindle always turns
+      clockwise, seen from above, for anything lc does (the user only runs
+      it backwards to back taps out), so a side cut climbs when the material
+      is on the right of the cutter's travel relative to the work. Config
+      says which way the cutter moves relative to the work for positive X
+      and Y (on the mill the table moves, and X's sign is already flipped,
+      so it mustn't be guessed). The warning is on the pause's prompt line
+      (e.g. "CLIMB: ..."), in a highlight colour, updating live as the user
+      winds Y and Z; no sound, and no second Enter to confirm, as the user
+      will often intend it (e.g. a spring pass back instead, or only a
+      small change of Y)
+    - **Enter waits for the scales to settle** (the prompt says "settling"
+      meanwhile), so the re-base and the climb warning are from settled
+      readings, not stale ones
+    - **Engine options needed** (off by default, with unit tests on the
+      fake machine): cut both ways (`cutBack` for Feed cuts, not just
+      threading), pause at both ends (it only pauses before a pass now),
+      re-base the cut axis at a pause once its scale has settled, and
+      finish each end on the scale. The engine's `feedManual` becomes "the
+      feed axis is a manual axis", which can now show the distance to go
+    - Depends on the array of axes with manual Y and Z (see "Structure and
+      refactoring")
 - [x] Try the rewritten multi-pass on the machine.
     - **Done:** tried on aluminium, without pausing: it worked, finishing
       within a few hundredths of a mm of the target diameter (the machine's
@@ -1513,11 +1573,63 @@ change.
     - Would free the OS, the compiler (`std::format` and newer C++23) and Qt
       to move on
 - [ ] Lots of refactoring still needed, as this grew a bit organically
-- [ ] (undecided) Replace all "Axis1..." and "Axis2..." references with an array, to
-      allow for future expansion. Might be difficult owing to the axes'
-      different behaviours
-- [ ] Support three axes, to enable X, Y and a rotary table (or Z, X, and
-      manual rotation of the chuck on the lathe)
+- [ ] **An array of axes, with manual axes (the mill's Y and Z).** Replace
+      the hard-coded "Axis1..." and "Axis2..." functions and members with an
+      array of axes, so the mill can have four: X (stepper), A (the rotary
+      table, stepper), and Y and Z (moved by hand, read from their scales).
+      Some behaviour only applies to some axes (e.g. retracting is only for
+      the lathe's X, not its Z), so each axis says what it can do, rather
+      than every axis having every feature.
+    - **Decided (18 Nov 2026), from planning the mill's slot and
+      face/pocket modes (see "Slot and face/pocket modes" under
+      Multi-pass):**
+        - Each axis has a kind: `stepper` or `manual`. A manual axis's
+          position is its scale's reading plus an offset, so it must have a
+          scale (refused at start-up without one). The mill's DRO sender
+          already sends Y and Z over the same FTDI stream as X; only X is
+          used so far
+        - A manual axis behaves like a DRO line: shown on the main display
+          all the time, with zero, set (type a value) and half (set it to
+          half its reading, for finding a centre between two edges; the
+          user uses this on TouchDRO all the time). Half is for the motor
+          axes too. Each axis has its own leader key (check for clashes:
+          `a` is already X's nudge on the mill)
+        - A go-to on a manual axis is a "distance to go" prompt, not a
+          motor move: e.g. "Move Y to 12.500: 0.340 to go", updated live as
+          the user winds the handle. It's done by itself once the scale has
+          settled within a count or two of the target, and says if it went
+          past. It's in the status line or panel, not a modal dialog, so
+          nothing blocks; Space (or Esc) cancels it. Moves and nudges on a
+          manual axis say why they can't, rather than doing nothing
+        - A go-to involving a motor axis and a manual axis runs both
+          together (e.g. X moves while the user winds Y), and is done once
+          both have arrived. This would make bolt-hole circles possible
+          later (a list of go-to targets), so TouchDRO would only be needed
+          rarely, if at all
+        - Memory slots store every axis. Going to a slot moves (or prompts
+          for) the cut-plane axes only: X, Y and A. Z is stored and shown,
+          but is never part of a slot's go-to (the user won't move Z while
+          X is moving). Z will never have a stepper: the user's CNC mill is
+          for anything that needs full automation
+        - The plan is to fit a stepper to Y later. That should then be a
+          config change (`manual` to `stepper`, plus its pins, conversion
+          and core). Mind the cores: X, A and Y would each have a pinned
+          core, leaving one for the UI and the OS on a Pi 4. A fourth motor
+          wouldn't fit without rethinking the pinning
+        - The lathe stays at two axes (no topslide scale: the user never
+          uses the topslide)
+    - **Plan, in stages, each tested and working before the next:**
+        1. The axis abstraction, with the new manual axes built on it from
+           the start: config, calibration (Y and Z probably need their own
+           counts per mm, as X did), the DRO lines, zero, set, half, the
+           go-to prompt, and memory slots for every axis
+        2. Move X and A (and the lathe's Z and X) onto it, one area at a
+           time (display, memory, nudges, go-tos, scale), with no change of
+           behaviour, so lc.cfg and lc_mill.cfg keep working with the same
+           keys
+        3. The slot and face/pocket modes on top of it (see Multi-pass)
+    - The `Axis1*` / `Axis2*` config keys stay as they are; the new axes
+      are `Axis3*` and `Axis4*` on the mill
 - [x] `axis.cpp` / `axis.h` are compiled but unused, and their `mgo::Axis`
       class clashes in name with `enum class mgo::Axis` in model.h
     - **Done:** removed (they're in git's history, if the "array of axes"
@@ -1927,7 +2039,8 @@ change.
           a Pi whose cores are reserved for the motor threads
 - [ ] **Use the mill's scales in latheControl.** To start with, X (the
       table, axis 1), which has a stepper; perhaps later Y and Z as
-      read-only axes, which are moved by hand
+      read-only axes, which are moved by hand (now planned as manual axes:
+      see "An array of axes" under "Structure and refactoring")
     - What it's good for: at about 40 ms between smoothed readings it can't
       close the loop on motion, but it can check and correct when stopped:
       lost steps on the open-loop mill axes, re-basing after a stall (as for
