@@ -54,6 +54,7 @@ endif()
 add_library(shared_with_test OBJECT
 	rotaryencoder.cpp
 	linearscale.cpp
+	manualaxis.cpp
 	scale.cpp
 	backlash.cpp
 	droserial.cpp

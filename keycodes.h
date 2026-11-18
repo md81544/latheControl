@@ -128,6 +128,7 @@ constexpr int a1_EQUALS = EQUALS + 0x1000; // axis1 speed increase
 constexpr int a1_FULLSTOP = '.' + 0x1000;
 constexpr int a1_DELETE = key::DELETE + 0x1000;
 constexpr int a1_e = e + 0x1000; // mark the work's end (current feature)
+constexpr int a1_h = h + 0x1000; // halve axis 1's position (to find a centre)
 
 // Axis 2 leader-prefixed keys ( 0x2000 = bit 13 is set )
 constexpr int a2_z = z + 0x2000; // axis2 zero
@@ -150,6 +151,7 @@ constexpr int a2_EQUALS = EQUALS + 0x2000; // axis2 speed increase
 constexpr int a2_FULLSTOP = '.' + 0x2000;
 constexpr int a2_DELETE = key::DELETE + 0x2000;
 constexpr int a2_d = d + 0x2000; // record the feature's diameter (current feature)
+constexpr int a2_h = h + 0x2000; // halve axis 2's position (to find a centre)
 
 // Axis All leader-prefixed keys ( 0x4000 = bit 14 is set )
 constexpr int aAll_z = z + 0x4000; // All axis zero
@@ -158,6 +160,16 @@ constexpr int aAll_f = f + 0x4000;
 constexpr int aAll_l = l + 0x4000; // last position on both axes
 constexpr int aAll_FULLSTOP = '.' + 0x4000;
 constexpr int aAll_DELETE = key::DELETE + 0x4000;
+
+// Axis 3 and 4 leader-prefixed keys: the manual axes (e.g. the mill's Y and
+// Z). 0x8000 = bit 15 is set for axis 3, and 0x20000 = bit 17 for axis 4
+// (bit 16 is Ctrl)
+constexpr int a3_z = z + 0x8000; // zero axis 3
+constexpr int a3_s = s + 0x8000; // set axis 3's position
+constexpr int a3_h = h + 0x8000; // halve axis 3's position (to find a centre)
+constexpr int a4_z = z + 0x20000; // zero axis 4
+constexpr int a4_s = s + 0x20000; // set axis 4's position
+constexpr int a4_h = h + 0x20000; // halve axis 4's position (to find a centre)
 
 // Commands with no shortcut of their own, chosen from the menu. The f2 names
 // are from the F2 leader key they used to follow

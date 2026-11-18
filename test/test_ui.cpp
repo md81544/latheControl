@@ -1989,6 +1989,52 @@ TEST_CASE("UI: a serial scale (simulated) is lined up with the motor, and follow
     REQUIRE(*model.getAxis1ScalePositionMm() == Approx(0.0).margin(0.011));
 }
 
+TEST_CASE("UI: a manual axis (Y) is zeroed, set and halved with its leader key")
+{
+    MapConfigReader config { { { "Axis3Kind", "manual" },
+                               { "Axis3Label", "Y" },
+                               { "Axis3Leader", "121" },
+                               { "Axis3Scale", "serial" },
+                               { "Axis3ScaleSerialLetter", "Y" },
+                               { "Axis3ScaleCountsPerMm", "100" },
+                               // (As on the mill, where Y takes its line)
+                               { "DisableRpm", "true" } } };
+    mgo::MockGpio gpio { false };
+    mgo::Model model { gpio, config };
+    mgo::Controller controller(&model);
+    QWidget* w = mainWindow();
+    REQUIRE(w);
+    const mgo::ManualAxis* y = model.manualAxis(3);
+    REQUIRE(y);
+    REQUIRE(*y->positionMm() == Approx(0.0).margin(0.005));
+    // Wound along, then zeroed there
+    model.fakeMoveManualAxis(3, 3.0);
+    REQUIRE(QTest::qWaitFor([y] { return std::abs(*y->positionMm() - 3.0) < 0.005; }, 5'000));
+
+    press(w, controller, Qt::Key_Y);
+    REQUIRE(model.getKeyMode() == mgo::KeyMode::Axis3);
+    press(w, controller, Qt::Key_Z);
+    REQUIRE(model.getKeyMode() == mgo::KeyMode::None);
+    REQUIRE(*y->positionMm() == Approx(0.0).margin(0.005));
+
+    whenDialogShows([](QWidget* dialog) {
+        QTest::keyClicks(inputWidget(dialog), "12");
+        QTest::keyClick(inputWidget(dialog), Qt::Key_Return);
+    });
+    press(w, controller, Qt::Key_Y);
+    press(w, controller, Qt::Key_S); // opens the dialog
+    REQUIRE(waitForDialogToClose());
+    REQUIRE(*y->positionMm() == Approx(12.0).margin(0.005));
+
+    press(w, controller, Qt::Key_Y);
+    press(w, controller, Qt::Key_H);
+    REQUIRE(*y->positionMm() == Approx(6.0).margin(0.005));
+
+    // (To look at the display, with LC_SNAPSHOT_DIR set)
+    controller.tick();
+    snapshot(w, "manual-axis");
+}
+
 TEST_CASE("UI: start-up sets the motors' speeds before taking up the backlash")
 {
     // (A motor at zero speed cancels any move, so the backlash was never

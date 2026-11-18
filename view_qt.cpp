@@ -463,6 +463,18 @@ struct ViewQt::Impl {
     TextItem axis1Scale;
     TextItem surfaceSpeed; // Vc
 
+    // The manual axes (e.g. the mill's Y and Z), as on a DRO: a line each,
+    // below the motorised axes
+    struct ManualAxisLine {
+        int axisNumber { 0 };
+        TextItem label;
+        TextItem position;
+        TextItem units;
+        // "no reading", if it hasn't one
+        TextItem status;
+    };
+    std::vector<ManualAxisLine> manualAxisLines;
+
     // Text items which are displayed sometimes:
     TextItem mode;
     TextItem misc1;
@@ -578,6 +590,32 @@ void ViewQt::initialise(const Model& model)
     d.axis2Units.text = model.config().read("Axis2DisplayUnits", "mm");
     d.axis2Speed = make(550, 100, 30, QColor(209, 209, 50));
 
+    // The manual axes' lines go below the motorised axes', in place of the
+    // spindle's speed where it isn't shown (as on the mill). They're a little
+    // smaller, to fit two there, with their digits lined up with those
+    // above. (With the spindle's speed shown as well, they'd run into the
+    // memory slots: no machine has that yet)
+    constexpr int MANUAL_AXIS_SIZE = 45;
+    // (The font's characters are 0.6 of its size wide, and positions 8 wide)
+    constexpr float MANUAL_AXIS_POSITION_X = 110 + 8 * 0.6f * (60 - MANUAL_AXIS_SIZE);
+    float manualAxisY = model.config().readBool("DisableRpm", false) ? 130 : 190;
+    // (From the config, as the view is set up before the model makes the
+    // axes: one the model refuses, e.g. with no scale, isn't drawn)
+    for (int n = Model::FIRST_MANUAL_AXIS; n <= Model::LAST_MANUAL_AXIS; ++n) {
+        if (model.config().read(fmt::format("Axis{}Kind", n), "none") == "manual") {
+            Impl::ManualAxisLine line;
+            line.axisNumber = n;
+            line.label = make(20, manualAxisY, MANUAL_AXIS_SIZE);
+            line.label.text
+                = model.config().read(fmt::format("Axis{}Label", n), n == 3 ? "Y" : "Z") + ":";
+            line.position = make(MANUAL_AXIS_POSITION_X, manualAxisY, MANUAL_AXIS_SIZE, GREEN);
+            line.units = make(430, manualAxisY + 15, 30, QColor(0, 127, 0));
+            line.status = make(550, manualAxisY + 20, 20, QColor(209, 209, 50));
+            d.manualAxisLines.push_back(line);
+            manualAxisY += 50;
+        }
+    }
+
     d.rpmLabel = make(20, 130, 60);
     d.rpmLabel.text = "n:";
     d.rpm = make(150, 130, 60, GREEN);
@@ -620,16 +658,19 @@ void ViewQt::initialise(const Model& model)
     d.misc6 = make(20, MISC_Y + 180, 25);
 
     d.warning = make(20, MISC_Y + 210, 20, RED);
-    d.taperAngle = make(860, 75, 20, RED);
-    d.notification = make(860, 45, 25, RED);
-    d.xRetracted = make(860, 105, 25, RED);
+    // (The mode's name, and those below it, are a line lower than they
+    // were, to make room for axis 1's scale on its row)
+    d.notification = make(860, 75, 25, RED);
+    d.taperAngle = make(860, 105, 20, RED);
+    d.xRetracted = make(860, 135, 25, RED);
     d.xRetracted.text = "RETRACTED";
     d.xRetractDirection = make(860, 165, 25, RED);
     d.xRetractDirection.text = "-X RTRCT";
-    // (Surface speed, on the rpm line, in line with the axes' feed rates; the
-    // linear scale's reading is below it)
+    // (Surface speed, on the rpm line, in line with the axes' feed rates)
     d.surfaceSpeed = make(550, 160, 30, QColor(209, 209, 50));
-    d.axis1Scale = make(550, 205, 20, QColor(209, 209, 50));
+    // Axis 1's scale, on its row, after its speed (lined up with the bottom
+    // of the speed's text)
+    d.axis1Scale = make(850, 43, 25, QColor(209, 209, 50));
     d.fault = make(20, STATUS_BAR_Y - 30, 22, RED);
 
     // (Joystick support is only available on Linux)
@@ -1133,6 +1174,13 @@ void ViewQt::Impl::drawLeaderHints(std::vector<DrawItem>& frame, const Model& mo
         case KeyMode::AxisAll:
             title = "\\ (both axes) then...";
             break;
+        case KeyMode::Axis3:
+        case KeyMode::Axis4:
+            if (const ManualAxis* axis
+                = model.manualAxis(model.getKeyMode() == KeyMode::Axis3 ? 3 : 4)) {
+                title = axis->label() + " then...";
+            }
+            break;
         case KeyMode::None:
             return;
     }
@@ -1260,6 +1308,18 @@ void ViewQt::updateDisplay(const Model& model)
             draw(d.axis2Speed);
             draw(d.axis2Status);
             draw(d.axis2MemoryLabel);
+        }
+        for (auto& line : d.manualAxisLines) {
+            if (!model.manualAxis(line.axisNumber)) {
+                continue;
+            }
+            const bool leader = (line.axisNumber == 3 && model.getKeyMode() == KeyMode::Axis3)
+                || (line.axisNumber == 4 && model.getKeyMode() == KeyMode::Axis4);
+            line.label.colour = leader ? RED : QColor(0, 192, 0);
+            draw(line.label);
+            draw(line.position);
+            draw(line.units);
+            draw(line.status);
         }
         if (!model.config().readBool("DisableRpm", false)) {
             draw(d.rpmLabel);
@@ -1422,25 +1482,38 @@ void ViewQt::Impl::updateTextFromModel(const Model& model)
     }
     chuckRpm.text = fmt::format("C: {: >5.1f} deg", model.getChuckAngle());
 
-    // The scale's position, and how far it is from the motor's (which shows
-    // any lost steps)
+    // The scale's position, and (in brackets) how far it is from the
+    // motor's, which shows any lost steps. Short, as it's on the axis's row,
+    // in its units
     {
-        const std::string label = model.config().read("Axis1Label", "Z");
         const auto position = model.getAxis1ScalePositionMm();
         const auto difference = model.getAxis1ScaleDifferenceMm();
         if (position && difference) {
             axis1Scale.text = fmt::format(
-                "{} scale: {:.{}f} {}, off by {:+.{}f}",
-                label,
+                "scale {:.{}f} ({:+.{}f})",
                 model.toDisplayUnits(1, *position),
                 model.axisDecimals(1),
-                model.axisUnitName(1),
                 model.toDisplayUnits(1, *difference),
                 model.axisDecimals(1));
         } else if (model.axis1ScaleHasReading()) {
-            axis1Scale.text = fmt::format("{} scale: settling", label);
+            axis1Scale.text = "scale: settling";
         } else {
-            axis1Scale.text = fmt::format("{} scale: no reading", label);
+            axis1Scale.text = "scale: no reading";
+        }
+    }
+
+    for (auto& line : manualAxisLines) {
+        const ManualAxis* axis = model.manualAxis(line.axisNumber);
+        line.units.text = model.axisUnitName(line.axisNumber);
+        const auto position = axis ? axis->positionMm() : std::nullopt;
+        if (position) {
+            line.position.text = formatMotorPosition(
+                model.toDisplayUnits(line.axisNumber, *position),
+                model.axisDecimals(line.axisNumber));
+            line.status.text.clear();
+        } else {
+            line.position.text = "     ---";
+            line.status.text = "no reading";
         }
     }
 

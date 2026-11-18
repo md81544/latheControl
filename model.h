@@ -4,6 +4,7 @@
 #include "configreader.h"
 #include "droserial.h"
 #include "gearcutting.h"
+#include "manualaxis.h"
 #include "motionsequence.h"
 #include "multipass.h"
 #include "radius.h"
@@ -14,6 +15,8 @@
 #include "toollibrary.h"
 #include "units.h"
 
+#include <array>
+#include <atomic>
 #include <chrono>
 #include <cmath> // IWYU pragma: keep (need for M_PI)
 #include <deque>
@@ -23,6 +26,7 @@
 #include <optional>
 #include <set>
 #include <stack>
+#include <string>
 #include <vector>
 
 // "Model", i.e. program state data
@@ -64,7 +68,10 @@ enum class KeyMode {
     None,
     Axis1,
     Axis2,
-    AxisAll
+    AxisAll,
+    // The manual axes (see Model::manualAxis())
+    Axis3,
+    Axis4
 };
 
 enum class XDirection {
@@ -141,6 +148,11 @@ public:
     void axis1GoToCurrentMemory();
     void axis1Nudge(ZDirection direction, double nudgeAmountMm);
     void axis1Zero();
+    // Sets axis 1's position to half what it is (e.g. having zeroed it on one
+    // edge and moved to the other, zero is then halfway between them). As
+    // for setting its position, its memory slots (and the work's end) are
+    // cleared. Not while it's moving
+    void axis1Half();
     void axis1SpeedDecrease();
     void axis1SpeedIncrease();
     void axis1FastReturn();
@@ -162,6 +174,9 @@ public:
     void axis2Wait();
     void axis2Stop();
     void axis2Zero();
+    // As axis1Half(), for axis 2 (clearing its memory slots, and the
+    // diameter)
+    void axis2Half();
     void axis2SynchroniseOff();
     void axis2GoToCurrentMemory();
     void axis2SpeedDecrease();
@@ -483,6 +498,24 @@ public:
     FakeDroScale* fakeAxis1Scale();
 #endif
 
+    // The axes moved by hand (axes 3 and 4: Axis3Kind = manual in the
+    // config), e.g. the mill's Y and Z, whose positions are read from their
+    // scales, as on a DRO. Only zeroing, setting and halving them so far:
+    // no memory slots or go-tos. (See "An array of axes" in TODO.md)
+    static constexpr int FIRST_MANUAL_AXIS = 3;
+    static constexpr int LAST_MANUAL_AXIS = 4;
+    // The manual axis numbered axisNumber, or nullptr if there isn't one
+    const ManualAxis* manualAxis(int axisNumber) const;
+    // Each warns (and changes nothing) if the axis has no reading
+    void manualAxisZero(int axisNumber);
+    void setManualAxisPosition(int axisNumber, double mm);
+    void manualAxisHalf(int axisNumber);
+#ifdef FAKE
+    // Moves a manual axis's simulated scale (as if its handle were wound),
+    // to a position in mm from where the simulated scale started
+    void fakeMoveManualAxis(int axisNumber, double mm);
+#endif
+
     void clearCurrentMemorySlot(Axis axis);
 
     // Limit switches (LimitSwitchPin in the config): any switch stops all the
@@ -681,6 +714,15 @@ private:
     std::unique_ptr<mgo::DroSerialReader> m_droReader;
     // Only axis 1 can have a scale so far
     std::unique_ptr<mgo::AxisScale> m_axis1Scale;
+    // The serial device m_droReader reads (the first axis's to need it)
+    std::string m_droDevice;
+#ifdef FAKE
+    // Where each manual axis's simulated scale is (see fakeMoveManualAxis()).
+    // (Declared before the manual axes, as their simulated scales read these)
+    std::array<std::atomic<double>, LAST_MANUAL_AXIS - FIRST_MANUAL_AXIS + 1> m_fakeManualAxisMm {};
+#endif
+    // Axes 3 and 4, if they're manual axes (see manualAxis())
+    std::array<std::unique_ptr<ManualAxis>, LAST_MANUAL_AXIS - FIRST_MANUAL_AXIS + 1> m_manualAxes;
     // While measuring the backlash (see axis1MeasureBacklash())
     std::optional<BacklashMeasurement> m_backlashMeasurement;
     // The scale's settleCount() when the measurement's last move started
@@ -908,6 +950,22 @@ private:
     void checkEncoderLostPulses();
     // Creates axis 1's scale, if the config gives it one
     void configureAxis1Scale();
+    // Makes the scale described by an axis's Axis<n>Scale... config keys, or
+    // returns nullptr (having logged why) if the config is wrong. source is
+    // set to where it's read from, for the log. fakePosition is what a
+    // simulated serial scale follows (in FAKE builds), and fake is set to
+    // it
+    std::unique_ptr<IScale> makeScale(
+        int axisNumber,
+        const std::string& type,
+        double countsPerMm,
+        bool reversed,
+        std::function<double()> fakePosition,
+        FakeDroScale** fake,
+        std::string& source);
+    // Creates the manual axes (axes 3 and 4), if the config has them
+    void configureManualAxes();
+    ManualAxis* manualAxisOrWarn(int axisNumber);
     // Called from checkStatus(): records each move's reading once the scale
     // has settled, and starts the next move, or reports the result
     void advanceBacklashMeasurement();

@@ -17,6 +17,10 @@ namespace {
 constexpr int AXIS1_LEADER_BIT = 0x1000;
 constexpr int AXIS2_LEADER_BIT = 0x2000;
 constexpr int ALL_AXES_LEADER_BIT = 0x4000;
+constexpr int AXIS3_LEADER_BIT = 0x8000;
+constexpr int AXIS4_LEADER_BIT = 0x20000;
+constexpr int LEADER_BITS = AXIS1_LEADER_BIT | AXIS2_LEADER_BIT | ALL_AXES_LEADER_BIT
+    | AXIS3_LEADER_BIT | AXIS4_LEADER_BIT;
 
 // The name of a single key (without leader keys)
 std::string keyName(int k)
@@ -99,11 +103,14 @@ public:
     explicit CommandListBuilder(const IConfigReader& config)
         : m_axis1Enabled(!config.readBool("DisableAxis1", false))
         , m_axis2Enabled(!config.readBool("DisableAxis2", false))
+        , m_axis3Enabled(config.read("Axis3Kind", "none") == "manual")
+        , m_axis4Enabled(config.read("Axis4Kind", "none") == "manual")
         , m_config(config)
     {
     }
 
-    // axes: which axes the command needs (bit 0 = axis 1, bit 1 = axis 2)
+    // axes: which axes the command needs (bit 0 = axis 1, bit 1 = axis 2,
+    // bits 2 and 3 = the manual axes 3 and 4)
     // hotkey: optional menu hotkey (lower case), or 0
     void
     add(const std::string& category,
@@ -115,6 +122,7 @@ public:
         bool isToggle = false)
     {
         if (((axes & 1) && !m_axis1Enabled) || ((axes & 2) && !m_axis2Enabled)
+            || ((axes & 4) && !m_axis3Enabled) || ((axes & 8) && !m_axis4Enabled)
             || keyDisabledByConfig(key, m_config)) {
             return;
         }
@@ -135,6 +143,8 @@ public:
 private:
     bool m_axis1Enabled;
     bool m_axis2Enabled;
+    bool m_axis3Enabled;
+    bool m_axis4Enabled;
     const IConfigReader& m_config;
     std::vector<Command> m_commands;
 };
@@ -142,6 +152,8 @@ private:
 constexpr int AXIS1 = 1;
 constexpr int AXIS2 = 2;
 constexpr int BOTH = AXIS1 | AXIS2;
+constexpr int AXIS3 = 4;
+constexpr int AXIS4 = 8;
 constexpr int NONE = 0;
 
 } // end anonymous namespace
@@ -249,6 +261,12 @@ std::string shortcutText(int k, const IConfigReader& config)
     if (k & ALL_AXES_LEADER_BIT) {
         return "\\ " + keyName(k & ~ALL_AXES_LEADER_BIT);
     }
+    if (k & AXIS4_LEADER_BIT) {
+        return leaderKeyName(config, "Axis4Leader", 0) + " " + keyName(k & ~AXIS4_LEADER_BIT);
+    }
+    if (k & AXIS3_LEADER_BIT) {
+        return leaderKeyName(config, "Axis3Leader", 0) + " " + keyName(k & ~AXIS3_LEADER_BIT);
+    }
     if (k & AXIS2_LEADER_BIT) {
         return leaderKeyName(config, "Axis2Leader", 120) + " " + keyName(k & ~AXIS2_LEADER_BIT);
     }
@@ -260,7 +278,7 @@ std::string shortcutText(int k, const IConfigReader& config)
 
 std::string followUpKeyName(int k)
 {
-    return keyName(k & ~(AXIS1_LEADER_BIT | AXIS2_LEADER_BIT | ALL_AXES_LEADER_BIT));
+    return keyName(k & ~LEADER_BITS);
 }
 
 std::vector<const Command*> commandsForLeader(const std::vector<Command>& commands, KeyMode mode)
@@ -277,21 +295,28 @@ std::vector<const Command*> commandsForLeader(const std::vector<Command>& comman
         if (menuOnly(k)) {
             continue;
         }
-        bool follows = false;
+        int leaderBit = 0;
         switch (mode) {
             case KeyMode::Axis1:
-                follows = (k & AXIS1_LEADER_BIT) && !(k & (AXIS2_LEADER_BIT | ALL_AXES_LEADER_BIT));
+                leaderBit = AXIS1_LEADER_BIT;
                 break;
             case KeyMode::Axis2:
-                follows = (k & AXIS2_LEADER_BIT) && !(k & (AXIS1_LEADER_BIT | ALL_AXES_LEADER_BIT));
+                leaderBit = AXIS2_LEADER_BIT;
                 break;
             case KeyMode::AxisAll:
-                follows = (k & ALL_AXES_LEADER_BIT) && !(k & (AXIS1_LEADER_BIT | AXIS2_LEADER_BIT));
+                leaderBit = ALL_AXES_LEADER_BIT;
+                break;
+            case KeyMode::Axis3:
+                leaderBit = AXIS3_LEADER_BIT;
+                break;
+            case KeyMode::Axis4:
+                leaderBit = AXIS4_LEADER_BIT;
                 break;
             case KeyMode::None:
                 break;
         }
-        if (follows) {
+        // (Only that leader's bit, and no other's)
+        if (leaderBit != 0 && (k & LEADER_BITS) == leaderBit) {
             result.push_back(&c);
         }
     }
@@ -469,6 +494,8 @@ std::vector<Command> buildCommands(
 {
     const std::string a1 = config.read("Axis1Label", "Z");
     const std::string a2 = config.read("Axis2Label", "X");
+    const std::string a3 = config.read("Axis3Label", "Y");
+    const std::string a4 = config.read("Axis4Label", "Z");
     const std::string u1 = config.read("Axis1DisplayUnits", "mm");
     const std::string u2 = config.read("Axis2DisplayUnits", "mm");
     const bool imperial = units == DisplayUnits::Imperial;
@@ -591,6 +618,15 @@ std::vector<Command> buildCommands(
     b.add(c, fmt::format("Repeat offset move: {}", a1), key::a1_FULLSTOP, AXIS1);
     b.add(c, fmt::format("Repeat offset move: {}", a2), key::a2_FULLSTOP, AXIS2);
     b.add(c, fmt::format("Repeat offset move: {} and {}", a1, a2), key::aAll_FULLSTOP, BOTH);
+    b.add(c, fmt::format("Halve {} (to find a centre)", a1), key::a1_h, AXIS1);
+    b.add(c, fmt::format("Halve {} (to find a centre)", a2), key::a2_h, AXIS2);
+    // The manual axes (e.g. the mill's Y and Z), which are moved by hand
+    b.add(c, fmt::format("Zero {}", a3), key::a3_z, AXIS3);
+    b.add(c, fmt::format("Set {} position...", a3), key::a3_s, AXIS3);
+    b.add(c, fmt::format("Halve {} (to find a centre)", a3), key::a3_h, AXIS3);
+    b.add(c, fmt::format("Zero {}", a4), key::a4_z, AXIS4);
+    b.add(c, fmt::format("Set {} position...", a4), key::a4_s, AXIS4);
+    b.add(c, fmt::format("Halve {} (to find a centre)", a4), key::a4_h, AXIS4);
     b.add(c, fmt::format("Previous position: {}", a1), key::a1_l, AXIS1);
     b.add(c, fmt::format("Previous position: {}", a2), key::a2_l, AXIS2);
     b.add(c, fmt::format("Previous position: {} and {}", a1, a2), key::aAll_l, BOTH);

@@ -880,6 +880,99 @@ TEST_CASE("Scale:   A jump at rest bigger than the fault limit is a misread")
     REQUIRE(!off.axisScale->misreadJumpMm());
 }
 
+namespace {
+
+// A manual axis (1 count = 0.01mm) on a scale whose reading the test sets
+struct ManualAxisTest {
+    explicit ManualAxisTest(bool reversed = false)
+    {
+        auto scale = std::make_unique<SettableScale>();
+        counts = scale->m_counts;
+        axis = std::make_unique<mgo::ManualAxis>(
+            std::move(scale),
+            mgo::ManualAxis::Settings { .label = "Y", .countsPerMm = 100.0, .reversed = reversed });
+    }
+    std::shared_ptr<std::optional<int32_t>> counts;
+    std::unique_ptr<mgo::ManualAxis> axis;
+};
+
+} // namespace
+
+TEST_CASE("Manual axis: starts at zero")
+{
+    ManualAxisTest t;
+    REQUIRE(t.axis->hasReading());
+    REQUIRE(*t.axis->positionMm() == Approx(0.0));
+    *t.counts = 1'250;
+    REQUIRE(*t.axis->positionMm() == Approx(2.5));
+}
+
+TEST_CASE("Manual axis: with no reading at first, starts at zero once there is one")
+{
+    auto scale = std::make_unique<SettableScale>();
+    auto counts = scale->m_counts;
+    *counts = std::nullopt;
+    mgo::ManualAxis axis(std::move(scale), mgo::ManualAxis::Settings { .label = "Y" });
+    REQUIRE(!axis.positionMm());
+    *counts = 5'000;
+    axis.update();
+    REQUIRE(*axis.positionMm() == Approx(0.0));
+}
+
+TEST_CASE("Manual axis: zero, set and half")
+{
+    ManualAxisTest t;
+    // Moved by hand, and zeroed there
+    *t.counts = 2'000;
+    REQUIRE(*t.axis->positionMm() == Approx(10.0));
+    *t.counts = 1'000;
+    REQUIRE(t.axis->zero());
+    REQUIRE(*t.axis->positionMm() == Approx(0.0));
+    *t.counts = 1'500;
+    REQUIRE(*t.axis->positionMm() == Approx(5.0));
+
+    SECTION("Half: zero is then halfway between the two edges")
+    {
+        REQUIRE(t.axis->half());
+        REQUIRE(*t.axis->positionMm() == Approx(2.5));
+        *t.counts = 1'250;
+        REQUIRE(*t.axis->positionMm() == Approx(0.0));
+    }
+    SECTION("Set")
+    {
+        REQUIRE(t.axis->setPositionMm(-3.0));
+        REQUIRE(*t.axis->positionMm() == Approx(-3.0));
+        *t.counts = 1'600;
+        REQUIRE(*t.axis->positionMm() == Approx(-2.0));
+    }
+}
+
+TEST_CASE("Manual axis: a reversed scale counts the other way")
+{
+    ManualAxisTest t(true);
+    *t.counts = 900;
+    REQUIRE(*t.axis->positionMm() == Approx(1.0));
+}
+
+TEST_CASE("Manual axis: losing the readings loses the zero; it starts at zero again")
+{
+    ManualAxisTest t;
+    REQUIRE(t.axis->setPositionMm(4.0));
+    *t.counts = std::nullopt;
+    t.axis->update();
+    REQUIRE(!t.axis->hasReading());
+    REQUIRE(!t.axis->positionMm());
+    // Nothing to zero, set or halve from
+    REQUIRE(!t.axis->zero());
+    REQUIRE(!t.axis->setPositionMm(1.0));
+    REQUIRE(!t.axis->half());
+    // (e.g. the sender was switched off and on again, so its count started
+    // again: the old offset would put the zero anywhere)
+    *t.counts = 0;
+    t.axis->update();
+    REQUIRE(*t.axis->positionMm() == Approx(0.0));
+}
+
 TEST_CASE("Backlash: the moves, and the arithmetic")
 {
     // From 10, moving 1mm right first, with 0.4mm of compensation
@@ -1167,6 +1260,94 @@ private:
 constexpr int ALARM_PIN = 17;
 
 } // end anonymous namespace
+
+TEST_CASE("Manual axis: made from the config, only with a scale")
+{
+    mgo::MockGpio gpio(false);
+    SECTION("None by default")
+    {
+        mgo::MockConfigReader config;
+        mgo::Model model(gpio, config);
+        model.initialise();
+        REQUIRE(!model.manualAxis(3));
+        REQUIRE(!model.manualAxis(4));
+        // (Nor any other axis number)
+        REQUIRE(!model.manualAxis(1));
+        REQUIRE(!model.manualAxis(5));
+    }
+    SECTION("A manual axis with no scale isn't made")
+    {
+        TestConfigReader config({ { "Axis3Kind", "manual" } });
+        mgo::Model model(gpio, config);
+        model.initialise();
+        REQUIRE(!model.manualAxis(3));
+    }
+    SECTION("Y and Z, on the DRO sender (simulated)")
+    {
+        TestConfigReader config(
+            { { "Axis3Kind", "manual" },
+              { "Axis3Label", "Y" },
+              { "Axis3Scale", "serial" },
+              { "Axis3ScaleSerialLetter", "Y" },
+              { "Axis3ScaleCountsPerMm", "100" },
+              { "Axis4Kind", "manual" },
+              { "Axis4Label", "Z" },
+              { "Axis4Scale", "serial" },
+              { "Axis4ScaleSerialLetter", "Z" },
+              { "Axis4ScaleCountsPerMm", "100" } });
+        mgo::Model model(gpio, config);
+        model.initialise();
+        REQUIRE(model.manualAxis(3));
+        REQUIRE(model.manualAxis(3)->label() == "Y");
+        REQUIRE(model.manualAxis(4));
+        REQUIRE(model.manualAxis(4)->label() == "Z");
+
+        // Waits (up to 5s) for the simulated scale to catch up with a move
+        const auto waitFor = [&model](int axis, double mm) {
+            const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+            while (std::chrono::steady_clock::now() < deadline) {
+                model.checkStatus();
+                const auto position = model.manualAxis(axis)->positionMm();
+                if (position && std::abs(*position - mm) < 0.005) {
+                    return true;
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(20));
+            }
+            return false;
+        };
+        // Both start at zero
+        REQUIRE(*model.manualAxis(3)->positionMm() == Approx(0.0).margin(0.005));
+        REQUIRE(*model.manualAxis(4)->positionMm() == Approx(0.0).margin(0.005));
+        // Wound to the other edge, then halved
+        model.fakeMoveManualAxis(3, 20.0);
+        REQUIRE(waitFor(3, 20.0));
+        model.manualAxisHalf(3);
+        REQUIRE(waitFor(3, 10.0));
+        // Z is separate
+        model.setManualAxisPosition(4, -1.5);
+        REQUIRE(waitFor(4, -1.5));
+        REQUIRE(waitFor(3, 10.0));
+    }
+}
+
+TEST_CASE("Halving axis 1 or 2's position, to find a centre")
+{
+    mgo::MockGpio gpio(false);
+    mgo::MockConfigReader config;
+    mgo::Model model(gpio, config);
+    model.initialise();
+    model.setAxis1Position(10.0);
+    model.axis1StorePosition();
+    REQUIRE(model.getAxis1MemoryAsPosition(model.getCurrentMemorySlot()));
+    model.axis1Half();
+    REQUIRE(model.getAxis1MotorPosition() == Approx(5.0).margin(0.01));
+    // (As for setting its position, the memory slots would be wrong)
+    REQUIRE(!model.getAxis1MemoryAsPosition(model.getCurrentMemorySlot()));
+
+    model.setAxis2Position(-4.0);
+    model.axis2Half();
+    REQUIRE(model.getAxis2Position() == Approx(-2.0).margin(0.01));
+}
 
 TEST_CASE("Stepper: driver alarm stops the motor until cleared")
 {
@@ -1982,12 +2163,56 @@ TEST_CASE("Commands: hints after a leader key")
     REQUIRE(!both.contains(mgo::key::a1_z));
 
     REQUIRE(keysFor(mgo::KeyMode::None).empty());
+    // Halving follows each motorised axis's leader
+    REQUIRE(axis1.contains(mgo::key::a1_h));
+    REQUIRE(axis2.contains(mgo::key::a2_h));
+    // No manual axes by default
+    REQUIRE(keysFor(mgo::KeyMode::Axis3).empty());
+    REQUIRE(keysFor(mgo::KeyMode::Axis4).empty());
 
     // The key to press after the leader
     REQUIRE(mgo::followUpKeyName(mgo::key::a1_g) == "g");
     REQUIRE(mgo::followUpKeyName(mgo::key::a2_ENTER) == "Enter");
     REQUIRE(mgo::followUpKeyName(mgo::key::aAll_DELETE) == "Delete");
     REQUIRE(mgo::followUpKeyName(mgo::key::a1_FULLSTOP) == ".");
+}
+
+TEST_CASE("Commands: the manual axes (e.g. the mill's Y and Z)")
+{
+    TestConfigReader config(
+        { { "Axis3Kind", "manual" },
+          { "Axis3Label", "Y" },
+          { "Axis3Leader", "121" },
+          { "Axis4Kind", "manual" },
+          { "Axis4Label", "Z" },
+          { "Axis4Leader", "122" },
+          { "Axis1Label", "X" },
+          { "Axis1Leader", "120" } });
+    const auto commands = mgo::buildCommands(config);
+    const auto keysFor = [&commands](mgo::KeyMode mode) {
+        std::set<int> keys;
+        for (const mgo::Command* c : mgo::commandsForLeader(commands, mode)) {
+            keys.insert(c->key);
+        }
+        return keys;
+    };
+    REQUIRE(
+        keysFor(mgo::KeyMode::Axis3)
+        == std::set<int> { mgo::key::a3_z, mgo::key::a3_s, mgo::key::a3_h });
+    REQUIRE(
+        keysFor(mgo::KeyMode::Axis4)
+        == std::set<int> { mgo::key::a4_z, mgo::key::a4_s, mgo::key::a4_h });
+    REQUIRE(!keysFor(mgo::KeyMode::Axis1).contains(mgo::key::a3_z));
+    REQUIRE(mgo::shortcutText(mgo::key::a3_z, config) == "y z");
+    REQUIRE(mgo::shortcutText(mgo::key::a4_h, config) == "z h");
+    REQUIRE(mgo::followUpKeyName(mgo::key::a4_s) == "s");
+    const auto described = [&commands](int k) {
+        const auto it = std::find_if(
+            commands.begin(), commands.end(), [k](const mgo::Command& c) { return c.key == k; });
+        return it == commands.end() ? std::string() : it->description;
+    };
+    REQUIRE(described(mgo::key::a3_h) == "Halve Y (to find a centre)");
+    REQUIRE(described(mgo::key::a4_z) == "Zero Z");
 }
 
 TEST_CASE("Commands: shut down is shown, but unavailable, in mock builds")

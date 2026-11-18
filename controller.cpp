@@ -1103,6 +1103,58 @@ void Controller::processKey(int t)
                     m_model->markWorkEnd();
                     break;
                 }
+            case key::a1_h: // halve axis 1's position (to find a centre)
+                {
+                    confirmFeatureLoss(
+                        "Halving " + m_model->config().read("Axis1Label", "Z"),
+                        false,
+                        true,
+                        [this] { m_model->axis1Half(); });
+                    break;
+                }
+            case key::a2_h: // halve axis 2's position (to find a centre)
+                {
+                    confirmFeatureLoss(
+                        "Halving " + m_model->config().read("Axis2Label", "X"),
+                        true,
+                        false,
+                        [this] { m_model->axis2Half(); });
+                    break;
+                }
+            // The manual axes (e.g. the mill's Y and Z): these move nothing
+            case key::a3_z:
+            case key::a4_z:
+                {
+                    m_model->manualAxisZero(kp == key::a3_z ? 3 : 4);
+                    break;
+                }
+            case key::a3_h:
+            case key::a4_h:
+                {
+                    m_model->manualAxisHalf(kp == key::a3_h ? 3 : 4);
+                    break;
+                }
+            case key::a3_s:
+            case key::a4_s:
+                {
+                    const int axisNumber = kp == key::a3_s ? 3 : 4;
+                    const ManualAxis* axis = m_model->manualAxis(axisNumber);
+                    if (!axis) {
+                        break;
+                    }
+                    getNumericInput(
+                        axis->label() + " position set" + unitsSuffix(axisNumber),
+                        {},
+                        0.0,
+                        [this, axisNumber](const NumericInputReturn& result) {
+                            if (!result.cancelled) {
+                                m_model->setManualAxisPosition(
+                                    axisNumber,
+                                    m_model->fromDisplayUnits(axisNumber, result.value));
+                            }
+                        });
+                    break;
+                }
             case key::a2_d: // record the feature's diameter (current feature)
                 {
                     m_model->recordFeatureDiameter();
@@ -1370,16 +1422,19 @@ int Controller::checkKeyAllowedForMode(int key)
 
 int Controller::processLeaderKeyModeKeyPress(int keyPress)
 {
-    if (m_model->getKeyMode() == KeyMode::Axis1 || m_model->getKeyMode() == KeyMode::Axis2
-        || m_model->getKeyMode() == KeyMode::AxisAll) {
-        int bitFlip = 0x1000; // bit 12
-        if (m_model->getKeyMode() == KeyMode::Axis2) {
-            bitFlip = 0x2000; // bit 13
-        }
-        if (m_model->getKeyMode() == KeyMode::AxisAll) {
-            bitFlip = 0x4000; // bit 14
-        }
-        return keyPress + bitFlip;
+    switch (m_model->getKeyMode()) {
+        case KeyMode::Axis1:
+            return keyPress + 0x1000; // bit 12
+        case KeyMode::Axis2:
+            return keyPress + 0x2000; // bit 13
+        case KeyMode::AxisAll:
+            return keyPress + 0x4000; // bit 14
+        case KeyMode::Axis3:
+            return keyPress + 0x8000; // bit 15
+        case KeyMode::Axis4:
+            return keyPress + 0x20000; // bit 17 (16 is Ctrl)
+        case KeyMode::None:
+            break;
     }
 
     m_model->setKeyMode(KeyMode::None);
@@ -1402,6 +1457,14 @@ int Controller::checkForAxisLeaderKeys(int key)
     if (key == key::BACKSLASH) {
         m_model->setKeyMode(KeyMode::AxisAll);
         return key::None;
+    }
+    // (The manual axes have no default leader keys)
+    for (int n = Model::FIRST_MANUAL_AXIS; n <= Model::LAST_MANUAL_AXIS; ++n) {
+        const auto leader = m_model->config().readLong(fmt::format("Axis{}Leader", n), 0);
+        if (m_model->manualAxis(n) && leader != 0 && key == static_cast<int>(leader)) {
+            m_model->setKeyMode(n == 3 ? KeyMode::Axis3 : KeyMode::Axis4);
+            return key::None;
+        }
     }
     return key;
 }

@@ -1630,6 +1630,38 @@ change.
         3. The slot and face/pocket modes on top of it (see Multi-pass)
     - The `Axis1*` / `Axis2*` config keys stay as they are; the new axes
       are `Axis3*` and `Axis4*` on the mill
+    - **Done (18 Nov 2026), the first part of stage 1, not yet tried on the
+      mill:** Y and Z as DRO lines, with zero, set and half. Not yet the
+      go-to prompt, memory slots, or a settled/steady reading (which the
+      go-to prompt and the modes will need)
+        - `Axis3Kind` / `Axis4Kind` = manual (none by default), with a label,
+          a leader key (none by default; y and z on the mill), and the same
+          scale keys as axis 1's (a manual axis without a scale is refused).
+          The scales share axis 1's DRO reader (`makeScale()`, split out of
+          `configureAxis1Scale()`)
+        - `ManualAxis` (manualaxis.*): the scale's reading plus an offset,
+          which zero, set and half change. It starts at zero (the user's
+          choice: they re-zero at each start anyway, as on TouchDRO, so
+          showing the scale's own reading first was no use). Its zero isn't
+          kept when lc stops, and if the readings are lost (the sender's
+          count may have started again), it starts at zero again when they
+          return
+        - The display: a line each below X and A, at 45 px rather than 60 so
+          two fit where the spindle speed would be, with "no reading" when
+          there isn't one. X's scale line moved up to X's row, after its
+          speed, shortened to e.g. "scale 12.345 (+0.010)" (the units are
+          X's); the mode's name, and the lathe's taper angle and RETRACTED
+          below it, moved down a line to make room
+        - Half for the motorised axes too (`XH`, etc.): as setting the
+          position, it clears that axis's memory slots and asks before
+          clearing the current feature. Not while the axis is moving
+        - Not allowed during a multi-pass (nor are any other keys but a
+          few), though zeroing a manual axis moves nothing. The slot and
+          face/pocket modes may want Z zeroed at a pause
+    - **To try on the mill:** each scale's direction (`Axis3ScaleReversed`,
+      `Axis4ScaleReversed`) and counts per mm (the nominal 2560 per inch so
+      far: calibrate against a known move, as for X), and that the y and z
+      leader keys don't clash with anything in use
 - [x] `axis.cpp` / `axis.h` are compiled but unused, and their `mgo::Axis`
       class clashes in name with `enum class mgo::Axis` in model.h
     - **Done:** removed (they're in git's history, if the "array of axes"

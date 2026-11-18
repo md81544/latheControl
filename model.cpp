@@ -314,6 +314,7 @@ void Model::initialise()
     }
 
     configureAxis1Scale();
+    configureManualAxes();
 
     // We need to ensure that the motors are in a known position with regard to
     // backlash - which means moving them initially by the amount of
@@ -367,6 +368,11 @@ void Model::checkStatus()
     if (m_axis1Scale) {
         m_axis1Scale->update(
             m_axis1Motor->getPosition(), m_axis1Motor->isRunning(), m_axis1Motor->getSpeed());
+    }
+    for (auto& axis : m_manualAxes) {
+        if (axis) {
+            axis->update();
+        }
     }
     advanceBacklashMeasurement();
     checkAxis1ScaleAtRest();
@@ -1298,6 +1304,17 @@ void Model::axis1Zero()
     clearMotorFault(Axis::Axis1);
 }
 
+void Model::axis1Half()
+{
+    if (m_axis1Motor->isRunning()) {
+        m_warning = "Stop the motors first";
+        return;
+    }
+    setAxis1Position(m_axis1Motor->getPosition() / 2.0);
+    clearAllAxis1Memories();
+    clearWorkEnd();
+}
+
 void Model::axis1SpeedDecrease()
 {
     if (m_mode == Mode::Threading) {
@@ -1545,6 +1562,16 @@ void Model::axis2Zero()
     clearMotorFault(Axis::Axis2);
     // X is no longer measured from the centre (unless set as a diameter again)
     clearDiameter();
+}
+
+void Model::axis2Half()
+{
+    if (m_axis2Motor->isRunning()) {
+        m_warning = "Stop the motors first";
+        return;
+    }
+    setAxis2Position(m_axis2Motor->getPosition() / 2.0);
+    clearAllAxis2Memories();
 }
 
 void Model::axis2SynchroniseOff()
@@ -3392,63 +3419,23 @@ void Model::configureAxis1Scale()
         = std::chrono::milliseconds(m_config.readLong("Axis1ScaleMaxSettleMs", 3'000)),
         .faultMm = m_config.readDouble("Axis1ScaleFaultMm", 0.0),
     };
-    if (settings.countsPerMm <= 0.0) {
-        MGOLOG(
-            fmt::format(
-                "*** Warning *** Axis1ScaleCountsPerMm should be more than zero, not {}: no "
-                "scale",
-                settings.countsPerMm));
-        return;
-    }
-    std::unique_ptr<IScale> scale;
+    // (Simulated, following the motor's actual steps, as a table with no
+    // backlash would: so neither the backlash compensation nor re-basing the
+    // motor's position changes where it thinks the table is. The motor is
+    // reset after the scale; see resetMotorThreads())
+    const auto followMotor = [this]() {
+        return m_axis1Motor->getPosition(m_axis1Motor->getCurrentStepWithoutBacklashCompensation());
+    };
+    FakeDroScale* fake = nullptr;
     std::string source;
-    if (type == "quadrature") {
-        const long pinA = m_config.readLong("Axis1ScaleGpioPinA", 5);
-        const long pinB = m_config.readLong("Axis1ScaleGpioPinB", 6);
-        scale
-            = std::make_unique<LinearScale>(m_gpio, pinA, pinB, std::lround(settings.countsPerMm));
-        source = fmt::format("GPIO {} and {}", pinA, pinB);
-    } else if (type == "serial") {
-        const std::string letter = m_config.read("Axis1ScaleSerialLetter", "X");
-        if (letter.size() != 1 || letter[0] < 'A' || letter[0] > 'Z') {
-            MGOLOG(
-                fmt::format(
-                    "*** Warning *** Axis1ScaleSerialLetter should be a capital letter, not "
-                    "\"{}\": no scale",
-                    letter));
-            return;
-        }
-        const std::string device = m_config.read("Axis1ScaleSerialDevice", "/dev/ttyUSB0");
-#ifdef FAKE
-        // (Simulated, following the motor's actual steps, as a table with no
-        // backlash would: so neither the backlash compensation nor re-basing
-        // the motor's position changes where it thinks the table is. The
-        // motor is reset after the scale; see resetMotorThreads())
-        auto fake = std::make_unique<FakeDroScale>(
-            [this]() {
-                return m_axis1Motor->getPosition(
-                    m_axis1Motor->getCurrentStepWithoutBacklashCompensation());
-            },
-            settings.countsPerMm,
-            settings.reversed);
-        m_fakeAxis1Scale = fake.get();
-        scale = std::move(fake);
-        source = fmt::format("{} on {} (simulated)", letter, device);
-#else
-        if (!m_droReader) {
-            m_droReader = std::make_unique<DroSerialReader>(device);
-        }
-        scale = std::make_unique<DroSerialScale>(*m_droReader, letter[0]);
-        source = fmt::format("{} on {}", letter, device);
-#endif
-    } else {
-        MGOLOG(
-            fmt::format(
-                "*** Warning *** Axis1Scale should be none, quadrature or serial, not \"{}\": "
-                "no scale",
-                type));
+    std::unique_ptr<IScale> scale
+        = makeScale(1, type, settings.countsPerMm, settings.reversed, followMotor, &fake, source);
+    if (!scale) {
         return;
     }
+#ifdef FAKE
+    m_fakeAxis1Scale = fake;
+#endif
     m_axis1FinishOnScale = m_config.readBool("Axis1ScaleFinishMoves", false);
     MGOLOG(
         fmt::format(
@@ -3459,6 +3446,196 @@ void Model::configureAxis1Scale()
             settings.reversed ? ", reversed" : ""));
     m_axis1Scale = std::make_unique<AxisScale>(std::move(scale), std::move(settings));
 }
+
+std::unique_ptr<IScale> Model::makeScale(
+    int axisNumber,
+    const std::string& type,
+    double countsPerMm,
+    bool reversed,
+    std::function<double()> fakePosition,
+    FakeDroScale** fake,
+    std::string& source)
+{
+    const auto key = [axisNumber](std::string_view name) {
+        return fmt::format("Axis{}Scale{}", axisNumber, name);
+    };
+    if (countsPerMm <= 0.0) {
+        MGOLOG(
+            fmt::format(
+                "*** Warning *** {} should be more than zero, not {}: no scale",
+                key("CountsPerMm"),
+                countsPerMm));
+        return nullptr;
+    }
+    if (type == "quadrature") {
+        const long pinA = m_config.readLong(key("GpioPinA"), 5);
+        const long pinB = m_config.readLong(key("GpioPinB"), 6);
+        source = fmt::format("GPIO {} and {}", pinA, pinB);
+        return std::make_unique<LinearScale>(m_gpio, pinA, pinB, std::lround(countsPerMm));
+    }
+    if (type == "serial") {
+        const std::string letter = m_config.read(key("SerialLetter"), "X");
+        if (letter.size() != 1 || letter[0] < 'A' || letter[0] > 'Z') {
+            MGOLOG(
+                fmt::format(
+                    "*** Warning *** {} should be a capital letter, not \"{}\": no scale",
+                    key("SerialLetter"),
+                    letter));
+            return nullptr;
+        }
+        const std::string device = m_config.read(key("SerialDevice"), "/dev/ttyUSB0");
+        // (The sender's one stream has every axis's scale, so it's read once)
+        if (m_droDevice.empty()) {
+            m_droDevice = device;
+        } else if (device != m_droDevice) {
+            MGOLOG(
+                fmt::format(
+                    "*** Warning *** {} is {}, but the scales are already read from {}: "
+                    "reading it from there",
+                    key("SerialDevice"),
+                    device,
+                    m_droDevice));
+        }
+#ifdef FAKE
+        auto simulated
+            = std::make_unique<FakeDroScale>(std::move(fakePosition), countsPerMm, reversed);
+        *fake = simulated.get();
+        source = fmt::format("{} on {} (simulated)", letter, m_droDevice);
+        return simulated;
+#else
+        (void)fakePosition;
+        (void)fake;
+        (void)reversed;
+        if (!m_droReader) {
+            m_droReader = std::make_unique<DroSerialReader>(m_droDevice);
+        }
+        source = fmt::format("{} on {}", letter, m_droDevice);
+        return std::make_unique<DroSerialScale>(*m_droReader, letter[0]);
+#endif
+    }
+    MGOLOG(
+        fmt::format(
+            "*** Warning *** Axis{}Scale should be {}quadrature or serial, not \"{}\": no "
+            "scale",
+            axisNumber,
+            axisNumber < FIRST_MANUAL_AXIS ? "none, " : "",
+            type));
+    return nullptr;
+}
+
+void Model::configureManualAxes()
+{
+    for (int n = FIRST_MANUAL_AXIS; n <= LAST_MANUAL_AXIS; ++n) {
+        const std::string kind = m_config.read(fmt::format("Axis{}Kind", n), "none");
+        if (kind == "none") {
+            continue;
+        }
+        if (kind != "manual") {
+            MGOLOG(
+                fmt::format(
+                    "*** Warning *** Axis{}Kind should be none or manual, not \"{}\": no axis {}",
+                    n,
+                    kind,
+                    n));
+            continue;
+        }
+        ManualAxis::Settings settings {
+            .label = m_config.read(fmt::format("Axis{}Label", n), n == 3 ? "Y" : "Z"),
+            .countsPerMm = m_config.readDouble(fmt::format("Axis{}ScaleCountsPerMm", n), 100.0),
+            .reversed = m_config.readBool(fmt::format("Axis{}ScaleReversed", n), false),
+        };
+        // (A manual axis is only known from its scale, so it must have one)
+        const std::string type = m_config.read(fmt::format("Axis{}Scale", n), "none");
+        if (type == "none") {
+            MGOLOG(
+                fmt::format(
+                    "*** Warning *** axis {} ({}) is manual, so needs a scale (Axis{}Scale): no "
+                    "axis {}",
+                    n,
+                    settings.label,
+                    n,
+                    n));
+            continue;
+        }
+        const std::size_t index = static_cast<std::size_t>(n - FIRST_MANUAL_AXIS);
+        std::function<double()> handPosition = [] { return 0.0; };
+#ifdef FAKE
+        handPosition = [this, index] { return m_fakeManualAxisMm.at(index).load(); };
+#endif
+        FakeDroScale* fake = nullptr;
+        std::string source;
+        std::unique_ptr<IScale> scale = makeScale(
+            n, type, settings.countsPerMm, settings.reversed, handPosition, &fake, source);
+        if (!scale) {
+            continue;
+        }
+        MGOLOG(
+            fmt::format(
+                "{} (axis {}) is moved by hand; its scale: {}, {} counts per mm{}",
+                settings.label,
+                n,
+                source,
+                settings.countsPerMm,
+                settings.reversed ? ", reversed" : ""));
+        // (Its leader key mustn't be another axis's, which would win)
+        const unsigned long leader = m_config.readLong(fmt::format("Axis{}Leader", n), 0);
+        for (int other = 1; other < n; ++other) {
+            if (leader != 0 && leader == m_config.readLong(fmt::format("Axis{}Leader", other), 0)) {
+                MGOLOG(
+                    fmt::format(
+                        "*** Warning *** Axis{}Leader is the same as Axis{}Leader", n, other));
+            }
+        }
+        m_manualAxes.at(index)
+            = std::make_unique<ManualAxis>(std::move(scale), std::move(settings));
+    }
+}
+
+const ManualAxis* Model::manualAxis(int axisNumber) const
+{
+    if (axisNumber < FIRST_MANUAL_AXIS || axisNumber > LAST_MANUAL_AXIS) {
+        return nullptr;
+    }
+    return m_manualAxes.at(static_cast<std::size_t>(axisNumber - FIRST_MANUAL_AXIS)).get();
+}
+
+ManualAxis* Model::manualAxisOrWarn(int axisNumber)
+{
+    ManualAxis* axis = const_cast<ManualAxis*>(std::as_const(*this).manualAxis(axisNumber));
+    if (axis && !axis->hasReading()) {
+        m_warning = fmt::format("{} has no reading from its scale", axis->label());
+        return nullptr;
+    }
+    return axis;
+}
+
+void Model::manualAxisZero(int axisNumber)
+{
+    if (ManualAxis* axis = manualAxisOrWarn(axisNumber)) {
+        axis->zero();
+    }
+}
+
+void Model::setManualAxisPosition(int axisNumber, double mm)
+{
+    if (ManualAxis* axis = manualAxisOrWarn(axisNumber)) {
+        axis->setPositionMm(mm);
+    }
+}
+
+void Model::manualAxisHalf(int axisNumber)
+{
+    if (ManualAxis* axis = manualAxisOrWarn(axisNumber)) {
+        axis->half();
+    }
+}
+
+#ifdef FAKE
+void Model::fakeMoveManualAxis(int axisNumber, double mm)
+{
+    m_fakeManualAxisMm.at(static_cast<std::size_t>(axisNumber - FIRST_MANUAL_AXIS)) = mm;
+}
+#endif
 
 void Model::clearCurrentMemorySlot(Axis axis)
 {
