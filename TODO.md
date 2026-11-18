@@ -212,6 +212,14 @@
       or climb cuts pulling the table into the slack (about the same size
       each time, and depending on direction). lc.log's differences at each
       settle should tell which
+    - **Seen on the mill (18 Nov 2026, still the Pi 3):** a 5 mm
+      multi-pass repeated for about 15 passes stalled on the fast return
+      quite a few times, and X was over 20 mm out from its scale when it
+      was stopped. So it's lost steps, at least mostly, and **re-basing
+      from the scale during a multi-pass is needed**, whatever mode it
+      ends up in. Also worth knowing: whether the mismatch check warned
+      before then, since a stall that size should have shown at the next
+      pause. To repeat on the Pi 4 before changing anything
     - **Slot:** cut along X, pause (re-basing X), the user feeds Z down,
       cut back at cutting speed, pause again (re-basing X), and repeat until
       the full depth. Each end of the slot finishes on X's scale (backing
@@ -1661,10 +1669,11 @@ change.
     - **Seen on the mill (18 Nov 2026):** Z's scale counts up as the tool
       goes down, so `Axis4ScaleReversed` is now true, following the usual
       convention that Z goes negative towards the work
-    - **To try on the mill:** Y's direction (`Axis3ScaleReversed`: +Y is
-      the table moving towards you) and each scale's counts per mm (the nominal 2560 per inch so
-      far: calibrate against a known move, as for X), and that the y and z
-      leader keys don't clash with anything in use
+      Y left as it was: it increases "towards the column", as wanted
+      (checked the same day)
+    - **To try on the mill:** each scale's counts per mm (the nominal 2560
+      per inch so far: calibrate against a known move, as for X), and that
+      the y and z leader keys don't clash with anything in use
 - [x] `axis.cpp` / `axis.h` are compiled but unused, and their `mgo::Axis`
       class clashes in name with `enum class mgo::Axis` in model.h
     - **Done:** removed (they're in git's history, if the "array of axes"
