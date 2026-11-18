@@ -272,6 +272,15 @@
       check never ran, and the 4.5 mm only showed after Space. So a check
       (or re-basing) during a multi-pass is needed as a backstop, even once
       the cause is fixed
+    - **Confirmed (18 Nov 2026): it's the dead stop from full speed.** The
+      same run with `Axis1MaxMotorRpm` lowered from 800 to 400 (returns at
+      500 mm/min): about 40 passes, and the scale and motor ended 0.001 mm
+      apart (0.1 counts), against 4.5 mm at 800. So X can stop dead from
+      500 mm/min without being carried on, but not from 1000. **Next:**
+      deceleration ramping (Motion and timing), so returns and other moves
+      to a known target slow down before they stop, and X can go back to
+      800 rpm. Until then, 400 keeps multi-pass accurate, at the cost of
+      slower rapids and returns
     - **Slot:** cut along X, pause (re-basing X), the user feeds Z down,
       cut back at cutting speed, pause again (re-basing X), and repeat until
       the full depth. Each end of the slot finishes on X's scale (backing
