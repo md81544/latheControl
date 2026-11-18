@@ -520,6 +520,9 @@ public:
     const ManualAxis* manualAxis(int axisNumber) const;
     // Each warns (and changes nothing) if the axis has no reading
     void manualAxisZero(int axisNumber);
+    // Zeroes every axis: the two motorised ones, and the manual ones (each
+    // of which warns, and isn't zeroed, if it has no reading)
+    void zeroAllAxes();
     void setManualAxisPosition(int axisNumber, double mm);
     void manualAxisHalf(int axisNumber);
 #ifdef FAKE

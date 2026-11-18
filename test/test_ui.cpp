@@ -2054,6 +2054,36 @@ TEST_CASE("UI: a manual axis (Y) is zeroed, set and halved with its leader key")
     snapshot(w, "manual-axis");
 }
 
+TEST_CASE("UI: \\ z zeroes every axis, including the manual ones")
+{
+    MapConfigReader config { { { "Axis3Kind", "manual" },
+                               { "Axis3Label", "Y" },
+                               { "Axis3Leader", "121" },
+                               { "Axis3Scale", "serial" },
+                               { "Axis3ScaleSerialLetter", "Y" },
+                               { "Axis3ScaleCountsPerMm", "100" },
+                               { "DisableRpm", "true" } } };
+    mgo::MockGpio gpio { false };
+    mgo::Model model { gpio, config };
+    mgo::Controller controller(&model);
+    model.setAxis1MotorSpeed(1'000.0);
+    QWidget* w = mainWindow();
+    REQUIRE(w);
+    const mgo::ManualAxis* y = model.manualAxis(3);
+    REQUIRE(y);
+    // Z (axis 1) moved away from zero, and Y wound along
+    model.axis1GoToPosition(2.0);
+    REQUIRE(waitUntil([&] { return std::abs(model.getAxis1MotorPosition() - 2.0) < 0.001; }));
+    model.fakeMoveManualAxis(3, 3.0);
+    REQUIRE(QTest::qWaitFor([y] { return std::abs(*y->positionMm() - 3.0) < 0.005; }, 5'000));
+
+    press(w, controller, Qt::Key_Backslash);
+    REQUIRE(model.getKeyMode() == mgo::KeyMode::AxisAll);
+    press(w, controller, Qt::Key_Z);
+    REQUIRE(model.getAxis1MotorPosition() == 0.0);
+    REQUIRE(*y->positionMm() == Approx(0.0).margin(0.005));
+}
+
 TEST_CASE("UI: start-up sets the motors' speeds before taking up the backlash")
 {
     // (A motor at zero speed cancels any move, so the backlash was never

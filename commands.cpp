@@ -608,7 +608,11 @@ std::vector<Command> buildCommands(
     c = "Position";
     b.add(c, fmt::format("Zero {}", a1), key::a1_z, AXIS1);
     b.add(c, fmt::format("Zero {}", a2), key::a2_z, AXIS2);
-    b.add(c, fmt::format("Zero {} and {}", a1, a2), key::aAll_z, BOTH);
+    // (With manual axes, it zeroes them too)
+    const bool manualAxes = config.read("Axis3Kind", "none") == "manual"
+        || config.read("Axis4Kind", "none") == "manual";
+    b.add(
+        c, manualAxes ? "Zero all axes" : fmt::format("Zero {} and {}", a1, a2), key::aAll_z, BOTH);
     b.add(c, fmt::format("Set {} position...", a1), key::a1_s, AXIS1);
     b.add(c, fmt::format("Set {} position (or diameter)...", a2), key::a2_s, AXIS2);
     b.add(c, fmt::format("Go to {} position...", a1), key::a1_g, AXIS1);

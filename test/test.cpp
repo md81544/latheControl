@@ -2472,6 +2472,16 @@ TEST_CASE("Commands: the manual axes (e.g. the mill's Y and Z)")
     };
     REQUIRE(described(mgo::key::a3_h) == "Halve Y (to find a centre)");
     REQUIRE(described(mgo::key::a4_z) == "Zero Z");
+    // \ z zeroes them too
+    REQUIRE(described(mgo::key::aAll_z) == "Zero all axes");
+    // Without manual axes, it's the two motorised ones
+    const TestConfigReader latheConfig({});
+    const auto lathe = mgo::buildCommands(latheConfig);
+    const auto it = std::find_if(lathe.begin(), lathe.end(), [](const mgo::Command& c) {
+        return c.key == mgo::key::aAll_z;
+    });
+    REQUIRE(it != lathe.end());
+    REQUIRE(it->description == "Zero Z and X");
 }
 
 TEST_CASE("Commands: shut down is shown, but unavailable, in mock builds")

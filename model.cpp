@@ -3669,6 +3669,17 @@ void Model::manualAxisZero(int axisNumber)
     }
 }
 
+void Model::zeroAllAxes()
+{
+    axis1Zero();
+    axis2Zero();
+    for (int n = FIRST_MANUAL_AXIS; n <= LAST_MANUAL_AXIS; ++n) {
+        if (manualAxis(n)) {
+            manualAxisZero(n);
+        }
+    }
+}
+
 void Model::setManualAxisPosition(int axisNumber, double mm)
 {
     if (ManualAxis* axis = manualAxisOrWarn(axisNumber)) {

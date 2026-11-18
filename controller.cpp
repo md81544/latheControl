@@ -791,10 +791,13 @@ void Controller::processKey(int t)
                 }
             case key::aAll_z:
                 {
-                    confirmFeatureLoss("Zeroing both axes", true, true, [this] {
-                        m_model->axis1Zero();
-                        m_model->axis2Zero();
-                    });
+                    // (Including the manual axes, if any: see zeroAllAxes())
+                    const bool manualAxes = m_model->manualAxis(Model::FIRST_MANUAL_AXIS)
+                        || m_model->manualAxis(Model::LAST_MANUAL_AXIS);
+                    confirmFeatureLoss(
+                        manualAxes ? "Zeroing all axes" : "Zeroing both axes", true, true, [this] {
+                            m_model->zeroAllAxes();
+                        });
                     break;
                 }
             case key::a1_g:

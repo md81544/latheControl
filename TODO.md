@@ -20,12 +20,19 @@
       Only for axes with a scale
 
 ### Zero all the axes, including the manual ones
-- [ ] `\` then `z` ("Zero X and A" on the mill) only zeroes the two
+- [x] `\` then `z` ("Zero X and A" on the mill) only zeroes the two
       motorised axes. The user would like it to zero every axis, including
       the manual ones (the mill's Y and Z, axes 3 and 4), as each can be
       zeroed on its own with its leader then `z` (18 Nov 2026). Its name in
       the command table would change to suit (e.g. "Zero all axes" when
       there are manual axes)
+    - **Done (18 Nov 2026), not yet tried on the mill:** `Model::zeroAllAxes()`;
+      it's "Zero all axes" in the menu when there are manual axes, and
+      still "Zero Z and X" on the lathe. A manual axis with no reading
+      warns, as zeroing it alone does, and the rest are still zeroed. No
+      other `\` command applies to the manual axes: the rest are moves and
+      memory slots, which they don't have (zero, set and halve are all they
+      have, and halving several axes at once wouldn't make sense)
 
 ### Investigate Sound Output
 - [ ] Still getting the first sound failing - maybe the monitor's audio is
