@@ -106,6 +106,23 @@ public:
     // speed, as for a move from rest. Zero (the default) turns it off. Not
     // used while following or synchronised, as the motor must keep up there
     void setBacklashTakeUpSpeed(double speed);
+    // Optional: deceleration ramping. rampingSpeed is as for the constructor's
+    // (on the same scale as the config's RampingSpeed: up to 100), and zero
+    // (the default) turns it off. With it, a move slows down before its
+    // target, at that rate, to the speed the ramp starts at, rather than
+    // stopping dead from full speed. Stopping dead from 1000 mm/min carried
+    // the mill's X on by about 0.1 mm each time (18 Nov 2026), but not from
+    // 500. Only with (acceleration) ramping on, and not while following or
+    // synchronised
+    void setDecelerationRamping(double rampingSpeed);
+    // A stop which slows down first (if deceleration ramping is on): the
+    // target becomes the nearest step the motor can slow down by, so it runs
+    // on by that much. Doesn't block: isRunning() stays true meanwhile.
+    // Without deceleration ramping, or while taking up the backlash, or if
+    // already as slow as the ramp's start, it's stop()
+    void decelerateToStop();
+    // True while a move is slowing down, to its target or to a stop
+    bool isDecelerating() const;
     // Only really needed for testing:
     long getCurrentStepWithoutBacklashCompensation() const;
     // Also only needed for testing:
@@ -238,6 +255,19 @@ private:
     // See setBacklashTakeUpSpeed(): the take-up's step delay (µsecs), or
     // zero for none. Guarded by m_mtx
     int m_backlashTakeUpDelay { 0 };
+    // See setDecelerationRamping(): rpm lost per step while slowing down, or
+    // zero for none. Guarded by m_mtx
+    double m_decelerationRate { 0.0 };
+    // Set once a move starts slowing down (it doesn't speed up again), and
+    // cleared when a move starts
+    std::atomic<bool> m_decelerating { false };
+    // Internal, only to be used from within an existing lock scope:
+    // Whether the next step of the move is taking up the backlash
+    bool takingUpBacklash() const;
+    // How fast the motor is stepping now (rpm)
+    double currentRpm() const;
+    // How many steps it takes to slow down from rpm to where the ramp starts
+    double stepsToSlowDown(double rpm) const;
     bool m_useRamping { true };
     double m_rampingSpeed { 0.1 };
     double calculateDelayValue(double rpm);

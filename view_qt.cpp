@@ -141,7 +141,7 @@ public:
         QObject::connect(&m_rapidReleaseTimer, &QTimer::timeout, this, [this]() {
             // The rapid's arrow key really was let go
             m_rapidQtKey = 0;
-            m_keys.push_back(key::SPACE);
+            m_keys.push_back(key::RAPID_RELEASED);
         });
     }
 
@@ -294,7 +294,7 @@ protected:
         if (qtKey == Qt::Key_Alt || qtKey == Qt::Key_AltGr) {
             m_altHeld = m_altHeld && qtKey != Qt::Key_Alt;
             m_altGrHeld = m_altGrHeld && qtKey != Qt::Key_AltGr;
-            m_keys.push_back(key::SPACE);
+            m_keys.push_back(key::RAPID_RELEASED);
             return;
         }
         if (qtKey == m_rapidQtKey) {
@@ -303,7 +303,7 @@ protected:
             return;
         }
         if (isArrowKey(qtKey) && altPressed(event)) {
-            m_keys.push_back(key::SPACE);
+            m_keys.push_back(key::RAPID_RELEASED);
         }
     }
 

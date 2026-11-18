@@ -209,6 +209,11 @@ constexpr int js_rapid_right = 8005;
 constexpr int js_rapid_up = 8006;
 constexpr int js_rapid_down = 8007;
 
+// Sent (by the view, and the gamepad) when a rapid's key or stick is let
+// go. The controller slows the rapid down to a stop if it can (see
+// Model::rapidReleased()), and otherwise treats it as Space
+constexpr int RAPID_RELEASED = 8008;
+
 // Random others
 constexpr int CTRL = 0x10000;
 constexpr int ALT = 0x100000;

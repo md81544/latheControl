@@ -247,7 +247,7 @@
     - **Tried on the mill (18 Nov 2026): it works.** 40 multi-pass passes
       at 100 mm/min take-up with no stalls, where five or more would have
       been expected before. But X drifted from its scale, steadily: lc.log
-      (5 mm cuts at 100 mm/min, returns at 1000 mm/min) shows the table
+      (5 mm cuts at 100 mm/min, returns at 800 mm/min) shows the table
       9-11 counts (about 0.1 mm) further positive than the motor after
       every return, so the 0.456 mm check stopped the run every five passes
       (+0.089, +0.179, +0.288, +0.387, +0.497 mm). A wrong backlash setting
@@ -262,7 +262,7 @@
       it's the stop, "Deceleration ramping" (Motion and timing) is the fix;
       re-basing during a multi-pass would only hide it
     - **Second run (18 Nov 2026):** 6 mm cuts at 140 mm/min, returns at
-      1000 mm/min, about 39 passes with no pauses: the table ended 4.51 mm
+      800 mm/min, about 39 passes with no pauses: the table ended 4.51 mm
       ahead of the motor in the return's direction (about 0.115 mm a pass).
       There's an audible "clunk" at each return's dead stop, and the pulley
       is ruled out (the grub screw was lined up on the shaft's flat, and
@@ -274,13 +274,15 @@
       the cause is fixed
     - **Confirmed (18 Nov 2026): it's the dead stop from full speed.** The
       same run with `Axis1MaxMotorRpm` lowered from 800 to 400 (returns at
-      500 mm/min): about 40 passes, and the scale and motor ended 0.001 mm
+      400 mm/min): about 40 passes, and the scale and motor ended 0.001 mm
       apart (0.1 counts), against 4.5 mm at 800. So X can stop dead from
-      500 mm/min without being carried on, but not from 1000. **Next:**
-      deceleration ramping (Motion and timing), so returns and other moves
-      to a known target slow down before they stop, and X can go back to
-      800 rpm. Until then, 400 keeps multi-pass accurate, at the cost of
-      slower rapids and returns
+      400 mm/min without being carried on, but not from 800. (NB rapids
+      and returns go at `Axis1MaxMotorRpm` taken as mm/min: see "Rapids
+      use the maximum rpm as mm/min", under Motion and timing.)
+      **Done, not yet tried on the mill: deceleration ramping** (see under
+      Motion and timing), on for the mill's X, so X can go back to 800 rpm.
+      **To try:** the same 40 passes at 800 rpm; the scale should still
+      agree with the motor at the end, and the stop's clunk should be gone
     - **Slot:** cut along X, pause (re-basing X), the user feeds Z down,
       cut back at cutting speed, pause again (re-basing X), and repeat until
       the full depth. Each end of the slot finishes on X's scale (backing
@@ -795,6 +797,33 @@
       stops (especially from rapids) are abrupt. Needs tuning on the machine,
       and changes where moves end. Also, the ramp rate is per loop, so depends
       on the step rate
+    - **Done (18 Nov 2026), not yet tried on the machine:**
+      `Axis1DecelerationRamping` (and Axis2), off by default, on for the
+      mill's X; `Axis1DecelerationRampingSpeed` sets its rate (0-100, as
+      `Axis1RampingSpeed`, which it defaults to). Prompted by the mill (see
+      "Multi-pass" above): X drifted about 0.1 mm a pass from its scale,
+      stopping dead from 800 mm/min at each return, and not at all from
+      400. In the motor thread, mirroring the ramp up: once the steps left
+      are no more than it takes to slow to the ramp's start (40% of the
+      maximum rpm) at that rate, it slows by the same amount each step, and
+      doesn't speed up again. A short move speeds up and slows down with no
+      flat part in between. Moves always end exactly on their targets. Not
+      while following (threading) or synchronised (tapers), nor without
+      acceleration ramping
+    - **Decided (18 Nov 2026, the user): the stops the operator makes slow
+      down too**, except Space, which still stops everything at once. So a
+      released rapid (the arrow, Alt, or the gamepad's stick) and a jog
+      stopped by pressing its key again run on while they slow:
+      `StepperMotor::decelerateToStop()` moves the target to the nearest step
+      it can slow down by. On the mill's X that's about 2.5 mm from
+      800 mm/min (about 3.3 mm from letting go, with the 60 ms
+      `RAPID_RELEASE_MS`), or about 1 mm (1.8 mm) with the rate at 100. The
+      user's view: when rapiding up to work, they stop well short (say
+      10 mm) and approach slowly from there. Pressing the key again while
+      it slows stops it at once. A rapid's release is its own key code
+      (`key::RAPID_RELEASED`); the controller treats it as Space unless a
+      rapid is running, as before. This replaces the earlier plan below,
+      which kept the operator's stops instant
     - **Only for moves to a known target** (go to, memory returns, fast
       returns, multi-pass returns), planned to end exactly on the target.
       Stops the operator makes (releasing a rapid, Space, pressing a move's
@@ -819,6 +848,19 @@
           (or a lower maximum X speed) is worth doing
     - Related idea, for sizing: after setting the measured diameter, type the
       target diameter and X moves straight to it
+- [ ] **Rapids use the maximum rpm as mm/min.** `axis1Rapid()` and
+      `axis2Rapid()` set the speed to `getMaxRpm()`, and multi-pass returns
+      use `cutMaxSpeed()`, which is the same, but `setSpeed()` takes
+      units/min. So on the mill's X (1.25 mm a motor turn), 800 rpm gives
+      rapids and returns at 800 mm/min (640 rpm), not 1000. Found on
+      18 Nov 2026. Harmless as such (the motor's own limit still applies),
+      but confusing: lc.log's "at 800/min" is mm/min, and lowering
+      `Axis1MaxMotorRpm` to 400 gave returns at 400 mm/min. What fixing it
+      would change: the lathe's Z nothing (1 mm a turn); the lathe's X
+      nothing (a third of a mm a turn, so it's already at its maximum rpm,
+      the motor's limit); the mill's X 1.25 times faster; and the mill's A
+      five times faster (5° a turn: 640°/min now, which is only 128 rpm).
+      So it wants trying on the mill first
 - [ ] Sleep between steps at slow speeds, rather than busy-waiting. Needs the
       wake-up latency measuring on the Pi first, as thread pitch depends on
       step timing. (Idle motors can sleep, but on the lathe they're set to

@@ -41,6 +41,14 @@ void configureMotorThread(
         motor.setBacklashTakeUpSpeed(speed);
         MGOLOG(fmt::format("{} takes up its backlash at {} per minute", axisPrefix, speed));
     }
+    // (See StepperMotor::setDecelerationRamping())
+    if (config.readBool(axisPrefix + "DecelerationRamping", false)) {
+        const double rate = config.readDouble(
+            axisPrefix + "DecelerationRampingSpeed",
+            config.readDouble(axisPrefix + "RampingSpeed", 100.0));
+        motor.setDecelerationRamping(rate);
+        MGOLOG(fmt::format("{} slows down before stopping (ramping speed {})", axisPrefix, rate));
+    }
 }
 
 void configureAlarm(
@@ -1417,7 +1425,7 @@ void Model::axis1Move(ZDirection direction)
     // Issuing the same command (i.e. pressing the same key)
     // when it is already running will cause the motor to stop
     if (m_axis1Motor->isRunning()) {
-        axis1Stop();
+        axis1StopRamped();
         return;
     }
     if (axis1MoveRefused()) {
@@ -1452,7 +1460,7 @@ void Model::axis1Rapid(ZDirection direction)
     // Issuing the same command (i.e. pressing the same key)
     // when it is already running will cause the motor to stop
     if (m_axis1Motor->isRunning()) {
-        axis1Stop();
+        axis1StopRamped();
         return;
     }
     m_previousAxis1Speed = m_axis1Motor->getSpeed();
@@ -1519,6 +1527,45 @@ void Model::axis1Stop()
 {
     m_axis1Motor->stop();
     m_axis1Motor->wait();
+}
+
+void Model::axis1StopRamped()
+{
+    if (m_axis1Motor->isDecelerating()) {
+        // (e.g. a key pressed again while it slows down)
+        axis1Stop();
+        return;
+    }
+    m_axis1Motor->decelerateToStop();
+}
+
+void Model::axis2StopRamped()
+{
+    if (m_axis2Motor->isDecelerating()) {
+        axis2Stop();
+        return;
+    }
+    m_axis2Motor->decelerateToStop();
+}
+
+bool Model::rapidReleased()
+{
+    if (!m_axis1RapidInProgress && !m_axis2RapidInProgress) {
+        return false;
+    }
+    if (isMotionSequenceRunning() || m_axis1Finish || m_backlashMeasurement
+        || m_mode != Mode::None) {
+        return false;
+    }
+    // (Not axis1StopRamped(), as letting go of Alt and the arrow are two
+    // releases, and the second mustn't stop it dead while it slows down)
+    if (m_axis1Motor->isRunning()) {
+        m_axis1Motor->decelerateToStop();
+    }
+    if (m_axis2Motor->isRunning()) {
+        m_axis2Motor->decelerateToStop();
+    }
+    return true;
 }
 
 void Model::axis1StorePosition()
@@ -1764,7 +1811,7 @@ void Model::axis2StorePosition(double mm)
 void Model::axis2Move(XDirection direction)
 {
     if (m_axis2Motor->isRunning()) {
-        axis2Stop();
+        axis2StopRamped();
         return;
     }
     if (axis2MoveRefused()) {
@@ -1797,7 +1844,7 @@ void Model::axis2Rapid(XDirection direction)
         return;
     }
     if (m_axis2Motor->isRunning()) {
-        axis2Stop();
+        axis2StopRamped();
         return;
     }
     m_previousAxis2Speed = m_axis2Motor->getSpeed();

@@ -230,9 +230,10 @@ TEST_CASE("UI: keys are converted to key codes")
     QTest::keyClick(w, Qt::Key_Q, Qt::ControlModifier);
     REQUIRE(nextKey(view) == mgo::key::CtrlQ);
     // (QTest presses and releases the Alt key itself around this, as a real
-    // keyboard would; releasing Alt always sends a stop, as with SFML)
+    // keyboard would; releasing Alt always sends a rapid's release, which the
+    // controller treats as Space, a stop, unless a rapid is running)
     QTest::keyClick(w, Qt::Key_W, Qt::AltModifier);
-    REQUIRE(allKeys(view) == Keys { mgo::key::AltW, mgo::key::SPACE });
+    REQUIRE(allKeys(view) == Keys { mgo::key::AltW, mgo::key::RAPID_RELEASED });
     QTest::keyClick(w, Qt::Key_F2);
     REQUIRE(nextKey(view) == mgo::key::F2);
     QTest::keyClick(w, Qt::Key_5);
@@ -260,18 +261,19 @@ TEST_CASE("UI: releasing Alt or an Alt-arrow stops (dead man)")
     // Pressing Alt+Left starts a rapid (QTest presses Alt first, then Left)
     QTest::keyPress(w, Qt::Key_Left, Qt::AltModifier);
     REQUIRE(allKeys(view) == Keys { mgo::key::AltLeft });
-    // Releasing it stops: once for the Alt key itself, at once, and once for
-    // the arrow, a moment later (in case it was a repeat: see the next test)
+    // Releasing it stops (the controller slows it down if it can): once for
+    // the Alt key itself, at once, and once for the arrow, a moment later (in
+    // case it was a repeat: see the next test)
     QTest::keyRelease(w, Qt::Key_Left, Qt::AltModifier);
-    REQUIRE(allKeys(view) == Keys { mgo::key::SPACE });
+    REQUIRE(allKeys(view) == Keys { mgo::key::RAPID_RELEASED });
     QTest::qWait(100);
-    REQUIRE(allKeys(view) == Keys { mgo::key::SPACE });
+    REQUIRE(allKeys(view) == Keys { mgo::key::RAPID_RELEASED });
 
     // Alt on its own does nothing until released
     QTest::keyPress(w, Qt::Key_Alt);
     REQUIRE(allKeys(view).empty());
     QTest::keyRelease(w, Qt::Key_Alt);
-    REQUIRE(allKeys(view) == Keys { mgo::key::SPACE });
+    REQUIRE(allKeys(view) == Keys { mgo::key::RAPID_RELEASED });
 
     // Right Alt is often AltGr on Linux, which Qt doesn't report as an Alt
     // modifier: AltGr + arrow must still be a rapid, and stop on release
@@ -284,10 +286,10 @@ TEST_CASE("UI: releasing Alt or an Alt-arrow stops (dead man)")
     QTest::keyRelease(w, Qt::Key_Up);
     REQUIRE(allKeys(view).empty());
     QTest::qWait(100);
-    REQUIRE(allKeys(view) == Keys { mgo::key::SPACE });
+    REQUIRE(allKeys(view) == Keys { mgo::key::RAPID_RELEASED });
     QKeyEvent altGrRelease(QEvent::KeyRelease, Qt::Key_AltGr, Qt::NoModifier);
     QApplication::sendEvent(w, &altGrRelease);
-    REQUIRE(allKeys(view) == Keys { mgo::key::SPACE });
+    REQUIRE(allKeys(view) == Keys { mgo::key::RAPID_RELEASED });
 
     // A plain arrow, without Alt, doesn't stop on release
     QTest::keyPress(w, Qt::Key_Right);
@@ -319,10 +321,10 @@ TEST_CASE("UI: a rapid's key repeating, unmarked, doesn't stop it")
     }
     QTest::qWait(100);
     REQUIRE(allKeys(view).empty());
-    // Letting go of Alt stops it at once. Then the arrow's repeats (no longer
+    // Letting go of Alt stops it straight away. Then the arrow's repeats (no longer
     // with Alt) mustn't start a jog
     QTest::keyRelease(w, Qt::Key_Alt);
-    REQUIRE(allKeys(view) == Keys { mgo::key::SPACE });
+    REQUIRE(allKeys(view) == Keys { mgo::key::RAPID_RELEASED });
     for (int n = 0; n < 3; ++n) {
         QKeyEvent release(QEvent::KeyRelease, Qt::Key_Left, Qt::NoModifier);
         QApplication::sendEvent(w, &release);
@@ -335,7 +337,7 @@ TEST_CASE("UI: a rapid's key repeating, unmarked, doesn't stop it")
     // the arrow is an ordinary key again
     QTest::keyRelease(w, Qt::Key_Left);
     QTest::qWait(100);
-    REQUIRE(allKeys(view) == Keys { mgo::key::SPACE });
+    REQUIRE(allKeys(view) == Keys { mgo::key::RAPID_RELEASED });
     QTest::keyPress(w, Qt::Key_Left);
     REQUIRE(allKeys(view) == Keys { mgo::key::LEFT });
 }
@@ -533,6 +535,23 @@ bool waitUntil(const std::function<bool()>& condition)
 }
 
 } // end anonymous namespace
+
+TEST_CASE("UI: letting go of Alt with no rapid running stops everything, as Space")
+{
+    TestModel tm;
+    mgo::Controller controller(&tm.model);
+    tm.model.setAxis1MotorSpeed(100.0);
+    QWidget* w = mainWindow();
+    REQUIRE(w);
+
+    // A jog (not a rapid), then Alt pressed and let go
+    tm.model.axis1Move(mgo::ZDirection::Left);
+    REQUIRE(tm.model.isAxis1MotorRunning());
+    QTest::keyPress(w, Qt::Key_Alt);
+    QTest::keyRelease(w, Qt::Key_Alt);
+    controller.processKeyPress();
+    REQUIRE(!tm.model.isAxis1MotorRunning());
+}
 
 TEST_CASE("UI: menu through the controller")
 {

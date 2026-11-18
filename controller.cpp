@@ -307,6 +307,16 @@ bool Controller::isMenuOpen() const
 void Controller::processKeyPress()
 {
     int k = m_view->getEvents();
+    if ((k & ~key::JOYSTICK) == key::RAPID_RELEASED) {
+        // A rapid's key (or stick) let go: the rapid slows down to a stop,
+        // if it can. Otherwise it's Space, as it always was: it stops
+        // everything at once
+        if (!m_view->isDialogOpen() && m_model->rapidReleased()) {
+            MGOLOG("Rapid released: slowing down to a stop");
+            return;
+        }
+        k = (k & key::JOYSTICK) | key::SPACE;
+    }
     if (m_view->isDialogOpen()) {
         // The dialog has the keyboard, so any key here is from the gamepad,
         // which isn't used for dialogs: ignore it. Except Ctrl-Q (e.g. from

@@ -545,6 +545,126 @@ TEST_CASE("Stepper: the backlash is taken up at its own speed and then the ramp 
     }
 }
 
+TEST_CASE("Stepper: deceleration ramping slows a move down to its target")
+{
+    StepTimingGpio gpio;
+    // 1000 steps per revolution, so a step period is (2 x 30000 / rpm) µs. The
+    // ramp starts at 400 rpm (a period of 150µs) and, at 100 ("fastest"),
+    // changes by 0.1 rpm a step
+    mgo::StepperMotor motor(gpio, 0, 0, 0, 1'000, 1.0, 1'000.0, 100.0);
+    motor.setDecelerationRamping(100.0);
+
+    SECTION("A long move speeds up, runs at full speed, and slows down")
+    {
+        motor.setRpm(1'000.0); // A period of 60µs
+        motor.goToStep(20'000);
+        waitForMotor(motor);
+        REQUIRE(motor.getCurrentStep() == 20'000);
+        const auto gaps = gpio.takeStepGaps();
+        REQUIRE(gaps.size() == 19'999);
+        // At full speed in the middle
+        REQUIRE(gaps[10'000] < 64);
+        // Slowing down over the last 6000 steps (600 rpm at 0.1 a step)
+        REQUIRE(gaps[gaps.size() - 6'100] < 64);
+        REQUIRE(gaps[gaps.size() - 3'000] > 70);
+        REQUIRE(gaps[gaps.size() - 3'000] < 100);
+        // Ending at the ramp's starting speed
+        REQUIRE(gaps.back() >= 148);
+        REQUIRE(gaps.back() < 160);
+        // and never speeding up again once it's slowing
+        for (std::size_t n = gaps.size() - 5'900; n < gaps.size(); ++n) {
+            INFO("step " << n + 1);
+            REQUIRE(gaps[n] + 3 >= gaps[n - 1]);
+        }
+    }
+
+    SECTION("A short move speeds up then slows down, never reaching full speed")
+    {
+        motor.setRpm(1'000.0);
+        motor.goToStep(2'000);
+        waitForMotor(motor);
+        REQUIRE(motor.getCurrentStep() == 2'000);
+        const auto gaps = gpio.takeStepGaps();
+        // Fastest halfway: up by 0.1 rpm a step for 1000 steps, to 500 rpm (a
+        // period of 120µs), then down again
+        const auto fastest = *std::min_element(gaps.begin(), gaps.end());
+        REQUIRE(fastest >= 120);
+        REQUIRE(fastest < 124);
+        const auto fastestAt = std::min_element(gaps.begin(), gaps.end()) - gaps.begin();
+        // (The delay is in whole µs, so the fastest few periods are equal)
+        REQUIRE(std::abs(fastestAt - 1'000) < 100);
+        REQUIRE(gaps.back() >= 148);
+        REQUIRE(gaps.back() < 160);
+    }
+
+    SECTION("A move no faster than the ramp's start isn't slowed")
+    {
+        motor.setRpm(200.0); // A period of 300µs
+        motor.goToStep(500);
+        waitForMotor(motor);
+        for (const auto gap : gpio.takeStepGaps()) {
+            REQUIRE(gap >= 300);
+            REQUIRE(gap < 310);
+        }
+    }
+
+    SECTION("Without deceleration ramping, a move stops dead from full speed")
+    {
+        motor.setDecelerationRamping(0.0);
+        motor.setRpm(1'000.0);
+        motor.goToStep(20'000);
+        waitForMotor(motor);
+        REQUIRE(gpio.takeStepGaps().back() < 64);
+    }
+}
+
+TEST_CASE("Stepper: decelerateToStop() slows down to a stop, without blocking")
+{
+    StepTimingGpio gpio;
+    mgo::StepperMotor motor(gpio, 0, 0, 0, 1'000, 1.0, 1'000.0, 100.0);
+    motor.setRpm(1'000.0);
+
+    SECTION("With deceleration ramping, it runs on by the steps it needs to slow down")
+    {
+        motor.setDecelerationRamping(100.0);
+        motor.goToStep(1'000'000);
+        // (Until it's at full speed: 6000 steps from the ramp's start)
+        while (motor.getCurrentStep() < 10'000) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        const long before = motor.getCurrentStep();
+        motor.decelerateToStop();
+        const long target = motor.getTargetStep();
+        // It's still going, slowing down
+        REQUIRE(motor.isRunning());
+        REQUIRE(motor.isDecelerating());
+        // 6000 steps from full speed (600 rpm at 0.1 a step), counted from
+        // wherever it had got to by the call
+        REQUIRE(target - before >= 6'000);
+        REQUIRE(target - before < 6'000 + 2'000);
+        // A second request changes nothing
+        motor.decelerateToStop();
+        REQUIRE(motor.getTargetStep() == target);
+        waitForMotor(motor);
+        REQUIRE(motor.getCurrentStep() == target);
+        REQUIRE(!motor.isDecelerating());
+        const auto gaps = gpio.takeStepGaps();
+        REQUIRE(gaps.back() >= 148);
+        REQUIRE(gaps.back() < 160);
+    }
+
+    SECTION("Without it, it's an ordinary stop")
+    {
+        motor.goToStep(1'000'000);
+        while (motor.getCurrentStep() < 10'000) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        motor.decelerateToStop();
+        REQUIRE(!motor.isRunning());
+        REQUIRE(motor.getCurrentStep() < 1'000'000);
+    }
+}
+
 TEST_CASE("Stepper: Check motor synchronisation")
 {
     mgo::MockGpio gpio(false);
@@ -1341,10 +1461,10 @@ TEST_CASE("Joystick: right stick rapids stop when released (dead man)")
     REQUIRE(m.process({ axis(mgo::JoystickAxis::Z, 100.f) }) == Keys { mgo::key::js_rapid_right });
     REQUIRE(m.process({ axis(mgo::JoystickAxis::Z, 100.f) }).empty());
     // Letting the stick come back from fully over stops the motion
-    REQUIRE(m.process({ axis(mgo::JoystickAxis::Z, 30.f) }) == Keys { mgo::key::SPACE });
+    REQUIRE(m.process({ axis(mgo::JoystickAxis::Z, 30.f) }) == Keys { mgo::key::RAPID_RELEASED });
     REQUIRE(m.process({ axis(mgo::JoystickAxis::Z, 0.f) }).empty());
     REQUIRE(m.process({ axis(mgo::JoystickAxis::R, -100.f) }) == Keys { mgo::key::js_rapid_up });
-    REQUIRE(m.process({ axis(mgo::JoystickAxis::R, 0.f) }) == Keys { mgo::key::SPACE });
+    REQUIRE(m.process({ axis(mgo::JoystickAxis::R, 0.f) }) == Keys { mgo::key::RAPID_RELEASED });
 }
 
 TEST_CASE("Joystick: initial state doesn't trigger anything")
@@ -2833,6 +2953,47 @@ TEST_CASE("Model:   a nudge doesn't block, and restores the speed when done")
     REQUIRE(!model.isAxis2MotorRunning());
     REQUIRE(std::abs(model.getAxis2MotorPosition()) < 1.0);
     REQUIRE(model.getAxis2MotorSpeed() == Approx(20.0));
+}
+
+TEST_CASE("Model:   a released rapid slows down to a stop, if it can", "[timing]")
+{
+    SECTION("With deceleration ramping")
+    {
+        TestConfigReader config({ { "Axis1DecelerationRamping", "true" } });
+        mgo::MockGpio gpio(false);
+        mgo::Model model(gpio, config);
+        model.initialise();
+        REQUIRE(runUntilStopped(model));
+        // Nothing to release: the caller stops everything, as for Space
+        REQUIRE(!model.rapidReleased());
+        model.axis1Rapid(mgo::ZDirection::Left);
+        // (Long enough to speed up beyond where the ramp starts)
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        model.checkStatus();
+        REQUIRE(model.isAxis1MotorRunning());
+        const double released = model.getAxis1MotorPosition();
+        REQUIRE(model.rapidReleased());
+        // It slows down rather than stopping dead
+        REQUIRE(model.isAxis1MotorRunning());
+        // and the arrow's release, after Alt's, doesn't stop it dead either
+        REQUIRE(model.rapidReleased());
+        REQUIRE(model.isAxis1MotorRunning());
+        REQUIRE(runUntilStopped(model));
+        REQUIRE(std::abs(model.getAxis1MotorPosition() - released) > 0.1);
+    }
+
+    SECTION("Without it, it stops at once")
+    {
+        TestConfigReader config({});
+        mgo::MockGpio gpio(false);
+        mgo::Model model(gpio, config);
+        model.initialise();
+        REQUIRE(runUntilStopped(model));
+        model.axis1Rapid(mgo::ZDirection::Left);
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        REQUIRE(model.rapidReleased());
+        REQUIRE(!model.isAxis1MotorRunning());
+    }
 }
 
 TEST_CASE("Model:   a taper's backlash take-up doesn't block")

@@ -137,6 +137,12 @@ public:
     void changeMode(Mode mode);
     // (Also cancels any motion sequence)
     void stopAllMotors();
+    // A rapid's key (or the gamepad's stick) has been let go. If a rapid is
+    // running, and nothing else is, the moving motors slow down to a stop
+    // (if they decelerate; see StepperMotor::decelerateToStop()), and this
+    // returns true. Another release while they slow down changes nothing. Otherwise it returns
+    // false, and the caller should stop everything at once (as Space)
+    bool rapidReleased();
     // True while a series of moves (e.g. a nudge, or the backlash take-up
     // before a taper) is in progress. The controller holds back keys meanwhile
     bool isMotionSequenceRunning() const;
@@ -159,6 +165,10 @@ public:
     void axis1SetSpeed(double speed);
     void axis1Wait();
     void axis1Stop();
+    // Stops axis 1, slowing down first if it decelerates (see
+    // StepperMotor::decelerateToStop()), without waiting. If it's already
+    // slowing down, it stops at once
+    void axis1StopRamped();
     void axis1StorePosition();
     void axis1StorePosition(double mm);
     void axis1Move(ZDirection direction);
@@ -173,6 +183,8 @@ public:
     void axis2SetSpeed(double speed);
     void axis2Wait();
     void axis2Stop();
+    // As axis1StopRamped()
+    void axis2StopRamped();
     void axis2Zero();
     // As axis1Half(), for axis 2 (clearing its memory slots, and the
     // diameter)

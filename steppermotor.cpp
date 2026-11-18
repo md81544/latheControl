@@ -175,9 +175,7 @@ StepperMotor::StepperMotor(
                 bool takingUp = false;
                 if (m_targetStep != m_currentReportedStep) {
                     takingUp = m_backlashTakeUpDelay > 0 && !m_following && !m_synchronise
-                        && (m_targetStep < m_currentReportedStep
-                                ? m_backlashPosition != 0
-                                : m_backlashPosition != m_backlashSize);
+                        && takingUpBacklash();
                     if (takingUp && m_backlashTakeUpDelay > stepDelay) {
                         stepDelay = m_backlashTakeUpDelay;
                     }
@@ -235,6 +233,22 @@ StepperMotor::StepperMotor(
                             m_delay = calculateDelayValue(startRpm);
                         }
                     }
+                } else if (
+                    m_busy && m_useRamping && m_decelerationRate > 0.0 && !m_following
+                    && !m_synchronise
+                    && (m_decelerating
+                        || std::abs(m_targetStep - m_currentReportedStep)
+                            <= stepsToSlowDown(currentRpm()))) {
+                    // Slowing down to the target (see setDecelerationRamping()),
+                    // to the speed the ramp starts at (or the move's, if
+                    // that's slower), mirroring the ramp up. Once started, it
+                    // doesn't speed up again
+                    m_decelerating = true;
+                    const double slowestRpm
+                        = std::min(m_maxRpm * RAMP_START_FRACTION, m_rpm.load());
+                    const double rpm = std::max(currentRpm() - m_decelerationRate, slowestRpm);
+                    m_rampedRpm = rpm;
+                    m_delay = calculateDelayValue(rpm);
                 } else if (m_busy && m_useRamping && m_rampedRpm < m_rpm) {
                     m_rampedRpm += m_rampingSpeed;
                     if (m_rampedRpm > m_rpm) {
@@ -314,6 +328,7 @@ void StepperMotor::goToStep(long step, bool noLock)
         m_direction = Direction::reverse;
     }
     m_busy = true;
+    m_decelerating = false;
     m_stop = false;
     m_targetStep = step;
     m_wake.notify_all();
@@ -489,6 +504,75 @@ void StepperMotor::setBacklashTakeUpSpeed(double speed)
     m_backlashTakeUpDelay = rpm > 0.00001 ? calculateDelayValue(rpm) : 0;
 }
 
+void StepperMotor::setDecelerationRamping(double rampingSpeed)
+{
+    std::lock_guard lock(m_mtx);
+    m_decelerationRate = std::clamp(rampingSpeed / 1000.0, 0.0, 0.1);
+}
+
+void StepperMotor::decelerateToStop()
+{
+    {
+        std::unique_lock lock(m_mtx);
+        if (m_busy && m_decelerating) {
+            // Already slowing down (to a stop, or to its target, which is
+            // nearer)
+            return;
+        }
+        if (m_busy && m_useRamping && m_decelerationRate > 0.0 && !m_following && !m_synchronise
+            && !takingUpBacklash()) {
+            const long steps = std::lround(std::ceil(stepsToSlowDown(currentRpm())));
+            const long remaining = std::abs(m_targetStep - m_currentReportedStep);
+            if (steps >= remaining) {
+                // It'll slow down to its target sooner
+                return;
+            }
+            if (steps > 0) {
+                m_targetStep = m_currentReportedStep
+                    + (m_targetStep > m_currentReportedStep ? steps : -steps);
+                // (The motor thread starts slowing down at its next step)
+                m_decelerating = true;
+                if (m_usingMockLinearScale) {
+                    m_gpio.scaleGoToPositionMm(m_targetStep * m_conversionFactor);
+                }
+                return;
+            }
+        }
+    }
+    // (No deceleration, or no need for it)
+    stop();
+    if (m_usingMockLinearScale) {
+        m_gpio.scaleStop();
+    }
+}
+
+bool StepperMotor::isDecelerating() const
+{
+    return m_busy && m_decelerating;
+}
+
+bool StepperMotor::takingUpBacklash() const
+{
+    return m_targetStep < m_currentReportedStep ? m_backlashPosition != 0
+                                                : m_backlashPosition != m_backlashSize;
+}
+
+double StepperMotor::currentRpm() const
+{
+    // (Ramping, the speed is m_rampedRpm until it reaches m_rpm. m_rampedRpm
+    // isn't changed by slowing down without ramping, so it may be above m_rpm)
+    return m_useRamping ? std::min(m_rampedRpm.load(), m_rpm.load()) : m_rpm.load();
+}
+
+double StepperMotor::stepsToSlowDown(double rpm) const
+{
+    const double slowestRpm = m_maxRpm * RAMP_START_FRACTION;
+    if (m_decelerationRate <= 0.0 || rpm <= slowestRpm) {
+        return 0.0;
+    }
+    return (rpm - slowestRpm) / m_decelerationRate;
+}
+
 long StepperMotor::getCurrentStepWithoutBacklashCompensation() const
 {
     return m_currentActualStep;
@@ -553,6 +637,7 @@ void StepperMotor::followTo(long endStep, std::function<long()> targetStep)
     m_followTarget = std::move(targetStep);
     m_followStart = m_currentReportedStep;
     m_followEnd = endStep;
+    m_decelerating = false;
     m_following = true;
     m_busy = true;
     m_stop = false;

@@ -37,9 +37,8 @@ bool JoystickKeyMapper::isChordButton(unsigned button) const
     return m_menuChord && (button == m_menuChord->first || button == m_menuChord->second);
 }
 
-std::vector<int> JoystickKeyMapper::process(
-    const std::vector<JoystickEvent>& events,
-    Clock::time_point now)
+std::vector<int>
+JoystickKeyMapper::process(const std::vector<JoystickEvent>& events, Clock::time_point now)
 {
     std::vector<int> keys;
     const auto addKey = [&keys](int k) {
@@ -212,9 +211,9 @@ int JoystickKeyMapper::stateKey()
         constexpr float deadzone = 99.f;
         const float value = axis(JoystickAxis::Z);
         if (std::abs(m_previousZ) > deadzone && std::abs(value) <= deadzone) {
-            // stop rapid
+            // stop rapid (slowing down, if it can: see key::RAPID_RELEASED)
             m_previousZ = value;
-            return key::SPACE;
+            return key::RAPID_RELEASED;
         }
         if (!(m_previousZ > deadzone && value > deadzone)
             && !(m_previousZ < -deadzone && value < -deadzone)) {
@@ -231,9 +230,9 @@ int JoystickKeyMapper::stateKey()
         constexpr float deadzone = 99.f;
         const float value = axis(JoystickAxis::R);
         if (std::abs(m_previousR) > deadzone && std::abs(value) <= deadzone) {
-            // stop rapid
+            // stop rapid (slowing down, if it can: see key::RAPID_RELEASED)
             m_previousR = value;
-            return key::SPACE;
+            return key::RAPID_RELEASED;
         }
         if (!(m_previousR > deadzone && value > deadzone)
             && !(m_previousR < -deadzone && value < -deadzone)) {
@@ -352,14 +351,17 @@ std::vector<int> Joystick::poll()
             const bool initial = e.type & JS_EVENT_INIT;
             const auto type = e.type & ~JS_EVENT_INIT;
             if (type == JS_EVENT_BUTTON) {
-                events.push_back({ JoystickEvent::Type::Button, e.number, e.value ? 1.f : 0.f, initial });
-            } else if (type == JS_EVENT_AXIS && e.number < m_axisMap.size()
-                       && m_axisMap.at(e.number) >= 0) {
+                events.push_back(
+                    { JoystickEvent::Type::Button, e.number, e.value ? 1.f : 0.f, initial });
+            } else if (
+                type == JS_EVENT_AXIS && e.number < m_axisMap.size()
+                && m_axisMap.at(e.number) >= 0) {
                 // Scaled to -100 to 100, as SFML did
-                events.push_back({ JoystickEvent::Type::Axis,
-                                   static_cast<unsigned>(m_axisMap.at(e.number)),
-                                   e.value * 100.f / 32767.f,
-                                   initial });
+                events.push_back(
+                    { JoystickEvent::Type::Axis,
+                      static_cast<unsigned>(m_axisMap.at(e.number)),
+                      e.value * 100.f / 32767.f,
+                      initial });
             }
             continue;
         }
