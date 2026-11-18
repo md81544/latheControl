@@ -21,11 +21,13 @@
 #include <fmt/format.h>
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <ctime>
 #include <filesystem>
 #include <map>
+#include <mutex>
 #include <optional>
 #include <set>
 #include <sstream>
@@ -404,6 +406,143 @@ TEST_CASE("Stepper: a ramped move's first step is at the ramp's starting speed")
     motor.enableRamping(false);
     motor.setRpm(1'000.0);
     REQUIRE(motor.getDelay() == 30);
+}
+
+namespace {
+// An IGpio whose clock only moves when it's read (by a microsecond each
+// time), and which records the clock at each step pulse. With only the motor
+// thread reading it, the gaps between step pulses are the motor's step
+// periods, however promptly the thread runs, so tests can check speeds
+// without depending on real time
+class StepTimingGpio final : public mgo::IGpio {
+public:
+    int addMotor(int, int, int) override
+    {
+        return 0;
+    }
+    void setStepPin(int, mgo::PinState state) override
+    {
+        if (state == mgo::PinState::high) {
+            std::lock_guard lock(m_mtx);
+            m_stepTicks.push_back(m_tick);
+        }
+    }
+    void setReversePin(int, mgo::PinState) override { }
+    void setEnablePin(int, mgo::PinState) override { }
+    void setRotaryEncoderCallback(int, int, void (*)(int, int, uint32_t, void*), void*) override { }
+    void setLinearScaleAxis1Callback(int, int, void (*)(int, int, uint32_t, void*), void*) override
+    {
+    }
+    void delayMicroSeconds(long usecs) override
+    {
+        m_tick += static_cast<uint32_t>(usecs);
+    }
+    uint32_t getTick() override
+    {
+        return m_tick++;
+    }
+    void setInputPin(int, bool) override { }
+    mgo::PinState readPin(int) override
+    {
+        return mgo::PinState::high;
+    }
+    void scaleGoToPositionMm(double) override { }
+    void scaleSetSpeedStepsPerSec(double) override { }
+    void scaleStop() override { }
+    // The gaps between the step pulses since the last call
+    std::vector<uint32_t> takeStepGaps()
+    {
+        std::lock_guard lock(m_mtx);
+        std::vector<uint32_t> gaps;
+        for (std::size_t n = 1; n < m_stepTicks.size(); ++n) {
+            gaps.push_back(m_stepTicks[n] - m_stepTicks[n - 1]);
+        }
+        m_stepTicks.clear();
+        return gaps;
+    }
+
+private:
+    std::atomic<uint32_t> m_tick { 0 };
+    std::mutex m_mtx;
+    std::vector<uint32_t> m_stepTicks;
+};
+
+// Waits (in real time, so as not to move the fake clock) for a motor to stop
+void waitForMotor(const mgo::StepperMotor& motor)
+{
+    while (motor.isRunning()) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+}
+}
+
+TEST_CASE("Stepper: the backlash is taken up at its own speed and then the ramp starts")
+{
+    StepTimingGpio gpio;
+    // 1000 steps per revolution and 1 unit per step, so a speed of S
+    // units/min is S/1000 rpm, and a step period is (2 x 30000 / rpm) µs
+    mgo::StepperMotor motor(gpio, 0, 0, 0, 1'000, 1.0, 1'000.0);
+    motor.setBacklashCompensation(10, 0); // (taken up in the negative direction)
+    motor.setBacklashTakeUpSpeed(100'000.0); // 100 rpm: a period of 600µs
+    // Full speed is 1000 rpm, so the ramp starts at 400 rpm: a period of 150µs
+    motor.setRpm(1'000.0);
+
+    SECTION("A reversal takes up the backlash slowly")
+    {
+        motor.goToStep(20);
+        waitForMotor(motor);
+        REQUIRE(motor.getCurrentStep() == 20);
+        REQUIRE(motor.getCurrentStepWithoutBacklashCompensation() == 30);
+        const auto gaps = gpio.takeStepGaps();
+        REQUIRE(gaps.size() == 29);
+        // The ten take-up steps (the gaps after each of them) at 100 rpm.
+        // (The clock also moves a microsecond or so on each read outside
+        // the spinning)
+        for (std::size_t n = 0; n < 10; ++n) {
+            INFO("take-up step " << n + 1);
+            REQUIRE(gaps[n] >= 600);
+            REQUIRE(gaps[n] < 620);
+        }
+        // Then the move ramps up from its starting speed, 400 rpm, as from
+        // rest (with the default ramp, by 0.1 rpm a step: still about 150µs)
+        for (std::size_t n = 10; n < gaps.size(); ++n) {
+            INFO("step " << n + 1);
+            REQUIRE(gaps[n] >= 148);
+            REQUIRE(gaps[n] < 160);
+        }
+    }
+
+    SECTION("A move the same way as the last isn't slowed")
+    {
+        motor.goToStep(-10);
+        waitForMotor(motor);
+        REQUIRE(motor.getCurrentStepWithoutBacklashCompensation() == -10);
+        for (const auto gap : gpio.takeStepGaps()) {
+            REQUIRE(gap < 160);
+        }
+    }
+
+    SECTION("A move slower than the take-up keeps its own speed")
+    {
+        motor.setRpm(50.0); // A period of 1200µs
+        motor.goToStep(5);
+        waitForMotor(motor);
+        REQUIRE(motor.getCurrentStepWithoutBacklashCompensation() == 15);
+        for (const auto gap : gpio.takeStepGaps()) {
+            REQUIRE(gap >= 1'200);
+            REQUIRE(gap < 1'220);
+        }
+    }
+
+    SECTION("Without a take-up speed, the take-up goes at the move's speed")
+    {
+        motor.setBacklashTakeUpSpeed(0.0);
+        motor.goToStep(20);
+        waitForMotor(motor);
+        for (const auto gap : gpio.takeStepGaps()) {
+            REQUIRE(gap < 160);
+        }
+    }
 }
 
 TEST_CASE("Stepper: Check motor synchronisation")

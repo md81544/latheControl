@@ -96,6 +96,16 @@ public:
     // in the positive direction of the axis ( i.e. outwards on X or Z ). If this is
     // never called then the motor works as if there is no backlash at all.
     void setBacklashCompensation(unsigned int steps, unsigned int currentPosition);
+    // Optional: the speed (in units/min, as for setSpeed()) at which a move
+    // takes up the backlash, e.g. after a reversal. Without it, the take-up
+    // steps go at the move's speed, ramping up as usual, so the leadscrew's
+    // nut picks the load up all at once at that speed, which can stall the
+    // motor (seen on the mill's X, 18 Nov 2026: about one reversal in six,
+    // with a "clunk"). With it, the take-up goes at this speed (or the
+    // move's, if slower), and the ramp then starts afresh from its starting
+    // speed, as for a move from rest. Zero (the default) turns it off. Not
+    // used while following or synchronised, as the motor must keep up there
+    void setBacklashTakeUpSpeed(double speed);
     // Only really needed for testing:
     long getCurrentStepWithoutBacklashCompensation() const;
     // Also only needed for testing:
@@ -225,6 +235,9 @@ private:
     double m_maxRpm;
     unsigned int m_backlashSize { 0 };
     unsigned int m_backlashPosition { 0 };
+    // See setBacklashTakeUpSpeed(): the take-up's step delay (µsecs), or
+    // zero for none. Guarded by m_mtx
+    int m_backlashTakeUpDelay { 0 };
     bool m_useRamping { true };
     double m_rampingSpeed { 0.1 };
     double calculateDelayValue(double rpm);

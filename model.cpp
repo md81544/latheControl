@@ -35,6 +35,12 @@ void configureMotorThread(
         }
     }
     motor.setSpinWhenIdle(config.readBool("MotorThreadsSpinWhenIdle", false));
+    // (See StepperMotor::setBacklashTakeUpSpeed())
+    if (const double speed = config.readDouble(axisPrefix + "BacklashTakeUpSpeed", 0.0);
+        speed > 0.0) {
+        motor.setBacklashTakeUpSpeed(speed);
+        MGOLOG(fmt::format("{} takes up its backlash at {} per minute", axisPrefix, speed));
+    }
 }
 
 void configureAlarm(

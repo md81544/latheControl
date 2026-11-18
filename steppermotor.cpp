@@ -169,7 +169,18 @@ StepperMotor::StepperMotor(
                     });
                     continue; // start a fresh step period
                 }
+                // This period's delay. Normally the move's (ramped) delay, but
+                // see setBacklashTakeUpSpeed()
+                int stepDelay = m_delay;
+                bool takingUp = false;
                 if (m_targetStep != m_currentReportedStep) {
+                    takingUp = m_backlashTakeUpDelay > 0 && !m_following && !m_synchronise
+                        && (m_targetStep < m_currentReportedStep
+                                ? m_backlashPosition != 0
+                                : m_backlashPosition != m_backlashSize);
+                    if (takingUp && m_backlashTakeUpDelay > stepDelay) {
+                        stepDelay = m_backlashTakeUpDelay;
+                    }
                     if (oldDirection != m_direction) {
                         // Ensure direction pin is set correctly
                         m_gpio.setReversePin(
@@ -183,7 +194,7 @@ StepperMotor::StepperMotor(
                     // Do step pulse
                     m_gpio.setStepPin(m_motorNumber, PinState::high);
                     // Spin for first delay amount:
-                    while (m_gpio.getTick() - startTick < static_cast<uint32_t>(m_delay))
+                    while (m_gpio.getTick() - startTick < static_cast<uint32_t>(stepDelay))
                         ;
                     m_gpio.setStepPin(m_motorNumber, PinState::low);
                     if (m_targetStep < m_currentReportedStep) {
@@ -209,14 +220,31 @@ StepperMotor::StepperMotor(
                 }
                 // Ramping must happen inside the lock: it reads m_rpm and
                 // writes m_delay, both of which setRpm() also writes.
-                if (m_busy && m_useRamping && m_rampedRpm < m_rpm) {
+                if (takingUp) {
+                    // The ramp is held during a slow take-up. Once the
+                    // backlash is taken up, the load is on, so the ramp starts
+                    // again from its starting speed, as for a move from rest
+                    // (the move's speed, if it's below that)
+                    const bool takenUp = m_targetStep < m_currentReportedStep
+                        ? m_backlashPosition == 0
+                        : m_backlashPosition == m_backlashSize;
+                    if (takenUp && m_busy && m_useRamping) {
+                        const double startRpm = m_maxRpm * RAMP_START_FRACTION;
+                        if (m_rpm > startRpm) {
+                            m_rampedRpm = startRpm;
+                            m_delay = calculateDelayValue(startRpm);
+                        }
+                    }
+                } else if (m_busy && m_useRamping && m_rampedRpm < m_rpm) {
                     m_rampedRpm += m_rampingSpeed;
                     if (m_rampedRpm > m_rpm) {
                         m_rampedRpm = m_rpm.load();
                     }
                     m_delay = calculateDelayValue(m_rampedRpm);
                 }
-                delay = m_delay; // remember delay value while in mtx scope
+                // (Remember the delay while in the lock's scope. A take-up
+                // step's period is all at the take-up's speed)
+                delay = takingUp ? stepDelay : m_delay.load();
             } // scope for lock
 
             // We always perform the second delay regardless of
@@ -451,6 +479,14 @@ void StepperMotor::setBacklashCompensation(unsigned int compensation, unsigned i
     } else {
         m_backlashPosition = currentPosition;
     }
+}
+
+void StepperMotor::setBacklashTakeUpSpeed(double speed)
+{
+    const double rpm
+        = std::min(std::abs(speed / m_conversionFactor / m_stepsPerRevolution), m_maxRpm);
+    std::lock_guard lock(m_mtx);
+    m_backlashTakeUpDelay = rpm > 0.00001 ? calculateDelayValue(rpm) : 0;
 }
 
 long StepperMotor::getCurrentStepWithoutBacklashCompensation() const

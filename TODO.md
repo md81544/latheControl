@@ -7,6 +7,9 @@
       could go to the end?
 
 ### Investigate Sound Output
+- [ ] Still getting the first sound failing - maybe the monitor's audio is
+      also in idle - maybe play the alert sound on program start to kick it
+      into life?
 - [x] Could be useful for warnings and prompts.
     - **Done (2026-11-16), not yet tried on the machine:** `SoundAlert` and
       `SoundAlarm` in the config (sounds/alert.wav and sounds/alarm.wav, on
@@ -220,6 +223,27 @@
       ends up in. Also worth knowing: whether the mismatch check warned
       before then, since a stall that size should have shown at the next
       pause. To repeat on the Pi 4 before changing anything
+    - **Found (18 Nov 2026, on the Pi 4): the stalls come from the backlash
+      take-up on a reversal.** They went on after the move to the Pi 4,
+      with a "clunk" as the return started. A plain reversal by hand (jog
+      X slowly, stop, wait a few seconds, then Alt+arrow back) stalled
+      about one time in six too, so it isn't the multi-pass, nor the
+      table's momentum (it had stopped). The cause: the 820 take-up steps
+      went at the move's speed, starting at the ramp's 40% (400 mm/min on
+      X) and ramping up as they went, with nothing on the motor, so the
+      nut then picked the table up all at once at about 440 mm/min. Rapids
+      that don't reverse start at the same speed but with the nut engaged,
+      and don't stall. **Fixed, not yet tried on the mill:**
+      `Axis1BacklashTakeUpSpeed` (and Axis2), in mm/min, off unless set. A
+      move takes up the backlash at that speed (or its own, if slower),
+      with the ramp held, then ramps up from its starting speed as from
+      rest. It's in the motor thread, so it covers every reversal (jogs,
+      rapids, go-tos, multi-pass returns), but not following (threading)
+      or synchronised moves (tapers). Set to 100 mm/min for the mill's X:
+      the 0.26 mm take-up then adds about 0.15 s to each reversal. **To
+      try:** the reversal by hand, then the 5 mm multi-pass, and whether
+      the clunk has gone. If it still stalls, try a lower take-up speed.
+      Re-basing during a multi-pass is still wanted, as a backstop
     - **Slot:** cut along X, pause (re-basing X), the user feeds Z down,
       cut back at cutting speed, pause again (re-basing X), and repeat until
       the full depth. Each end of the slot finishes on X's scale (backing
