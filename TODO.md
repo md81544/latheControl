@@ -6,6 +6,27 @@
     - If a feature is defined, and zEnd is present, maybe pressing Z,G,E
       could go to the end?
 
+### Re-base an axis from its scale by hand
+- [ ] A command to line an axis's position up with its scale at any time
+      (the user's idea, 18 Nov 2026), rather than only when the mismatch
+      check stops everything and its dialog offers it, or when a move
+      re-bases at rest. The user suggested `x` then `s`, but on the mill
+      that's "Set X position..." (`x` is axis 1's leader there). The letters
+      free after an axis leader include `b` (re-base) and `y` (sync).
+      Wait for the scale to settle first (or refuse while it's still
+      changing, or while the axis is moving), log the difference it took
+      up as the other re-bases do, and add it to the command table, so it's
+      in the menu (Position, or System beside "Finishing on the scale").
+      Only for axes with a scale
+
+### Zero all the axes, including the manual ones
+- [ ] `\` then `z` ("Zero X and A" on the mill) only zeroes the two
+      motorised axes. The user would like it to zero every axis, including
+      the manual ones (the mill's Y and Z, axes 3 and 4), as each can be
+      zeroed on its own with its leader then `z` (18 Nov 2026). Its name in
+      the command table would change to suit (e.g. "Zero all axes" when
+      there are manual axes)
+
 ### Investigate Sound Output
 - [ ] Still getting the first sound failing - maybe the monitor's audio is
       also in idle - maybe play the alert sound on program start to kick it
@@ -279,10 +300,9 @@
       400 mm/min without being carried on, but not from 800. (NB rapids
       and returns go at `Axis1MaxMotorRpm` taken as mm/min: see "Rapids
       use the maximum rpm as mm/min", under Motion and timing.)
-      **Done, not yet tried on the mill: deceleration ramping** (see under
-      Motion and timing), on for the mill's X, so X can go back to 800 rpm.
-      **To try:** the same 40 passes at 800 rpm; the scale should still
-      agree with the motor at the end, and the stop's clunk should be gone
+      **Fixed by deceleration ramping** (see under Motion and timing), on
+      for the mill's X. **Tried on the mill (18 Nov 2026):** a large set of
+      passes at 800 rpm again, and it worked perfectly: no drift
     - **Slot:** cut along X, pause (re-basing X), the user feeds Z down,
       cut back at cutting speed, pause again (re-basing X), and repeat until
       the full depth. Each end of the slot finishes on X's scale (backing
@@ -793,11 +813,13 @@
       that's still to try, with a tool whose nose radius is typed in
 
 ## Motion and timing (mostly in steppermotor.cpp)
-- [ ] Deceleration ramping. At the moment there's only acceleration, so
+- [x] Deceleration ramping. At the moment there's only acceleration, so
       stops (especially from rapids) are abrupt. Needs tuning on the machine,
       and changes where moves end. Also, the ramp rate is per loop, so depends
       on the step rate
-    - **Done (18 Nov 2026), not yet tried on the machine:**
+    - **Done (18 Nov 2026), and tried on the mill the same day:** multi-pass
+      at 800 rpm with no drift, and released rapids slowing down felt
+      natural and easy to manage when getting close to a position.
       `Axis1DecelerationRamping` (and Axis2), off by default, on for the
       mill's X; `Axis1DecelerationRampingSpeed` sets its rate (0-100, as
       `Axis1RampingSpeed`, which it defaults to). Prompted by the mill (see
