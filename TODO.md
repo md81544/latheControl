@@ -2388,7 +2388,8 @@ change.
         - **Fitted (18 Nov 2026):** the Pi 4, with a fresh Bookworm on a
           new SD card, X11 rather than Wayland, and lc at
           `~/src/latheControl`. A clean `make release` was noticeably
-          faster. X, A and the scales work as before. Still to do: watch for
+          faster. X, A and the scales work as before. It has active cooling (a
+          heatsink with a fan); the lathe's Pi is still to have its fitted. Still to do: watch for
           lock-ups over longer runs, repeat the multi-pass return stall
           test (under Multi-pass), and wire the enable pins and limit
           switches (GPIO11, GPIO16, GPIO2; see Motion and timing)
