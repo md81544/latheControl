@@ -3167,6 +3167,20 @@ public:
         log.push_back(fmt::format("index {:.6g}", position));
         m_indexTarget = position;
     }
+    bool cutReady() override
+    {
+        if (notReadyAsks > 0) {
+            --notReadyAsks;
+            return false;
+        }
+        if (rebaseCutTo) {
+            // (As the model re-bases from a scale)
+            log.push_back(fmt::format("re-based {:.6g}", *rebaseCutTo));
+            m_cut = *rebaseCutTo;
+            rebaseCutTo.reset();
+        }
+        return true;
+    }
 
     // Finishes any moves in progress (or, if given, stops the cut short there)
     void finishMoves(std::optional<double> cutStopsAt = std::nullopt)
@@ -3217,6 +3231,11 @@ public:
     double m_index { 0.0 };
     // If set, the index axis stops here, rather than where it was sent
     std::optional<double> indexStopsAt;
+    // How many more times cutReady() says no (e.g. a scale still settling)
+    int notReadyAsks { 0 };
+    // If set, once cutReady() says yes, the cut axis's position is set to
+    // this (e.g. re-based from a scale)
+    std::optional<double> rebaseCutTo;
 
 private:
     std::optional<double> m_cutTarget;
@@ -3512,6 +3531,52 @@ TEST_CASE("MultiPass: the cut axis re-based while paused moves to the pass's sta
     // which still ends at the cut's end, and the return to the start
     REQUIRE(machine.log == Log { "feed 4.8", "cut 0 at 1000", "cut -10 at 40", "cut 0 at 1000" });
     REQUIRE(mp.state() == mgo::MultiPass::State::Paused);
+}
+
+TEST_CASE("MultiPass: each cut waits until the cut axis is ready, paused or not")
+{
+    // e.g. the model waiting for the cut axis's scale to settle after the
+    // return, then re-basing it
+    FakeMultiPassMachine machine;
+    mgo::MultiPass mp(machine);
+    machine.notReadyAsks = 2;
+    REQUIRE(mp.start(basicPlan()).empty());
+    machine.finishMoves();
+    mp.update();
+    REQUIRE(mp.state() == mgo::MultiPass::State::Settling);
+    REQUIRE(machine.log == Log { "feed 4.9" });
+    mp.update();
+    REQUIRE(mp.state() == mgo::MultiPass::State::Settling);
+    mp.update();
+    REQUIRE(mp.state() == mgo::MultiPass::State::Cutting);
+    // The next pass finds the cut axis 0.12 off the start once it's ready, so
+    // moves it there first
+    machine.rebaseCutTo = 0.12;
+    machine.run(mp);
+    REQUIRE(mp.state() == mgo::MultiPass::State::Finished);
+    REQUIRE(
+        machine.log
+        == Log { "feed 4.9",
+                 "cut -10 at 40",
+                 "cut 0 at 1000",
+                 "feed 4.8",
+                 "re-based 0.12",
+                 "cut 0 at 1000",
+                 "cut -10 at 40",
+                 "cut 0 at 1000",
+                 "feed 4.75",
+                 "cut -10 at 40",
+                 "cut 0 at 1000" });
+    // Stopping while it waits
+    machine.log.clear();
+    machine.notReadyAsks = 1;
+    machine.m_feed = 5.0;
+    REQUIRE(mp.start(basicPlan()).empty());
+    machine.finishMoves();
+    mp.update();
+    REQUIRE(mp.state() == mgo::MultiPass::State::Settling);
+    mp.stop("stopped");
+    REQUIRE(!mp.inProgress());
 }
 
 TEST_CASE("MultiPass: asking for a pause before the next pass")

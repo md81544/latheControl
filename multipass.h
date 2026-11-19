@@ -88,6 +88,18 @@ public:
     {
         return 0.0;
     }
+
+    // Whether the cut axis is ready for a cut to start: asked before each
+    // cut (before moving the cut axis to the pass's start, if it isn't
+    // there), and again on each update() until it is. e.g. the machine may
+    // wait for the axis's scale to settle after the return, and correct its
+    // position from it, so a drift or lost steps don't build up from pass to
+    // pass. The cut axis then moves to the pass's start from wherever that
+    // leaves it
+    virtual bool cutReady()
+    {
+        return true;
+    }
 };
 
 // What each cut is
@@ -396,6 +408,7 @@ public:
         Paused, // Waiting for continueAfterPause()
         Unretracting,
         Feeding,
+        Settling, // Waiting for the cut axis to be ready (see IMultiPassMachine::cutReady())
         Positioning, // Moving the cut axis to a pass's start (see cutShiftPerFeed)
         Indexing, // Moving the index axis to a start (see indexPerStart)
         Finishing, // Unretracting (or indexing on) after the last pass
@@ -506,9 +519,11 @@ private:
     double feedBase() const;
     // Where the feed axis goes for a pass (from 1), from where it is
     double nextFeedTarget(double from, int pass) const;
-    // Indexes (if the plan does), then moves the cut axis to the pass's
-    // start if need be, then cuts
+    // Indexes (if the plan does), then waits for the cut axis to be ready
+    // (see IMultiPassMachine::cutReady()), then moves it to the pass's start
+    // if need be, then cuts
     void startPass();
+    void settleAndCut();
     void positionAndCut();
     void startCut();
     void startCutBack();

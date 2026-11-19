@@ -390,7 +390,6 @@ void Model::checkStatus()
     }
     advanceBacklashMeasurement();
     checkAxis1ScaleAtRest();
-    continueMultiPassOnceSettled();
     advanceAxis1Finish();
 
     if (const auto diameter = getDiameterMm()) {
@@ -806,10 +805,6 @@ void Model::stopAllMotors()
         m_axis2Motor->setSpeed(m_previousAxis2Speed);
     }
     m_multiPass.stop("stopped");
-    if (std::exchange(m_multiPassContinueWhenSettled, false)) {
-        // (Its "waiting for the scale" warning no longer applies)
-        m_warning.clear();
-    }
     if (m_mode == Mode::Threading) {
         // (In case a threading multi-pass was stopped during a return, which
         // turns it on)
@@ -3247,28 +3242,24 @@ void Model::rebaseAxis1IfApart(const char* why)
     rebaseAxis1FromScale(why);
 }
 
-bool Model::waitingForScaleToContinue() const
+bool Model::cutReady()
 {
-    return m_multiPassContinueWhenSettled;
-}
-
-void Model::continueMultiPassOnceSettled()
-{
-    if (!m_multiPassContinueWhenSettled) {
-        return;
+    // (Without a reading, or before it's lined up, there's nothing to wait
+    // for)
+    if (!m_axis1Scale || !m_config.readBool("Axis1ScaleRebaseBetweenPasses", false)
+        || (m_mode != Mode::MultiPass && m_mode != Mode::GearCutting) || !m_axis1Scale->isAligned()
+        || !m_axis1Scale->hasReading()) {
+        return true;
     }
-    // (e.g. stopped, or the scale and motor were too far apart)
-    if (m_multiPass.state() != MultiPass::State::Paused) {
-        m_multiPassContinueWhenSettled = false;
-        return;
+    // (Settling ends after Axis1ScaleMaxSettleMs at most, even if the reading
+    // keeps changing, so this doesn't wait for ever. checkAxis1ScaleAtRest(),
+    // called before the multi-pass is updated, has then compared it with the
+    // motor, and stopped everything if they're too far apart)
+    if (!m_axis1Scale->isSettled()) {
+        return false;
     }
-    if (m_axis1Scale && m_axis1Scale->hasReading() && !m_axis1Scale->isSettled()) {
-        return;
-    }
-    m_multiPassContinueWhenSettled = false;
-    m_warning.clear();
-    // (As if Enter were pressed now: it re-bases, then continues)
-    multiPassGo();
+    rebaseAxis1IfApart("re-based between passes");
+    return true;
 }
 
 void Model::rebaseAxis1FromScale(const char* why)
@@ -4566,25 +4557,6 @@ void Model::multiPassGo()
         return;
     }
     if (m_multiPass.state() == MultiPass::State::Paused) {
-        if (multiPassPausedForRebase()
-            && m_config.readBool("Axis1ScaleRebaseBetweenPasses", false)) {
-            // The axis has only just stopped (e.g. the pass's return), so its
-            // scale is still settling: wait for it (see
-            // continueMultiPassOnceSettled()), so the next pass starts from
-            // where the table really is
-            if (m_axis1Scale && m_axis1Scale->isAligned() && m_axis1Scale->hasReading()
-                && !m_axis1Scale->isSettled()) {
-                if (!m_multiPassContinueWhenSettled) {
-                    MGOLOG("Multi-pass: continuing once the scale has settled");
-                }
-                m_multiPassContinueWhenSettled = true;
-                m_warning = fmt::format(
-                    "Waiting for {}'s scale to settle", m_config.read("Axis1Label", "Z"));
-                return;
-            }
-            // (Usually done already, when the reading settled)
-            rebaseAxis1IfApart("re-based between passes");
-        }
         MGOLOG("Multi-pass: continuing");
         m_multiPass.continueAfterPause();
         return;

@@ -499,16 +499,10 @@ public:
     // modes (as for the re-bases at rest). The exception: a multi-pass (or
     // gear cutting) which is paused, as the next pass moves to its start
     // from wherever the re-base leaves the axis (see also
-    // Axis1ScaleRebaseBetweenPasses, and waitingForScaleToContinue())
+    // Axis1ScaleRebaseBetweenPasses, and cutReady())
     bool canRebaseAxis1FromScale() const;
     // Re-bases it, or warns why it can't
     void rebaseAxis1FromScaleByHand();
-    // With Axis1ScaleRebaseBetweenPasses, while a multi-pass (or gear
-    // cutting) is paused, axis 1 is re-based from its scale each time the
-    // reading settles, as at rest. Enter, to continue, waits until the
-    // reading has settled (re-basing first), if it's still settling after
-    // the pass's return: this is true meanwhile. Space cancels it
-    bool waitingForScaleToContinue() const;
 
     // Finishing axis 1's positioning moves on its scale (stage 4): after a go
     // to (a memory, a typed or relative position, the last position), once
@@ -771,8 +765,6 @@ private:
     int m_axis1ScaleMismatchAsks { 0 };
     // The scale's position was chosen before its reading was steady
     bool m_axis1ScaleAskAgain { false };
-    // (See waitingForScaleToContinue())
-    bool m_multiPassContinueWhenSettled { false };
     // See axis1FinishesOnScale()
     bool m_axis1FinishOnScale { false };
     struct Axis1Finish {
@@ -1024,9 +1016,7 @@ private:
     // a count from the motor's position, and nothing (e.g. a nudge) is
     // moving it
     void rebaseAxis1IfApart(const char* why);
-    // Called from checkStatus(): continues a paused multi-pass once axis 1's
-    // scale has settled (see waitingForScaleToContinue())
-    void continueMultiPassOnceSettled();
+
     // After a positioning move to step has started: finish it on the scale,
     // if that's on and can be done now
     void startAxis1Finish(long step);
@@ -1057,6 +1047,12 @@ private:
     // only moves on once checkStatus() has dealt with a move's end, e.g.
     // clearing the retracted flag after an unretract)
     double cutPosition() const override;
+    // With Axis1ScaleRebaseBetweenPasses, in a plain multi-pass or gear
+    // cutting: before each cut, waits for axis 1's scale to settle (after the
+    // return, about 2 s on the mill), then re-bases it, as at rest. So a
+    // drift or lost steps are corrected at every pass, paused or not, and a
+    // mismatch beyond Axis1ScaleWarnMm stops everything at the next pass
+    bool cutReady() override;
     bool cutMoving() const override;
     void cutMoveTo(double position, double feedFollows) override;
     double cutSpeed() const override;

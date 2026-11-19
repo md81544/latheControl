@@ -532,7 +532,12 @@ void MultiPass::update()
                 abandon("The index stopped short");
                 return;
             }
-            positionAndCut();
+            settleAndCut();
+            return;
+        case State::Settling:
+            if (m_machine.cutReady()) {
+                positionAndCut();
+            }
             return;
         case State::Positioning:
             if (m_machine.cutMoving()) {
@@ -791,6 +796,15 @@ void MultiPass::startPass()
         // (Even if it's there: see IMultiPassMachine::indexMoveTo())
         m_state = State::Indexing;
         m_machine.indexMoveTo(indexTarget());
+        return;
+    }
+    settleAndCut();
+}
+
+void MultiPass::settleAndCut()
+{
+    if (!m_machine.cutReady()) {
+        m_state = State::Settling;
         return;
     }
     positionAndCut();

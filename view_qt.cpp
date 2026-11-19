@@ -1817,6 +1817,10 @@ void ViewQt::Impl::updateMultiPassData(const Model& model)
                        : radius ? ": " + x + " to the pass's start"
                                 : ": stepping over");
             break;
+        // (See IMultiPassMachine::cutReady())
+        case MultiPass::State::Settling:
+            status = pass + ": waiting for " + z + "'s scale to settle";
+            break;
         case MultiPass::State::Positioning:
             status = pass + ": " + z + " to the pass's start";
             break;
@@ -1947,6 +1951,9 @@ void ViewQt::Impl::updateGearData(const Model& model)
             break;
         case MultiPass::State::Indexing:
             status = tooth + ": turning " + a;
+            break;
+        case MultiPass::State::Settling:
+            status = tooth + ": waiting for " + x + "'s scale to settle";
             break;
         case MultiPass::State::Cutting:
             status = tooth + ": cutting";

@@ -2340,50 +2340,53 @@ TEST_CASE("UI: re-basing from the scale by hand (Z then B)")
 namespace {
 
 // Starts a two-pass multi-pass from where the axes are (Z by -1, X in by
-// 0.2, 0.1 a pass), pausing between passes
-void startPausingMultiPass(ScaleTestModel& t)
+// 0.2, 0.1 a pass)
+void startMultiPass(ScaleTestModel& t, bool pause)
 {
     t.model.setAxis1MotorSpeed(500.0);
     t.model.setAxis2MotorSpeed(100.0);
     t.model.changeMode(mgo::Mode::MultiPass);
     REQUIRE(t.model
                 .setMultiPassSetup(
-                    { .cutDistance = -1.0, .feedInfeed = 0.2, .feedPerPass = 0.1, .pause = true })
+                    { .cutDistance = -1.0, .feedInfeed = 0.2, .feedPerPass = 0.1, .pause = pause })
                 .empty());
     t.model.multiPassGo();
     REQUIRE(t.model.multiPass().inProgress());
 }
 
-bool multiPassPaused(const mgo::Model& model)
+bool multiPassIn(const mgo::Model& model, mgo::MultiPass::State state)
 {
-    return model.multiPass().state() == mgo::MultiPass::State::Paused;
+    return model.multiPass().state() == state;
 }
 
 } // namespace
 
-TEST_CASE("UI: re-basing between a multi-pass's passes", "[timing]")
+TEST_CASE("UI: re-basing before each pass of a multi-pass", "[timing]")
 {
     ScaleTestModel t(
         { { "Axis1ScaleRebaseBetweenPasses", "true" }, { "Axis1ScaleWarnMm", "0.2" } });
     REQUIRE(t.runUntil([&] { return t.model.axis1ScaleIsSteady(); }));
-    startPausingMultiPass(t);
+    const bool pause = GENERATE(false, true);
+    INFO((pause ? "Pausing" : "Not pausing"));
+    startMultiPass(t, pause);
     // During the first pass, the table gets 0.05mm ahead of the motor (e.g.
     // carried on at a stop)
     t.model.fakeAxis1Scale()->setErrorMm(0.05);
-    REQUIRE(t.runUntil([&] { return multiPassPaused(t.model); }));
-    // Enter at once, back at the start: the scale is still settling, so it
-    // waits
-    t.model.multiPassGo();
-    REQUIRE(t.model.waitingForScaleToContinue());
-    REQUIRE(multiPassPaused(t.model));
-    REQUIRE(t.model.getWarning() == "Waiting for Z's scale to settle");
-    // Once settled, it re-bases and carries on, back to the real start, so the
-    // table ends where it should, and agrees with the motor
-    REQUIRE(t.runUntil([&] { return !t.model.multiPass().inProgress(); }));
+    // Before the next pass, it waits for the scale to settle, re-bases, and
+    // goes back to the real start, so the table ends where it should, and
+    // agrees with the motor
+    bool settling = false;
+    REQUIRE(t.runUntil([&] {
+        settling = settling || multiPassIn(t.model, mgo::MultiPass::State::Settling);
+        if (multiPassIn(t.model, mgo::MultiPass::State::Paused)) {
+            // (Enter at once: the scale is probably still settling)
+            t.model.multiPassGo();
+        }
+        return !t.model.multiPass().inProgress();
+    }));
     INFO("Stopped: " << t.model.multiPass().message() << " / " << t.model.getWarning());
     REQUIRE(t.model.multiPass().state() == mgo::MultiPass::State::Finished);
-    REQUIRE(!t.model.waitingForScaleToContinue());
-    REQUIRE(t.model.getWarning().empty());
+    REQUIRE(settling);
     REQUIRE(t.runUntil([&] { return t.model.axis1ScaleIsSteady(); }));
     REQUIRE(*t.model.getAxis1ScalePositionMm() == Approx(0.0).margin(0.011));
     REQUIRE(std::abs(*t.model.getAxis1ScaleDifferenceMm()) < 0.011);
@@ -2393,33 +2396,37 @@ TEST_CASE("UI: Space stops a multi-pass waiting for the scale to settle", "[timi
 {
     ScaleTestModel t({ { "Axis1ScaleRebaseBetweenPasses", "true" } });
     REQUIRE(t.runUntil([&] { return t.model.axis1ScaleIsSteady(); }));
-    startPausingMultiPass(t);
-    REQUIRE(t.runUntil([&] { return multiPassPaused(t.model); }));
-    t.model.multiPassGo();
-    REQUIRE(t.model.waitingForScaleToContinue());
+    startMultiPass(t, false);
+    REQUIRE(t.runUntil([&] { return multiPassIn(t.model, mgo::MultiPass::State::Settling); }));
     t.model.stopAllMotors();
-    REQUIRE(!t.model.waitingForScaleToContinue());
     REQUIRE(!t.model.multiPass().inProgress());
-    REQUIRE(t.model.getWarning().empty());
 }
 
 TEST_CASE("UI: no re-basing between passes unless the config asks for it", "[timing]")
 {
     ScaleTestModel t({ { "Axis1ScaleRebase", "true" } });
     REQUIRE(t.runUntil([&] { return t.model.axis1ScaleIsSteady(); }));
-    startPausingMultiPass(t);
+    startMultiPass(t, true);
     t.model.fakeAxis1Scale()->setErrorMm(0.05);
-    REQUIRE(t.runUntil([&] { return multiPassPaused(t.model) && t.model.axis1ScaleIsSteady(); }));
+    REQUIRE(t.runUntil([&] {
+        return multiPassIn(t.model, mgo::MultiPass::State::Paused) && t.model.axis1ScaleIsSteady();
+    }));
     REQUIRE(t.model.getAxis1MotorPosition() == Approx(0.0).margin(0.0001));
-    // But it can be done by hand (Z then B), and Enter doesn't wait
+    // But it can be done by hand (Z then B)
     REQUIRE(t.model.canRebaseAxis1FromScale());
     REQUIRE(mgo::keyAllowedInCurrentMode(mgo::key::a1_b, t.model));
     t.model.rebaseAxis1FromScaleByHand();
     REQUIRE(t.model.getAxis1MotorPosition() == Approx(0.05).margin(0.011));
-    t.model.multiPassGo();
-    REQUIRE(!t.model.waitingForScaleToContinue());
-    REQUIRE(!multiPassPaused(t.model));
-    t.model.stopAllMotors();
+    // And the next pass doesn't wait for the scale
+    bool settling = false;
+    REQUIRE(t.runUntil([&] {
+        settling = settling || multiPassIn(t.model, mgo::MultiPass::State::Settling);
+        if (multiPassIn(t.model, mgo::MultiPass::State::Paused)) {
+            t.model.multiPassGo();
+        }
+        return !t.model.multiPass().inProgress();
+    }));
+    REQUIRE(!settling);
 }
 
 TEST_CASE("UI: the scale and motor too far apart stops everything and asks")

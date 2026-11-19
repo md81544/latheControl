@@ -333,22 +333,26 @@
     - **Re-basing between passes: done (19 Nov 2026), not yet tried on the
       mill.** `Axis1ScaleRebaseBetweenPasses` (off unless set; on for the
       mill), separate from `Axis1ScaleRebase`, as the lathe's Z scale is new.
-      While a plain multi-pass or gear cutting is paused, axis 1 is re-based
-      each time its scale settles (logged as "re-based between passes"), and
-      Enter straight after a return waits for the settle ("Waiting for X's
-      scale to settle"), re-bases, then continues; Space cancels. The engine
-      needed no change (see "Re-base an axis from its scale by hand").
-      Not for threading, knurling or a radius, which haven't been tried with
-      it. **Still to do:** a check for runs with no pauses, which never rest
-      long enough for the scale to settle (the 4.5 mm above went unseen):
-      e.g. at each end of a pass, a short dwell for the scale, or a
-      comparison while moving that allows for the scale's lag. Also
-      noticed: the re-base at rest is off in multi-pass mode altogether
-      (not just during a run), so after a multi-pass finishes, X isn't
-      re-based until the mode is left. That may be fine, but worth
-      checking on the mill. **To try on the mill:** a paused multi-pass
-      (slot) with Enter pressed straight after each return, watching
-      lc.log for the re-bases and the wait
+      In a plain multi-pass or gear cutting, before each cut, the engine asks
+      the machine whether the cut axis is ready (`cutReady()`, a new state
+      `Settling`, shown as "waiting for X's scale to settle"): the model says
+      no until axis 1's scale has settled after the return, then re-bases it
+      (logged as "re-based between passes"), and the engine moves the axis
+      to the pass's start from there. Paused or not, so runs with no pauses
+      (where the 4.5 mm above went unseen) are covered too, and the mismatch
+      check now runs at every pass. The cost is a settle per pass (about
+      2 s on the mill, as `Axis1ScaleSettleMs` is 1500). While paused, it
+      also re-bases each time the reading settles, so the position shown is
+      right. Not for threading, knurling or a radius, which haven't been
+      tried with it. First done as Enter waiting at a pause, the same day,
+      then moved into the engine to cover both. Also noticed: the re-base
+      at rest is off in multi-pass mode altogether (not just during a run),
+      so after a multi-pass finishes, X isn't re-based until the mode is
+      left. That may be fine, but worth checking on the mill. **To try on
+      the mill:** a multi-pass with pauses (pressing Enter straight after
+      each return) and one without, watching lc.log for the re-bases, and
+      whether the wait per pass is bearable. If it isn't, a shorter settle
+      for this, or only every few passes
     - **Slot:** cut along X, pause (re-basing X), the user feeds Z down,
       cut back at cutting speed, pause again (re-basing X), and repeat until
       the full depth. Each end of the slot finishes on X's scale (backing
