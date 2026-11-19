@@ -994,8 +994,9 @@
       less the 1.5 s window), which is the last count or two creeping in,
       not the sender smoothing the whole move. `Axis1ScaleLagMs` is now 200
       on the mill (within 0.3 mm of all four), and the limit back at 3.
-      Not yet tried. If it holds, both limits could come down (to 2, say),
-      which would catch a stall sooner still
+      Tried on the mill later that day: rapids no longer set it off. If it
+      keeps holding, both limits could come down (to 2, say), which would
+      catch a stall sooner still
         - The dialog only flashed up: it was "press any key", and the
           rapid's arrow, still held, closed it at once (choosing "keep X's
           position", unseen). Fixed: "press any key" now ignores repeats,
