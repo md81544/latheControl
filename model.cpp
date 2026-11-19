@@ -3144,6 +3144,24 @@ void Model::checkAxis1ScaleAtRest()
         ++m_axis1ScaleMismatchAsks;
         return;
     }
+    // A stall seen while moving stops everything at once, rather than once
+    // the reading has settled, as the motor would carry on regardless (seen on
+    // the mill, 19 Nov 2026: a fast return counted 29 mm while the table
+    // stayed put). Once settled, the difference is checked as usual, which
+    // asks which to believe if it's more than Axis1ScaleWarnMm
+    if (const auto stall = m_axis1Scale->stallMm(); !stall) {
+        m_axis1StallStopped = false;
+    } else if (!m_axis1StallStopped) {
+        m_axis1StallStopped = true;
+        const std::string label = m_config.read("Axis1Label", "Z");
+        MGOLOG(fmt::format("{} stalled: stopping everything", label));
+        stopAllMotors();
+        m_warning = fmt::format(
+            "{} stalled ({:.2f} {} behind): stopped",
+            label,
+            toDisplayUnits(1, *stall),
+            axisUnitName(1));
+    }
     // Once each time the scale settles
     const int settles = m_axis1Scale->settleCount();
     if (settles == m_axis1ScaleCheckedSettles) {
@@ -3552,6 +3570,9 @@ void Model::configureAxis1Scale()
         .maxSettleTime
         = std::chrono::milliseconds(m_config.readLong("Axis1ScaleMaxSettleMs", 3'000)),
         .faultMm = m_config.readDouble("Axis1ScaleFaultMm", 0.0),
+        .lag = std::chrono::milliseconds(m_config.readLong("Axis1ScaleLagMs", 0)),
+        .stallMm = m_config.readDouble("Axis1ScaleStallMm", 0.0),
+        .movingFaultMm = m_config.readDouble("Axis1ScaleMovingFaultMm", 0.0),
     };
     // (Simulated, following the motor's actual steps, as a table with no
     // backlash would: so neither the backlash compensation nor re-basing the

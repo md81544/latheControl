@@ -953,6 +953,37 @@
       800 mm/min: see the next item); a separate, slower speed for long
       rapids. Related: "Motor stalls: stop when the driver goes into its
       error mode", as the closed-loop driver would know at once
+    - **From lc.log (19 Nov 2026):** six mismatch stops between 15:20 and
+      15:34. Five were stalls, the table left behind by 5.5 to 28.8 mm, and
+      each one started or ran beyond about X = +50 mm (the table's
+      right-hand end), so the gibs theory fits. Two were reversals (so the
+      slow backlash take-up didn't prevent them) and one wasn't, stalling
+      while running *into* the tight region at 800 mm/min. The clearest:
+      a fast return (`x f`) from 65.6 counted 29 mm in 2.45 s while the
+      scale moved 0.2 mm, and only Space stopped it. Each was only caught
+      once X had stopped and the scale settled. The sixth (15:20:21) had
+      the table 5.05 mm *ahead* of the motor after a rapid, which a stall
+      can't do: probably a misread (the check for misreads only watched at
+      rest), and the -5.51 a minute later its undoing. The user remembers
+      seeming to lose position then, and started the pass again. The
+      0.05-0.2 mm corrections after reversals are X's real backlash
+      (0.31-0.45 mm) against the 0.256 mm setting
+    - **Done (19 Nov 2026), not yet tried on the mill: the scale is watched
+      while moving.** The reading is compared with where the motor was,
+      averaged over `Axis1ScaleLagMs` (the sender's smoothing; 1000 on the
+      mill, from its readings settling 0.7-1.4 s after a stop). Further
+      behind than `Axis1ScaleStallMm` is a stall: everything stops at once,
+      with a warning, and the settle then asks as usual. Changing faster
+      than the table can move, or further ahead than
+      `Axis1ScaleMovingFaultMm`, is a misread, dealt with as at rest. Through
+      a one-second average, a stall shows as 5t² mm behind after t seconds
+      at 600 mm/min (6.7t² at 800, so 3 mm in about 0.7 s), against 2.45 s plus a
+      settle before. 3 mm for both on the mill is a first guess: the settle
+      lines in lc.log now give how far behind and ahead each move's reading
+      got, so check those on normal rapids, and tighten them if there's
+      room. If the lag model is wrong (the sender isn't a plain one-second
+      average), fast moves could stop falsely; the log will show. Still to
+      do: the gibs, and a lower rapid speed for X if they don't cure it
 - [ ] **Rapids use the maximum rpm as mm/min.** `axis1Rapid()` and
       `axis2Rapid()` set the speed to `getMaxRpm()`, and multi-pass returns
       use `cutMaxSpeed()`, which is the same, but `setSpeed()` takes
@@ -1355,6 +1386,15 @@
     - **Testing:** the mock GPIO already simulates the scale moving with the
       motor, so it could simulate lost steps too (motor steps that the scale
       doesn't see), to test detection and correction without the machine
+    - **Creep at rest (mill, 19 Nov 2026):** the reading changes by 2 counts
+      every few minutes at rest, and each change is re-based: from 15:36 to
+      15:45, the position went 0.06 mm one way with nothing moving. Real
+      (thermal?) or the scale creeping? If the latter, re-basing at rest
+      chases it. Worth watching with a dial gauge on the table
+    - **Finishing moves** sometimes end with "the scale's reading didn't
+      settle" after their second correction (19 Nov 2026, on the mill), as
+      the reading flickers. Harmless (it's within a count or two), but it
+      wants looking at
 - [ ] Probing, which would also be useful as a way to touch off
     - X probing: would need an insulated known-diameter bar held in the spindle
     - Z probing: would need an insulated known-length bar, which could be

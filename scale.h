@@ -5,6 +5,7 @@
 
 #include <chrono>
 #include <cstdint>
+#include <deque>
 #include <memory>
 #include <optional>
 #include <string>
@@ -45,6 +46,13 @@ public:
 // a jump at rest bigger than faultMm (with the motor holding the table) is
 // taken as a misread.
 //
+// While the axis moves, the reading is watched too (if the settings ask for
+// it). The table falling well behind the motor means it has stalled, and the
+// reading changing faster than the table could move, or getting well ahead of
+// the motor, means it's misreading. A reading may lag the table (the mill's
+// sender averages about a second of readings), so it's compared with where
+// the motor was, averaged the same way (see Settings::lag).
+//
 // update() must be called regularly (from the model's checkStatus()). All of
 // this is used only from the UI thread, so needs no locking
 class AxisScale {
@@ -69,6 +77,21 @@ public:
         // A change of the reading at rest by more than this (in mm; 0 is off)
         // can't be the table moving, so the scale is misreading
         double faultMm { 0.0 };
+        // How far the reading lags the table: it's taken to be the average
+        // of where the table was over this long (e.g. a sender which averages
+        // its recent readings; 0 for one which doesn't)
+        std::chrono::milliseconds lag { 0 };
+        // While moving: the reading further behind the motor's position
+        // (averaged over the lag) than this (in mm; 0 is off) means the motor
+        // has stalled (see stallMm())
+        double stallMm { 0.0 };
+        // While moving: the reading changing between two updates by more than
+        // the table could have moved at the motor's speed, plus this, or
+        // getting further ahead of the motor's position (averaged over the
+        // lag) than this (in mm; 0 is off), means the scale is misreading (see
+        // misreadJumpMm()). The table can't outrun the motor by more than the
+        // backlash
+        double movingFaultMm { 0.0 };
     };
 
     AxisScale(std::unique_ptr<IScale> scale, Settings settings);
@@ -112,8 +135,13 @@ public:
     // time, so this doesn't stay false for long once the motor stops)
     bool isSettled() const;
     // If the reading has jumped at rest by more than faultMm since it was
-    // last lined up, by how much (the first such jump, in mm)
+    // last lined up, or misread while moving (see Settings::movingFaultMm),
+    // by how much (the first such jump, in mm)
     std::optional<double> misreadJumpMm() const;
+    // If the table fell further behind the motor during the move under way
+    // (or the last one) than Settings::stallMm, by how much it was behind
+    // when that was first seen (in mm). Cleared when the next move starts
+    std::optional<double> stallMm() const;
     // Which way the move before the last settle went: +1, -1, or 0 if it
     // settled after a change at rest (or the move wasn't seen)
     int lastMoveDirection() const;
@@ -126,6 +154,12 @@ private:
     // Starts settling (after a move, or a change at rest)
     void startSettling(int32_t counts, Clock::time_point now);
     void checkForMisread(int32_t counts);
+    // Called on each update while the motor is running (see Settings::stallMm
+    // and movingFaultMm)
+    void checkWhileMoving(int32_t counts, double motorMm, double motorSpeed, Clock::time_point now);
+    // Where the reading should be (in the motor's frame), if the table is
+    // keeping up with the motor: where the motor was, averaged over the lag
+    double expectedReadingMm(double motorMm, Clock::time_point now) const;
 
     enum class State {
         Moving, // (Or not yet seen at rest)
@@ -167,6 +201,18 @@ private:
     bool m_lastSettleSteady { false };
     // See misreadJumpMm()
     std::optional<double> m_misreadJumpMm;
+    // Where the motor was recently (at least the lag's worth), oldest first
+    std::deque<std::pair<Clock::time_point, double>> m_motorHistory;
+    // See stallMm()
+    std::optional<double> m_stallMm;
+    // During the move under way (or the last one), the furthest the reading
+    // was behind and ahead of where it should be (in mm), for the log, so
+    // the settings can be checked against real moves
+    std::optional<double> m_moveMostBehindMm;
+    std::optional<double> m_moveMostAheadMm;
+    // The reading on the last update, and when (to see how fast it changes)
+    std::optional<int32_t> m_previousCounts;
+    Clock::time_point m_previousAt;
 };
 
 } // namespace mgo

@@ -2471,6 +2471,52 @@ TEST_CASE("UI: the scale and motor too far apart stops everything and asks")
     }
 }
 
+namespace {
+
+// (The simulated sender averages a third of a second's readings)
+const std::map<std::string, std::string> movingChecks {
+    { "Axis1ScaleWarnMm", "0.2" },
+    { "Axis1ScaleLagMs", "336" },
+    { "Axis1ScaleStallMm", "1.0" },
+    { "Axis1ScaleMovingFaultMm", "1.0" },
+};
+
+} // namespace
+
+TEST_CASE("UI: a fast move with the table keeping up isn't a stall", "[timing]")
+{
+    ScaleTestModel t(movingChecks);
+    REQUIRE(t.runUntil([&] { return t.model.axis1ScaleIsSteady(); }));
+    t.model.setAxis1MotorSpeed(600.0);
+    t.model.axis1GoToPosition(20.0);
+    REQUIRE(t.runUntil([&] {
+        return !t.model.isAxis1MotorRunning()
+            && std::abs(t.model.getAxis1MotorPosition() - 20.0) < 0.0001;
+    }));
+    REQUIRE(t.runUntil([&] { return t.model.axis1ScaleIsSteady(); }));
+    INFO(t.model.getWarning());
+    REQUIRE(t.model.getWarning().empty());
+    REQUIRE(!t.model.axis1ScaleMismatchMm());
+}
+
+TEST_CASE("UI: a stall while moving stops everything at once, then asks", "[timing]")
+{
+    ScaleTestModel t(movingChecks);
+    REQUIRE(t.runUntil([&] { return t.model.axis1ScaleIsSteady(); }));
+    t.model.setAxis1MotorSpeed(600.0);
+    t.model.axis1GoToPosition(20.0);
+    // Part way, the table falls 3mm behind (e.g. the motor stalled)
+    REQUIRE(t.runUntil([&] { return t.model.getAxis1MotorPosition() > 5.0; }));
+    t.model.fakeAxis1Scale()->setErrorMm(-3.0);
+    REQUIRE(t.runUntil([&] { return !t.model.isAxis1MotorRunning(); }));
+    INFO(t.model.getWarning());
+    REQUIRE(t.model.getWarning().starts_with("Z stalled"));
+    REQUIRE(t.model.getAxis1MotorPosition() < 15.0);
+    // Once the reading has settled, it asks which to believe, as usual
+    REQUIRE(t.runUntil([&] { return t.model.axis1ScaleMismatchMm().has_value(); }));
+    REQUIRE(*t.model.axis1ScaleMismatchMm() == Approx(-3.0).margin(0.05));
+}
+
 TEST_CASE("UI: the dialog when the scale and motor disagree")
 {
     ScaleTestModel t({ { "Axis1ScaleWarnMm", "0.2" } });

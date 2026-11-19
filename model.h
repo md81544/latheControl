@@ -765,6 +765,9 @@ private:
     int m_axis1ScaleMismatchAsks { 0 };
     // The scale's position was chosen before its reading was steady
     bool m_axis1ScaleAskAgain { false };
+    // Whether everything has been stopped for the stall the scale saw during
+    // the last move (see AxisScale::stallMm())
+    bool m_axis1StallStopped { false };
     // See axis1FinishesOnScale()
     bool m_axis1FinishOnScale { false };
     struct Axis1Finish {

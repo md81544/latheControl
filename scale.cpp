@@ -34,12 +34,31 @@ void AxisScale::update(double motorMm, bool motorRunning, double motorSpeed, Clo
         m_aligned = false;
         m_state = State::Moving;
         m_moveStartMm.reset();
+        m_previousCounts.reset();
         return;
     }
     if (m_noReadings) {
         MGOLOG(fmt::format("{} scale: readings received", m_settings.axisLabel));
         m_noReadings = false;
     }
+
+    // Watching the move under way (before the motor's position is noted
+    // below: a move starting now starts afresh)
+    if (motorRunning && m_state != State::Moving) {
+        m_stallMm.reset();
+        m_moveMostBehindMm.reset();
+        m_moveMostAheadMm.reset();
+    }
+    m_motorHistory.emplace_back(now, motorMm);
+    // (Keeping one from before the lag began, so the average covers it all)
+    while (m_motorHistory.size() > 1 && m_motorHistory[1].first <= now - m_settings.lag) {
+        m_motorHistory.pop_front();
+    }
+    if (motorRunning && m_aligned) {
+        checkWhileMoving(*counts, motorMm, motorSpeed, now);
+    }
+    m_previousCounts = *counts;
+    m_previousAt = now;
 
     if (motorRunning) {
         if (m_state != State::Moving) {
@@ -138,9 +157,16 @@ void AxisScale::update(double motorMm, bool motorRunning, double motorSpeed, Clo
             seconds,
             m_changedAtRest ? "changing at rest" : "stopping",
             m_moveStartMm ? fmt::format(
-                                " after a move of {:+.4f} mm at up to {:.0f} mm/min",
+                                " after a move of {:+.4f} mm at up to {:.0f} mm/min{}",
                                 motorMm - *m_moveStartMm,
-                                m_moveTopSpeed)
+                                m_moveTopSpeed,
+                                m_moveMostBehindMm && !m_changedAtRest
+                                    ? fmt::format(
+                                          " (while moving, the reading was up to {:.3f} mm "
+                                          "behind and {:.3f} mm ahead of where expected)",
+                                          *m_moveMostBehindMm,
+                                          *m_moveMostAheadMm)
+                                    : "")
                           : "",
             scaleMm,
             motorMm,
@@ -178,10 +204,109 @@ void AxisScale::checkForMisread(int32_t counts)
             m_settings.faultMm));
 }
 
+void AxisScale::checkWhileMoving(
+    int32_t counts,
+    double motorMm,
+    double motorSpeed,
+    Clock::time_point now)
+{
+    const double scaleMm = rawMm(counts) + m_offsetMm;
+    // A change in the reading faster than the table could move: a misread.
+    // (A sender which averages its readings smooths a small one out, but not
+    // the jumps of hundreds of mm seen on the mill)
+    if (m_settings.movingFaultMm > 0.0 && !m_misreadJumpMm && m_previousCounts) {
+        const double change = rawMm(counts) - rawMm(*m_previousCounts);
+        const double seconds = std::chrono::duration<double>(now - m_previousAt).count();
+        const double speed = std::max(std::abs(motorSpeed), m_moveTopSpeed);
+        if (std::abs(change) > speed / 60.0 * seconds + m_settings.movingFaultMm) {
+            m_misreadJumpMm = change;
+            MGOLOG(
+                fmt::format(
+                    "*** Warning *** {} scale's reading jumped by {:+.4f} mm in {:.3f} s while "
+                    "moving, faster than the table can at {:.0f} mm/min: it's misreading",
+                    m_settings.axisLabel,
+                    change,
+                    seconds,
+                    speed));
+            return;
+        }
+    }
+    // (Not while the motor's position isn't changing, e.g. taking up the
+    // backlash, as there's no direction to be behind in)
+    if (!m_lastMotorMm || motorMm == *m_lastMotorMm) {
+        return;
+    }
+    const double direction = motorMm > *m_lastMotorMm ? 1.0 : -1.0;
+    const double behind = (expectedReadingMm(motorMm, now) - scaleMm) * direction;
+    m_moveMostBehindMm = std::max(m_moveMostBehindMm.value_or(0.0), behind);
+    m_moveMostAheadMm = std::max(m_moveMostAheadMm.value_or(0.0), -behind);
+    if (m_settings.stallMm > 0.0 && !m_stallMm && behind > m_settings.stallMm) {
+        m_stallMm = behind;
+        MGOLOG(
+            fmt::format(
+                "*** Warning *** {} is {:.4f} mm behind the motor while moving (more than {:.4f}, "
+                "allowing for the scale's lag): it has stalled. Motor {:.4f} mm, scale {:.4f} mm",
+                m_settings.axisLabel,
+                behind,
+                m_settings.stallMm,
+                motorMm,
+                scaleMm));
+    }
+    // The table can't get ahead of the motor by more than its slack
+    if (m_settings.movingFaultMm > 0.0 && !m_misreadJumpMm && -behind > m_settings.movingFaultMm) {
+        m_misreadJumpMm = -behind * direction;
+        MGOLOG(
+            fmt::format(
+                "*** Warning *** {} scale's reading is {:.4f} mm ahead of the motor while moving "
+                "(more than {:.4f}, allowing for its lag), which the table can't be: it's "
+                "misreading. Motor {:.4f} mm, scale {:.4f} mm",
+                m_settings.axisLabel,
+                -behind,
+                m_settings.movingFaultMm,
+                motorMm,
+                scaleMm));
+    }
+}
+
+double AxisScale::expectedReadingMm(double motorMm, Clock::time_point now) const
+{
+    const double lagSeconds = std::chrono::duration<double>(m_settings.lag).count();
+    if (lagSeconds <= 0.0 || m_motorHistory.empty()) {
+        return motorMm;
+    }
+    const auto seconds = [](Clock::duration d) { return std::chrono::duration<double>(d).count(); };
+    const Clock::time_point start = now - m_settings.lag;
+    double total = 0.0;
+    // (Before the history begins, it was where it first was)
+    if (m_motorHistory.front().first > start) {
+        total += m_motorHistory.front().second * seconds(m_motorHistory.front().first - start);
+    }
+    // Between updates, moving steadily from one position to the next
+    for (std::size_t n = 0; n + 1 < m_motorHistory.size(); ++n) {
+        auto [t0, p0] = m_motorHistory[n];
+        const auto [t1, p1] = m_motorHistory[n + 1];
+        if (t1 <= start) {
+            continue;
+        }
+        if (t0 < start) {
+            p0 += (p1 - p0) * seconds(start - t0) / seconds(t1 - t0);
+            t0 = start;
+        }
+        total += (p0 + p1) / 2.0 * seconds(t1 - t0);
+    }
+    // (The history ends now, with the motor where it is)
+    if (m_motorHistory.back().first < now) {
+        total += motorMm * seconds(now - m_motorHistory.back().first);
+    }
+    return total / lagSeconds;
+}
+
 void AxisScale::realign()
 {
     m_aligned = false;
     m_misreadJumpMm.reset();
+    // (The motor's position changes without it moving)
+    m_motorHistory.clear();
     // (The motor's position changes, e.g. when zeroed, without it moving)
     m_lastMotorMm.reset();
 }
@@ -218,6 +343,13 @@ std::optional<double> AxisScale::differenceMm(double motorMm) const
 
 void AxisScale::motorRebased(double motorMm)
 {
+    // (Where the motor was is where it was on the new footing too)
+    if (m_lastMotorMm) {
+        const double shift = motorMm - *m_lastMotorMm;
+        for (auto& [time, position] : m_motorHistory) {
+            position += shift;
+        }
+    }
     m_lastMotorMm = motorMm;
 }
 
@@ -239,6 +371,11 @@ bool AxisScale::isSettled() const
 std::optional<double> AxisScale::misreadJumpMm() const
 {
     return m_misreadJumpMm;
+}
+
+std::optional<double> AxisScale::stallMm() const
+{
+    return m_stallMm;
 }
 
 int AxisScale::lastMoveDirection() const

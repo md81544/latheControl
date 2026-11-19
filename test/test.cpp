@@ -25,6 +25,7 @@
 #include <chrono>
 #include <cmath>
 #include <ctime>
+#include <deque>
 #include <filesystem>
 #include <map>
 #include <mutex>
@@ -901,26 +902,35 @@ public:
         = std::make_shared<std::optional<int32_t>>(1'000);
 };
 
+mgo::AxisScale::Settings axisScaleSettings(bool reversed = false, double faultMm = 0.0)
+{
+    return { .axisLabel = "X",
+             .countsPerMm = 100.0,
+             .reversed = reversed,
+             .settleTime = std::chrono::milliseconds(500),
+             .maxSettleTime = std::chrono::milliseconds(3'000),
+             .faultMm = faultMm };
+}
+
 struct AxisScaleTest {
     explicit AxisScaleTest(bool reversed = false, double faultMm = 0.0)
+        : AxisScaleTest(axisScaleSettings(reversed, faultMm))
+    {
+    }
+    explicit AxisScaleTest(mgo::AxisScale::Settings settings)
     {
         auto scale = std::make_unique<SettableScale>();
         counts = scale->m_counts;
-        axisScale = std::make_unique<mgo::AxisScale>(
-            std::move(scale),
-            mgo::AxisScale::Settings { .axisLabel = "X",
-                                       .countsPerMm = 100.0,
-                                       .reversed = reversed,
-                                       .settleTime = std::chrono::milliseconds(500),
-                                       .maxSettleTime = std::chrono::milliseconds(3'000),
-                                       .faultMm = faultMm });
+        axisScale = std::make_unique<mgo::AxisScale>(std::move(scale), std::move(settings));
     }
     // Advances the clock, then updates the scale with the motor at motorMm
     void update(double motorMm, bool running, int afterMs = 50)
     {
         now += std::chrono::milliseconds(afterMs);
-        axisScale->update(motorMm, running, 100.0, now);
+        axisScale->update(motorMm, running, speed, now);
     }
+    // The motor's speed (mm/min), as given to the scale
+    double speed { 100.0 };
     // Updates every 50ms for a while, with the motor stopped at motorMm
     void rest(double motorMm, int forMs)
     {
@@ -961,6 +971,146 @@ TEST_CASE("Scale:   An axis's scale is lined up with its motor once settled")
     *t.counts = 1'190;
     t.rest(4.0, 1'000);
     REQUIRE(*t.axisScale->differenceMm(4.0) == Approx(-0.1));
+}
+
+namespace {
+
+// A sender which, like the mill's, averages its readings over the last second
+// (20 of them, at one every 50ms), following a table at tableMm
+struct AveragingSender {
+    int32_t counts(double tableMm)
+    {
+        recent.push_back(tableMm);
+        if (recent.size() > 20) {
+            recent.pop_front();
+        }
+        double total = 0.0;
+        for (const double mm : recent) {
+            total += mm;
+        }
+        return 1'000 + static_cast<int32_t>(std::lround(total / recent.size() * 100.0));
+    }
+    std::deque<double> recent;
+};
+
+} // namespace
+
+TEST_CASE("Scale:   A stall while moving is seen at once, allowing for the scale's lag")
+{
+    auto settings = axisScaleSettings();
+    settings.lag = std::chrono::milliseconds(1'000);
+    settings.stallMm = 1.0;
+    AxisScaleTest t(settings);
+    t.speed = 600.0; // (0.5mm every 50ms)
+    AveragingSender sender;
+    // Lined up at 0
+    for (int n = 0; n < 20; ++n) {
+        *t.counts = sender.counts(0.0);
+        t.update(0.0, false);
+    }
+    REQUIRE(t.axisScale->isAligned());
+    // Two seconds' move at 600mm/min, the table keeping up: the reading lags
+    // by several mm, but that's allowed for
+    double motor = 0.0;
+    for (int n = 0; n < 40; ++n) {
+        motor += 0.5;
+        *t.counts = sender.counts(motor);
+        t.update(motor, true);
+    }
+    REQUIRE(*t.axisScale->positionMm() < motor - 2.0);
+    REQUIRE(!t.axisScale->stallMm());
+    // Then the table stops, while the motor carries on. Through the
+    // sender's averaging, the reading falls behind by 5t² mm after t
+    // seconds at this speed, so it's seen within half a second (and 1mm
+    // further on is 0.45s, so not much before)
+    const double table = motor;
+    for (int n = 0; n < 8; ++n) {
+        motor += 0.5;
+        *t.counts = sender.counts(table);
+        t.update(motor, true);
+    }
+    REQUIRE(!t.axisScale->stallMm());
+    for (int n = 0; n < 2 && !t.axisScale->stallMm(); ++n) {
+        motor += 0.5;
+        *t.counts = sender.counts(table);
+        t.update(motor, true);
+    }
+    REQUIRE(t.axisScale->stallMm());
+    REQUIRE(*t.axisScale->stallMm() > 1.0);
+    // It stays until the next move starts, which (once the reading has
+    // settled, and the motor's position is set from it) is a fresh start
+    for (int n = 0; n < 30; ++n) {
+        *t.counts = sender.counts(table);
+        t.update(motor, false);
+    }
+    REQUIRE(t.axisScale->stallMm());
+    t.axisScale->motorRebased(table);
+    *t.counts = sender.counts(table + 0.5);
+    t.update(table + 0.5, true);
+    REQUIRE(!t.axisScale->stallMm());
+}
+
+TEST_CASE("Scale:   Moving back the other way isn't a stall")
+{
+    auto settings = axisScaleSettings();
+    settings.lag = std::chrono::milliseconds(1'000);
+    settings.stallMm = 1.0;
+    settings.movingFaultMm = 1.0;
+    AxisScaleTest t(settings);
+    t.speed = 600.0;
+    AveragingSender sender;
+    for (int n = 0; n < 20; ++n) {
+        *t.counts = sender.counts(0.0);
+        t.update(0.0, false);
+    }
+    // Out 10mm, then straight back, and out again, the table keeping up
+    double motor = 0.0;
+    for (const double step : { 0.5, -0.5, 0.5 }) {
+        for (int n = 0; n < 20; ++n) {
+            motor += step;
+            *t.counts = sender.counts(motor);
+            t.update(motor, true);
+        }
+    }
+    REQUIRE(!t.axisScale->stallMm());
+    REQUIRE(!t.axisScale->misreadJumpMm());
+}
+
+TEST_CASE("Scale:   A reading which jumps, or gets ahead of the motor, while moving is a misread")
+{
+    auto settings = axisScaleSettings();
+    settings.movingFaultMm = 1.0;
+    AxisScaleTest t(settings);
+    t.speed = 600.0;
+    t.rest(0.0, 600);
+    REQUIRE(t.axisScale->isAligned());
+    double motor = 0.0;
+    SECTION("A jump")
+    {
+        for (int n = 0; n < 4; ++n) {
+            motor += 0.5;
+            *t.counts = 1'000 + static_cast<int32_t>(std::lround(motor * 100.0));
+            t.update(motor, true);
+        }
+        REQUIRE(!t.axisScale->misreadJumpMm());
+        // (0.5mm is as far as the table can go in 50ms; this is 2.5mm)
+        **t.counts += 250;
+        t.update(motor, true);
+        REQUIRE(t.axisScale->misreadJumpMm());
+        REQUIRE(*t.axisScale->misreadJumpMm() == Approx(2.5));
+    }
+    SECTION("Creeping ahead")
+    {
+        // Each step a little further than the motor's
+        for (int n = 0; n < 10 && !t.axisScale->misreadJumpMm(); ++n) {
+            motor += 0.5;
+            *t.counts = 1'000 + static_cast<int32_t>(std::lround(motor * 130.0));
+            t.update(motor, true);
+        }
+        REQUIRE(t.axisScale->misreadJumpMm());
+        REQUIRE(*t.axisScale->misreadJumpMm() > 1.0);
+        REQUIRE(!t.axisScale->stallMm());
+    }
 }
 
 TEST_CASE("Scale:   A reversed scale counts the other way")
