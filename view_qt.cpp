@@ -1507,13 +1507,13 @@ void ViewQt::Impl::updateTextFromModel(const Model& model)
     AxisLine& axis1 = axisLine(1);
     AxisLine& axis2 = axisLine(2);
     axis1.position.text = formatMotorPosition(
-        model.toDisplayUnits(1, model.getAxis1MotorPosition()), model.axisDecimals(1));
+        model.toDisplayUnits(1, model.motorPosition(1)), model.axisDecimals(1));
 
     // (When threading or knurling, Z's speed is set by the spindle's)
     const double axis1Speed
         = model.getMode() == Mode::Threading || model.getMode() == Mode::Knurling
         ? model.getThreadingZSpeed()
-        : model.getAxis1MotorSpeed();
+        : model.motorSpeed(1);
     axis1.speed.text = fmt::format(
         "{:<.{}f} {}/min",
         model.toDisplayUnits(1, axis1Speed),
@@ -1528,7 +1528,7 @@ void ViewQt::Impl::updateTextFromModel(const Model& model)
     }
     axis2.speed.text = fmt::format(
         "{:<.{}f} {}/min",
-        model.toDisplayUnits(2, model.getAxis2MotorSpeed()),
+        model.toDisplayUnits(2, model.motorSpeed(2)),
         speedDecimals(2),
         model.axisUnitName(2));
     float rpmValue = model.getRotaryEncoderRpm();
@@ -1554,8 +1554,8 @@ void ViewQt::Impl::updateTextFromModel(const Model& model)
     }
 
     generalStatus.text = model.getGeneralStatus();
-    axis1Status.text = fmt::format("{}: {}", model.axisLabel(1), model.getAxis1Status());
-    axis2Status.text = fmt::format("{}: {}", model.axisLabel(2), model.getAxis2Status());
+    axis1Status.text = fmt::format("{}: {}", model.axisLabel(1), model.axisStatus(1));
+    axis2Status.text = fmt::format("{}: {}", model.axisLabel(2), model.axisStatus(2));
     if (model.getMode() == Mode::Taper) {
         taperAngle.text = fmt::format("Angle: {}", model.getTaperAngle());
     }

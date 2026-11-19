@@ -483,7 +483,7 @@ TEST_CASE("UI: Z go-to through the controller")
     // the Z axis to 5.00
     TestModel tm;
     mgo::Controller controller(&tm.model); // creates the view and window
-    tm.model.setAxis1MotorSpeed(1'000.0);
+    tm.model.setMotorSpeed(1, 1'000.0);
     QWidget* w = mainWindow();
     REQUIRE(w);
 
@@ -503,11 +503,11 @@ TEST_CASE("UI: Z go-to through the controller")
     REQUIRE(dialogShown);
 
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
-    while (std::abs(tm.model.getAxis1MotorPosition() - 5.0) > 0.001
+    while (std::abs(tm.model.motorPosition(1) - 5.0) > 0.001
            && std::chrono::steady_clock::now() < deadline) {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
-    REQUIRE(tm.model.getAxis1MotorPosition() == Approx(5.0).margin(0.001));
+    REQUIRE(tm.model.motorPosition(1) == Approx(5.0).margin(0.001));
 }
 
 namespace {
@@ -540,30 +540,30 @@ TEST_CASE("UI: letting go of Alt with no rapid running stops everything, as Spac
 {
     TestModel tm;
     mgo::Controller controller(&tm.model);
-    tm.model.setAxis1MotorSpeed(100.0);
+    tm.model.setMotorSpeed(1, 100.0);
     QWidget* w = mainWindow();
     REQUIRE(w);
 
     // A jog (not a rapid), then Alt pressed and let go
     tm.model.axis1Move(mgo::ZDirection::Left);
-    REQUIRE(tm.model.isAxis1MotorRunning());
+    REQUIRE(tm.model.isMotorRunning(1));
     QTest::keyPress(w, Qt::Key_Alt);
     QTest::keyRelease(w, Qt::Key_Alt);
     controller.processKeyPress();
-    REQUIRE(!tm.model.isAxis1MotorRunning());
+    REQUIRE(!tm.model.isMotorRunning(1));
 }
 
 TEST_CASE("UI: menu through the controller")
 {
     TestModel tm;
     mgo::Controller controller(&tm.model);
-    tm.model.setAxis1MotorSpeed(1'000.0);
+    tm.model.setMotorSpeed(1, 1'000.0);
     QWidget* w = mainWindow();
     REQUIRE(w);
 
     // Move Z away from zero, then zero it from the menu
-    tm.model.axis1GoToPosition(2.0);
-    REQUIRE(waitUntil([&] { return std::abs(tm.model.getAxis1MotorPosition() - 2.0) < 0.001; }));
+    tm.model.goToPosition(1, 2.0);
+    REQUIRE(waitUntil([&] { return std::abs(tm.model.motorPosition(1) - 2.0) < 0.001; }));
     press(w, controller, Qt::Key_Tab);
     REQUIRE(controller.isMenuOpen());
     // "Position" is the fifth category; "Zero Z" is its first command
@@ -573,17 +573,17 @@ TEST_CASE("UI: menu through the controller")
     press(w, controller, Qt::Key_Return);
     press(w, controller, Qt::Key_Return);
     REQUIRE(!controller.isMenuOpen());
-    REQUIRE(tm.model.getAxis1MotorPosition() == 0.0);
+    REQUIRE(tm.model.motorPosition(1) == 0.0);
 
     // While the menu is open, Space still stops all motors, and the menu
     // stays open
-    tm.model.axis1GoToPosition(50.0);
-    REQUIRE(waitUntil([&] { return tm.model.isAxis1MotorRunning(); }));
+    tm.model.goToPosition(1, 50.0);
+    REQUIRE(waitUntil([&] { return tm.model.isMotorRunning(1); }));
     press(w, controller, Qt::Key_Tab);
     REQUIRE(controller.isMenuOpen());
-    REQUIRE(tm.model.isAxis1MotorRunning()); // opening the menu doesn't stop anything
+    REQUIRE(tm.model.isMotorRunning(1)); // opening the menu doesn't stop anything
     press(w, controller, Qt::Key_Space);
-    REQUIRE(!tm.model.isAxis1MotorRunning());
+    REQUIRE(!tm.model.isMotorRunning(1));
     REQUIRE(controller.isMenuOpen());
 
     // Esc closes it
@@ -1046,8 +1046,8 @@ TEST_CASE("UI: radius on the end through the controller")
     QWidget* w = mainWindow();
     REQUIRE(w);
     // (As Controller::run() sets them)
-    model.setAxis1MotorSpeed(40.0);
-    model.setAxis2MotorSpeed(20.0);
+    model.setMotorSpeed(1, 40.0);
+    model.setMotorSpeed(2, 20.0);
 
     // Without the work's diameter and end, it says what's needed
     bool told = false;
@@ -1121,8 +1121,8 @@ TEST_CASE("UI: a shoulder with a fillet through the controller")
     mgo::Controller controller(&model);
     QWidget* w = mainWindow();
     REQUIRE(w);
-    model.setAxis1MotorSpeed(40.0);
-    model.setAxis2MotorSpeed(20.0);
+    model.setMotorSpeed(1, 40.0);
+    model.setMotorSpeed(2, 20.0);
 
     // A 10 mm bar, its end at Z 0. Down to 8 mm, 3 mm from the end, with a
     // 0.5 mm fillet, 0.3 per pass, with a 0.1 mm nose radius
@@ -1332,14 +1332,14 @@ TEST_CASE("UI: quick chamfer")
     mgo::Controller controller(&tm.model);
     QWidget* w = mainWindow();
     REQUIRE(w);
-    tm.model.setAxis2MotorSpeed(37.0);
+    tm.model.setMotorSpeed(2, 37.0);
     press(w, controller, Qt::Key_H);
     REQUIRE(tm.model.getMode() == mgo::Mode::Taper);
     REQUIRE(tm.model.getTaperAngle() == Approx(-45.0));
-    tm.model.setAxis2MotorSpeed(100.0);
+    tm.model.setMotorSpeed(2, 100.0);
     press(w, controller, Qt::Key_Escape);
     REQUIRE(tm.model.getMode() == mgo::Mode::None);
-    REQUIRE(tm.model.getAxis2MotorSpeed() == Approx(37.0));
+    REQUIRE(tm.model.motorSpeed(2) == Approx(37.0));
 }
 
 TEST_CASE("UI: thread dialog")
@@ -1424,7 +1424,7 @@ TEST_CASE("UI: switching to inches, and typing a position in inches")
 {
     TestModel tm;
     mgo::Controller controller(&tm.model);
-    tm.model.setAxis1MotorSpeed(1'000.0);
+    tm.model.setMotorSpeed(1, 1'000.0);
     QWidget* w = mainWindow();
     REQUIRE(w);
 
@@ -1438,7 +1438,7 @@ TEST_CASE("UI: switching to inches, and typing a position in inches")
     });
     press(w, controller, Qt::Key_Z);
     press(w, controller, Qt::Key_G);
-    REQUIRE(waitUntil([&] { return std::abs(tm.model.getAxis1MotorPosition() - 25.4) < 0.001; }));
+    REQUIRE(waitUntil([&] { return std::abs(tm.model.motorPosition(1) - 25.4) < 0.001; }));
 
     // And back to mm
     press(w, controller, Qt::Key_U);
@@ -1503,7 +1503,7 @@ TEST_CASE("UI: the controller's event loop")
     REQUIRE(tm.model.isQuitting());
     REQUIRE(dialogShown);
     REQUIRE(tm.model.getDisplayUnits() == mgo::DisplayUnits::Metric); // (toggled twice)
-    REQUIRE(tm.model.getAxis1MotorPosition() == Approx(0.5).margin(0.001));
+    REQUIRE(tm.model.motorPosition(1) == Approx(0.5).margin(0.001));
 }
 
 TEST_CASE("UI: keys wait while a nudge is moving, except Space")
@@ -1512,7 +1512,7 @@ TEST_CASE("UI: keys wait while a nudge is moving, except Space")
     mgo::Controller controller(&tm.model);
     QWidget* w = mainWindow();
     REQUIRE(w);
-    const double speed = tm.model.getAxis1MotorSpeed();
+    const double speed = tm.model.motorSpeed(1);
 
     // A (nudge left 0.05mm), then Shift-D (right 0.01mm) while the first is
     // still moving: the second waits, so each moves its full amount
@@ -1523,16 +1523,16 @@ TEST_CASE("UI: keys wait while a nudge is moving, except Space")
     controller.tick();
     REQUIRE(tm.model.isMotionSequenceRunning()); // (still the first nudge)
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
-    while (std::abs(std::abs(tm.model.getAxis1MotorPosition()) - 0.04) > 0.0001
+    while (std::abs(std::abs(tm.model.motorPosition(1)) - 0.04) > 0.0001
            || tm.model.isMotionSequenceRunning()) {
         REQUIRE(std::chrono::steady_clock::now() < deadline);
         controller.tick();
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
-    REQUIRE(tm.model.getAxis1MotorSpeed() == Approx(speed));
+    REQUIRE(tm.model.motorSpeed(1) == Approx(speed));
 
     // Space, though, stops a nudge part way (and the speed is restored)
-    const double position = tm.model.getAxis1MotorPosition();
+    const double position = tm.model.motorPosition(1);
     QTest::keyClick(w, Qt::Key_A);
     controller.tick();
     REQUIRE(tm.model.isMotionSequenceRunning());
@@ -1540,11 +1540,11 @@ TEST_CASE("UI: keys wait while a nudge is moving, except Space")
     QTest::keyClick(w, Qt::Key_Space);
     controller.tick();
     REQUIRE(!tm.model.isMotionSequenceRunning());
-    REQUIRE(!tm.model.isAxis1MotorRunning());
-    const double moved = std::abs(tm.model.getAxis1MotorPosition() - position);
+    REQUIRE(!tm.model.isMotorRunning(1));
+    const double moved = std::abs(tm.model.motorPosition(1) - position);
     REQUIRE(moved > 0.0);
     REQUIRE(moved < 0.05);
-    REQUIRE(tm.model.getAxis1MotorSpeed() == Approx(speed));
+    REQUIRE(tm.model.motorSpeed(1) == Approx(speed));
 }
 
 TEST_CASE("UI: multi-pass through the controller")
@@ -1554,8 +1554,8 @@ TEST_CASE("UI: multi-pass through the controller")
     QWidget* w = mainWindow();
     REQUIRE(w);
     // (run() would set these from the presets)
-    tm.model.setAxis1MotorSpeed(500.0);
-    tm.model.setAxis2MotorSpeed(20.0);
+    tm.model.setMotorSpeed(1, 500.0);
+    tm.model.setMotorSpeed(2, 20.0);
     // Mem 1 where the tool is (0, 0); Mem 2 at Z 0.3, X 0.02
     tm.model.storePosition(1, 0.0);
     tm.model.storePosition(2, 0.0);
@@ -1598,8 +1598,8 @@ TEST_CASE("UI: multi-pass through the controller")
     }
     INFO("Stopped: " << tm.model.multiPass().message() << " / " << tm.model.getWarning());
     REQUIRE(tm.model.multiPass().state() == mgo::MultiPass::State::Finished);
-    REQUIRE(tm.model.getAxis1MotorPosition() == Approx(0.0).margin(0.0001));
-    REQUIRE(tm.model.getAxis2MotorPosition() == Approx(0.02).margin(0.0001));
+    REQUIRE(tm.model.motorPosition(1) == Approx(0.0).margin(0.0001));
+    REQUIRE(tm.model.motorPosition(2) == Approx(0.02).margin(0.0001));
 }
 
 TEST_CASE("UI: the controller carries on while a dialog is open")
@@ -1852,8 +1852,8 @@ TEST_CASE("UI: the current feature is shown")
                       .feedPerPass = 0.1,
                       .retract = true })
                 .empty());
-    tm.model.axis2GoToPosition(9.0);
-    tm.model.axis2Wait();
+    tm.model.goToPosition(2, 9.0);
+    tm.model.waitForMotor(2);
     view.updateDisplay(tm.model);
     QWidget* w = mainWindow();
     REQUIRE(w);
@@ -1903,7 +1903,7 @@ TEST_CASE("UI: zeroing or setting a position asks before clearing the current fe
     press(w, controller, Qt::Key_X);
     press(w, controller, Qt::Key_Z);
     REQUIRE(asked);
-    REQUIRE(tm.model.getAxis2MotorPosition() == Approx(7.5));
+    REQUIRE(tm.model.motorPosition(2) == Approx(7.5));
     REQUIRE(tm.model.getFeatureDiameterMm() == Approx(15.0));
 
     // Z Z: going ahead zeroes Z, clearing the work's end (but not the diameter)
@@ -1911,7 +1911,7 @@ TEST_CASE("UI: zeroing or setting a position asks before clearing the current fe
     press(w, controller, Qt::Key_Z);
     press(w, controller, Qt::Key_Z);
     REQUIRE(asked);
-    REQUIRE(tm.model.getAxis1MotorPosition() == Approx(0.0));
+    REQUIRE(tm.model.motorPosition(1) == Approx(0.0));
     REQUIRE(!tm.model.getWorkEndZ());
     REQUIRE(tm.model.getFeatureDiameterMm() == Approx(15.0));
 
@@ -1921,7 +1921,7 @@ TEST_CASE("UI: zeroing or setting a position asks before clearing the current fe
     tm.model.setPosition(1, 2.0);
     press(w, controller, Qt::Key_Z);
     press(w, controller, Qt::Key_Z);
-    REQUIRE(tm.model.getAxis1MotorPosition() == Approx(0.0));
+    REQUIRE(tm.model.motorPosition(1) == Approx(0.0));
 
     // X S, set as a diameter: the diameter's replaced, without asking (as
     // above, press() would fail if it asked)
@@ -1943,7 +1943,7 @@ TEST_CASE("UI: zeroing or setting a position asks before clearing the current fe
     press(w, controller, Qt::Key_X);
     press(w, controller, Qt::Key_S);
     REQUIRE(asked);
-    REQUIRE(tm.model.getAxis2MotorPosition() == Approx(7.0));
+    REQUIRE(tm.model.motorPosition(2) == Approx(7.0));
     REQUIRE(tm.model.getFeatureDiameterMm() == Approx(14.0));
     // Y sets it, clearing the diameter
     whenDialogShows([&answer](QWidget* dialog) {
@@ -1954,7 +1954,7 @@ TEST_CASE("UI: zeroing or setting a position asks before clearing the current fe
     press(w, controller, Qt::Key_X);
     press(w, controller, Qt::Key_S);
     REQUIRE(asked);
-    REQUIRE(tm.model.getAxis2MotorPosition() == Approx(3.0));
+    REQUIRE(tm.model.motorPosition(2) == Approx(3.0));
     REQUIRE(!tm.model.getFeatureDiameterMm());
 }
 
@@ -1994,12 +1994,10 @@ TEST_CASE("UI: a serial scale (simulated) is lined up with the motor, and follow
     REQUIRE(tickUntil([&model] { return model.getAxis1ScalePositionMm().has_value(); }));
     REQUIRE(agrees());
 
-    model.setAxis1MotorSpeed(1'000.0);
-    model.axis1GoToPosition(1.0);
-    REQUIRE(tickUntil(
-        [&] { return std::abs(model.getAxis1MotorPosition() - 1.0) < 0.0001 && agrees(); }));
-    REQUIRE(tickUntil(
-        [&] { return std::abs(model.getAxis1MotorPosition() - 1.0) < 0.0001 && agrees(); }));
+    model.setMotorSpeed(1, 1'000.0);
+    model.goToPosition(1, 1.0);
+    REQUIRE(tickUntil([&] { return std::abs(model.motorPosition(1) - 1.0) < 0.0001 && agrees(); }));
+    REQUIRE(tickUntil([&] { return std::abs(model.motorPosition(1) - 1.0) < 0.0001 && agrees(); }));
     REQUIRE(*model.getAxis1ScalePositionMm() == Approx(1.0).margin(0.011));
 
     // Zeroing lines it up again, at the new zero
@@ -2066,21 +2064,21 @@ TEST_CASE("UI: \\ z zeroes every axis, including the manual ones")
     mgo::MockGpio gpio { false };
     mgo::Model model { gpio, config };
     mgo::Controller controller(&model);
-    model.setAxis1MotorSpeed(1'000.0);
+    model.setMotorSpeed(1, 1'000.0);
     QWidget* w = mainWindow();
     REQUIRE(w);
     const mgo::ManualAxis* y = model.manualAxis(3);
     REQUIRE(y);
     // Z (axis 1) moved away from zero, and Y wound along
-    model.axis1GoToPosition(2.0);
-    REQUIRE(waitUntil([&] { return std::abs(model.getAxis1MotorPosition() - 2.0) < 0.001; }));
+    model.goToPosition(1, 2.0);
+    REQUIRE(waitUntil([&] { return std::abs(model.motorPosition(1) - 2.0) < 0.001; }));
     model.fakeMoveManualAxis(3, 3.0);
     REQUIRE(QTest::qWaitFor([y] { return std::abs(*y->positionMm() - 3.0) < 0.005; }, 5'000));
 
     press(w, controller, Qt::Key_Backslash);
     REQUIRE(model.getKeyMode() == mgo::KeyMode::AxisAll);
     press(w, controller, Qt::Key_Z);
-    REQUIRE(model.getAxis1MotorPosition() == 0.0);
+    REQUIRE(model.motorPosition(1) == 0.0);
     REQUIRE(*y->positionMm() == Approx(0.0).margin(0.005));
 }
 
@@ -2211,11 +2209,11 @@ TEST_CASE("UI: start-up sets the motors' speeds before taking up the backlash")
     mgo::MockGpio gpio { false };
     mgo::Model model { gpio, config };
     mgo::Controller controller(&model);
-    REQUIRE(model.getAxis1MotorSpeed() == Approx(250.0));
-    REQUIRE(model.getAxis2MotorSpeed() == Approx(150.0));
+    REQUIRE(model.motorSpeed(1) == Approx(250.0));
+    REQUIRE(model.motorSpeed(2) == Approx(150.0));
     // Re-zeroed after the take-up
-    REQUIRE(model.getAxis1MotorPosition() == 0.0);
-    REQUIRE(model.getAxis2MotorPosition() == 0.0);
+    REQUIRE(model.motorPosition(1) == 0.0);
+    REQUIRE(model.motorPosition(2) == 0.0);
 }
 
 TEST_CASE("UI: keys, moves and zeroing are logged")
@@ -2232,7 +2230,7 @@ TEST_CASE("UI: keys, moves and zeroing are logged")
         press(w, controller, Qt::Key_A);
         REQUIRE(waitUntil([&] {
             controller.tick();
-            return !tm.model.isMotionSequenceRunning() && !tm.model.isAxis1MotorRunning();
+            return !tm.model.isMotionSequenceRunning() && !tm.model.isMotorRunning(1);
         }));
         controller.tick();
         press(w, controller, Qt::Key_Z);
@@ -2282,13 +2280,13 @@ TEST_CASE("UI: measuring the backlash with a (simulated) scale")
     // Moves of 1mm (more than twice the 0.2mm compensation), right first
     REQUIRE(model.axis1BacklashMeasureDistanceMm() == Approx(1.0));
     REQUIRE(model.axis1BacklashMeasureFirstDirection() == 1);
-    const double start = model.getAxis1MotorPosition();
+    const double start = model.motorPosition(1);
     // (It measures at the second preset's speed, then puts this back)
-    model.setAxis1MotorSpeed(250.0);
+    model.setMotorSpeed(1, 250.0);
 
     model.axis1MeasureBacklash();
     REQUIRE(model.isMeasuringBacklash());
-    REQUIRE(model.getAxis1Status() == "Measuring backlash: move 1 of 6");
+    REQUIRE(model.axisStatus(1) == "Measuring backlash: move 1 of 6");
     // Nothing else may move meanwhile
     REQUIRE(!mgo::keyAllowedInCurrentMode(mgo::key::ENTER, model));
     REQUIRE(!mgo::keyAllowedInCurrentMode(mgo::key::LEFT, model));
@@ -2304,8 +2302,8 @@ TEST_CASE("UI: measuring the backlash with a (simulated) scale")
         },
         20));
     REQUIRE(!model.isMeasuringBacklash());
-    REQUIRE(model.getAxis1MotorPosition() == Approx(start).margin(0.0001));
-    REQUIRE(model.getAxis1MotorSpeed() == Approx(250.0));
+    REQUIRE(model.motorPosition(1) == Approx(start).margin(0.0001));
+    REQUIRE(model.motorSpeed(1) == Approx(250.0));
     INFO(report->front());
     // No backlash, to within a count of the scale (10 steps)
     const auto at = report->front().find(", which is ");
@@ -2363,42 +2361,40 @@ TEST_CASE("UI: re-basing from the scale at rest")
     // The table goes 0.05mm further than the motor says (e.g. its backlash
     // is less than the compensation, here)
     t.model.fakeAxis1Scale()->setErrorMm(0.05);
-    t.model.axis1GoToPosition(1.0);
+    t.model.goToPosition(1, 1.0);
     // Once settled, the position is the scale's (to within a count)
     REQUIRE(t.runUntil([&] {
-        return !t.model.isAxis1MotorRunning()
-            && std::abs(t.model.getAxis1MotorPosition() - 1.05) < 0.011;
+        return !t.model.isMotorRunning(1) && std::abs(t.model.motorPosition(1) - 1.05) < 0.011;
     }));
     REQUIRE(std::abs(*t.model.getAxis1ScaleDifferenceMm()) < 0.011);
     REQUIRE(!t.model.axis1ScaleMismatchMm());
     // Moves now go from the corrected position: to 2 is a move of 0.95, and
     // the table (still 0.05 ahead of the motor's steps) arrives at 2
-    t.model.axis1GoToPosition(2.0);
+    t.model.goToPosition(1, 2.0);
     REQUIRE(t.runUntil([&] {
-        return !t.model.isAxis1MotorRunning()
-            && std::abs(t.model.getAxis1MotorPosition() - 2.0) < 0.0001;
+        return !t.model.isMotorRunning(1) && std::abs(t.model.motorPosition(1) - 2.0) < 0.0001;
     }));
     // (The scale settles, still agreeing: nothing changes)
     std::this_thread::sleep_for(std::chrono::milliseconds(600));
     REQUIRE(t.runUntil([&] { return std::abs(*t.model.getAxis1ScaleDifferenceMm()) < 0.011; }));
-    REQUIRE(t.model.getAxis1MotorPosition() == Approx(2.0).margin(0.011));
+    REQUIRE(t.model.motorPosition(1) == Approx(2.0).margin(0.011));
 }
 
 TEST_CASE("UI: re-basing when the scale changes at rest")
 {
     ScaleTestModel t({ { "Axis1ScaleRebase", "true" }, { "Axis1ScaleWarnMm", "0.2" } });
     REQUIRE(t.runUntil([&] { return t.model.getAxis1ScalePositionMm().has_value(); }));
-    t.model.axis1GoToPosition(1.0);
+    t.model.goToPosition(1, 1.0);
     REQUIRE(t.runUntil([&] {
         const auto d = t.model.getAxis1ScaleDifferenceMm();
-        return !t.model.isAxis1MotorRunning() && d && std::abs(*d) < 0.011;
+        return !t.model.isMotorRunning(1) && d && std::abs(*d) < 0.011;
     }));
     // Settled at 1. Then, with nothing moving, the table shifts 0.04mm (e.g.
     // pushed by a cut): the position follows, once the reading has settled
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
     t.model.checkStatus();
     t.model.fakeAxis1Scale()->setErrorMm(0.04);
-    REQUIRE(t.runUntil([&] { return std::abs(t.model.getAxis1MotorPosition() - 1.04) < 0.011; }));
+    REQUIRE(t.runUntil([&] { return std::abs(t.model.motorPosition(1) - 1.04) < 0.011; }));
     REQUIRE(!t.model.axis1ScaleMismatchMm());
     // And far more (e.g. a knock): it stops and asks
     t.model.fakeAxis1Scale()->setErrorMm(0.5);
@@ -2410,17 +2406,17 @@ TEST_CASE("UI: no re-basing unless the config asks for it")
     ScaleTestModel t;
     REQUIRE(t.runUntil([&] { return t.model.getAxis1ScalePositionMm().has_value(); }));
     t.model.fakeAxis1Scale()->setErrorMm(0.5);
-    t.model.axis1GoToPosition(1.0);
+    t.model.goToPosition(1, 1.0);
     REQUIRE(t.runUntil([&] {
         const auto d = t.model.getAxis1ScaleDifferenceMm();
-        return !t.model.isAxis1MotorRunning() && d && std::abs(*d - 0.5) < 0.011;
+        return !t.model.isMotorRunning(1) && d && std::abs(*d - 0.5) < 0.011;
     }));
     std::this_thread::sleep_for(std::chrono::milliseconds(800));
     for (int n = 0; n < 10; ++n) {
         t.model.checkStatus();
     }
     // Nothing done: no warning, and the position is the motor's
-    REQUIRE(t.model.getAxis1MotorPosition() == Approx(1.0).margin(0.0001));
+    REQUIRE(t.model.motorPosition(1) == Approx(1.0).margin(0.0001));
     REQUIRE(!t.model.axis1ScaleMismatchMm());
 }
 
@@ -2432,21 +2428,21 @@ TEST_CASE("UI: re-basing from the scale by hand (Z then B)")
     REQUIRE(w);
     REQUIRE(t.runUntil([&] { return t.model.getAxis1ScalePositionMm().has_value(); }));
     t.model.fakeAxis1Scale()->setErrorMm(0.08);
-    t.model.axis1GoToPosition(1.0);
+    t.model.goToPosition(1, 1.0);
     REQUIRE(t.runUntil([&] {
         const auto d = t.model.getAxis1ScaleDifferenceMm();
-        return !t.model.isAxis1MotorRunning() && d && std::abs(*d - 0.08) < 0.011
+        return !t.model.isMotorRunning(1) && d && std::abs(*d - 0.08) < 0.011
             && t.model.axis1ScaleIsSteady();
     }));
     REQUIRE(t.model.canRebaseAxis1FromScale());
     press(w, t.controller, Qt::Key_Z);
     press(w, t.controller, Qt::Key_B);
-    REQUIRE(t.model.getAxis1MotorPosition() == Approx(1.08).margin(0.011));
+    REQUIRE(t.model.motorPosition(1) == Approx(1.08).margin(0.011));
     REQUIRE(std::abs(*t.model.getAxis1ScaleDifferenceMm()) < 0.011);
 
     // Not while the axis is moving: it warns, and nothing changes
     t.model.axis1Move(mgo::ZDirection::Left);
-    REQUIRE(t.model.isAxis1MotorRunning());
+    REQUIRE(t.model.isMotorRunning(1));
     REQUIRE(!t.model.canRebaseAxis1FromScale());
     t.model.rebaseAxis1FromScaleByHand();
     REQUIRE(t.model.getWarning() == "Stop the motors first");
@@ -2459,8 +2455,8 @@ namespace {
 // 0.2, 0.1 a pass)
 void startMultiPass(ScaleTestModel& t, bool pause)
 {
-    t.model.setAxis1MotorSpeed(500.0);
-    t.model.setAxis2MotorSpeed(100.0);
+    t.model.setMotorSpeed(1, 500.0);
+    t.model.setMotorSpeed(2, 100.0);
     t.model.changeMode(mgo::Mode::MultiPass);
     REQUIRE(t.model
                 .setMultiPassSetup(
@@ -2535,12 +2531,12 @@ TEST_CASE("UI: no re-basing between passes unless the config asks for it", "[tim
     REQUIRE(t.runUntil([&] {
         return multiPassIn(t.model, mgo::MultiPass::State::Paused) && t.model.axis1ScaleIsSteady();
     }));
-    REQUIRE(t.model.getAxis1MotorPosition() == Approx(0.0).margin(0.0001));
+    REQUIRE(t.model.motorPosition(1) == Approx(0.0).margin(0.0001));
     // But it can be done by hand (Z then B)
     REQUIRE(t.model.canRebaseAxis1FromScale());
     REQUIRE(mgo::keyAllowedInCurrentMode(mgo::key::a1_b, t.model));
     t.model.rebaseAxis1FromScaleByHand();
-    REQUIRE(t.model.getAxis1MotorPosition() == Approx(0.05).margin(0.011));
+    REQUIRE(t.model.motorPosition(1) == Approx(0.05).margin(0.011));
     // And the next pass doesn't wait for the scale
     bool settling = false;
     REQUIRE(t.runUntil([&] {
@@ -2559,10 +2555,10 @@ TEST_CASE("UI: the scale and motor too far apart stops everything and asks")
     REQUIRE(t.runUntil([&] { return t.model.getAxis1ScalePositionMm().has_value(); }));
     // e.g. the motor stalled, losing 0.5mm
     t.model.fakeAxis1Scale()->setErrorMm(-0.5);
-    t.model.axis1GoToPosition(1.0);
+    t.model.goToPosition(1, 1.0);
     REQUIRE(t.runUntil([&] { return t.model.axis1ScaleMismatchMm().has_value(); }));
     REQUIRE(*t.model.axis1ScaleMismatchMm() == Approx(-0.5).margin(0.011));
-    REQUIRE(t.model.getAxis1MotorPosition() == Approx(1.0).margin(0.0001)); // (not re-based)
+    REQUIRE(t.model.motorPosition(1) == Approx(1.0).margin(0.0001)); // (not re-based)
     // Nothing may move until it's dealt with
     REQUIRE(!mgo::keyAllowedInCurrentMode(mgo::key::ENTER, t.model));
     REQUIRE(!mgo::keyAllowedInCurrentMode(mgo::key::RIGHT, t.model));
@@ -2572,7 +2568,7 @@ TEST_CASE("UI: the scale and motor too far apart stops everything and asks")
     {
         t.model.acceptAxis1ScalePosition();
         REQUIRE(!t.model.axis1ScaleMismatchMm());
-        REQUIRE(t.model.getAxis1MotorPosition() == Approx(0.5).margin(0.011));
+        REQUIRE(t.model.motorPosition(1) == Approx(0.5).margin(0.011));
         REQUIRE(mgo::keyAllowedInCurrentMode(mgo::key::ENTER, t.model));
     }
     SECTION("Keep the motor's position")
@@ -2583,7 +2579,7 @@ TEST_CASE("UI: the scale and motor too far apart stops everything and asks")
             const auto d = t.model.getAxis1ScaleDifferenceMm();
             return d && std::abs(*d) < 0.011;
         }));
-        REQUIRE(t.model.getAxis1MotorPosition() == Approx(1.0).margin(0.0001));
+        REQUIRE(t.model.motorPosition(1) == Approx(1.0).margin(0.0001));
     }
 }
 
@@ -2603,11 +2599,10 @@ TEST_CASE("UI: a fast move with the table keeping up isn't a stall", "[timing]")
 {
     ScaleTestModel t(movingChecks);
     REQUIRE(t.runUntil([&] { return t.model.axis1ScaleIsSteady(); }));
-    t.model.setAxis1MotorSpeed(600.0);
-    t.model.axis1GoToPosition(20.0);
+    t.model.setMotorSpeed(1, 600.0);
+    t.model.goToPosition(1, 20.0);
     REQUIRE(t.runUntil([&] {
-        return !t.model.isAxis1MotorRunning()
-            && std::abs(t.model.getAxis1MotorPosition() - 20.0) < 0.0001;
+        return !t.model.isMotorRunning(1) && std::abs(t.model.motorPosition(1) - 20.0) < 0.0001;
     }));
     REQUIRE(t.runUntil([&] { return t.model.axis1ScaleIsSteady(); }));
     INFO(t.model.getWarning());
@@ -2619,15 +2614,15 @@ TEST_CASE("UI: a stall while moving stops everything at once, then asks", "[timi
 {
     ScaleTestModel t(movingChecks);
     REQUIRE(t.runUntil([&] { return t.model.axis1ScaleIsSteady(); }));
-    t.model.setAxis1MotorSpeed(600.0);
-    t.model.axis1GoToPosition(20.0);
+    t.model.setMotorSpeed(1, 600.0);
+    t.model.goToPosition(1, 20.0);
     // Part way, the table falls 3mm behind (e.g. the motor stalled)
-    REQUIRE(t.runUntil([&] { return t.model.getAxis1MotorPosition() > 5.0; }));
+    REQUIRE(t.runUntil([&] { return t.model.motorPosition(1) > 5.0; }));
     t.model.fakeAxis1Scale()->setErrorMm(-3.0);
-    REQUIRE(t.runUntil([&] { return !t.model.isAxis1MotorRunning(); }));
+    REQUIRE(t.runUntil([&] { return !t.model.isMotorRunning(1); }));
     INFO(t.model.getWarning());
     REQUIRE(t.model.getWarning().starts_with("Z stalled"));
-    REQUIRE(t.model.getAxis1MotorPosition() < 15.0);
+    REQUIRE(t.model.motorPosition(1) < 15.0);
     // Once the reading has settled, it asks which to believe, as usual
     REQUIRE(t.runUntil([&] { return t.model.axis1ScaleMismatchMm().has_value(); }));
     REQUIRE(*t.model.axis1ScaleMismatchMm() == Approx(-3.0).margin(0.05));
@@ -2638,7 +2633,7 @@ TEST_CASE("UI: the dialog when the scale and motor disagree")
     ScaleTestModel t({ { "Axis1ScaleWarnMm", "0.2" } });
     REQUIRE(t.runUntil([&] { return t.model.getAxis1ScalePositionMm().has_value(); }));
     t.model.fakeAxis1Scale()->setErrorMm(0.3);
-    t.model.axis1GoToPosition(1.0);
+    t.model.goToPosition(1, 1.0);
     REQUIRE(t.runUntil([&] { return t.model.axis1ScaleMismatchMm().has_value(); }));
     bool shown = false;
     whenDialogShows([&shown](QWidget* dialog) {
@@ -2649,7 +2644,7 @@ TEST_CASE("UI: the dialog when the scale and motor disagree")
     REQUIRE(waitForDialogToClose());
     REQUIRE(shown);
     REQUIRE(!t.model.axis1ScaleMismatchMm());
-    REQUIRE(t.model.getAxis1MotorPosition() == Approx(1.3).margin(0.011));
+    REQUIRE(t.model.motorPosition(1) == Approx(1.3).margin(0.011));
 }
 
 TEST_CASE("UI: a mismatch found straight after one is answered is asked about too")
@@ -2660,13 +2655,13 @@ TEST_CASE("UI: a mismatch found straight after one is answered is asked about to
     ScaleTestModel t({ { "Axis1ScaleWarnMm", "0.2" } });
     REQUIRE(t.runUntil([&] { return t.model.getAxis1ScalePositionMm().has_value(); }));
     t.model.fakeAxis1Scale()->setErrorMm(0.3);
-    t.model.axis1GoToPosition(1.0);
+    t.model.goToPosition(1, 1.0);
     REQUIRE(t.runUntil([&] { return t.model.axis1ScaleMismatchMm().has_value(); }));
     whenDialogShows([](QWidget* dialog) { QTest::keyClick(inputWidget(dialog), Qt::Key_Y); });
     t.controller.tick();
     REQUIRE(waitForDialogToClose());
     REQUIRE(!t.model.axis1ScaleMismatchMm());
-    REQUIRE(t.model.getAxis1MotorPosition() == Approx(1.3).margin(0.011));
+    REQUIRE(t.model.motorPosition(1) == Approx(1.3).margin(0.011));
     // The table shifts again (the model runs, but the controller doesn't
     // tick in between)
     t.model.fakeAxis1Scale()->setErrorMm(0.8);
@@ -2680,17 +2675,17 @@ TEST_CASE("UI: a mismatch found straight after one is answered is asked about to
     REQUIRE(waitForDialogToClose());
     REQUIRE(shown);
     REQUIRE(!t.model.axis1ScaleMismatchMm());
-    REQUIRE(t.model.getAxis1MotorPosition() == Approx(1.3).margin(0.011));
+    REQUIRE(t.model.motorPosition(1) == Approx(1.3).margin(0.011));
 }
 
 TEST_CASE("UI: the scale's position isn't used until its reading is steady")
 {
     ScaleTestModel t({ { "Axis1ScaleWarnMm", "0.2" }, { "Axis1ScaleMaxSettleMs", "1000" } });
     REQUIRE(t.runUntil([&] { return t.model.getAxis1ScalePositionMm().has_value(); }));
-    t.model.axis1GoToPosition(1.0);
+    t.model.goToPosition(1, 1.0);
     REQUIRE(t.runUntil([&] {
         const auto d = t.model.getAxis1ScaleDifferenceMm();
-        return !t.model.isAxis1MotorRunning() && d && std::abs(*d) < 0.011;
+        return !t.model.isMotorRunning(1) && d && std::abs(*d) < 0.011;
     }));
     // The reading runs away (e.g. interference), never settling: after the
     // longest time, everything stops and asks
@@ -2711,7 +2706,7 @@ TEST_CASE("UI: the scale's position isn't used until its reading is steady")
     REQUIRE(text.contains("still changing"));
     // Not used: the position is still the motor's, and it still asks
     REQUIRE(t.model.axis1ScaleMismatchMm());
-    REQUIRE(t.model.getAxis1MotorPosition() == Approx(1.0).margin(0.0001));
+    REQUIRE(t.model.motorPosition(1) == Approx(1.0).margin(0.0001));
     REQUIRE(!mgo::keyAllowedInCurrentMode(mgo::key::ENTER, t.model));
 
     // Once the reading settles, it asks again, and then it's used
@@ -2730,7 +2725,7 @@ TEST_CASE("UI: the scale's position isn't used until its reading is steady")
     REQUIRE(!text.isEmpty());
     REQUIRE(!text.contains("still changing"));
     REQUIRE(!t.model.axis1ScaleMismatchMm());
-    REQUIRE(t.model.getAxis1MotorPosition() == Approx(1.3).margin(0.011));
+    REQUIRE(t.model.motorPosition(1) == Approx(1.3).margin(0.011));
 }
 
 TEST_CASE("UI: a scale which jumps at rest is misreading, so only the position can be kept")
@@ -2740,10 +2735,10 @@ TEST_CASE("UI: a scale which jumps at rest is misreading, so only the position c
           { "Axis1ScaleWarnMm", "0.2" },
           { "Axis1ScaleFaultMm", "5" } });
     REQUIRE(t.runUntil([&] { return t.model.getAxis1ScalePositionMm().has_value(); }));
-    t.model.axis1GoToPosition(1.0);
+    t.model.goToPosition(1, 1.0);
     REQUIRE(t.runUntil([&] {
         const auto d = t.model.getAxis1ScaleDifferenceMm();
-        return !t.model.isAxis1MotorRunning() && d && std::abs(*d) < 0.011
+        return !t.model.isMotorRunning(1) && d && std::abs(*d) < 0.011
             && t.model.axis1ScaleIsSteady();
     }));
     // As on the mill, with the lathe running
@@ -2763,13 +2758,13 @@ TEST_CASE("UI: a scale which jumps at rest is misreading, so only the position c
     REQUIRE(text.contains("misreading"));
     REQUIRE(!t.model.axis1ScaleMismatchMm());
     REQUIRE(!t.model.axis1ScaleMisreadJumpMm());
-    REQUIRE(t.model.getAxis1MotorPosition() == Approx(1.0).margin(0.0001));
+    REQUIRE(t.model.motorPosition(1) == Approx(1.0).margin(0.0001));
     // The scale is lined up with the motor again
     REQUIRE(t.runUntil([&] {
         const auto d = t.model.getAxis1ScaleDifferenceMm();
         return d && std::abs(*d) < 0.011;
     }));
-    REQUIRE(t.model.getAxis1MotorPosition() == Approx(1.0).margin(0.011));
+    REQUIRE(t.model.motorPosition(1) == Approx(1.0).margin(0.011));
 }
 
 TEST_CASE("UI: the status line's items move along to make room")
@@ -2799,7 +2794,7 @@ TEST_CASE("UI: finishing moves on the scale")
     const auto finishedAt = [&t](double target) {
         return t.runUntil([&] {
             const auto scale = t.model.getAxis1ScalePositionMm();
-            return !t.model.isAxis1FinishingOnScale() && !t.model.isAxis1MotorRunning() && scale
+            return !t.model.isAxis1FinishingOnScale() && !t.model.isMotorRunning(1) && scale
                 && std::abs(*scale - target) < 0.011;
         });
     };
@@ -2808,42 +2803,42 @@ TEST_CASE("UI: finishing moves on the scale")
     {
         // The table falls 0.05mm short of where the motor's steps say
         t.model.fakeAxis1Scale()->setErrorMm(-0.05);
-        t.model.axis1GoToPosition(1.0);
+        t.model.goToPosition(1, 1.0);
         REQUIRE(t.model.isAxis1FinishingOnScale());
         // (Keys wait meanwhile)
         REQUIRE(t.runUntil([&] {
-            return !t.model.isAxis1MotorRunning() && t.model.isAxis1FinishingOnScale()
-                && t.model.getAxis1Status().starts_with("Finishing on the scale");
+            return !t.model.isMotorRunning(1) && t.model.isAxis1FinishingOnScale()
+                && t.model.axisStatus(1).starts_with("Finishing on the scale");
         }));
         REQUIRE(finishedAt(1.0));
-        REQUIRE(t.model.getAxis1MotorPosition() == Approx(1.0).margin(0.011));
+        REQUIRE(t.model.motorPosition(1) == Approx(1.0).margin(0.011));
         REQUIRE(t.model.getWarning().empty());
     }
     SECTION("Past the target: backs off and approaches again")
     {
         t.model.fakeAxis1Scale()->setErrorMm(0.05);
-        t.model.axis1GoToPosition(1.0);
+        t.model.goToPosition(1, 1.0);
         // It goes back below 1 (backing off), then comes up to it again
-        REQUIRE(t.runUntil([&] { return t.model.getAxis1MotorPosition() < 0.6; }));
+        REQUIRE(t.runUntil([&] { return t.model.motorPosition(1) < 0.6; }));
         REQUIRE(finishedAt(1.0));
         REQUIRE(t.model.getWarning().empty());
     }
     SECTION("Both directions, after zeroing")
     {
-        t.model.axis1GoToPosition(2.0);
+        t.model.goToPosition(1, 2.0);
         REQUIRE(finishedAt(2.0));
         t.model.fakeAxis1Scale()->setErrorMm(0.03);
         t.model.zero(1);
         REQUIRE(t.runUntil([&] { return t.model.getAxis1ScalePositionMm().has_value(); }));
-        t.model.axis1GoToPosition(-1.0);
+        t.model.goToPosition(1, -1.0);
         REQUIRE(finishedAt(-1.0));
-        t.model.axis1GoToPosition(0.0);
+        t.model.goToPosition(1, 0.0);
         REQUIRE(finishedAt(0.0));
     }
     SECTION("Space stops it")
     {
         t.model.fakeAxis1Scale()->setErrorMm(-0.05);
-        t.model.axis1GoToPosition(1.0);
+        t.model.goToPosition(1, 1.0);
         REQUIRE(t.model.isAxis1FinishingOnScale());
         t.model.stopAllMotors();
         REQUIRE(!t.model.isAxis1FinishingOnScale());
@@ -2853,11 +2848,10 @@ TEST_CASE("UI: finishing moves on the scale")
         t.model.toggleAxis1FinishOnScale();
         REQUIRE(!t.model.axis1FinishesOnScale());
         t.model.fakeAxis1Scale()->setErrorMm(-0.05);
-        t.model.axis1GoToPosition(1.0);
+        t.model.goToPosition(1, 1.0);
         REQUIRE(!t.model.isAxis1FinishingOnScale());
         REQUIRE(t.runUntil([&] {
-            return !t.model.isAxis1MotorRunning()
-                && std::abs(t.model.getAxis1MotorPosition() - 0.95) < 0.011;
+            return !t.model.isMotorRunning(1) && std::abs(t.model.motorPosition(1) - 0.95) < 0.011;
         }));
     }
 }
@@ -2893,26 +2887,26 @@ TEST_CASE("UI: the table carrying on into the slack is allowed for")
     REQUIRE(t.runUntil([&] { return t.model.getAxis1ScalePositionMm().has_value(); }));
     const auto stoppedAt = [&t](double position) {
         return t.runUntil([&] {
-            return !t.model.isAxis1MotorRunning() && !t.model.axis1ScaleMismatchMm()
-                && std::abs(t.model.getAxis1MotorPosition() - position) < 0.011;
+            return !t.model.isMotorRunning(1) && !t.model.axis1ScaleMismatchMm()
+                && std::abs(t.model.motorPosition(1) - position) < 0.011;
         });
     };
     // (The simulated table has no backlash, so the first move to the right,
     // a reversal after the start-up take-up, ends 0.3 further right: within
     // what's allowed that way, so re-based. After that, moves to the right
     // aren't reversals)
-    t.model.axis1GoToPosition(0.5);
+    t.model.goToPosition(1, 0.5);
     REQUIRE(stoppedAt(0.8));
 
     // Moving right, the table ends 0.4mm further right than the motor (as
     // after stopping dead from speed): within 0.2 + 0.3, so just re-based.
     // (The error changes while moving: at rest, a change is just that)
-    t.model.axis1GoToPosition(1.8);
+    t.model.goToPosition(1, 1.8);
     t.model.fakeAxis1Scale()->setErrorMm(0.4);
     REQUIRE(stoppedAt(2.2));
     // Moving right again, the table ends 0.3mm short (as if stalled): that
     // way, only 0.2 is allowed
-    t.model.axis1GoToPosition(3.2);
+    t.model.goToPosition(1, 3.2);
     t.model.fakeAxis1Scale()->setErrorMm(0.1);
     REQUIRE(t.runUntil([&] { return t.model.axis1ScaleMismatchMm().has_value(); }));
     REQUIRE(*t.model.axis1ScaleMismatchMm() == Approx(-0.3).margin(0.011));
@@ -2941,16 +2935,16 @@ TEST_CASE("UI: defining a new tool, then changing tool")
             w->grab().save(QString::fromStdString(std::string(dir) + "/" + name + ".png"));
         }
     };
-    model.axis1SetSpeed(500.0);
-    model.axis2SetSpeed(500.0);
+    model.setMotorSpeed(1, 500.0);
+    model.setMotorSpeed(2, 500.0);
     model.setPosition(2, 10.0);
     model.diameterIsSet();
     model.markWorkEnd();
     const auto moveTo = [&model](double z, double x) {
-        model.axis1GoToPosition(z);
-        model.axis1Wait();
-        model.axis2GoToPosition(x);
-        model.axis2Wait();
+        model.goToPosition(1, z);
+        model.waitForMotor(1);
+        model.goToPosition(2, x);
+        model.waitForMotor(2);
     };
 
     // The menu's Tool library, then New, which explains and asks first
@@ -3006,7 +3000,7 @@ TEST_CASE("UI: defining a new tool, then changing tool")
     REQUIRE(model.toolLibrary().current().description == "Left-hand turning tool");
     REQUIRE(model.toolLibrary().current().noseRadiusMm == Approx(0.2));
     // Tool 2 is on the end, which reads Z 0 again
-    REQUIRE(model.getAxis1MotorPosition() == Approx(0.0).margin(0.0011));
+    REQUIRE(model.motorPosition(1) == Approx(0.0).margin(0.0011));
     snapshotWindow("tool_in_use");
 
     // T: back to tool 1 (the first in the list)
@@ -3016,7 +3010,7 @@ TEST_CASE("UI: defining a new tool, then changing tool")
     });
     press(w, controller, Qt::Key_T);
     REQUIRE(model.toolLibrary().current().number == 1);
-    REQUIRE(model.getAxis1MotorPosition() == Approx(1.0).margin(0.0011));
+    REQUIRE(model.motorPosition(1) == Approx(1.0).margin(0.0011));
 
     // T: the unknown tool (last in the list). Nothing shifts
     whenDialogShows([](QWidget* dialog) {
@@ -3025,7 +3019,7 @@ TEST_CASE("UI: defining a new tool, then changing tool")
     });
     press(w, controller, Qt::Key_T);
     REQUIRE(!model.toolLibrary().currentIsKnown());
-    REQUIRE(model.getAxis1MotorPosition() == Approx(1.0).margin(0.0011));
+    REQUIRE(model.motorPosition(1) == Approx(1.0).margin(0.0011));
     snapshotWindow("tool_unknown");
 
     std::filesystem::remove(path, ec);

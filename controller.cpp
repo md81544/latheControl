@@ -216,7 +216,7 @@ void Controller::checkScaleMismatch()
             [this]() { m_model->keepAxis1MotorPosition(); });
         return;
     }
-    const double position = m_model->getAxis1MotorPosition();
+    const double position = m_model->motorPosition(1);
     std::vector<std::string> lines {
         fmt::format(
             "{}'s scale says {}, but {}'s position is {}: {} apart,",
@@ -432,35 +432,35 @@ void Controller::processKey(int t)
             case key::L:
             case key::a1_l:
                 {
-                    m_model->axis1GoToPreviousPosition();
+                    m_model->goToPreviousPosition(1);
                     break;
                 }
             case key::a2_l:
                 {
-                    m_model->axis2GoToPreviousPosition();
+                    m_model->goToPreviousPosition(2);
                     break;
                 }
             case key::aAll_l:
                 {
-                    m_model->axis1GoToPreviousPosition();
-                    m_model->axis2GoToPreviousPosition();
+                    m_model->goToPreviousPosition(1);
+                    m_model->goToPreviousPosition(2);
                     break;
                 }
             case key::FULLSTOP:
             case key::a1_FULLSTOP:
                 {
-                    m_model->repeatLastRelativeMove(Axis::Axis1);
+                    m_model->repeatLastRelativeMove(1);
                     break;
                 }
             case key::a2_FULLSTOP:
                 {
-                    m_model->repeatLastRelativeMove(Axis::Axis2);
+                    m_model->repeatLastRelativeMove(2);
                     break;
                 }
             case key::aAll_FULLSTOP:
                 {
-                    m_model->repeatLastRelativeMove(Axis::Axis1);
-                    m_model->repeatLastRelativeMove(Axis::Axis2);
+                    m_model->repeatLastRelativeMove(1);
+                    m_model->repeatLastRelativeMove(2);
                     break;
                 }
             case key::a2_MINUS:
@@ -641,28 +641,28 @@ void Controller::processKey(int t)
             // accidental triggering of both with the stick
             case key::js_rapid_up:
                 {
-                    if (!m_model->isAxis1MotorRunning()) {
+                    if (!m_model->isMotorRunning(1)) {
                         m_model->axis2Rapid(XDirection::Inwards);
                     }
                     break;
                 }
             case key::js_rapid_down:
                 {
-                    if (!m_model->isAxis1MotorRunning()) {
+                    if (!m_model->isMotorRunning(1)) {
                         m_model->axis2Rapid(XDirection::Outwards);
                     }
                     break;
                 }
             case key::js_rapid_left:
                 {
-                    if (!m_model->isAxis2MotorRunning()) {
+                    if (!m_model->isMotorRunning(2)) {
                         m_model->axis1Rapid(ZDirection::Left);
                     }
                     break;
                 }
             case key::js_rapid_right:
                 {
-                    if (!m_model->isAxis2MotorRunning()) {
+                    if (!m_model->isMotorRunning(2)) {
                         m_model->axis1Rapid(ZDirection::Right);
                     }
                     break;
@@ -672,28 +672,28 @@ void Controller::processKey(int t)
             // accidental triggering of both with the stick
             case key::js_up:
                 {
-                    if (!m_model->isAxis1MotorRunning()) {
+                    if (!m_model->isMotorRunning(1)) {
                         m_model->axis2Move(XDirection::Inwards);
                     }
                     break;
                 }
             case key::js_down:
                 {
-                    if (!m_model->isAxis1MotorRunning()) {
+                    if (!m_model->isMotorRunning(1)) {
                         m_model->axis2Move(XDirection::Outwards);
                     }
                     break;
                 }
             case key::js_left:
                 {
-                    if (!m_model->isAxis2MotorRunning()) {
+                    if (!m_model->isMotorRunning(2)) {
                         m_model->axis1Move(ZDirection::Left);
                     }
                     break;
                 }
             case key::js_right:
                 {
-                    if (!m_model->isAxis2MotorRunning()) {
+                    if (!m_model->isMotorRunning(2)) {
                         m_model->axis1Move(ZDirection::Right);
                     }
                     break;
@@ -825,7 +825,7 @@ void Controller::processKey(int t)
                         0.0,
                         [this](const NumericInputReturn& rc) {
                             if (!rc.cancelled) {
-                                m_model->axis1GoToPosition(m_model->fromDisplayUnits(1, rc.value));
+                                m_model->goToPosition(1, m_model->fromDisplayUnits(1, rc.value));
                             }
                         });
                     break;
@@ -840,7 +840,7 @@ void Controller::processKey(int t)
                         0.0,
                         [this](const NumericInputReturn& rc) {
                             if (!rc.cancelled) {
-                                m_model->axis2GoToPosition(m_model->fromDisplayUnits(2, rc.value));
+                                m_model->goToPosition(2, m_model->fromDisplayUnits(2, rc.value));
                             }
                         });
                     break;
@@ -856,7 +856,7 @@ void Controller::processKey(int t)
                         0.0,
                         [this](const NumericInputReturn& rc) {
                             if (!rc.cancelled) {
-                                m_model->axis1GoToOffset(m_model->fromDisplayUnits(1, rc.value));
+                                m_model->goToOffset(1, m_model->fromDisplayUnits(1, rc.value));
                             }
                         });
                     break;
@@ -872,7 +872,7 @@ void Controller::processKey(int t)
                         0.0,
                         [this](const NumericInputReturn& rc) {
                             if (!rc.cancelled) {
-                                m_model->axis2GoToOffset(m_model->fromDisplayUnits(2, rc.value));
+                                m_model->goToOffset(2, m_model->fromDisplayUnits(2, rc.value));
                             }
                         });
                     break;
@@ -1410,7 +1410,7 @@ void Controller::processKey(int t)
                 }
             default: // e.g. key::SPACE to stop all motors
                 {
-                    if (m_model->isAxis1MotorRunning() || m_model->isAxis2MotorRunning()) {
+                    if (m_model->isMotorRunning(1) || m_model->isMotorRunning(2)) {
                         // (Logged, as stray keys - e.g. from a gamepad - stop motion)
                         MGOLOG("Stopping all motors: key " << kp);
                     }

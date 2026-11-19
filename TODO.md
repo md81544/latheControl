@@ -2009,12 +2009,29 @@ change.
         - A bug fixed on the way: a memory value typed in (`i`) was
           truncated to a step, not rounded, so 0.7 mm at 1/1000 mm a step
           was stored as 699 steps (0.699 mm). Now it's the nearest step
-        - Still to do, in the same way: moves and rapids, nudges, go-tos
-          to a position and breadcrumbs, speeds, statuses, locks, and the
+        - **Then (19 Nov 2026), the motorised axes' state:** the dozen
+          pairs of members (`m_axis1Status`/`m_axis2Status`, fast
+          returning, rapid in progress, previous speed, was running, the
+          motor log, the positions' tool, the last relative move, the
+          breadcrumbs, faulted) are one `MotorAxisState` per axis, in
+          `m_motorAxes`, through `axisState(n)`. The calls which differed
+          only by axis take its number: `isMotorRunning()`,
+          `motorSpeed()`, `setMotorSpeed()` (which also replaces
+          `axis1SetSpeed()`), `waitForMotor()`, `motorStep()`,
+          `motorPosition()`, `axisStatus()`, `goToPosition()`,
+          `goToOffset()`, `repeatLastRelativeMove()` and
+          `goToPreviousPosition()` (whose two copies are now one).
+          `enum class Axis` is gone (its last uses take a number), as is
+          `m_lastRelativeMoveAxis`, which was set but never read. The
+          motors themselves are still `m_axis1Motor`/`m_axis2Motor` (about
+          400 uses), with `motor(n)` for code taking a number: they can
+          move into the state with the moves
+        - Still to do, in the same way: moves and rapids, nudges, fast
+          returns, speed up and down and presets, stopping, locks, and the
           scale (which wants to belong to any axis, for a scale on the
-          lathe's X later). These are mostly inside the Model, where the
-          two motorised axes differ most (axis 1's taper, threading and
-          scale; axis 2's retraction), so each wants care
+          lathe's X later). These are inside the Model, where the two
+          motorised axes differ most (axis 1's taper, threading and scale;
+          axis 2's retraction), so each wants care
 - [x] `axis.cpp` / `axis.h` are compiled but unused, and their `mgo::Axis`
       class clashes in name with `enum class mgo::Axis` in model.h
     - **Done:** removed (they're in git's history, if the "array of axes"

@@ -82,11 +82,6 @@ enum class ZDirection {
     Right
 };
 
-enum class Axis {
-    Axis1,
-    Axis2
-};
-
 // The touches which measure a tool's offsets, in order (see
 // Model::startToolMeasurement()): the current tool on the work's diameter,
 // then on its end; then, after changing tool, the tool being measured on the
@@ -145,16 +140,34 @@ public:
     // before a taper) is in progress. The controller holds back keys meanwhile
     bool isMotionSequenceRunning() const;
 
+    // The motorised axes (1 and 2). Each of these takes an axis number
+    bool isMotorRunning(int axisNumber) const;
+    // In the axis's units (e.g. mm) per minute
+    double motorSpeed(int axisNumber) const;
+    void setMotorSpeed(int axisNumber, double speed);
+    // Waits for the motor to stop (e.g. for the tests)
+    void waitForMotor(int axisNumber);
+    long motorStep(int axisNumber) const;
+    // The motor's position (for axis 2, what's shown is getAxis2Position(),
+    // less any taper correction)
+    double motorPosition(int axisNumber) const;
+    // Shown on the status line, e.g. "stopped" or "Going to 10.000"
+    std::string axisStatus(int axisNumber) const;
+    // Moves to a position, or by an offset from where it is (which
+    // repeatLastRelativeMove() repeats). Axis 1's moves follow the taper or
+    // the thread, in those modes, and finish on its scale, if it has one
+    void goToPosition(int axisNumber, double mm);
+    void goToOffset(int axisNumber, double mm);
+    void repeatLastRelativeMove(int axisNumber);
+    // Goes back along the axis's "breadcrumb" trail: to the last position
+    // it stopped at (or was nudged to) before this one
+    void goToPreviousPosition(int axisNumber);
+
     void axis1GoToStep(long step);
-    void axis1GoToPosition(double pos);
-    void axis1GoToOffset(double pos);
-    void axis1GoToPreviousPosition();
     void axis1Nudge(ZDirection direction, double nudgeAmountMm);
     void axis1SpeedDecrease();
     void axis1SpeedIncrease();
     void axis1FastReturn();
-    void axis1SetSpeed(double speed);
-    void axis1Wait();
     void axis1Stop();
     // Stops axis 1, slowing down first if it decelerates (see
     // StepperMotor::decelerateToStop()), without waiting. If it's already
@@ -163,14 +176,7 @@ public:
     void axis1Move(ZDirection direction);
     void axis1Rapid(ZDirection direction);
     void axis1SpeedPreset();
-    void axis1SaveBreadcrumbPosition();
-    void axis1ClearBreadcrumbs();
 
-    void axis2GoToPosition(double pos);
-    void axis2GoToOffset(double pos);
-    void axis2GoToPreviousPosition();
-    void axis2SetSpeed(double speed);
-    void axis2Wait();
     void axis2Stop();
     // As axis1StopRamped()
     void axis2StopRamped();
@@ -184,10 +190,7 @@ public:
     void axis2Move(XDirection direction);
     void axis2Rapid(XDirection direction);
     void axis2SpeedPreset();
-    void axis2SaveBreadcrumbPosition();
-    void axis2ClearBreadcrumbs();
 
-    void repeatLastRelativeMove(Axis axis);
     // The X position has been set as a diameter (so X is now measured from
     // the centre). This lasts until X is zeroed, or its position is set again.
     // As the tool is on the surface just measured, its diameter becomes the
@@ -332,8 +335,6 @@ public:
     // a stall), or a limit switch has stopped the motors (or is still
     // pressed), describing it and what to do
     std::string getFaultMessage() const;
-    std::string getAxis1Status() const;
-    std::string getAxis2Status() const;
     std::string getGeneralStatus() const;
 
     // The thread sizes, read from the ThreadsFile at initialise() (empty if
@@ -406,11 +407,7 @@ public:
     // while X is moving)
     bool inSlotGoTo(int axisNumber) const;
 
-    void setAxis1MotorSpeed(double speed);
-    void setAxis2MotorSpeed(double speed);
     void resetMotorThreads();
-    double getAxis1MotorPosition() const;
-    double getAxis2MotorPosition() const;
     // X's position as shown: the motor's, less any taper correction it's
     // making (see multiPassXCorrection())
     double getAxis2Position() const;
@@ -429,7 +426,6 @@ public:
     // passes, and before moving to their start: just clear of the work's
     // surface at the start (see MultiPassPlan::retractTo)
     double multiPassRetractTarget() const;
-    double getAxis1MotorSpeed() const;
     // See RotaryEncoder::getSpindlePulses()
     int64_t getSpindlePulses() const;
     // See RotaryEncoder::getSpindlePosition(): what threading passes follow
@@ -437,12 +433,6 @@ public:
     // When threading or knurling: the speed Z moves at (pitch or lead x the
     // spindle's speed)
     double getThreadingZSpeed() const;
-    double getAxis2MotorSpeed() const;
-    double getAxis1MotorCurrentStep() const;
-    double getAxis2MotorCurrentStep() const;
-
-    bool isAxis1MotorRunning() const;
-    bool isAxis2MotorRunning() const;
 
     float getChuckAngle() const;
 
@@ -845,20 +835,60 @@ private:
     void axis1GoToCurrentMemory();
     void axis2GoToCurrentMemory();
     void manualAxisGoToCurrentMemory(int axisNumber);
+    // What logMotorMovement() last saw of a motor
+    struct MotorLog {
+        bool running { false };
+        long step { 0 };
+    };
+    // What's kept for each motorised axis (axes 1 and 2), besides its motor
+    struct MotorAxisState {
+        // Shown on the status line, e.g. "stopped" or "returning"
+        std::string status { "stopped" };
+        bool fastReturning { false };
+        bool rapidInProgress { false };
+        // The speed to go back to after a fast return or a rapid (axis 2's
+        // is also used for X's speed around a taper)
+        float previousSpeed { 40.f };
+        // Whether the motor was running at the last checkStatus()
+        bool wasRunning { false };
+        MotorLog motorLog;
+        // The tool whose tip the axis's positions read (see positionsTool()):
+        // the tool in use when the axis was last zeroed or set, or changed to
+        int positionsTool { ToolLibrary::REFERENCE_TOOL };
+        // The last relative move (see repeatLastRelativeMove())
+        double lastRelativeMove { 0.0 };
+        // The "breadcrumb" trail of positions, for going back to the last
+        std::stack<double> previousPositions;
+        // Set when the motor's driver goes into alarm (see
+        // StepperMotor::setAlarmPin()). The position is then lost, so this
+        // stays set until the axis is re-zeroed or its position set (which
+        // also clears the motor's fault, if the driver's alarm has been
+        // cleared)
+        bool faulted { false };
+    };
+    std::array<MotorAxisState, 2> m_motorAxes;
+    // Axis 1's or axis 2's
+    MotorAxisState& axisState(int axisNumber);
+    const MotorAxisState& axisState(int axisNumber) const;
+    // (See goToPosition(), goToOffset() and goToPreviousPosition())
+    void axis1GoToPosition(double pos);
+    void axis1GoToOffset(double pos);
+    void axis2GoToPosition(double pos);
+    void axis2GoToOffset(double pos);
+    // Pushes where the axis is onto its breadcrumb trail (unless it's there
+    // already), or clears the trail, leaving only where it is
+    void saveBreadcrumbPosition(int axisNumber);
+    void clearBreadcrumbs(int axisNumber);
+    // Axis 1's or axis 2's motor (nullptr before initialise())
+    StepperMotor* motor(int axisNumber);
+    const StepperMotor* motor(int axisNumber) const;
     ThreadTable m_threads;
     ThreadChoice m_threadChoice;
     std::string m_generalStatus { DEFAULT_GENERAL_STATUS };
-    std::string m_axis1Status { "stopped" };
-    std::string m_axis2Status { "stopped" };
     std::string m_warning;
     std::string m_input; // general-purpose string for user-entered data
     bool m_quit { false };
     bool m_shutdown { false };
-    float m_previousAxis1Speed { 40.f };
-    bool m_axis1FastReturning { false };
-    bool m_axis2FastReturning { false };
-    bool m_axis1RapidInProgress { false };
-    bool m_axis2RapidInProgress { false };
     int m_keyPressed { 0 };
     double m_taperAngle { 0.0 };
     float m_taperPreviousXSpeed { 40.f };
@@ -873,18 +903,8 @@ private:
     // Used to store position to return to after retract:
     long m_xOldPosition;
     bool m_axis2Retracted { false };
-    float m_previousAxis2Speed { 40.f };
     bool m_fastRetracting { false };
 
-    bool m_axis1WasRunning { false };
-    // What logMotorMovement() last saw of each motor
-    struct MotorLog {
-        bool running { false };
-        long step { 0 };
-    };
-    MotorLog m_axis1MotorLog;
-    MotorLog m_axis2MotorLog;
-    bool m_axis2WasRunning { false };
     bool m_spindleWasRunning { false };
     // When the spindle started reading as stopped (see checkSpindleStopped())
     std::optional<std::chrono::steady_clock::time_point> m_spindleLowSince;
@@ -901,10 +921,6 @@ private:
     std::optional<double> m_workEndZ;
     // See toolLibrary()
     ToolLibrary m_toolLibrary;
-    // The tool whose tip each axis's positions read (see positionsTool()):
-    // the tool in use when the axis was last zeroed or set, or changed to
-    int m_axis1PositionsTool { ToolLibrary::REFERENCE_TOOL };
-    int m_axis2PositionsTool { ToolLibrary::REFERENCE_TOOL };
     // While measuring a tool (see startToolMeasurement()): which, and the
     // positions touched so far, in ToolTouchStep's order (for the diameter,
     // axis 2's; for the end, axis 1's)
@@ -914,13 +930,7 @@ private:
     };
     std::optional<ToolMeasurement> m_toolMeasurement;
     DisplayUnits m_displayUnits { DisplayUnits::Metric };
-    double m_axis1LastRelativeMove { 0.0 };
-    double m_axis2LastRelativeMove { 0.0 };
-    Axis m_lastRelativeMoveAxis;
 
-    // "Breadcrumb" trail of positions for axes:
-    std::stack<double> m_axis1PreviousPositions;
-    std::stack<double> m_axis2PreviousPositions;
     MultiPassSetup m_multiPassSetup;
     // (The range is for whichever was set up last: multi-pass mode's, or the
     // threading passes'. Each is set up on entering its mode, or after it)
@@ -970,12 +980,6 @@ private:
     // checkStatus() can clear the warning once it's stopped
     std::optional<unsigned> m_lockRefusedAxis;
 
-    // Set when a motor's driver goes into alarm (see StepperMotor::setAlarmPin()).
-    // The position is then lost, so these stay set until the axis is re-zeroed
-    // or its position set (which also clears the motor's fault, if the
-    // driver's alarm has been cleared)
-    bool m_axis1Faulted { false };
-    bool m_axis2Faulted { false };
     // Whether a limit switch trip has been dealt with (see checkLimitSwitch())
     bool m_limitTripSeen { false };
 
@@ -1105,10 +1109,10 @@ private:
     logMotorMovement(const StepperMotor& motor, MotorLog& log, const std::string& label);
     // X is no longer known to be measured from the centre
     void clearDiameter();
-    void clearMotorFault(Axis axis);
+    void clearMotorFault(int axisNumber);
     // Shifts an axis's positions from one tool's offset to another's (see
     // selectTool())
-    void shiftPositionsForTool(Axis axis, double fromMm, double toMm);
+    void shiftPositionsForTool(int axisNumber, double fromMm, double toMm);
     // Writes the tool library to ToolLibraryFile. Returns why not (also
     // shown as a warning), or empty
     std::string saveToolLibrary();

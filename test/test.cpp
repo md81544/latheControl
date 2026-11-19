@@ -125,8 +125,8 @@ bool runUntilStopped(mgo::Model& model)
     bool stoppedBefore = false;
     for (;;) {
         model.checkStatus();
-        const bool stopped = !model.isMotionSequenceRunning() && !model.isAxis1MotorRunning()
-            && !model.isAxis2MotorRunning();
+        const bool stopped = !model.isMotionSequenceRunning() && !model.isMotorRunning(1)
+            && !model.isMotorRunning(2);
         if (stopped && stoppedBefore) {
             return true;
         }
@@ -692,10 +692,10 @@ TEST_CASE("Model:   check tapering")
     model.initialise();
     model.changeMode(mgo::Mode::Taper);
     model.setTaperAngle(45.0);
-    model.axis1SetSpeed(200.0);
-    model.axis1GoToPosition(-0.5);
+    model.setMotorSpeed(1, 200.0);
+    model.goToPosition(1, -0.5);
     REQUIRE(runUntilStopped(model));
-    double pos = model.getAxis2MotorPosition();
+    double pos = model.motorPosition(2);
     REQUIRE(pos < -0.495);
     REQUIRE(pos > -0.505);
 }
@@ -710,10 +710,10 @@ TEST_CASE("Model:   check tapering (small angle)")
     model.initialise();
     model.changeMode(mgo::Mode::Taper);
     model.setTaperAngle(-1.42);
-    model.axis1SetSpeed(200.0);
-    model.axis1GoToPosition(-0.5);
+    model.setMotorSpeed(1, 200.0);
+    model.goToPosition(1, -0.5);
     REQUIRE(runUntilStopped(model));
-    double pos = model.getAxis2MotorPosition();
+    double pos = model.motorPosition(2);
     REQUIRE(pos != 0.0);
 }
 
@@ -1749,7 +1749,7 @@ TEST_CASE("Halving axis 1 or 2's position, to find a centre")
     model.storePosition(1);
     REQUIRE(model.getMemory(1, model.getCurrentMemorySlot()));
     model.half(1);
-    REQUIRE(model.getAxis1MotorPosition() == Approx(5.0).margin(0.01));
+    REQUIRE(model.motorPosition(1) == Approx(5.0).margin(0.01));
     // (As for setting its position, the memory slots would be wrong)
     REQUIRE(!model.getMemory(1, model.getCurrentMemorySlot()));
 
@@ -1775,8 +1775,8 @@ TEST_CASE("A memory value typed in is stored to the nearest step")
     REQUIRE(*model.getMemory(1, 0) == Approx(0.701).margin(1e-9));
     // Going there moves to that step, and being there is seen as being there
     model.goToCurrentMemory(1);
-    model.axis1Wait();
-    REQUIRE(model.getAxis1MotorPosition() == Approx(0.701).margin(1e-9));
+    model.waitForMotor(1);
+    REQUIRE(model.motorPosition(1) == Approx(0.701).margin(1e-9));
 }
 
 TEST_CASE("Stepper: driver alarm stops the motor until cleared")
@@ -1847,27 +1847,27 @@ TEST_CASE("Model:   motor fault stops all axes, and re-zeroing clears it")
     mgo::MockGpio gpio(false);
     mgo::Model model(gpio, config);
     model.initialise();
-    model.setAxis1MotorSpeed(100.0);
-    model.setAxis2MotorSpeed(100.0);
-    model.axis1GoToPosition(50.0);
-    model.axis2GoToPosition(50.0);
-    REQUIRE(waitFor([&] { return model.isAxis1MotorRunning() && model.isAxis2MotorRunning(); }));
+    model.setMotorSpeed(1, 100.0);
+    model.setMotorSpeed(2, 100.0);
+    model.goToPosition(1, 50.0);
+    model.goToPosition(2, 50.0);
+    REQUIRE(waitFor([&] { return model.isMotorRunning(1) && model.isMotorRunning(2); }));
     model.checkStatus();
     REQUIRE(model.getFaultMessage().empty());
 
     // Axis 1's driver goes into alarm: it stops by itself...
     gpio.setInputPinLevel(ALARM_PIN, mgo::PinState::low);
-    REQUIRE(waitFor([&] { return !model.isAxis1MotorRunning(); }));
+    REQUIRE(waitFor([&] { return !model.isMotorRunning(1); }));
     // ...and the model then stops the other axis, and reports the fault
     model.checkStatus();
-    REQUIRE(!model.isAxis2MotorRunning());
+    REQUIRE(!model.isMotorRunning(2));
     REQUIRE(model.getFaultMessage().find("Z MOTOR FAULT") != std::string::npos);
 
     // Axis 1 won't move while faulted
-    const double position = model.getAxis1MotorPosition();
-    model.axis1GoToPosition(0.0);
+    const double position = model.motorPosition(1);
+    model.goToPosition(1, 0.0);
     std::this_thread::sleep_for(std::chrono::milliseconds(20));
-    REQUIRE(model.getAxis1MotorPosition() == position);
+    REQUIRE(model.motorPosition(1) == position);
 
     // Re-zeroing while the driver is still in alarm doesn't clear the fault
     model.zero(1);
@@ -1879,9 +1879,9 @@ TEST_CASE("Model:   motor fault stops all axes, and re-zeroing clears it")
     model.zero(1);
     REQUIRE(model.getFaultMessage().empty());
     REQUIRE(model.getWarning().empty());
-    model.axis1GoToPosition(0.5);
-    model.axis1Wait();
-    REQUIRE(model.getAxis1MotorPosition() == Approx(0.5));
+    model.goToPosition(1, 0.5);
+    model.waitForMotor(1);
+    REQUIRE(model.motorPosition(1) == Approx(0.5));
 }
 
 namespace {
@@ -1971,11 +1971,11 @@ TEST_CASE("Model:   a limit switch stops all axes, and refuses moves until clear
     gpio.setInputPinLevel(LIMIT_PIN, mgo::PinState::low);
     mgo::Model model(gpio, config);
     model.initialise();
-    model.setAxis1MotorSpeed(100.0);
-    model.setAxis2MotorSpeed(100.0);
-    model.axis1GoToPosition(50.0);
-    model.axis2GoToPosition(50.0);
-    REQUIRE(waitFor([&] { return model.isAxis1MotorRunning() && model.isAxis2MotorRunning(); }));
+    model.setMotorSpeed(1, 100.0);
+    model.setMotorSpeed(2, 100.0);
+    model.goToPosition(1, 50.0);
+    model.goToPosition(2, 50.0);
+    REQUIRE(waitFor([&] { return model.isMotorRunning(1) && model.isMotorRunning(2); }));
     model.checkStatus();
     REQUIRE(!model.limitSwitchTripped());
     REQUIRE(model.getFaultMessage().empty());
@@ -1983,7 +1983,7 @@ TEST_CASE("Model:   a limit switch stops all axes, and refuses moves until clear
 
     // A switch is pressed: both motors stop, and it's reported
     gpio.setInputPinLevel(LIMIT_PIN, mgo::PinState::high);
-    REQUIRE(waitFor([&] { return !model.isAxis1MotorRunning() && !model.isAxis2MotorRunning(); }));
+    REQUIRE(waitFor([&] { return !model.isMotorRunning(1) && !model.isMotorRunning(2); }));
     model.checkStatus();
     REQUIRE(model.limitSwitchTripped());
     REQUIRE(model.limitSwitchPressed());
@@ -1996,10 +1996,10 @@ TEST_CASE("Model:   a limit switch stops all axes, and refuses moves until clear
     REQUIRE(mgo::keyAllowedInCurrentMode(mgo::key::SPACE, model));
     REQUIRE(mgo::keyAllowedInCurrentMode(mgo::key::clearLimitTrip, model));
     // (And the model's moves are refused by the motors anyway)
-    const double z = model.getAxis1MotorPosition();
-    model.axis1GoToPosition(0.0);
+    const double z = model.motorPosition(1);
+    model.goToPosition(1, 0.0);
     std::this_thread::sleep_for(std::chrono::milliseconds(20));
-    REQUIRE(model.getAxis1MotorPosition() == z);
+    REQUIRE(model.motorPosition(1) == z);
 
     // Cleared, with the switch still pressed: moves are allowed again (to
     // move off it), and the message says it's still pressed
@@ -2008,9 +2008,9 @@ TEST_CASE("Model:   a limit switch stops all axes, and refuses moves until clear
     REQUIRE(!model.limitSwitchTripped());
     REQUIRE(mgo::keyAllowedInCurrentMode(mgo::key::w, model));
     REQUIRE(model.getFaultMessage().find("still pressed") != std::string::npos);
-    model.axis1GoToPosition(z - 0.5);
-    model.axis1Wait();
-    REQUIRE(model.getAxis1MotorPosition() == Approx(z - 0.5));
+    model.goToPosition(1, z - 0.5);
+    model.waitForMotor(1);
+    REQUIRE(model.motorPosition(1) == Approx(z - 0.5));
     gpio.setInputPinLevel(LIMIT_PIN, mgo::PinState::low); // (off the switch)
     model.checkStatus();
     REQUIRE(model.getFaultMessage().empty());
@@ -2023,8 +2023,8 @@ TEST_CASE("Model:   a limit switch stops a multi-pass")
     gpio.setInputPinLevel(LIMIT_PIN, mgo::PinState::low);
     mgo::Model model(gpio, config);
     model.initialise();
-    model.axis1SetSpeed(20.0);
-    model.axis2SetSpeed(100.0);
+    model.setMotorSpeed(1, 20.0);
+    model.setMotorSpeed(2, 100.0);
     model.changeMode(mgo::Mode::MultiPass);
     REQUIRE(model.setMultiPassSetup({ .cutDistance = 2.0, .feedInfeed = 0.02, .feedPerPass = 0.01 })
                 .empty());
@@ -2040,8 +2040,8 @@ TEST_CASE("Model:   a limit switch stops a multi-pass")
         return !model.multiPass().inProgress();
     }));
     REQUIRE(model.limitSwitchTripped());
-    REQUIRE(!model.isAxis1MotorRunning());
-    REQUIRE(!model.isAxis2MotorRunning());
+    REQUIRE(!model.isMotorRunning(1));
+    REQUIRE(!model.isMotorRunning(2));
 }
 
 TEST_CASE("Model:   a locked axis isn't moved by anything")
@@ -2050,20 +2050,20 @@ TEST_CASE("Model:   a locked axis isn't moved by anything")
     mgo::MockGpio gpio(false);
     mgo::Model model(gpio, config);
     model.initialise();
-    model.setAxis1MotorSpeed(100.0);
-    model.setAxis2MotorSpeed(100.0);
+    model.setMotorSpeed(1, 100.0);
+    model.setMotorSpeed(2, 100.0);
     model.storePosition(1, 1.0);
     model.storePosition(2, 1.0);
     const auto stillAt = [&](double z, double x) {
         std::this_thread::sleep_for(std::chrono::milliseconds(20));
         model.checkStatus();
-        return !model.isAxis1MotorRunning() && !model.isAxis2MotorRunning()
-            && model.getAxis1MotorPosition() == Approx(z) && model.getAxis2Position() == Approx(x);
+        return !model.isMotorRunning(1) && !model.isMotorRunning(2)
+            && model.motorPosition(1) == Approx(z) && model.getAxis2Position() == Approx(x);
     };
 
     model.lockAxis(2);
     REQUIRE(model.isAxisLocked(2));
-    model.axis2GoToPosition(0.5);
+    model.goToPosition(2, 0.5);
     REQUIRE(model.getWarning() == "Unlock X first");
     model.goToCurrentMemory(2);
     model.axis2Retract();
@@ -2074,14 +2074,14 @@ TEST_CASE("Model:   a locked axis isn't moved by anything")
     REQUIRE(stillAt(0.0, 0.0));
     REQUIRE(!model.getIsAxis2Retracted());
     // Z isn't locked, so moves
-    model.axis1GoToPosition(0.5);
-    model.axis1Wait();
-    REQUIRE(model.getAxis1MotorPosition() == Approx(0.5));
+    model.goToPosition(1, 0.5);
+    model.waitForMotor(1);
+    REQUIRE(model.motorPosition(1) == Approx(0.5));
     // Unlocking clears the warning, and X moves again
     model.unlockAxis(2);
     REQUIRE(model.getWarning().empty());
-    model.axis2GoToPosition(0.5);
-    model.axis2Wait();
+    model.goToPosition(2, 0.5);
+    model.waitForMotor(2);
     REQUIRE(model.getAxis2Position() == Approx(0.5));
 
     model.lockAxis(1);
@@ -2091,7 +2091,7 @@ TEST_CASE("Model:   a locked axis isn't moved by anything")
     model.axis1Move(mgo::ZDirection::Right);
     model.axis1Nudge(mgo::ZDirection::Left, 0.1);
     model.axis1FastReturn();
-    model.repeatLastRelativeMove(mgo::Axis::Axis1);
+    model.repeatLastRelativeMove(1);
     REQUIRE(stillAt(0.5, 0.5));
     model.unlockAxis(1);
 }
@@ -2105,11 +2105,11 @@ TEST_CASE("Model:   in a taper, Z doesn't move while X is locked")
     model.setTaperAngle(-45.0);
     model.changeMode(mgo::Mode::Taper);
     model.lockAxis(2);
-    model.axis1GoToPosition(-0.5);
+    model.goToPosition(1, -0.5);
     std::this_thread::sleep_for(std::chrono::milliseconds(20));
     model.checkStatus();
-    REQUIRE(!model.isAxis1MotorRunning());
-    REQUIRE(model.getAxis1MotorPosition() == 0.0);
+    REQUIRE(!model.isMotorRunning(1));
+    REQUIRE(model.motorPosition(1) == 0.0);
     REQUIRE(model.getWarning() == "Unlock X first");
 }
 
@@ -2119,9 +2119,9 @@ TEST_CASE("Model:   an axis can't be locked while it's moving")
     mgo::MockGpio gpio(false);
     mgo::Model model(gpio, config);
     model.initialise();
-    model.setAxis2MotorSpeed(10.0);
-    model.axis2GoToPosition(50.0);
-    REQUIRE(waitFor([&] { return model.isAxis2MotorRunning(); }));
+    model.setMotorSpeed(2, 10.0);
+    model.goToPosition(2, 50.0);
+    REQUIRE(waitFor([&] { return model.isMotorRunning(2); }));
     model.lockAxis(2);
     REQUIRE(!model.isAxisLocked(2));
     REQUIRE(model.getWarning() == "Stop X before locking it");
@@ -2144,8 +2144,8 @@ TEST_CASE("Model:   a multi-pass doesn't start or continue while an axis is lock
     mgo::MockGpio gpio(false);
     mgo::Model model(gpio, config);
     model.initialise();
-    model.axis1SetSpeed(200.0);
-    model.axis2SetSpeed(100.0);
+    model.setMotorSpeed(1, 200.0);
+    model.setMotorSpeed(2, 100.0);
     model.storePosition(1, 0.0);
     model.storePosition(2, 0.0);
     model.selectNextMemorySlot();
@@ -2876,9 +2876,9 @@ TEST_CASE("Model:   zeroing or setting X clears the diameter")
 
     // Moving X doesn't affect it
     setDiameter();
-    model.setAxis2MotorSpeed(100.0);
-    model.axis2GoToPosition(10.0);
-    model.axis2Wait();
+    model.setMotorSpeed(2, 100.0);
+    model.goToPosition(2, 10.0);
+    model.waitForMotor(2);
     REQUIRE(model.getDiameterMm() == Approx(20.0).margin(0.01));
 }
 
@@ -2907,18 +2907,18 @@ TEST_CASE("Model:   the diameter doesn't change as X retracts and unretracts")
             std::this_thread::sleep_for(std::chrono::milliseconds(2));
             model.checkStatus();
             check();
-        } while (model.isAxis2MotorRunning());
+        } while (model.isMotorRunning(2));
         model.checkStatus();
         check();
     };
     model.axis2Retract();
     REQUIRE(model.getIsAxis2Retracted());
     runAndCheck();
-    REQUIRE(std::abs(model.getAxis2MotorPosition() - 10.0) > 1.0); // (it did retract)
+    REQUIRE(std::abs(model.motorPosition(2) - 10.0) > 1.0); // (it did retract)
     model.axis2Retract(); // (unretract)
     runAndCheck();
     REQUIRE(!model.getIsAxis2Retracted());
-    REQUIRE(model.getAxis2MotorPosition() == Approx(10.0).margin(0.01));
+    REQUIRE(model.motorPosition(2) == Approx(10.0).margin(0.01));
     REQUIRE(unchanged);
 }
 
@@ -2935,11 +2935,11 @@ TEST_CASE("Model:   X retracts by Axis2RetractionDistance")
         REQUIRE(runUntilStopped(model));
         REQUIRE(model.getIsAxis2Retracted());
         // (Out: the opposite way to into the work)
-        REQUIRE(model.getAxis2MotorPosition() * intoWork == Approx(-0.5).margin(0.001));
+        REQUIRE(model.motorPosition(2) * intoWork == Approx(-0.5).margin(0.001));
         model.axis2Retract();
         REQUIRE(runUntilStopped(model));
         REQUIRE(!model.getIsAxis2Retracted());
-        REQUIRE(model.getAxis2MotorPosition() == Approx(0.0).margin(0.001));
+        REQUIRE(model.motorPosition(2) == Approx(0.0).margin(0.001));
     }
 }
 
@@ -2954,8 +2954,8 @@ TEST_CASE("Model:   a multi-pass retracts to just clear of its start, e.g. in a 
     mgo::Model model(gpio, config);
     model.initialise();
     model.setRetractionDirection(mgo::XDirection::Inwards);
-    model.axis1SetSpeed(200.0);
-    model.axis2SetSpeed(100.0);
+    model.setMotorSpeed(1, 200.0);
+    model.setMotorSpeed(2, 100.0);
     const double intoWork = model.multiPassPositions().feedIntoWork;
     model.changeMode(mgo::Mode::MultiPass);
     REQUIRE(model
@@ -2979,7 +2979,7 @@ TEST_CASE("Model:   a multi-pass retracts to just clear of its start, e.g. in a 
     while (model.multiPass().inProgress()) {
         REQUIRE(std::chrono::steady_clock::now() < deadline);
         model.checkStatus();
-        const double out = (start - model.getAxis2MotorPosition()) * intoWork;
+        const double out = (start - model.motorPosition(2)) * intoWork;
         double& furthest = furthestOut[model.multiPass().pass()];
         furthest = std::max(furthest, out);
         std::this_thread::sleep_for(std::chrono::milliseconds(2));
@@ -2987,7 +2987,7 @@ TEST_CASE("Model:   a multi-pass retracts to just clear of its start, e.g. in a 
     REQUIRE(model.multiPass().state() == mgo::MultiPass::State::Finished);
     REQUIRE(furthestOut.at(1) == Approx(0.3).margin(0.001));
     REQUIRE(furthestOut.at(2) == Approx(0.3).margin(0.001));
-    REQUIRE(model.getAxis2MotorPosition() == Approx(start + 0.1 * intoWork).margin(0.001));
+    REQUIRE(model.motorPosition(2) == Approx(start + 0.1 * intoWork).margin(0.001));
 }
 
 TEST_CASE("Threading: auto-retract at the end of a pass")
@@ -3150,25 +3150,25 @@ TEST_CASE("Model:   a nudge doesn't block, and restores the speed when done")
     mgo::MockGpio gpio(false);
     mgo::Model model(gpio, config);
     model.initialise();
-    model.axis1SetSpeed(40.0);
+    model.setMotorSpeed(1, 40.0);
     // (At the nudge speed, 1mm takes over half a second)
     model.axis1Nudge(mgo::ZDirection::Left, 1.0);
     REQUIRE(model.isMotionSequenceRunning());
-    REQUIRE(model.isAxis1MotorRunning());
+    REQUIRE(model.isMotorRunning(1));
     REQUIRE(runUntilStopped(model));
-    REQUIRE(std::abs(model.getAxis1MotorPosition()) == Approx(1.0));
-    REQUIRE(model.getAxis1MotorSpeed() == Approx(40.0));
+    REQUIRE(std::abs(model.motorPosition(1)) == Approx(1.0));
+    REQUIRE(model.motorSpeed(1) == Approx(40.0));
 
     // Stopping all motors part way cancels it, and still restores the speed
-    model.axis2SetSpeed(20.0);
+    model.setMotorSpeed(2, 20.0);
     model.axis2Nudge(mgo::XDirection::Inwards, 1.0);
     REQUIRE(model.isMotionSequenceRunning());
-    REQUIRE(waitFor([&] { return std::abs(model.getAxis2MotorPosition()) > 0.01; }));
+    REQUIRE(waitFor([&] { return std::abs(model.motorPosition(2)) > 0.01; }));
     model.stopAllMotors();
     REQUIRE(!model.isMotionSequenceRunning());
-    REQUIRE(!model.isAxis2MotorRunning());
-    REQUIRE(std::abs(model.getAxis2MotorPosition()) < 1.0);
-    REQUIRE(model.getAxis2MotorSpeed() == Approx(20.0));
+    REQUIRE(!model.isMotorRunning(2));
+    REQUIRE(std::abs(model.motorPosition(2)) < 1.0);
+    REQUIRE(model.motorSpeed(2) == Approx(20.0));
 }
 
 TEST_CASE("Model:   a released rapid slows down to a stop, if it can", "[timing]")
@@ -3186,16 +3186,16 @@ TEST_CASE("Model:   a released rapid slows down to a stop, if it can", "[timing]
         // (Long enough to speed up beyond where the ramp starts)
         std::this_thread::sleep_for(std::chrono::milliseconds(200));
         model.checkStatus();
-        REQUIRE(model.isAxis1MotorRunning());
-        const double released = model.getAxis1MotorPosition();
+        REQUIRE(model.isMotorRunning(1));
+        const double released = model.motorPosition(1);
         REQUIRE(model.rapidReleased());
         // It slows down rather than stopping dead
-        REQUIRE(model.isAxis1MotorRunning());
+        REQUIRE(model.isMotorRunning(1));
         // and the arrow's release, after Alt's, doesn't stop it dead either
         REQUIRE(model.rapidReleased());
-        REQUIRE(model.isAxis1MotorRunning());
+        REQUIRE(model.isMotorRunning(1));
         REQUIRE(runUntilStopped(model));
-        REQUIRE(std::abs(model.getAxis1MotorPosition() - released) > 0.1);
+        REQUIRE(std::abs(model.motorPosition(1) - released) > 0.1);
     }
 
     SECTION("Without it, it stops at once")
@@ -3208,7 +3208,7 @@ TEST_CASE("Model:   a released rapid slows down to a stop, if it can", "[timing]
         model.axis1Rapid(mgo::ZDirection::Left);
         std::this_thread::sleep_for(std::chrono::milliseconds(200));
         REQUIRE(model.rapidReleased());
-        REQUIRE(!model.isAxis1MotorRunning());
+        REQUIRE(!model.isMotorRunning(1));
     }
 }
 
@@ -3224,15 +3224,15 @@ TEST_CASE("Model:   a taper's backlash take-up doesn't block")
     model.initialise();
     model.changeMode(mgo::Mode::Taper);
     model.setTaperAngle(45.0);
-    model.axis1SetSpeed(10.0);
+    model.setMotorSpeed(1, 10.0);
     const auto start = std::chrono::steady_clock::now();
-    model.axis1GoToPosition(0.05);
+    model.goToPosition(1, 0.05);
     REQUIRE(std::chrono::steady_clock::now() - start < std::chrono::milliseconds(100));
     REQUIRE(model.isMotionSequenceRunning());
     // Updates meanwhile don't take the take-up's end for the end of the cut
     REQUIRE(runUntilStopped(model));
-    REQUIRE(model.getAxis1MotorPosition() == Approx(0.05));
-    REQUIRE(std::abs(model.getAxis2MotorPosition()) == Approx(0.05).margin(0.002));
+    REQUIRE(model.motorPosition(1) == Approx(0.05));
+    REQUIRE(std::abs(model.motorPosition(2)) == Approx(0.05).margin(0.002));
 }
 
 namespace {
@@ -4456,8 +4456,8 @@ TEST_CASE("Model:   a multi-pass from Mem 1 to Mem 2")
     mgo::MockGpio gpio(false);
     mgo::Model model(gpio, config);
     model.initialise();
-    model.axis1SetSpeed(200.0);
-    model.axis2SetSpeed(100.0);
+    model.setMotorSpeed(1, 200.0);
+    model.setMotorSpeed(2, 100.0);
     // Mem 1: the start, where the tool is now (Z 0, X 0). Mem 2: Z 0.2, X 0.025
     model.storePosition(1, 0.0);
     model.storePosition(2, 0.0);
@@ -4496,10 +4496,10 @@ TEST_CASE("Model:   a multi-pass from Mem 1 to Mem 2")
     }
     REQUIRE(model.multiPass().state() == mgo::MultiPass::State::Finished);
     REQUIRE(model.multiPass().pass() == 3);
-    REQUIRE(model.getAxis1MotorPosition() == Approx(0.0).margin(0.0001));
-    REQUIRE(model.getAxis2MotorPosition() == Approx(0.025).margin(0.0001));
+    REQUIRE(model.motorPosition(1) == Approx(0.0).margin(0.0001));
+    REQUIRE(model.motorPosition(2) == Approx(0.025).margin(0.0001));
     REQUIRE(!model.getIsAxis2Retracted());
-    REQUIRE(model.getAxis1MotorSpeed() == Approx(200.0));
+    REQUIRE(model.motorSpeed(1) == Approx(200.0));
     REQUIRE(mgo::keyAllowedInCurrentMode(mgo::key::a, model));
 }
 
@@ -4510,8 +4510,8 @@ TEST_CASE("Model:   a multi-pass whose X end isn't a whole number of steps")
     mgo::MockGpio gpio(false);
     mgo::Model model(gpio, config);
     model.initialise();
-    model.axis1SetSpeed(200.0);
-    model.axis2SetSpeed(100.0);
+    model.setMotorSpeed(1, 200.0);
+    model.setMotorSpeed(2, 100.0);
     model.changeMode(mgo::Mode::MultiPass);
     REQUIRE(model
                 .setMultiPassSetup(
@@ -4545,8 +4545,8 @@ void runCorrectedMultiPass(bool retract)
     mgo::MockGpio gpio(false);
     mgo::Model model(gpio, config);
     model.initialise();
-    model.axis1SetSpeed(200.0);
-    model.axis2SetSpeed(100.0);
+    model.setMotorSpeed(1, 200.0);
+    model.setMotorSpeed(2, 100.0);
     model.changeMode(mgo::Mode::MultiPass);
     REQUIRE(model
                 .setMultiPassSetup(
@@ -4576,7 +4576,7 @@ void runCorrectedMultiPass(bool retract)
             const double passX = model.multiPass().pass() == 1 ? xEnd / 2.0 : xEnd;
             mostShownMoved = std::max(mostShownMoved, std::abs(model.getAxis2Position() - passX));
             mostCorrected = std::max(
-                mostCorrected, std::abs(model.getAxis2MotorPosition() - model.getAxis2Position()));
+                mostCorrected, std::abs(model.motorPosition(2) - model.getAxis2Position()));
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(2));
     }
@@ -4584,11 +4584,11 @@ void runCorrectedMultiPass(bool retract)
     REQUIRE(mostCorrected > 0.01);
     REQUIRE(mostShownMoved < 0.002);
     // Back where the last cut started, with nothing left over
-    REQUIRE(model.getAxis1MotorPosition() == Approx(0.0).margin(0.0001));
-    REQUIRE(model.getAxis2MotorPosition() == Approx(xEnd).margin(0.0001));
-    REQUIRE(model.getAxis2Position() == model.getAxis2MotorPosition());
+    REQUIRE(model.motorPosition(1) == Approx(0.0).margin(0.0001));
+    REQUIRE(model.motorPosition(2) == Approx(xEnd).margin(0.0001));
+    REQUIRE(model.getAxis2Position() == model.motorPosition(2));
     REQUIRE(!model.getIsAxis2Retracted());
-    REQUIRE(model.getAxis2MotorSpeed() == Approx(100.0));
+    REQUIRE(model.motorSpeed(2) == Approx(100.0));
 }
 
 } // end anonymous namespace
@@ -4609,11 +4609,11 @@ TEST_CASE("Model:   stopping a multi-pass")
     mgo::MockGpio gpio(false);
     mgo::Model model(gpio, config);
     model.initialise();
-    model.axis1SetSpeed(20.0);
+    model.setMotorSpeed(1, 20.0);
     // (X slow, so its first feed, of 0.01 mm, takes long enough (0.6 s) to
     // still be moving when checked below, even if this thread isn't run for
     // a few ms, as happens on a busy Linux desktop)
-    model.axis2SetSpeed(1.0);
+    model.setMotorSpeed(2, 1.0);
     model.storePosition(1, 0.0);
     model.storePosition(2, 0.0);
     model.selectNextMemorySlot();
@@ -4632,24 +4632,24 @@ TEST_CASE("Model:   stopping a multi-pass")
     REQUIRE(model.getWarning().empty());
     model.checkStatus();
     // (X feeding in for the first pass)
-    REQUIRE(model.isAxis2MotorRunning());
+    REQUIRE(model.isMotorRunning(2));
     // Stopping the motors (e.g. Space) stops it
     model.stopAllMotors();
     REQUIRE(model.multiPass().state() == mgo::MultiPass::State::Idle);
     model.checkStatus();
-    REQUIRE(!model.isAxis1MotorRunning());
-    REQUIRE(!model.isAxis2MotorRunning());
+    REQUIRE(!model.isMotorRunning(1));
+    REQUIRE(!model.isMotorRunning(2));
 
     // As does leaving the mode part way. (Back to the start first, so Enter
     // starts the passes rather than moving there: X stopped part way in)
-    model.axis1GoToPosition(0.0);
-    model.axis2GoToPosition(0.0);
+    model.goToPosition(1, 0.0);
+    model.goToPosition(2, 0.0);
     REQUIRE(runUntilStopped(model));
     model.multiPassGo();
     REQUIRE(model.multiPass().inProgress());
     model.changeMode(mgo::Mode::None);
     REQUIRE(!model.multiPass().inProgress());
-    REQUIRE(!model.isAxis1MotorRunning());
+    REQUIRE(!model.isMotorRunning(1));
 }
 
 namespace {
@@ -4818,10 +4818,10 @@ TEST_CASE("Model:   X's infeed is the opposite way to its retract")
         model.initialise();
         model.setRetractionDirection(direction);
         const double intoWork = model.multiPassPositions().feedIntoWork;
-        const double before = model.getAxis2MotorPosition();
+        const double before = model.motorPosition(2);
         model.axis2Retract();
         REQUIRE(runUntilStopped(model));
-        const double retracted = model.getAxis2MotorPosition() - before;
+        const double retracted = model.motorPosition(2) - before;
         REQUIRE(retracted != Approx(0.0));
         REQUIRE(retracted * intoWork < 0.0);
     }
@@ -4833,8 +4833,8 @@ TEST_CASE("Model:   Enter moves to a multi-pass's start, retracting first; Enter
     mgo::MockGpio gpio(false);
     mgo::Model model(gpio, config);
     model.initialise();
-    model.axis1SetSpeed(200.0);
-    model.axis2SetSpeed(50.0);
+    model.setMotorSpeed(1, 200.0);
+    model.setMotorSpeed(2, 50.0);
     // From here (Z 0, X 0): Z by 0.2, X in by 0.02
     model.changeMode(mgo::Mode::MultiPass);
     REQUIRE(model.setMultiPassSetup({ .cutDistance = 0.2, .feedInfeed = 0.02, .feedPerPass = 0.01 })
@@ -4843,8 +4843,8 @@ TEST_CASE("Model:   Enter moves to a multi-pass's start, retracting first; Enter
     REQUIRE(model.multiPassAtStart());
 
     // Moved away (as after a multi-pass, or setting up)
-    model.axis1GoToPosition(0.5);
-    model.axis2GoToPosition(0.1);
+    model.goToPosition(1, 0.5);
+    model.goToPosition(2, 0.1);
     REQUIRE(runUntilStopped(model));
     REQUIRE(!model.multiPassAtStart());
 
@@ -4853,28 +4853,28 @@ TEST_CASE("Model:   Enter moves to a multi-pass's start, retracting first; Enter
     // MultiPassRetractClearance, 0.25 mm)
     const double intoWork = model.multiPassPositions().feedIntoWork;
     // (The moves above may have reset the speeds, as usual after a fast move)
-    const double zSpeed = model.getAxis1MotorSpeed();
-    const double xSpeed = model.getAxis2MotorSpeed();
+    const double zSpeed = model.motorSpeed(1);
+    const double xSpeed = model.motorSpeed(2);
     model.multiPassGo();
     REQUIRE(model.multiPassMovingToStart());
     REQUIRE(!model.multiPass().inProgress());
     bool zMovedWithXOut = true;
     REQUIRE(runUntilAtStart(model, [&] {
-        if (model.isAxis1MotorRunning()) {
-            const double x = model.getAxis2MotorPosition();
+        if (model.isMotorRunning(1)) {
+            const double x = model.motorPosition(2);
             zMovedWithXOut = zMovedWithXOut && (x - 0.1) * intoWork < -0.24
                 && (x - range.feedStart) * intoWork < -0.24;
         }
     }));
     REQUIRE(zMovedWithXOut);
     REQUIRE(model.multiPassAtStart());
-    REQUIRE(model.getAxis1MotorPosition() == Approx(range.cutStart).margin(0.0001));
-    REQUIRE(model.getAxis2MotorPosition() == Approx(range.feedStart).margin(0.0001));
+    REQUIRE(model.motorPosition(1) == Approx(range.cutStart).margin(0.0001));
+    REQUIRE(model.motorPosition(2) == Approx(range.feedStart).margin(0.0001));
     REQUIRE(!model.getIsAxis2Retracted());
     REQUIRE(!model.multiPass().inProgress()); // (waiting for the next Enter)
     // (The speeds are as they were, not the full speed Z moved at)
-    REQUIRE(model.getAxis1MotorSpeed() == Approx(zSpeed));
-    REQUIRE(model.getAxis2MotorSpeed() == Approx(xSpeed));
+    REQUIRE(model.motorSpeed(1) == Approx(zSpeed));
+    REQUIRE(model.motorSpeed(2) == Approx(xSpeed));
 
     // The second starts cutting
     model.multiPassGo();
@@ -4890,7 +4890,7 @@ TEST_CASE("Model:   without a retract, X moves away from the work before Z, and 
         mgo::MockGpio gpio(false);
         mgo::Model model(gpio, config);
         model.initialise();
-        model.axis1SetSpeed(200.0);
+        model.setMotorSpeed(1, 200.0);
         const double intoWork = model.multiPassPositions().feedIntoWork;
         // The start is here: Z 0, X 0
         model.changeMode(mgo::Mode::MultiPass);
@@ -4902,8 +4902,8 @@ TEST_CASE("Model:   without a retract, X moves away from the work before Z, and 
                           .retractBeforeMoveToStart = false })
                     .empty());
         // Away along Z, and in or out from the start along X
-        model.axis1GoToPosition(0.3);
-        model.axis2GoToPosition((startFurtherOut ? 0.05 : -0.05) * intoWork);
+        model.goToPosition(1, 0.3);
+        model.goToPosition(2, (startFurtherOut ? 0.05 : -0.05) * intoWork);
         REQUIRE(runUntilStopped(model));
 
         model.multiPassGo();
@@ -4911,16 +4911,16 @@ TEST_CASE("Model:   without a retract, X moves away from the work before Z, and 
         bool xAtStartWhenZMoved = true;
         bool zAtStartWhenXMoved = true;
         REQUIRE(runUntilAtStart(model, [&] {
-            const bool z = model.isAxis1MotorRunning();
-            const bool x = model.isAxis2MotorRunning();
+            const bool z = model.isMotorRunning(1);
+            const bool x = model.isMotorRunning(2);
             bothMoved = bothMoved || (z && x);
             if (z) {
                 xAtStartWhenZMoved
-                    = xAtStartWhenZMoved && std::abs(model.getAxis2MotorPosition()) < 0.0001;
+                    = xAtStartWhenZMoved && std::abs(model.motorPosition(2)) < 0.0001;
             }
             if (x) {
                 zAtStartWhenXMoved
-                    = zAtStartWhenXMoved && std::abs(model.getAxis1MotorPosition()) < 0.0001;
+                    = zAtStartWhenXMoved && std::abs(model.motorPosition(1)) < 0.0001;
             }
         }));
         REQUIRE(!bothMoved); // (one at a time)
@@ -4943,10 +4943,10 @@ TEST_CASE("Model:   Space stops a move to a multi-pass's start")
     mgo::MockGpio gpio(false);
     mgo::Model model(gpio, config);
     model.initialise();
-    model.axis1SetSpeed(20.0);
+    model.setMotorSpeed(1, 20.0);
     model.changeMode(mgo::Mode::MultiPass);
     REQUIRE(model.setMultiPassSetup({ .cutDistance = 0.2, .feedPerPass = 0.01 }).empty());
-    model.axis1GoToPosition(2.0);
+    model.goToPosition(1, 2.0);
     REQUIRE(runUntilStopped(model));
     model.multiPassGo();
     model.checkStatus();
@@ -4954,8 +4954,8 @@ TEST_CASE("Model:   Space stops a move to a multi-pass's start")
     model.stopAllMotors();
     REQUIRE(!model.multiPassMovingToStart());
     model.checkStatus();
-    REQUIRE(!model.isAxis1MotorRunning());
-    REQUIRE(!model.isAxis2MotorRunning());
+    REQUIRE(!model.isMotorRunning(1));
+    REQUIRE(!model.isMotorRunning(2));
     REQUIRE(!model.multiPass().inProgress());
 }
 
@@ -5022,7 +5022,7 @@ struct ThreadingTestModel {
             model.checkStatus();
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
-        REQUIRE(model.isAxis1MotorRunning());
+        REQUIRE(model.isMotorRunning(1));
     }
     // Waits for Z to get going, returning the pulse count when it started.
     // Each reading is worked out from the spindle's position and how far Z
@@ -5036,7 +5036,7 @@ struct ThreadingTestModel {
     // the count, Z looked that far early)
     int64_t pulsesWhenZStarts()
     {
-        const long start = model.getAxis1MotorCurrentStep();
+        const long start = model.motorStep(1);
         const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
         std::optional<int64_t> earliest;
         std::optional<std::chrono::steady_clock::time_point> end;
@@ -5045,7 +5045,7 @@ struct ThreadingTestModel {
             // (Read the position either side of Z's step, so a delay between
             // them shows, and the reading is dropped)
             const double position = model.getSpindlePosition();
-            const long z = model.getAxis1MotorCurrentStep();
+            const long z = model.motorStep(1);
             if (z != start && std::abs(model.getSpindlePosition() - position) <= 1.0) {
                 if (!end) {
                     end = std::chrono::steady_clock::now() + std::chrono::milliseconds(40);
@@ -5097,7 +5097,7 @@ TEST_CASE("Threading: Z follows the spindle's position, even as its speed change
         const double position = t.model.getSpindlePosition();
         const long expected = std::lround(
             (position - static_cast<double>(startPulse)) * ThreadingTestModel::STEPS_PER_PULSE);
-        const long z = t.model.getAxis1MotorCurrentStep();
+        const long z = t.model.motorStep(1);
         INFO("spindle " << position << ", Z step " << z << ", expected " << expected);
         REQUIRE(std::abs(z - expected) <= 6);
     };
@@ -5115,11 +5115,11 @@ TEST_CASE("Threading: Z follows the spindle's position, even as its speed change
 
     // It ends exactly at the end
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(15);
-    while (t.model.isAxis1MotorRunning()) {
+    while (t.model.isMotorRunning(1)) {
         REQUIRE(std::chrono::steady_clock::now() < deadline);
         t.runFor(std::chrono::milliseconds(50));
     }
-    REQUIRE(t.model.getAxis1MotorCurrentStep() == 5'000);
+    REQUIRE(t.model.motorStep(1) == 5'000);
     REQUIRE(t.model.getWarning().empty());
 }
 
@@ -5132,8 +5132,8 @@ TEST_CASE("Threading: every pass starts at the same spindle angle", "[timing]")
         const int64_t started = t.pulsesWhenZStarts();
         INFO("Pass to " << end << " started at pulse " << started);
         REQUIRE(ThreadingTestModel::pulsesFromWholeRev(started) <= 5);
-        REQUIRE(waitFor([&t] { return !t.model.isAxis1MotorRunning(); }, std::chrono::seconds(5)));
-        REQUIRE(t.model.getAxis1MotorCurrentStep() == end);
+        REQUIRE(waitFor([&t] { return !t.model.isMotorRunning(1); }, std::chrono::seconds(5)));
+        REQUIRE(t.model.motorStep(1) == end);
         t.model.checkStatus();
     }
 }
@@ -5150,11 +5150,11 @@ TEST_CASE("Threading: a pass follows a spindle turning the other way", "[timing]
         INFO("Pass to " << end << " started at pulse " << started);
         REQUIRE(ThreadingTestModel::pulsesFromWholeRev(started) <= 5);
         const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
-        while (t.model.isAxis1MotorRunning()) {
+        while (t.model.isMotorRunning(1)) {
             REQUIRE(std::chrono::steady_clock::now() < deadline);
             t.runFor(std::chrono::milliseconds(20));
         }
-        REQUIRE(t.model.getAxis1MotorCurrentStep() == end);
+        REQUIRE(t.model.motorStep(1) == end);
         REQUIRE(t.model.getWarning().empty());
     }
 }
@@ -5182,7 +5182,7 @@ TEST_CASE("Threading: a pass waits until it's known which way the spindle is tur
         waitFor([&model] { return model.getRotaryEncoderRpm() > 30.f; }, std::chrono::seconds(5)));
     // (The model's first look at the spindle)
     model.checkStatus();
-    const long start = model.getAxis1MotorCurrentStep();
+    const long start = model.motorStep(1);
     model.axis1GoToStep(1'000);
     // (Z's backlash is taken up first, by a step. Well within the tenth of a
     // second, so the pass can't yet start)
@@ -5192,8 +5192,8 @@ TEST_CASE("Threading: a pass waits until it's known which way the spindle is tur
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
     REQUIRE(!model.isMotionSequenceRunning());
-    REQUIRE(waitFor([&model] { return !model.isAxis1MotorRunning(); }, std::chrono::seconds(1)));
-    REQUIRE(std::abs(model.getAxis1MotorCurrentStep() - start) <= 1);
+    REQUIRE(waitFor([&model] { return !model.isMotorRunning(1); }, std::chrono::seconds(1)));
+    REQUIRE(std::abs(model.motorStep(1) - start) <= 1);
     INFO(model.getWarning());
     REQUIRE(model.getWarning().find("which way") != std::string::npos);
 }
@@ -5203,19 +5203,19 @@ TEST_CASE("Threading: Z's backlash is taken up before a pass reverses", "[timing
     // More backlash than half the pitch (500 steps): taken up while following
     // the spindle, Z would fall far enough behind for the pass to be stopped
     ThreadingTestModel t(300, { { "Axis1BacklashCompensationSteps", "600" } });
-    REQUIRE(waitFor([&t] { return !t.model.isAxis1MotorRunning(); }, std::chrono::seconds(5)));
-    const long home = t.model.getAxis1MotorCurrentStep();
+    REQUIRE(waitFor([&t] { return !t.model.isMotorRunning(1); }, std::chrono::seconds(5)));
+    const long home = t.model.motorStep(1);
     for (const long end : { home + 1'000, home, home + 1'000 }) {
         t.startPass(end);
         const int64_t started = t.pulsesWhenZStarts();
         INFO("Pass to " << end << " started at pulse " << started);
         REQUIRE(ThreadingTestModel::pulsesFromWholeRev(started) <= 5);
         const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
-        while (t.model.isAxis1MotorRunning()) {
+        while (t.model.isMotorRunning(1)) {
             REQUIRE(std::chrono::steady_clock::now() < deadline);
             t.runFor(std::chrono::milliseconds(20));
         }
-        REQUIRE(t.model.getAxis1MotorCurrentStep() == end);
+        REQUIRE(t.model.motorStep(1) == end);
         INFO("Warning: " << t.model.getWarning());
         REQUIRE(t.model.getWarning().empty());
     }
@@ -5227,16 +5227,16 @@ TEST_CASE("Threading: a pass stops if Z can't keep up with the spindle", "[timin
     t.startPass(20'000);
     t.pulsesWhenZStarts();
     t.runFor(std::chrono::milliseconds(100));
-    REQUIRE(t.model.isAxis1MotorRunning());
+    REQUIRE(t.model.isMotorRunning(1));
     // Z may follow at up to twice the speed it needed at the start, so a
     // spindle going (much) faster than that leaves it behind
     t.gpio.setRotaryEncoderDelayMicroseconds(100);
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
-    while (t.model.isAxis1MotorRunning()) {
+    while (t.model.isMotorRunning(1)) {
         REQUIRE(std::chrono::steady_clock::now() < deadline);
         t.runFor(std::chrono::milliseconds(20));
     }
-    REQUIRE(t.model.getAxis1MotorCurrentStep() < 20'000);
+    REQUIRE(t.model.motorStep(1) < 20'000);
     REQUIRE(t.model.getWarning().find("keep up") != std::string::npos);
 }
 
@@ -5419,9 +5419,9 @@ TEST_CASE("Model:   threading passes are set up only in threading mode")
 TEST_CASE("Model:   threading passes, each locked to the spindle", "[timing]")
 {
     ThreadingTestModel t(300);
-    REQUIRE(waitFor([&t] { return !t.model.isAxis1MotorRunning(); }, std::chrono::seconds(5)));
+    REQUIRE(waitFor([&t] { return !t.model.isMotorRunning(1); }, std::chrono::seconds(5)));
     t.model.checkStatus();
-    t.model.axis2SetSpeed(100.0);
+    t.model.setMotorSpeed(2, 100.0);
     // Z 1 mm (a revolution, at M6's pitch), X in 0.02 by 0.01: two passes
     REQUIRE(
         t.model
@@ -5448,7 +5448,7 @@ TEST_CASE("Model:   threading passes, each locked to the spindle", "[timing]")
     // busy machine), so the earliest during the cut is kept. A pass that
     // wasn't synchronised could start up to half a revolution (350 pulses)
     // away
-    const long startStep = t.model.getAxis1MotorCurrentStep();
+    const long startStep = t.model.motorStep(1);
     std::map<int, int64_t> passStarts; // (by pass)
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(20);
     while (t.model.multiPass().inProgress()) {
@@ -5457,7 +5457,7 @@ TEST_CASE("Model:   threading passes, each locked to the spindle", "[timing]")
         const int pass = t.model.multiPass().pass();
         // (The position, which Z follows: see pulsesWhenZStarts())
         const double position = t.model.getSpindlePosition();
-        const long steps = std::abs(t.model.getAxis1MotorCurrentStep() - startStep);
+        const long steps = std::abs(t.model.motorStep(1) - startStep);
         if (t.model.multiPass().state() == mgo::MultiPass::State::Cutting && steps > 50
             && steps < 950) {
             const int64_t started = std::llround(
@@ -5475,8 +5475,8 @@ TEST_CASE("Model:   threading passes, each locked to the spindle", "[timing]")
         INFO("Pass " << pass << " started at pulse " << pulses);
         REQUIRE(ThreadingTestModel::pulsesFromWholeRev(pulses) <= 10);
     }
-    REQUIRE(t.model.getAxis1MotorPosition() == Approx(zStart).margin(0.0001));
-    REQUIRE(t.model.getAxis2MotorPosition() == Approx(xEnd).margin(0.0001));
+    REQUIRE(t.model.motorPosition(1) == Approx(zStart).margin(0.0001));
+    REQUIRE(t.model.motorPosition(2) == Approx(xEnd).margin(0.0001));
     REQUIRE(!t.model.getIsAxis2Retracted());
     REQUIRE(t.model.getWarning().empty());
     // Still in threading mode, ready to go again
@@ -5505,7 +5505,7 @@ void runUntilMoved(ThreadingTestModel& t)
 {
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(20);
     while (t.model.multiPassMovingToStart() || t.model.isMotionSequenceRunning()
-           || t.model.isAxis1MotorRunning() || t.model.isAxis2MotorRunning()) {
+           || t.model.isMotorRunning(1) || t.model.isMotorRunning(2)) {
         REQUIRE(std::chrono::steady_clock::now() < deadline);
         t.model.checkStatus();
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -5517,9 +5517,9 @@ void runUntilMoved(ThreadingTestModel& t)
 TEST_CASE("Model:   spring passes after the threading passes", "[timing]")
 {
     ThreadingTestModel t(300);
-    REQUIRE(waitFor([&t] { return !t.model.isAxis1MotorRunning(); }, std::chrono::seconds(5)));
+    REQUIRE(waitFor([&t] { return !t.model.isMotorRunning(1); }, std::chrono::seconds(5)));
     t.model.checkStatus();
-    t.model.axis2SetSpeed(100.0);
+    t.model.setMotorSpeed(2, 100.0);
     // One pass, in 0.01
     REQUIRE(t.model
                 .setThreadingPassesSetup(
@@ -5543,7 +5543,7 @@ TEST_CASE("Model:   spring passes after the threading passes", "[timing]")
     runThreadingPasses(t);
     REQUIRE(t.model.multiPass().state() == mgo::MultiPass::State::Paused);
     REQUIRE(t.model.multiPass().pass() == 1);
-    REQUIRE(t.model.getAxis2MotorPosition() == Approx(xEnd).margin(0.0001));
+    REQUIRE(t.model.motorPosition(2) == Approx(xEnd).margin(0.0001));
 
     // A fine nudge in (W) is allowed while paused, and the next pass is there
     REQUIRE(mgo::keyAllowedInCurrentMode(mgo::key::W, t.model));
@@ -5552,14 +5552,14 @@ TEST_CASE("Model:   spring passes after the threading passes", "[timing]")
     const double intoWork = xEnd < t.model.getMultiPassRange().feedStart ? -1.0 : 1.0;
     t.model.axis2Nudge(intoWork < 0.0 ? mgo::XDirection::Inwards : mgo::XDirection::Outwards, 0.01);
     runUntilMoved(t);
-    const double nudged = t.model.getAxis2MotorPosition();
+    const double nudged = t.model.motorPosition(2);
     REQUIRE(nudged == Approx(xEnd + intoWork * 0.01).margin(0.0001));
     t.model.multiPassGo();
     runThreadingPasses(t);
     REQUIRE(t.model.multiPass().state() == mgo::MultiPass::State::Paused);
     REQUIRE(t.model.multiPass().pass() == 2);
-    REQUIRE(t.model.getAxis2MotorPosition() == Approx(nudged).margin(0.0001));
-    REQUIRE(t.model.getAxis1MotorPosition() == Approx(zStart).margin(0.0001));
+    REQUIRE(t.model.motorPosition(2) == Approx(nudged).margin(0.0001));
+    REQUIRE(t.model.motorPosition(1) == Approx(zStart).margin(0.0001));
 
     const mgo::XDirection in
         = intoWork < 0.0 ? mgo::XDirection::Inwards : mgo::XDirection::Outwards;
@@ -5576,13 +5576,13 @@ TEST_CASE("Model:   spring passes after the threading passes", "[timing]")
     REQUIRE(t.model.multiPass().message().empty()); // (not "stopped")
     REQUIRE(t.model.multiPassMovingToStart());
     runUntilMoved(t);
-    REQUIRE(t.model.getAxis2MotorPosition() == Approx(nudged).margin(0.0001));
+    REQUIRE(t.model.motorPosition(2) == Approx(nudged).margin(0.0001));
     REQUIRE(t.model.springPassAtStart());
     t.model.multiPassGo();
     REQUIRE(t.model.multiPass().inProgress());
     runThreadingPasses(t);
     REQUIRE(t.model.multiPass().state() == mgo::MultiPass::State::Paused);
-    REQUIRE(t.model.getAxis2MotorPosition() == Approx(nudged).margin(0.0001));
+    REQUIRE(t.model.motorPosition(2) == Approx(nudged).margin(0.0001));
 
     // Z moved along while paused (e.g. off the end): allowed between spring
     // passes. Enter while it's moving waits; once it's stopped, Enter takes it
@@ -5593,20 +5593,20 @@ TEST_CASE("Model:   spring passes after the threading passes", "[timing]")
     // (In threading mode, the move is a pass: Z's backlash is taken up, by a
     // step, then it waits for the spindle. Polling for Z running could miss
     // the step and never see the pass, as it starts on a later update)
-    t.model.axis1GoToPosition(zStart - 0.5);
+    t.model.goToPosition(1, zStart - 0.5);
     t.waitForPassToStart();
     t.model.multiPassGo();
     REQUIRE(t.model.getWarning() == "Stop the motors first");
     REQUIRE(t.model.multiPass().state() == mgo::MultiPass::State::Paused);
     runUntilMoved(t);
-    REQUIRE(t.model.getAxis1MotorPosition() == Approx(zStart - 0.5).margin(0.0001));
+    REQUIRE(t.model.motorPosition(1) == Approx(zStart - 0.5).margin(0.0001));
     REQUIRE(!t.model.springPassAtStart());
     t.model.multiPassGo();
     REQUIRE(!t.model.multiPass().inProgress());
     REQUIRE(t.model.multiPassMovingToStart());
     runUntilMoved(t);
-    REQUIRE(t.model.getAxis1MotorPosition() == Approx(zStart).margin(0.0001));
-    REQUIRE(t.model.getAxis2MotorPosition() == Approx(nudged).margin(0.0001));
+    REQUIRE(t.model.motorPosition(1) == Approx(zStart).margin(0.0001));
+    REQUIRE(t.model.motorPosition(2) == Approx(nudged).margin(0.0001));
     REQUIRE(t.model.springPassAtStart());
     t.model.multiPassGo();
     runThreadingPasses(t);
@@ -5631,12 +5631,12 @@ TEST_CASE("Model:   spring passes after the threading passes", "[timing]")
     t.model.multiPassGo();
     REQUIRE(t.model.multiPassMovingToStart());
     runUntilMoved(t);
-    REQUIRE(t.model.getAxis2MotorPosition() == Approx(nudged).margin(0.0001));
+    REQUIRE(t.model.motorPosition(2) == Approx(nudged).margin(0.0001));
 
     // Stopped, X nudged in: deeper is on purpose, so Enter cuts from there
     t.model.axis2Nudge(in, 0.01);
     runUntilMoved(t);
-    const double deeper = t.model.getAxis2MotorPosition();
+    const double deeper = t.model.motorPosition(2);
     REQUIRE(deeper == Approx(nudged + intoWork * 0.01).margin(0.0001));
     REQUIRE(t.model.springPassAtStart());
     t.model.multiPassGo();
@@ -5644,7 +5644,7 @@ TEST_CASE("Model:   spring passes after the threading passes", "[timing]")
     REQUIRE(t.model.multiPass().inProgress());
     runThreadingPasses(t);
     REQUIRE(t.model.multiPass().state() == mgo::MultiPass::State::Paused);
-    REQUIRE(t.model.getAxis2MotorPosition() == Approx(deeper).margin(0.0001));
+    REQUIRE(t.model.motorPosition(2) == Approx(deeper).margin(0.0001));
     t.model.stopAllMotors();
     runUntilMoved(t);
 
@@ -5657,8 +5657,8 @@ TEST_CASE("Model:   spring passes after the threading passes", "[timing]")
     REQUIRE(t.model.multiPassMovingToStart());
     runUntilMoved(t);
     REQUIRE(t.model.springPassAtStart());
-    REQUIRE(t.model.getAxis1MotorPosition() == Approx(zStart).margin(0.0001));
-    REQUIRE(t.model.getAxis2MotorPosition() == Approx(deeper).margin(0.0001));
+    REQUIRE(t.model.motorPosition(1) == Approx(zStart).margin(0.0001));
+    REQUIRE(t.model.motorPosition(2) == Approx(deeper).margin(0.0001));
     t.model.multiPassGo();
     runThreadingPasses(t);
     REQUIRE(t.model.multiPass().state() == mgo::MultiPass::State::Paused);
@@ -5677,9 +5677,9 @@ TEST_CASE("Model:   spring passes after the threading passes", "[timing]")
 TEST_CASE("Model:   threading passes with a constant area and a compound infeed", "[timing]")
 {
     ThreadingTestModel t(300);
-    REQUIRE(waitFor([&t] { return !t.model.isAxis1MotorRunning(); }, std::chrono::seconds(5)));
+    REQUIRE(waitFor([&t] { return !t.model.isMotorRunning(1); }, std::chrono::seconds(5)));
     t.model.checkStatus();
-    t.model.axis2SetSpeed(100.0);
+    t.model.setMotorSpeed(2, 100.0);
     // Both on the first time
     REQUIRE(t.model.threadingPassesDialogSetup().constantArea);
     REQUIRE(t.model.threadingPassesDialogSetup().compoundInfeed);
@@ -5713,7 +5713,7 @@ TEST_CASE("Model:   threading passes with a constant area and a compound infeed"
         t.model.checkStatus();
         const bool cutting = t.model.multiPass().state() == mgo::MultiPass::State::Cutting;
         if (cutting && !wasCutting) {
-            starts.emplace_back(t.model.getAxis1MotorPosition(), t.model.multiPass().fed());
+            starts.emplace_back(t.model.motorPosition(1), t.model.multiPass().fed());
         }
         wasCutting = cutting;
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -5744,9 +5744,9 @@ TEST_CASE("Model:   threading passes with a constant area and a compound infeed"
 TEST_CASE("Model:   threading passes stop after a pass if the encoder loses pulses", "[timing]")
 {
     ThreadingTestModel t(300);
-    REQUIRE(waitFor([&t] { return !t.model.isAxis1MotorRunning(); }, std::chrono::seconds(5)));
+    REQUIRE(waitFor([&t] { return !t.model.isMotorRunning(1); }, std::chrono::seconds(5)));
     t.model.checkStatus();
-    t.model.axis2SetSpeed(100.0);
+    t.model.setMotorSpeed(2, 100.0);
     REQUIRE(t.model
                 .setThreadingPassesSetup(
                     { .cutDistance = 1.0,
@@ -5761,7 +5761,7 @@ TEST_CASE("Model:   threading passes stop after a pass if the encoder loses puls
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(20);
     while (
         !(t.model.multiPass().state() == mgo::MultiPass::State::Cutting
-          && t.model.isAxis1MotorRunning())) {
+          && t.model.isMotorRunning(1))) {
         REQUIRE(std::chrono::steady_clock::now() < deadline);
         t.model.checkStatus();
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -5781,7 +5781,7 @@ TEST_CASE("Model:   threading passes stop after a pass if the encoder loses puls
     REQUIRE(t.model.multiPass().pass() == 1);
     REQUIRE(t.model.getWarning().find("lost pulses") != std::string::npos);
     REQUIRE(t.model.getIsAxis2Retracted());
-    REQUIRE(t.model.getAxis1MotorPosition() == Approx(zStart).margin(0.0001));
+    REQUIRE(t.model.motorPosition(1) == Approx(zStart).margin(0.0001));
 
     // Enter won't start them again (nor spring passes) on this thread
     t.model.multiPassGo();
@@ -5814,7 +5814,7 @@ TEST_CASE("Model:   threading passes stop if a pass can't start", "[timing]")
                 .setThreadingPassesSetup(
                     { .cutDistance = 1.0, .feedInfeed = 0.02, .feedPerPass = 0.01 })
                 .empty());
-    t.model.axis2SetSpeed(100.0);
+    t.model.setMotorSpeed(2, 100.0);
     // Too fast for Z to follow at this pitch (over 800 rpm)
     t.gpio.setRotaryEncoderDelayMicroseconds(50);
     REQUIRE(
@@ -5897,8 +5897,8 @@ TEST_CASE("Model:   nudging X while a multi-pass is paused")
     mgo::MockGpio gpio(false);
     mgo::Model model(gpio, config);
     model.initialise();
-    model.axis1SetSpeed(200.0);
-    model.axis2SetSpeed(100.0);
+    model.setMotorSpeed(1, 200.0);
+    model.setMotorSpeed(2, 100.0);
     model.storePosition(1, 0.0);
     model.storePosition(2, 0.0);
     model.selectNextMemorySlot();
@@ -5977,10 +5977,10 @@ TEST_CASE("Model:   knurling is set up only in knurling mode, with a diameter")
 TEST_CASE("Model:   knurling passes, each start there and back, locked to the spindle", "[timing]")
 {
     ThreadingTestModel t(300);
-    REQUIRE(waitFor([&t] { return !t.model.isAxis1MotorRunning(); }, std::chrono::seconds(5)));
+    REQUIRE(waitFor([&t] { return !t.model.isMotorRunning(1); }, std::chrono::seconds(5)));
     t.model.checkStatus();
     t.model.changeMode(mgo::Mode::Knurling);
-    t.model.axis2SetSpeed(100.0);
+    t.model.setMotorSpeed(2, 100.0);
     t.model.setPosition(2, 1.0);
     t.model.diameterIsSet();
     // Ø 2 at 80 degrees: a lead of 1.108 mm. Z 1 mm, X in 0.02 by 0.01: two
@@ -6011,7 +6011,7 @@ TEST_CASE("Model:   knurling passes, each start there and back, locked to the sp
     // number in the pass (they're cut in whichever order comes round
     // first), and way. Each start is at a whole revolution, or half a
     // revolution (350 pulses) on from one
-    const long startStep = t.model.getAxis1MotorCurrentStep();
+    const long startStep = t.model.motorStep(1);
     std::map<std::tuple<int, int, bool>, int64_t> cutStarts;
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
     while (t.model.multiPass().inProgress()) {
@@ -6028,7 +6028,7 @@ TEST_CASE("Model:   knurling passes, each start there and back, locked to the sp
         // (The position, which Z follows: see pulsesWhenZStarts())
         const double position = t.model.getSpindlePosition();
         // (Back from the end, 1000 steps from the start)
-        const long fromStart = std::abs(t.model.getAxis1MotorCurrentStep() - startStep);
+        const long fromStart = std::abs(t.model.motorStep(1) - startStep);
         const long steps = back ? 1'000 - fromStart : fromStart;
         if (steps > 50 && steps < 950) {
             const int64_t started
@@ -6059,8 +6059,8 @@ TEST_CASE("Model:   knurling passes, each start there and back, locked to the sp
         INFO("Pass " << passAndWay.first << (passAndWay.second ? " back" : " there"));
         REQUIRE(used == std::set<int64_t> { 0, 350 });
     }
-    REQUIRE(t.model.getAxis1MotorPosition() == Approx(zStart).margin(0.0001));
-    REQUIRE(t.model.getAxis2MotorPosition() == Approx(xEnd).margin(0.0001));
+    REQUIRE(t.model.motorPosition(1) == Approx(zStart).margin(0.0001));
+    REQUIRE(t.model.motorPosition(2) == Approx(xEnd).margin(0.0001));
     REQUIRE(!t.model.getIsAxis2Retracted());
     REQUIRE(t.model.getWarning().empty());
     REQUIRE(t.model.getMode() == mgo::Mode::Knurling);
@@ -6108,14 +6108,14 @@ TEST_CASE("Model:   leaving threading mode resets Z's speed")
     mgo::Model model(gpio, config);
     model.initialise();
     model.changeMode(mgo::Mode::Threading);
-    model.axis1SetSpeed(500.0);
+    model.setMotorSpeed(1, 500.0);
     model.changeMode(mgo::Mode::None);
-    REQUIRE(model.getAxis1MotorSpeed() == Approx(40.0)); // (Axis1SpeedPreset2)
+    REQUIRE(model.motorSpeed(1) == Approx(40.0)); // (Axis1SpeedPreset2)
     // (Other modes leave it alone)
     model.changeMode(mgo::Mode::MultiPass);
-    model.axis1SetSpeed(70.0);
+    model.setMotorSpeed(1, 70.0);
     model.changeMode(mgo::Mode::None);
-    REQUIRE(model.getAxis1MotorSpeed() == Approx(70.0));
+    REQUIRE(model.motorSpeed(1) == Approx(70.0));
 }
 
 TEST_CASE("Model:   X's retraction direction from the config")
@@ -6264,9 +6264,9 @@ TEST_CASE("Model:   setting and clearing the current feature")
     model.setPosition(2, 7.5);
     model.diameterIsSet();
     REQUIRE(model.getFeatureDiameterMm() == Approx(15.0));
-    model.setAxis2MotorSpeed(100.0);
-    model.axis2GoToPosition(5.0);
-    model.axis2Wait();
+    model.setMotorSpeed(2, 100.0);
+    model.goToPosition(2, 5.0);
+    model.waitForMotor(2);
     REQUIRE(model.getDiameterMm() == Approx(10.0).margin(0.01));
     REQUIRE(model.getFeatureDiameterMm() == Approx(15.0));
     // ...until recorded again
@@ -6274,9 +6274,9 @@ TEST_CASE("Model:   setting and clearing the current feature")
     REQUIRE(model.getFeatureDiameterMm() == Approx(10.0).margin(0.01));
 
     // The work's end is Z here
-    model.setAxis1MotorSpeed(100.0);
-    model.axis1GoToPosition(3.0);
-    model.axis1Wait();
+    model.setMotorSpeed(1, 100.0);
+    model.goToPosition(1, 3.0);
+    model.waitForMotor(1);
     model.markWorkEnd();
     REQUIRE(model.getWorkEndZ() == Approx(3.0).margin(0.01));
     const auto positions = model.multiPassPositions();
@@ -6318,8 +6318,8 @@ TEST_CASE("Model:   a motor fault clears that axis's part of the current feature
     model.diameterIsSet();
     model.markWorkEnd();
     gpio.setInputPinLevel(ALARM_PIN, mgo::PinState::low);
-    model.setAxis1MotorSpeed(100.0);
-    model.axis1GoToPosition(1.0);
+    model.setMotorSpeed(1, 100.0);
+    model.goToPosition(1, 1.0);
     REQUIRE(waitFor([&] {
         model.checkStatus();
         return !model.getFaultMessage().empty();
@@ -6334,8 +6334,8 @@ TEST_CASE("Model:   a multi-pass from the work's end sets the feature's diameter
     mgo::MockGpio gpio(false);
     mgo::Model model(gpio, config);
     model.initialise();
-    model.axis1SetSpeed(200.0);
-    model.axis2SetSpeed(100.0);
+    model.setMotorSpeed(1, 200.0);
+    model.setMotorSpeed(2, 100.0);
     // The work's end at Z 0, 1.0 diameter (X 0.5)
     model.setPosition(2, 0.5);
     model.diameterIsSet();
@@ -6360,8 +6360,8 @@ TEST_CASE("Model:   a multi-pass from the work's end sets the feature's diameter
     REQUIRE(model.getFeatureDiameterMm() == Approx(0.96).margin(0.0001));
 
     // Part way along (starting in the work, from Z -0.1): it's unchanged
-    model.axis1GoToPosition(-0.1);
-    model.axis1Wait();
+    model.goToPosition(1, -0.1);
+    model.waitForMotor(1);
     REQUIRE(
         model.setMultiPassSetup({ .cutDistance = -0.1, .feedInfeed = 0.02, .feedPerPass = 0.02 })
             .empty());
@@ -6369,7 +6369,7 @@ TEST_CASE("Model:   a multi-pass from the work's end sets the feature's diameter
     REQUIRE(model.multiPass().inProgress());
     REQUIRE(runUntilStopped(model));
     REQUIRE(model.multiPass().state() == mgo::MultiPass::State::Finished);
-    REQUIRE(model.getAxis2MotorPosition() == Approx(0.46).margin(0.0001));
+    REQUIRE(model.motorPosition(2) == Approx(0.46).margin(0.0001));
     REQUIRE(model.getFeatureDiameterMm() == Approx(0.96).margin(0.0001));
 }
 
@@ -6423,8 +6423,8 @@ struct FeatureModel {
         }())
     {
         model.initialise();
-        model.axis1SetSpeed(200.0);
-        model.axis2SetSpeed(100.0);
+        model.setMotorSpeed(1, 200.0);
+        model.setMotorSpeed(2, 100.0);
         model.setPosition(2, 0.5);
         model.diameterIsSet();
         model.markWorkEnd();
@@ -6436,8 +6436,8 @@ struct FeatureModel {
     }
     void moveTo(double z, double x)
     {
-        model.axis1GoToPosition(z);
-        model.axis2GoToPosition(x);
+        model.goToPosition(1, z);
+        model.goToPosition(2, x);
         REQUIRE(runUntilStopped(model));
     }
 };
@@ -6471,25 +6471,24 @@ TEST_CASE("Model:   going to the feature's start, X clear of the work while Z mo
     while (f.model.isMotionSequenceRunning()) {
         REQUIRE(std::chrono::steady_clock::now() < deadline);
         f.model.checkStatus();
-        if (f.model.isAxis1MotorRunning()) {
+        if (f.model.isMotorRunning(1)) {
             // (Further out than the surface)
-            zMovedWithXOut
-                = zMovedWithXOut && (f.model.getAxis2MotorPosition() - 0.5) * intoWork < 0.0;
+            zMovedWithXOut = zMovedWithXOut && (f.model.motorPosition(2) - 0.5) * intoWork < 0.0;
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(2));
     }
     REQUIRE(runUntilStopped(f.model));
     REQUIRE(zMovedWithXOut);
-    REQUIRE(f.model.getAxis1MotorPosition() == Approx(0.5).margin(0.0001));
-    REQUIRE(f.model.getAxis2MotorPosition() == Approx(0.5).margin(0.0001));
+    REQUIRE(f.model.motorPosition(1) == Approx(0.5).margin(0.0001));
+    REQUIRE(f.model.motorPosition(2) == Approx(0.5).margin(0.0001));
     REQUIRE(!f.model.getIsAxis2Retracted());
 
     // At the end exactly
     f.moveTo(-0.3, f.deeper(0.2));
     f.model.featureGoToStart(false);
     REQUIRE(runUntilStopped(f.model));
-    REQUIRE(f.model.getAxis1MotorPosition() == Approx(0.0).margin(0.0001));
-    REQUIRE(f.model.getAxis2MotorPosition() == Approx(0.5).margin(0.0001));
+    REQUIRE(f.model.motorPosition(1) == Approx(0.0).margin(0.0001));
+    REQUIRE(f.model.motorPosition(2) == Approx(0.5).margin(0.0001));
 }
 
 TEST_CASE("Model:   X to the feature's diameter, or Z to the work's end")
@@ -6499,27 +6498,27 @@ TEST_CASE("Model:   X to the feature's diameter, or Z to the work's end")
     f.moveTo(-0.3, f.deeper(0.2));
     f.model.featureGoToDiameter();
     REQUIRE(runUntilStopped(f.model));
-    REQUIRE(f.model.getAxis1MotorPosition() == Approx(-0.3).margin(0.0001));
-    REQUIRE(f.model.getAxis2MotorPosition() == Approx(0.5).margin(0.0001));
+    REQUIRE(f.model.motorPosition(1) == Approx(-0.3).margin(0.0001));
+    REQUIRE(f.model.motorPosition(2) == Approx(0.5).margin(0.0001));
 
     // Z only, but not with X deeper than the surface
     f.moveTo(-0.3, f.deeper(0.2));
     f.model.featureGoToWorkEnd(true);
     REQUIRE(f.model.getWarning().find("clear of the work") != std::string::npos);
     REQUIRE(runUntilStopped(f.model));
-    REQUIRE(f.model.getAxis1MotorPosition() == Approx(-0.3).margin(0.0001));
+    REQUIRE(f.model.motorPosition(1) == Approx(-0.3).margin(0.0001));
     // On the surface, or further out, it goes (and X stays put)
     f.moveTo(-0.3, 0.5);
     f.model.featureGoToWorkEnd(true);
     REQUIRE(f.model.getWarning().empty());
     REQUIRE(runUntilStopped(f.model));
-    REQUIRE(f.model.getAxis1MotorPosition() == Approx(0.5).margin(0.0001));
-    REQUIRE(f.model.getAxis2MotorPosition() == Approx(0.5).margin(0.0001));
+    REQUIRE(f.model.motorPosition(1) == Approx(0.5).margin(0.0001));
+    REQUIRE(f.model.motorPosition(2) == Approx(0.5).margin(0.0001));
     f.moveTo(-0.3, f.deeper(-0.2));
     f.model.featureGoToWorkEnd(false);
     REQUIRE(runUntilStopped(f.model));
-    REQUIRE(f.model.getAxis1MotorPosition() == Approx(0.0).margin(0.0001));
-    REQUIRE(f.model.getAxis2MotorPosition() == Approx(f.deeper(-0.2)).margin(0.0001));
+    REQUIRE(f.model.motorPosition(1) == Approx(0.0).margin(0.0001));
+    REQUIRE(f.model.motorPosition(2) == Approx(f.deeper(-0.2)).margin(0.0001));
 }
 
 TEST_CASE("Model:   going to the feature needs it, and isn't allowed in some modes")
@@ -6829,7 +6828,7 @@ TEST_CASE("Model:   gear cutting, every tooth each pass, then A back to where it
     GearTestModel t;
     mgo::Model& model = t.model;
     model.initialise();
-    model.axis1SetSpeed(200.0);
+    model.setMotorSpeed(1, 200.0);
     // A starts at 30°, with a memory slot at 30° and one at 100°
     model.setPosition(2, 30.0);
     model.storePosition(2);
@@ -6866,8 +6865,8 @@ TEST_CASE("Model:   gear cutting, every tooth each pass, then A back to where it
             REQUIRE(std::chrono::steady_clock::now() < deadline);
             model.checkStatus();
             if (model.multiPass().state() == mgo::MultiPass::State::Cutting) {
-                REQUIRE(!model.isAxis2MotorRunning());
-                cutAt.insert(std::lround(model.getAxis2MotorPosition()));
+                REQUIRE(!model.isMotorRunning(2));
+                cutAt.insert(std::lround(model.motorPosition(2)));
             }
             std::this_thread::sleep_for(std::chrono::milliseconds(2));
         }
@@ -6876,8 +6875,8 @@ TEST_CASE("Model:   gear cutting, every tooth each pass, then A back to where it
     REQUIRE(model.multiPass().state() == mgo::MultiPass::State::Paused);
     REQUIRE(model.multiPass().pass() == 1);
     REQUIRE(cutAt == std::set<long> { 30, 120, 210, 300 });
-    REQUIRE(model.getAxis2MotorPosition() == Approx(300.0));
-    REQUIRE(model.getAxis1MotorPosition() == Approx(0.0).margin(0.0001));
+    REQUIRE(model.motorPosition(2) == Approx(300.0));
+    REQUIRE(model.motorPosition(1) == Approx(0.0).margin(0.0001));
     cutAt.clear();
     runPass();
     REQUIRE(model.multiPass().state() == mgo::MultiPass::State::Finished);
@@ -6887,7 +6886,7 @@ TEST_CASE("Model:   gear cutting, every tooth each pass, then A back to where it
     // Then A went on round to 750°, two turns from the start, which is shown
     // as where it started, and the memory slots are as they were (the same
     // places on the table)
-    REQUIRE(model.getAxis2MotorPosition() == Approx(30.0));
+    REQUIRE(model.motorPosition(2) == Approx(30.0));
     REQUIRE(*model.getMemory(2, 0) == Approx(30.0));
     REQUIRE(*model.getMemory(2, 1) == Approx(100.0));
     // (It's ready to go again)
@@ -6912,12 +6911,12 @@ TEST_CASE("Model:   gear cutting's first tooth takes up A's backlash forwards")
     while (model.multiPass().state() == mgo::MultiPass::State::Indexing) {
         REQUIRE(std::chrono::steady_clock::now() < deadline);
         model.checkStatus();
-        lowest = std::min(lowest, model.getAxis2MotorPosition());
+        lowest = std::min(lowest, model.motorPosition(2));
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
     REQUIRE(lowest < -0.5);
     REQUIRE(model.multiPass().state() == mgo::MultiPass::State::Cutting);
-    REQUIRE(model.getAxis2MotorPosition() == Approx(0.0).margin(0.001));
+    REQUIRE(model.motorPosition(2) == Approx(0.0).margin(0.001));
     model.stopAllMotors();
     REQUIRE(!model.multiPass().inProgress());
     REQUIRE(runUntilStopped(model));
@@ -6935,7 +6934,7 @@ TEST_CASE("Model:   gear cutting stopped between teeth goes on to the next tooth
     mgo::MockGpio gpio { false };
     mgo::Model model { gpio, config };
     model.initialise();
-    model.axis1SetSpeed(200.0);
+    model.setMotorSpeed(1, 200.0);
     model.changeMode(mgo::Mode::GearCutting);
     REQUIRE(
         model.setGearSetup({ .teeth = 4, .cutDistance = 0.2, .depth = 0.1, .depthPerPass = 0.1 })
@@ -6947,14 +6946,14 @@ TEST_CASE("Model:   gear cutting stopped between teeth goes on to the next tooth
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
     while (
         !(model.multiPass().state() == mgo::MultiPass::State::Indexing
-          && model.multiPass().startNumber() == 2 && model.getAxis2MotorPosition() > 20.0)) {
+          && model.multiPass().startNumber() == 2 && model.motorPosition(2) > 20.0)) {
         REQUIRE(std::chrono::steady_clock::now() < deadline);
         model.checkStatus();
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
     model.stopAllMotors();
     REQUIRE(runUntilStopped(model));
-    const double stoppedAt = model.getAxis2MotorPosition();
+    const double stoppedAt = model.motorPosition(2);
     REQUIRE(stoppedAt > 20.0);
     REQUIRE(stoppedAt < 89.0);
     REQUIRE(!model.gearAOnTooth());
@@ -6968,11 +6967,11 @@ TEST_CASE("Model:   gear cutting stopped between teeth goes on to the next tooth
     while (model.multiPassMovingToStart()) {
         REQUIRE(std::chrono::steady_clock::now() < deadline2);
         model.checkStatus();
-        lowest = std::min(lowest, model.getAxis2MotorPosition());
+        lowest = std::min(lowest, model.motorPosition(2));
         std::this_thread::sleep_for(std::chrono::milliseconds(2));
     }
     REQUIRE(lowest == Approx(stoppedAt));
-    REQUIRE(model.getAxis2MotorPosition() == Approx(90.0));
+    REQUIRE(model.motorPosition(2) == Approx(90.0));
     REQUIRE(model.multiPassAtStart());
     model.multiPassGo();
     REQUIRE(model.getWarning().empty());
@@ -6981,7 +6980,7 @@ TEST_CASE("Model:   gear cutting stopped between teeth goes on to the next tooth
     // Zeroing A puts the first tooth wherever A is again
     model.stopAllMotors();
     REQUIRE(runUntilStopped(model));
-    model.axis2GoToPosition(100.0);
+    model.goToPosition(2, 100.0);
     REQUIRE(runUntilStopped(model));
     REQUIRE(!model.gearAOnTooth());
     model.zero(2);
@@ -7459,8 +7458,8 @@ TEST_CASE("Model:   radius cutting, every pass round an arc")
     mgo::Model model(gpio, config);
     model.initialise();
     // (As the controller starts with)
-    model.setAxis1MotorSpeed(40.0);
-    model.setAxis2MotorSpeed(20.0);
+    model.setMotorSpeed(1, 40.0);
+    model.setMotorSpeed(2, 20.0);
     // A 10 mm bar, its end at Z 0 (Z negative towards the chuck)
     model.setPosition(2, 5.0);
     model.diameterIsSet();
@@ -7492,8 +7491,8 @@ TEST_CASE("Model:   radius cutting, every pass round an arc")
     while (model.multiPass().inProgress()) {
         REQUIRE(std::chrono::steady_clock::now() < deadline);
         model.checkStatus();
-        const double z = model.getAxis1MotorPosition();
-        const double x = model.getAxis2MotorPosition();
+        const double z = model.motorPosition(1);
+        const double x = model.motorPosition(2);
         if (model.multiPass().state() == mgo::MultiPass::State::Cutting) {
             if (model.multiPass().pass() != lastPass) {
                 lastPass = model.multiPass().pass();
@@ -7519,11 +7518,11 @@ TEST_CASE("Model:   radius cutting, every pass round an arc")
     REQUIRE(furthestOff < 0.02);
     // Back off the end, on the diameter (or just off it: see planRadius()),
     // which is unchanged
-    REQUIRE(model.getAxis1MotorPosition() == Approx(0.5).margin(0.0001));
-    REQUIRE(model.getAxis2MotorPosition() >= 5.0 - 0.0001);
-    REQUIRE(model.getAxis2MotorPosition() <= 5.0 + mgo::RADIUS_CHORD_TOLERANCE + 0.0011);
+    REQUIRE(model.motorPosition(1) == Approx(0.5).margin(0.0001));
+    REQUIRE(model.motorPosition(2) >= 5.0 - 0.0001);
+    REQUIRE(model.motorPosition(2) <= 5.0 + mgo::RADIUS_CHORD_TOLERANCE + 0.0011);
     REQUIRE(model.getFeatureDiameterMm() == Approx(10.0));
-    REQUIRE(model.getAxis1MotorSpeed() == Approx(40.0));
+    REQUIRE(model.motorSpeed(1) == Approx(40.0));
 }
 
 TEST_CASE("Model:   radius cutting, a shoulder with a fillet")
@@ -7532,8 +7531,8 @@ TEST_CASE("Model:   radius cutting, a shoulder with a fillet")
     mgo::MockGpio gpio(false);
     mgo::Model model(gpio, config);
     model.initialise();
-    model.setAxis1MotorSpeed(40.0);
-    model.setAxis2MotorSpeed(20.0);
+    model.setMotorSpeed(1, 40.0);
+    model.setMotorSpeed(2, 20.0);
     // A 10 mm bar, its end at Z 0 (Z negative towards the chuck)
     model.setPosition(2, 5.0);
     model.diameterIsSet();
@@ -7569,8 +7568,8 @@ TEST_CASE("Model:   radius cutting, a shoulder with a fillet")
     while (model.multiPass().inProgress()) {
         REQUIRE(std::chrono::steady_clock::now() < deadline);
         model.checkStatus();
-        const double z = model.getAxis1MotorPosition();
-        const double x = model.getAxis2MotorPosition();
+        const double z = model.motorPosition(1);
+        const double x = model.motorPosition(2);
         REQUIRE(z >= -3.0 - mgo::RADIUS_CHORD_TOLERANCE - 0.0011);
         REQUIRE(x >= 4.0 - 0.0011);
         const int pass = model.multiPass().pass();
@@ -7586,11 +7585,11 @@ TEST_CASE("Model:   radius cutting, a shoulder with a fillet")
     REQUIRE(furthestOff < 0.02);
     // The last pass went up the shoulder's face to the fillet's top, then
     // back to just short of the fillet
-    REQUIRE(model.getAxis1MotorPosition() == Approx(-2.0).margin(0.0001));
-    REQUIRE(model.getAxis2MotorPosition() == Approx(4.5).margin(0.0011));
+    REQUIRE(model.motorPosition(1) == Approx(-2.0).margin(0.0001));
+    REQUIRE(model.motorPosition(2) == Approx(4.5).margin(0.0011));
     // The step is turned from the end: that's the feature's diameter now
     REQUIRE(model.getFeatureDiameterMm() == Approx(8.0));
-    REQUIRE(model.getAxis1MotorSpeed() == Approx(40.0));
+    REQUIRE(model.motorSpeed(1) == Approx(40.0));
 }
 
 // The tool library (see toollibrary.h)
@@ -7763,16 +7762,16 @@ struct ToolModel {
                 { "CurrentFeature", "true" } })
     {
         model.initialise();
-        model.axis1SetSpeed(200.0);
-        model.axis2SetSpeed(200.0);
+        model.setMotorSpeed(1, 200.0);
+        model.setMotorSpeed(2, 200.0);
         model.setPosition(2, 10.0);
         model.diameterIsSet();
         model.markWorkEnd();
     }
     void moveTo(double z, double x)
     {
-        model.axis1GoToPosition(z);
-        model.axis2GoToPosition(x);
+        model.goToPosition(1, z);
+        model.goToPosition(2, x);
         REQUIRE(runUntilStopped(model));
     }
     // Touches the diameter at X x, coming in (X goes down into the work)
@@ -7818,8 +7817,8 @@ TEST_CASE("Model:   changing tool shifts the positions, keeping memories and the
 
     // Tool 2 is at the end (Z 1.5 with tool 1's positions): it now reads 0,
     // the work's end, as tool 1 did there
-    REQUIRE(t.model.getAxis1MotorPosition() == Approx(0.0).margin(0.0011));
-    REQUIRE(t.model.getAxis2MotorPosition() == Approx(9.0).margin(0.0011));
+    REQUIRE(t.model.motorPosition(1) == Approx(0.0).margin(0.0011));
+    REQUIRE(t.model.motorPosition(2) == Approx(9.0).margin(0.0011));
     // The memory slot and the feature are where they were on the work
     REQUIRE(t.model.getMemory(1, 0) == Approx(0.0));
     REQUIRE(t.model.getMemory(2, 0) == Approx(10.0));
@@ -7829,13 +7828,13 @@ TEST_CASE("Model:   changing tool shifts the positions, keeping memories and the
     REQUIRE(t.model.getDiameterMm() == Approx(18.0).margin(0.0021));
 
     // Back to tool 1: back to the same steps
-    const long z2 = t.model.getAxis1MotorCurrentStep();
-    const long x2 = t.model.getAxis2MotorCurrentStep();
+    const long z2 = t.model.motorStep(1);
+    const long x2 = t.model.motorStep(2);
     REQUIRE(t.model.selectTool(1).empty());
-    REQUIRE(t.model.getAxis1MotorPosition() == Approx(1.5).margin(0.0011));
+    REQUIRE(t.model.motorPosition(1) == Approx(1.5).margin(0.0011));
     REQUIRE(t.model.selectTool(2).empty());
-    REQUIRE(t.model.getAxis1MotorCurrentStep() == z2);
-    REQUIRE(t.model.getAxis2MotorCurrentStep() == x2);
+    REQUIRE(t.model.motorStep(1) == z2);
+    REQUIRE(t.model.motorStep(2) == x2);
 
     // The library was saved, with tool 2 current
     std::vector<std::string> errors;
@@ -7924,7 +7923,7 @@ TEST_CASE("Model:   measuring the reference tool again from another tool")
     REQUIRE(library.find(2)->axis1OffsetMm == Approx(-1.0).margin(0.0011));
     REQUIRE(library.find(2)->axis2OffsetMm == Approx(-0.3).margin(0.0011));
     // Tool 1 is at the end it touched, which tool 2 read as Z 0
-    REQUIRE(t.model.getAxis1MotorPosition() == Approx(0.0).margin(0.0011));
+    REQUIRE(t.model.motorPosition(1) == Approx(0.0).margin(0.0011));
 }
 
 TEST_CASE("Tools:   the unknown tool, current but not in the library")
@@ -7952,8 +7951,8 @@ TEST_CASE("Model:   the unknown tool keeps the positions, until an axis is set w
     t.touch(0.0, 10.0);
     t.touch(1.5, 10.4);
     REQUIRE(t.model.finishToolMeasurement("Tool 2", 0.0).empty());
-    const long z2 = t.model.getAxis1MotorCurrentStep();
-    const long x2 = t.model.getAxis2MotorCurrentStep();
+    const long z2 = t.model.motorStep(1);
+    const long x2 = t.model.motorStep(2);
 
     // To the unknown tool: nothing shifts, and the positions are still
     // tool 2's
@@ -7961,21 +7960,21 @@ TEST_CASE("Model:   the unknown tool keeps the positions, until an axis is set w
     REQUIRE(t.model.selectTool(mgo::ToolLibrary::UNKNOWN_TOOL).empty());
     REQUIRE(!t.model.toolLibrary().currentIsKnown());
     REQUIRE(t.model.positionsTool() == 2);
-    REQUIRE(t.model.getAxis1MotorCurrentStep() == z2);
-    REQUIRE(t.model.getAxis2MotorCurrentStep() == x2);
+    REQUIRE(t.model.motorStep(1) == z2);
+    REQUIRE(t.model.motorStep(2) == x2);
     // Tools are measured from one in the library
     REQUIRE(!t.model.toolMeasurementUnavailable(3).empty());
     // Back to tool 2, nothing set meanwhile: as it was, feature and all
     REQUIRE(t.model.toolChangeClears(2) == std::pair { false, false });
     REQUIRE(t.model.selectTool(2).empty());
-    REQUIRE(t.model.getAxis1MotorCurrentStep() == z2);
-    REQUIRE(t.model.getAxis2MotorCurrentStep() == x2);
+    REQUIRE(t.model.motorStep(1) == z2);
+    REQUIRE(t.model.motorStep(2) == x2);
     REQUIRE(t.model.getWorkEndZ() == Approx(0.0));
     REQUIRE(t.model.getFeatureDiameterMm() == Approx(20.0));
     // Via the unknown tool to tool 1: shifted from tool 2's offsets
     REQUIRE(t.model.selectTool(mgo::ToolLibrary::UNKNOWN_TOOL).empty());
     REQUIRE(t.model.selectTool(1).empty());
-    REQUIRE(t.model.getAxis1MotorPosition() == Approx(1.5).margin(0.0011));
+    REQUIRE(t.model.motorPosition(1) == Approx(1.5).margin(0.0011));
 
     // With the unknown tool, Z is zeroed: Z's positions are now its, so
     // changing to tool 1 can't shift Z, and the work's end (set with tool
@@ -7986,10 +7985,10 @@ TEST_CASE("Model:   the unknown tool keeps the positions, until an axis is set w
     REQUIRE(!t.model.positionsTool());
     REQUIRE(t.model.toolChangeClears(2) == std::pair { false, true });
     REQUIRE(t.model.selectTool(2).empty());
-    REQUIRE(t.model.getAxis1MotorPosition() == Approx(0.0).margin(0.0001));
+    REQUIRE(t.model.motorPosition(1) == Approx(0.0).margin(0.0001));
     REQUIRE(!t.model.getWorkEndZ());
     REQUIRE(t.model.getFeatureDiameterMm() == Approx(20.0));
-    REQUIRE(t.model.getAxis2MotorCurrentStep() == x2);
+    REQUIRE(t.model.motorStep(2) == x2);
     REQUIRE(t.model.positionsTool() == 2);
 
     // The unknown tool is saved as the one in use
