@@ -82,6 +82,23 @@ using DrawItem = std::variant<TextItem, RectItem>;
 
 // A position as displayed (already converted to the display units), avoiding
 // "-0.00"
+// The key mode an axis's leader key gives
+KeyMode axisKeyMode(int axisNumber)
+{
+    switch (axisNumber) {
+        case 1:
+            return KeyMode::Axis1;
+        case 2:
+            return KeyMode::Axis2;
+        case 3:
+            return KeyMode::Axis3;
+        case 4:
+            return KeyMode::Axis4;
+        default:
+            return KeyMode::None;
+    }
+}
+
 std::string formatMotorPosition(double value, int decimals)
 {
     if (std::abs(value) < 0.5 * std::pow(10.0, -decimals)) {
@@ -442,15 +459,36 @@ struct ViewQt::Impl {
     void setDimmed(bool dimmed);
     void dialogClosed();
 
+    // Each axis's line: the motorised axes' at the top, then the manual
+    // axes' (e.g. the mill's Y and Z), as on a DRO, a little smaller
+    struct AxisLine {
+        int axisNumber { 0 };
+        TextItem label;
+        TextItem position;
+        TextItem units;
+        // A motorised axis's speed
+        TextItem speed;
+        // A manual axis's "no reading", if it hasn't one
+        TextItem status;
+        // While a manual axis goes to a memory slot: the distance to wind it
+        // (see Model::manualAxisGoTo())
+        TextItem goTo;
+    };
+    std::vector<AxisLine> axisLines;
+    AxisLine& axisLine(int axisNumber);
+    // Whether an axis's line and memory row are shown: not a motorised axis
+    // turned off in the config (DisableAxis1), nor a manual axis the model
+    // refused (e.g. with no scale)
+    static bool axisShown(const Model& model, int axisNumber);
+    // Each axis's row of memory slots, below their labels
+    struct MemoryRow {
+        int axisNumber { 0 };
+        TextItem label;
+        std::vector<TextItem> values;
+    };
+    std::vector<MemoryRow> memoryRows;
+
     // Main text items which are always displayed:
-    TextItem axis1Label;
-    TextItem axis1Pos;
-    TextItem axis1Units;
-    TextItem axis1Speed;
-    TextItem axis2Label;
-    TextItem axis2Pos;
-    TextItem axis2Units;
-    TextItem axis2Speed;
     TextItem rpmLabel;
     TextItem rpm;
     TextItem rpmUnits;
@@ -462,28 +500,6 @@ struct ViewQt::Impl {
     TextItem taperAngle;
     TextItem axis1Scale;
     TextItem surfaceSpeed; // Vc
-
-    // The manual axes (e.g. the mill's Y and Z), as on a DRO: a line each,
-    // below the motorised axes
-    struct ManualAxisLine {
-        int axisNumber { 0 };
-        TextItem label;
-        TextItem position;
-        TextItem units;
-        // "no reading", if it hasn't one
-        TextItem status;
-        // While going to a memory slot: the distance to wind it (see
-        // Model::manualAxisGoTo())
-        TextItem goTo;
-    };
-    std::vector<ManualAxisLine> manualAxisLines;
-    // A manual axis's row of memory slots
-    struct ManualMemoryRow {
-        int axisNumber { 0 };
-        TextItem label;
-        std::vector<TextItem> values;
-    };
-    std::vector<ManualMemoryRow> manualMemoryRows;
 
     // Text items which are displayed sometimes:
     TextItem mode;
@@ -520,10 +536,6 @@ struct ViewQt::Impl {
     void updateToolMeasurementData(const Model& model);
 
     std::vector<TextItem> memoryLabel;
-    TextItem axis1MemoryLabel;
-    TextItem axis2MemoryLabel;
-    std::vector<TextItem> axis1MemoryValue;
-    std::vector<TextItem> axis2MemoryValue;
 
     std::size_t iteration { 0 };
 
@@ -588,19 +600,17 @@ void ViewQt::initialise(const Model& model)
         return TextItem { QPointF(x, y), pixelSize, colour, "" };
     };
 
-    d.axis1Label = make(20, 10, 60);
-    d.axis1Label.text = model.config().read("Axis1Label", "Z") + ":";
-    d.axis1Pos = make(110, 10, 60, GREEN);
-    d.axis1Units = make(430, 40, 30, QColor(0, 127, 0));
-    d.axis1Units.text = model.config().read("Axis1DisplayUnits", "mm");
-    d.axis1Speed = make(550, 40, 30, QColor(209, 209, 50));
-
-    d.axis2Label = make(20, 70, 60);
-    d.axis2Label.text = model.config().read("Axis2Label", "X") + ":";
-    d.axis2Pos = make(110, 70, 60, GREEN);
-    d.axis2Units = make(430, 100, 30, QColor(0, 127, 0));
-    d.axis2Units.text = model.config().read("Axis2DisplayUnits", "mm");
-    d.axis2Speed = make(550, 100, 30, QColor(209, 209, 50));
+    for (int n = 1; n <= 2; ++n) {
+        const float y = n == 1 ? 10.f : 70.f;
+        Impl::AxisLine line;
+        line.axisNumber = n;
+        line.label = make(20, y, 60);
+        line.label.text = model.axisLabel(n) + ":";
+        line.position = make(110, y, 60, GREEN);
+        line.units = make(430, y + 30, 30, QColor(0, 127, 0));
+        line.speed = make(550, y + 30, 30, QColor(209, 209, 50));
+        d.axisLines.push_back(line);
+    }
 
     // The manual axes' lines go below the motorised axes', in place of the
     // spindle's speed where it isn't shown (as on the mill). They're a little
@@ -615,7 +625,7 @@ void ViewQt::initialise(const Model& model)
     // axes: one the model refuses, e.g. with no scale, isn't drawn)
     for (int n = Model::FIRST_MANUAL_AXIS; n <= Model::LAST_MANUAL_AXIS; ++n) {
         if (model.config().read(fmt::format("Axis{}Kind", n), "none") == "manual") {
-            Impl::ManualAxisLine line;
+            Impl::AxisLine line;
             line.axisNumber = n;
             line.label = make(20, manualAxisY, MANUAL_AXIS_SIZE);
             line.label.text
@@ -624,7 +634,7 @@ void ViewQt::initialise(const Model& model)
             line.units = make(430, manualAxisY + 15, 30, QColor(0, 127, 0));
             line.status = make(550, manualAxisY + 20, 20, QColor(209, 209, 50));
             line.goTo = make(550, manualAxisY + 10, 30, YELLOW);
-            d.manualAxisLines.push_back(line);
+            d.axisLines.push_back(line);
             manualAxisY += 50;
         }
     }
@@ -638,7 +648,7 @@ void ViewQt::initialise(const Model& model)
     // Memory banks. With manual axes, a row for each of them too, so the
     // rows are a little smaller and closer, to fit above the mode's lines
     const QColor grey(128, 128, 128);
-    const bool manualRows = !d.manualAxisLines.empty();
+    const bool manualRows = d.axisLines.size() > 2;
     const float memoryY = manualRows ? 232.f : 250.f;
     const int memorySize = manualRows ? 25 : 30;
     const float rowGap = manualRows ? 26.f : 30.f;
@@ -649,26 +659,18 @@ void ViewQt::initialise(const Model& model)
         auto label = make(valuesX + n * columnWidth, memoryY, memorySize, grey);
         label.text = fmt::format("    Mem {}", n + 1);
         d.memoryLabel.push_back(label);
-        d.axis1MemoryValue.push_back(
-            make(valuesX + n * columnWidth, memoryY + 25, memorySize, grey));
-        d.axis2MemoryValue.push_back(
-            make(valuesX + n * columnWidth, memoryY + 25 + rowGap, memorySize, grey));
     }
-    d.axis1MemoryLabel = make(24, memoryY + 25, memorySize, grey);
-    d.axis1MemoryLabel.text = model.config().read("Axis1Label", "Z") + ":";
-    d.axis2MemoryLabel = make(24, memoryY + 25 + rowGap, memorySize, grey);
-    d.axis2MemoryLabel.text = model.config().read("Axis2Label", "X") + ":";
-    float manualRowY = memoryY + 25 + 2 * rowGap;
-    for (const auto& line : d.manualAxisLines) {
-        Impl::ManualMemoryRow row;
+    float rowY = memoryY + 25;
+    for (const auto& line : d.axisLines) {
+        Impl::MemoryRow row;
         row.axisNumber = line.axisNumber;
-        row.label = make(24, manualRowY, memorySize, grey);
+        row.label = make(24, rowY, memorySize, grey);
         row.label.text = line.label.text;
         for (unsigned n = 0; n < model.getMemorySize(); ++n) {
-            row.values.push_back(make(valuesX + n * columnWidth, manualRowY, memorySize, grey));
+            row.values.push_back(make(valuesX + n * columnWidth, rowY, memorySize, grey));
         }
-        d.manualMemoryRows.push_back(row);
-        manualRowY += rowGap;
+        d.memoryRows.push_back(row);
+        rowY += rowGap;
     }
 
     // STATUS BAR (at bottom of screen). These are where its items usually
@@ -1088,10 +1090,7 @@ void ViewQt::Impl::drawFeature(std::vector<DrawItem>& frame, const Model& model)
     line(boxY + 36.f, "Ø", diameter ? length(2, *diameter) : "-");
     // (The work's end, as "Z 0.00 mm": not "Z end", which in the multi-pass
     // dialog is the cut's end)
-    line(
-        boxY + 72.f,
-        "End",
-        workEnd ? model.config().read("Axis1Label", "Z") + " " + length(1, *workEnd) : "-");
+    line(boxY + 72.f, "End", workEnd ? model.axisLabel(1) + " " + length(1, *workEnd) : "-");
 }
 
 void ViewQt::Impl::drawTool(std::vector<DrawItem>& frame, const Model& model) const
@@ -1153,8 +1152,8 @@ void ViewQt::Impl::updateToolMeasurementData(const Model& model)
     const ToolLibrary& library = model.toolLibrary();
     const int from = library.current().number;
     const int number = model.toolMeasurementNumber();
-    const std::string z = model.config().read("Axis1Label", "Z");
-    const std::string x = model.config().read("Axis2Label", "X");
+    const std::string z = model.axisLabel(1);
+    const std::string x = model.axisLabel(2);
     const auto step = model.toolTouchStep();
     mode.text = fmt::format(
         "Measuring T{}{} from T{}: Enter records, Esc cancels",
@@ -1187,7 +1186,7 @@ std::vector<std::string> settlingOverlayText(const Model& model)
     if (model.multiPass().state() != MultiPass::State::Settling) {
         return {};
     }
-    return { fmt::format("Waiting for {}'s scale", model.config().read("Axis1Label", "Z")),
+    return { fmt::format("Waiting for {}'s scale", model.axisLabel(1)),
              "to settle before the next cut",
              "(Space stops)" };
 }
@@ -1234,10 +1233,10 @@ void ViewQt::Impl::drawLeaderHints(std::vector<DrawItem>& frame, const Model& mo
     std::string title;
     switch (model.getKeyMode()) {
         case KeyMode::Axis1:
-            title = model.config().read("Axis1Label", "Z") + " then...";
+            title = model.axisLabel(1) + " then...";
             break;
         case KeyMode::Axis2:
-            title = model.config().read("Axis2Label", "X") + " then...";
+            title = model.axisLabel(2) + " then...";
             break;
         case KeyMode::AxisAll:
             title = "\\ (both axes) then...";
@@ -1356,40 +1355,38 @@ void ViewQt::updateDisplay(const Model& model)
     const auto draw = [&frame](const TextItem& item) { frame.push_back(item); };
 
     if (!model.isShuttingDown()) {
-        if (!model.config().readBool("DisableAxis1", false)) {
-            d.axis1Label.colour = model.isAxisLocked(1) ? QColor(90, 90, 90) : QColor(0, 192, 0);
-            draw(d.axis1Label);
-            draw(d.axis1Pos);
-            draw(d.axis1Units);
-            draw(d.axis1Speed);
+        // (The status line's items for the motorised axes, and axis 1's
+        // scale on its line)
+        if (d.axisShown(model, 1)) {
             draw(d.axis1Status);
-            draw(d.axis1MemoryLabel);
             if (model.hasAxis1Scale()) {
                 draw(d.axis1Scale);
             }
         }
-        if (!model.config().readBool("DisableAxis2", false)) {
-            d.axis2Label.colour = model.isAxisLocked(2) ? QColor(90, 90, 90) : QColor(0, 192, 0);
-            draw(d.axis2Label);
-            draw(d.axis2Pos);
-            draw(d.axis2Units);
-            draw(d.axis2Speed);
+        if (d.axisShown(model, 2)) {
             draw(d.axis2Status);
-            draw(d.axis2MemoryLabel);
         }
-        for (auto& line : d.manualAxisLines) {
-            if (!model.manualAxis(line.axisNumber)) {
+        for (auto& line : d.axisLines) {
+            if (!d.axisShown(model, line.axisNumber)) {
                 continue;
             }
-            const bool leader = (line.axisNumber == 3 && model.getKeyMode() == KeyMode::Axis3)
-                || (line.axisNumber == 4 && model.getKeyMode() == KeyMode::Axis4);
-            line.label.colour = leader ? RED : QColor(0, 192, 0);
+            if (model.manualAxis(line.axisNumber)) {
+                line.label.colour
+                    = model.getKeyMode() == axisKeyMode(line.axisNumber) ? RED : QColor(0, 192, 0);
+            } else {
+                line.label.colour
+                    = model.isAxisLocked(line.axisNumber) ? QColor(90, 90, 90) : QColor(0, 192, 0);
+            }
             draw(line.label);
             draw(line.position);
             draw(line.units);
-            draw(line.status);
-            if (!line.goTo.text.empty()) {
-                draw(line.goTo);
+            if (model.manualAxis(line.axisNumber)) {
+                draw(line.status);
+                if (!line.goTo.text.empty()) {
+                    draw(line.goTo);
+                }
+            } else {
+                draw(line.speed);
             }
         }
         if (!model.config().readBool("DisableRpm", false)) {
@@ -1417,39 +1414,21 @@ void ViewQt::updateDisplay(const Model& model)
         if (model.getIsAxis2Retracted()) {
             draw(d.xRetracted);
         }
-        for (std::size_t n = 0; n < d.memoryLabel.size(); ++n) {
-            draw(d.memoryLabel.at(n));
-            if (!model.config().readBool("DisableAxis1", false)) {
-                draw(d.axis1MemoryValue.at(n));
-            }
-            if (!model.config().readBool("DisableAxis2", false)) {
-                draw(d.axis2MemoryValue.at(n));
-            }
+        for (const auto& label : d.memoryLabel) {
+            draw(label);
         }
-        for (auto& row : d.manualMemoryRows) {
-            if (!model.manualAxis(row.axisNumber)) {
+        // (A row's label is red after its axis's leader key, or \)
+        for (auto& row : d.memoryRows) {
+            if (!d.axisShown(model, row.axisNumber)) {
                 continue;
             }
-            const bool leader = (row.axisNumber == 3 && model.getKeyMode() == KeyMode::Axis3)
-                || (row.axisNumber == 4 && model.getKeyMode() == KeyMode::Axis4)
+            const bool leader = model.getKeyMode() == axisKeyMode(row.axisNumber)
                 || model.getKeyMode() == KeyMode::AxisAll;
             row.label.colour = leader ? RED : QColor(128, 128, 128);
             draw(row.label);
             for (const auto& value : row.values) {
                 draw(value);
             }
-        }
-        // Z/X labels - make red if keyMode corresponds. (As in the SFML
-        // version, this takes effect from the next frame)
-        if (model.getKeyMode() == KeyMode::Axis1 || model.getKeyMode() == KeyMode::AxisAll) {
-            d.axis1MemoryLabel.colour = RED;
-        } else {
-            d.axis1MemoryLabel.colour = QColor(128, 128, 128);
-        }
-        if (model.getKeyMode() == KeyMode::Axis2 || model.getKeyMode() == KeyMode::AxisAll) {
-            d.axis2MemoryLabel.colour = RED;
-        } else {
-            d.axis2MemoryLabel.colour = QColor(128, 128, 128);
         }
         if (model.getMode() != Mode::None || model.isMeasuringTool()) {
             draw(d.mode);
@@ -1486,18 +1465,36 @@ void ViewQt::updateDisplay(const Model& model)
         }
     } else {
         // The SFML version drew nothing while shutting down, but set this text
-        draw(d.axis1Pos);
+        draw(d.axisLine(1).position);
     }
 
     d.widget->frame = std::move(frame);
     d.widget->update(); // (repainted by Qt's event loop)
 }
 
+ViewQt::Impl::AxisLine& ViewQt::Impl::axisLine(int axisNumber)
+{
+    for (auto& line : axisLines) {
+        if (line.axisNumber == axisNumber) {
+            return line;
+        }
+    }
+    throw std::logic_error(fmt::format("No line for axis {}", axisNumber));
+}
+
+bool ViewQt::Impl::axisShown(const Model& model, int axisNumber)
+{
+    if (axisNumber <= 2) {
+        return !model.config().readBool(fmt::format("DisableAxis{}", axisNumber), false);
+    }
+    return model.manualAxis(axisNumber) != nullptr;
+}
+
 void ViewQt::Impl::updateTextFromModel(const Model& model)
 {
     // Updates all the text objects with data in the model
     if (model.isShuttingDown()) {
-        axis1Pos.text = "SHUTTING DOWN";
+        axisLine(1).position.text = "SHUTTING DOWN";
         return;
     }
 
@@ -1507,10 +1504,9 @@ void ViewQt::Impl::updateTextFromModel(const Model& model)
         return model.isLengthAxis(axis) && model.getDisplayUnits() == DisplayUnits::Imperial ? 3
                                                                                              : 2;
     };
-    axis1Units.text = model.axisUnitName(1);
-    axis2Units.text = model.axisUnitName(2);
-
-    axis1Pos.text = formatMotorPosition(
+    AxisLine& axis1 = axisLine(1);
+    AxisLine& axis2 = axisLine(2);
+    axis1.position.text = formatMotorPosition(
         model.toDisplayUnits(1, model.getAxis1MotorPosition()), model.axisDecimals(1));
 
     // (When threading or knurling, Z's speed is set by the spindle's)
@@ -1518,19 +1514,19 @@ void ViewQt::Impl::updateTextFromModel(const Model& model)
         = model.getMode() == Mode::Threading || model.getMode() == Mode::Knurling
         ? model.getThreadingZSpeed()
         : model.getAxis1MotorSpeed();
-    this->axis1Speed.text = fmt::format(
+    axis1.speed.text = fmt::format(
         "{:<.{}f} {}/min",
         model.toDisplayUnits(1, axis1Speed),
         speedDecimals(1),
         model.axisUnitName(1));
 
     if (!model.getIsAxis2Retracted()) {
-        axis2Pos.text = formatMotorPosition(
+        axis2.position.text = formatMotorPosition(
             model.toDisplayUnits(2, model.getAxis2Position()), model.axisDecimals(2));
     } else {
-        axis2Pos.text = "     ---";
+        axis2.position.text = "     ---";
     }
-    axis2Speed.text = fmt::format(
+    axis2.speed.text = fmt::format(
         "{:<.{}f} {}/min",
         model.toDisplayUnits(2, model.getAxis2MotorSpeed()),
         speedDecimals(2),
@@ -1558,10 +1554,8 @@ void ViewQt::Impl::updateTextFromModel(const Model& model)
     }
 
     generalStatus.text = model.getGeneralStatus();
-    axis1Status.text
-        = fmt::format("{}: {}", model.config().read("Axis1Label", "Z"), model.getAxis1Status());
-    axis2Status.text
-        = fmt::format("{}: {}", model.config().read("Axis2Label", "X"), model.getAxis2Status());
+    axis1Status.text = fmt::format("{}: {}", model.axisLabel(1), model.getAxis1Status());
+    axis2Status.text = fmt::format("{}: {}", model.axisLabel(2), model.getAxis2Status());
     if (model.getMode() == Mode::Taper) {
         taperAngle.text = fmt::format("Angle: {}", model.getTaperAngle());
     }
@@ -1587,9 +1581,13 @@ void ViewQt::Impl::updateTextFromModel(const Model& model)
         }
     }
 
-    for (auto& line : manualAxisLines) {
-        const ManualAxis* axis = model.manualAxis(line.axisNumber);
+    for (auto& line : axisLines) {
         line.units.text = model.axisUnitName(line.axisNumber);
+        // (The motorised axes' positions and speeds are above)
+        if (line.axisNumber < Model::FIRST_MANUAL_AXIS) {
+            continue;
+        }
+        const ManualAxis* axis = model.manualAxis(line.axisNumber);
         const auto position = axis ? axis->positionMm() : std::nullopt;
         if (position) {
             line.position.text = formatMotorPosition(
@@ -1622,38 +1620,19 @@ void ViewQt::Impl::updateTextFromModel(const Model& model)
             }
         }
     }
-    for (auto& row : manualMemoryRows) {
-        for (std::size_t n = 0; n < row.values.size(); ++n) {
-            row.values.at(n).colour
-                = model.getCurrentMemorySlot() == n ? QColor(255, 255, 255) : QColor(100, 100, 100);
-            const auto memory = model.getManualAxisMemory(row.axisNumber, n);
-            row.values.at(n).text = memory ? fmt::format(
-                                                 "{: >9}",
-                                                 fmt::format(
-                                                     "{:.{}f}",
-                                                     model.toDisplayUnits(row.axisNumber, *memory),
-                                                     model.axisDecimals(row.axisNumber)))
-                                           : "        -";
-        }
-    }
-
+    const auto slotColour = [&model](std::size_t slot) {
+        return model.getCurrentMemorySlot() == slot ? QColor(255, 255, 255) : QColor(100, 100, 100);
+    };
     for (std::size_t n = 0; n < memoryLabel.size(); ++n) {
-        const QColor colour
-            = model.getCurrentMemorySlot() == n ? QColor(255, 255, 255) : QColor(100, 100, 100);
-        memoryLabel.at(n).colour = colour;
-        axis1MemoryValue.at(n).colour = colour;
-        axis2MemoryValue.at(n).colour = colour;
-        if (model.getAxis1Memory(n) == AXIS1_UNSET) {
-            axis1MemoryValue.at(n).text = "        -";
-        } else {
-            axis1MemoryValue.at(n).text
-                = fmt::format("{: >9}", model.formatAxis1Position(model.getAxis1Memory(n)));
-        }
-        if (model.getAxis2Memory(n) == AXIS2_UNSET) {
-            axis2MemoryValue.at(n).text = "        -";
-        } else {
-            axis2MemoryValue.at(n).text
-                = fmt::format("{: >9}", model.formatAxis2Position(model.getAxis2Memory(n)));
+        memoryLabel.at(n).colour = slotColour(n);
+    }
+    for (auto& row : memoryRows) {
+        for (std::size_t n = 0; n < row.values.size(); ++n) {
+            row.values.at(n).colour = slotColour(n);
+            const auto memory = model.getMemory(row.axisNumber, n);
+            row.values.at(n).text = memory
+                ? fmt::format("{: >9}", model.formatPosition(row.axisNumber, *memory))
+                : "        -";
         }
     }
 
@@ -1790,8 +1769,8 @@ void ViewQt::Impl::updateMultiPassData(const Model& model)
     // (A radius's passes are arcs: see radius.h)
     const bool radius = model.getMode() == Mode::Radius;
     const MultiPassRange& range = model.getMultiPassRange();
-    const std::string z = model.config().read("Axis1Label", "Z");
-    const std::string x = model.config().read("Axis2Label", "X");
+    const std::string z = model.axisLabel(1);
+    const std::string x = model.axisLabel(2);
     const auto xLength = [&model](double mm) {
         return fmt::format(
             "{:.{}f} {}",
@@ -2007,8 +1986,8 @@ void ViewQt::Impl::updateGearData(const Model& model)
     const MultiPass& mp = model.multiPass();
     const GearSetup& gear = model.getGearSetup();
     const MultiPassRange& range = model.getMultiPassRange();
-    const std::string x = model.config().read("Axis1Label", "Z");
-    const std::string a = model.config().read("Axis2Label", "X");
+    const std::string x = model.axisLabel(1);
+    const std::string a = model.axisLabel(2);
     // (The depth is fed by hand, but is a length, as axis 1's are)
     const auto length = [&model](double mm, int extraDecimals = 0) {
         return fmt::format(
@@ -2164,7 +2143,7 @@ void ViewQt::Impl::updateThreadData(const Model& model)
     // forgotten, having been turned off from the menu)
     misc3.text = fmt::format(
         "{} retracts {}; auto-retract {}",
-        model.config().read("Axis2Label", "X"),
+        model.axisLabel(2),
         model.getRetractionDirection() == XDirection::Inwards ? "inwards" : "outwards",
         model.threadingAutoRetract() ? "on" : "off");
 }

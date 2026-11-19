@@ -178,6 +178,28 @@ constexpr int a4_ENTER = ENTER + 0x20000; // go to axis 4's memory slot (by hand
 constexpr int a3_DELETE = key::DELETE + 0x8000; // clear axis 3's memory slot
 constexpr int a4_DELETE = key::DELETE + 0x20000; // clear axis 4's memory slot
 
+// The axis a leader-prefixed key is for (1 to 4), or 0 if it isn't one (or
+// it's for every axis)
+constexpr int axisOfKey(int keyCode)
+{
+    if (keyCode & 0x20000) {
+        return 4;
+    }
+    if (keyCode & 0x8000) {
+        return 3;
+    }
+    if (keyCode & 0x4000) {
+        return 0;
+    }
+    if (keyCode & 0x2000) {
+        return 2;
+    }
+    if (keyCode & 0x1000) {
+        return 1;
+    }
+    return 0;
+}
+
 // Commands with no shortcut of their own, chosen from the menu. The f2 names
 // are from the F2 leader key they used to follow
 constexpr int f2t = 7002; // threading

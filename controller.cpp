@@ -161,7 +161,7 @@ void Controller::confirmMeasureBacklash()
     if (!m_model->canMeasureAxis1Backlash()) {
         return;
     }
-    const std::string label = m_model->config().read("Axis1Label", "Z");
+    const std::string label = m_model->axisLabel(1);
     const int direction = m_model->axis1BacklashMeasureFirstDirection();
     okCancel(
         fmt::format("Measure {}'s backlash", label),
@@ -192,7 +192,7 @@ void Controller::checkScaleMismatch()
     m_scaleAsksShown = asks;
     m_model->setKeyMode(KeyMode::None);
     m_heldKeys.clear();
-    const std::string label = m_model->config().read("Axis1Label", "Z");
+    const std::string label = m_model->axisLabel(1);
     const auto length = [this](double mm) {
         return fmt::format(
             "{:.{}f} {}",
@@ -259,9 +259,7 @@ void Controller::showBacklashReport()
     }
     if (auto report = m_model->takeBacklashReport()) {
         pressAnyKey(
-            fmt::format("{}'s backlash", m_model->config().read("Axis1Label", "Z")),
-            std::move(*report),
-            []() { });
+            fmt::format("{}'s backlash", m_model->axisLabel(1)), std::move(*report), []() { });
     }
 }
 
@@ -522,63 +520,51 @@ void Controller::processKey(int t)
                     break;
                 }
             case key::a1_m:
-                {
-                    m_model->axis1StorePosition();
-                    break;
-                }
             case key::a2_m:
+            case key::a3_m:
+            case key::a4_m:
                 {
-                    m_model->axis2StorePosition();
+                    m_model->storePosition(key::axisOfKey(kp));
                     break;
                 }
             case key::m:
             case key::M:
                 {
-                    m_model->axis1StorePosition();
-                    m_model->axis2StorePosition();
                     // (Every axis is stored: a manual axis with no reading
                     // keeps what it had)
-                    for (int n = Model::FIRST_MANUAL_AXIS; n <= Model::LAST_MANUAL_AXIS; ++n) {
+                    for (int n = 1; n <= Model::AXES; ++n) {
                         const ManualAxis* axis = m_model->manualAxis(n);
-                        if (axis && axis->hasReading()) {
-                            m_model->manualAxisStorePosition(n);
+                        if (m_model->hasAxis(n) && (!axis || axis->hasReading())) {
+                            m_model->storePosition(n);
                         }
                     }
                     break;
                 }
-            case key::a3_m:
-            case key::a4_m:
-                {
-                    m_model->manualAxisStorePosition(kp == key::a3_m ? 3 : 4);
-                    break;
-                }
+            case key::a2_ENTER:
             case key::a3_ENTER:
             case key::a4_ENTER:
                 {
-                    m_model->manualAxisGoToCurrentMemory(kp == key::a3_ENTER ? 3 : 4);
+                    m_model->goToCurrentMemory(key::axisOfKey(kp));
                     break;
                 }
+            case key::a1_DELETE:
+            case key::a2_DELETE:
             case key::a3_DELETE:
             case key::a4_DELETE:
                 {
-                    m_model->clearCurrentManualMemorySlot(kp == key::a3_DELETE ? 3 : 4);
-                    break;
-                }
-            case key::a2_ENTER:
-                {
-                    m_model->axis2GoToCurrentMemory();
+                    m_model->clearCurrentMemorySlot(key::axisOfKey(kp));
                     break;
                 }
             case key::aAll_ENTER:
                 {
-                    m_model->axis1GoToCurrentMemory();
-                    m_model->axis2GoToCurrentMemory();
-                    // The manual axes in the go-to (e.g. the mill's Y, but not
-                    // its Z) are wound there at the same time, if they're set
-                    for (int n = Model::FIRST_MANUAL_AXIS; n <= Model::LAST_MANUAL_AXIS; ++n) {
-                        if (m_model->manualAxisInSlotGoTo(n)
-                            && m_model->getManualAxisMemory(n, m_model->getCurrentMemorySlot())) {
-                            m_model->manualAxisGoToCurrentMemory(n);
+                    // Every axis in the go-to (so not, e.g., the mill's Z)
+                    // goes there at the same time: the motorised ones move,
+                    // and the manual ones are wound there, if they're set
+                    for (int n = 1; n <= Model::AXES; ++n) {
+                        if (m_model->inSlotGoTo(n)
+                            && (m_model->manualAxis(n) == nullptr
+                                || m_model->getMemory(n, m_model->getCurrentMemorySlot()))) {
+                            m_model->goToCurrentMemory(n);
                         }
                     }
                     break;
@@ -600,16 +586,14 @@ void Controller::processKey(int t)
                 [[fallthrough]];
             case key::a1_ENTER:
                 {
-                    if (m_model->getAxis1Memory(m_model->getCurrentMemorySlot()) == AXIS1_UNSET) {
+                    // (If axis 1 isn't set in the slot, axis 2 goes there instead)
+                    if (!m_model->getMemory(1, m_model->getCurrentMemorySlot())) {
                         if (m_model->config().readBool("DisableAxis2", false)) {
                             break;
                         }
-                        if (m_model->getAxis2Memory(m_model->getCurrentMemorySlot())
-                            != AXIS2_UNSET) {
-                            m_model->axis2GoToCurrentMemory();
-                        }
+                        m_model->goToCurrentMemory(2);
                     }
-                    m_model->axis1GoToCurrentMemory();
+                    m_model->goToCurrentMemory(1);
                     break;
                 }
             case key::UP:
@@ -807,21 +791,17 @@ void Controller::processKey(int t)
                     break;
                 }
             case key::a1_z:
-                {
-                    confirmFeatureLoss(
-                        "Zeroing " + m_model->config().read("Axis1Label", "Z"),
-                        false,
-                        true,
-                        [this] { m_model->axis1Zero(); });
-                    break;
-                }
             case key::a2_z:
+            case key::a3_z:
+            case key::a4_z:
                 {
+                    // (Axis 1's position is the work's end's, and axis 2's
+                    // the diameter's. The manual axes move nothing)
+                    const int n = key::axisOfKey(kp);
                     confirmFeatureLoss(
-                        "Zeroing " + m_model->config().read("Axis2Label", "X"),
-                        true,
-                        false,
-                        [this] { m_model->axis2Zero(); });
+                        "Zeroing " + m_model->axisLabel(n), n == 2, n == 1, [this, n] {
+                            m_model->zero(n);
+                        });
                     break;
                 }
             case key::aAll_z:
@@ -838,7 +818,7 @@ void Controller::processKey(int t)
             case key::a1_g:
                 {
                     // Note all motors will be stopped when a dialog is displayed
-                    const std::string axisName = m_model->config().read("Axis1Label", "Z");
+                    const std::string axisName = m_model->axisLabel(1);
                     getNumericInput(
                         "Go to " + axisName + " absolute position" + unitsSuffix(1),
                         { "Specify a value" },
@@ -853,7 +833,7 @@ void Controller::processKey(int t)
             case key::a2_g:
                 {
                     // Note all motors will be stopped when a dialog is displayed
-                    const std::string axisName = m_model->config().read("Axis2Label", "X");
+                    const std::string axisName = m_model->axisLabel(2);
                     getNumericInput(
                         "Go to " + axisName + " absolute position" + unitsSuffix(2),
                         { "Specify a value" },
@@ -869,7 +849,7 @@ void Controller::processKey(int t)
                 {
                     // Relative motion
                     // Note all motors will be stopped when a dialog is displayed
-                    const std::string axisName = m_model->config().read("Axis1Label", "Z");
+                    const std::string axisName = m_model->axisLabel(1);
                     getNumericInput(
                         "Go to " + axisName + " relative position" + unitsSuffix(1),
                         { "Specify a RELATIVE offset value" },
@@ -885,7 +865,7 @@ void Controller::processKey(int t)
                 {
                     // Relative motion
                     // Note all motors will be stopped when a dialog is displayed
-                    const std::string axisName = m_model->config().read("Axis2Label", "X");
+                    const std::string axisName = m_model->axisLabel(2);
                     getNumericInput(
                         "Go to " + axisName + " relative position" + unitsSuffix(2),
                         { "Specify a RELATIVE offset value" },
@@ -1011,7 +991,7 @@ void Controller::processKey(int t)
                     // As with all dialogs, stop all motors first
                     m_model->stopAllMotors();
                     if (!m_model->getDiameterMm()) {
-                        const std::string x = m_model->config().read("Axis2Label", "X");
+                        const std::string x = m_model->axisLabel(2);
                         pressAnyKey(
                             "Cut knurling",
                             { "Set " + x + " as a diameter first (with the tool on the work's",
@@ -1156,52 +1136,34 @@ void Controller::processKey(int t)
                     m_model->rebaseAxis1FromScaleByHand();
                     break;
                 }
-            case key::a1_h: // halve axis 1's position (to find a centre)
-                {
-                    confirmFeatureLoss(
-                        "Halving " + m_model->config().read("Axis1Label", "Z"),
-                        false,
-                        true,
-                        [this] { m_model->axis1Half(); });
-                    break;
-                }
-            case key::a2_h: // halve axis 2's position (to find a centre)
-                {
-                    confirmFeatureLoss(
-                        "Halving " + m_model->config().read("Axis2Label", "X"),
-                        true,
-                        false,
-                        [this] { m_model->axis2Half(); });
-                    break;
-                }
-            // The manual axes (e.g. the mill's Y and Z): these move nothing
-            case key::a3_z:
-            case key::a4_z:
-                {
-                    m_model->manualAxisZero(kp == key::a3_z ? 3 : 4);
-                    break;
-                }
+            case key::a1_h: // halve an axis's position (to find a centre)
+            case key::a2_h:
             case key::a3_h:
             case key::a4_h:
                 {
-                    m_model->manualAxisHalf(kp == key::a3_h ? 3 : 4);
+                    const int n = key::axisOfKey(kp);
+                    confirmFeatureLoss(
+                        "Halving " + m_model->axisLabel(n), n == 2, n == 1, [this, n] {
+                            m_model->half(n);
+                        });
                     break;
                 }
             case key::a3_s:
             case key::a4_s:
                 {
-                    const int axisNumber = kp == key::a3_s ? 3 : 4;
-                    const ManualAxis* axis = m_model->manualAxis(axisNumber);
-                    if (!axis) {
+                    // (A manual axis's has no options: its memory slots are
+                    // always cleared, as its zero has moved)
+                    const int axisNumber = key::axisOfKey(kp);
+                    if (!m_model->hasAxis(axisNumber)) {
                         break;
                     }
                     getNumericInput(
-                        axis->label() + " position set" + unitsSuffix(axisNumber),
+                        m_model->axisLabel(axisNumber) + " position set" + unitsSuffix(axisNumber),
                         {},
                         0.0,
                         [this, axisNumber](const NumericInputReturn& result) {
                             if (!result.cancelled) {
-                                m_model->setManualAxisPosition(
+                                m_model->setPosition(
                                     axisNumber,
                                     m_model->fromDisplayUnits(axisNumber, result.value));
                             }
@@ -1237,7 +1199,7 @@ void Controller::processKey(int t)
                 }
             case key::a1_s: // Axis1 position set
                 {
-                    const std::string axisName = m_model->config().read("Axis1Label", "Z");
+                    const std::string axisName = m_model->axisLabel(1);
                     getNumericInput(
                         axisName + " position set" + unitsSuffix(1),
                         { "[&A] adjust (keeps memory slots)" },
@@ -1253,12 +1215,12 @@ void Controller::processKey(int t)
                                 false,
                                 !adjust,
                                 [this, result, adjust] {
-                                    m_model->setAxis1Position(
-                                        m_model->fromDisplayUnits(1, result.value));
+                                    m_model->setPosition(
+                                        1, m_model->fromDisplayUnits(1, result.value));
                                     // This will invalidate any memorised Z positions, so we
                                     // clear them unless the user specified not to with 'A'
                                     if (!adjust) {
-                                        m_model->clearAllAxis1Memories();
+                                        m_model->clearMemory(1);
                                         m_model->clearWorkEnd();
                                     }
                                 });
@@ -1268,7 +1230,7 @@ void Controller::processKey(int t)
             case key::a2_s: // Axis2 position set
                 {
                     // Note all motors will be stopped when a dialog is displayed
-                    const std::string axisName = m_model->config().read("Axis2Label", "X");
+                    const std::string axisName = m_model->axisLabel(2);
                     getNumericInput(
                         axisName + " position set" + unitsSuffix(2),
                         { "[&D] set as diameter", "[&A] adjusts (keeps memory slots)" },
@@ -1289,7 +1251,7 @@ void Controller::processKey(int t)
                                     if (diameter) {
                                         position /= 2;
                                     }
-                                    m_model->setAxis2Position(position);
+                                    m_model->setPosition(2, position);
                                     // (After setting the position, which clears any diameter)
                                     if (diameter) {
                                         m_model->diameterIsSet();
@@ -1297,7 +1259,7 @@ void Controller::processKey(int t)
                                     // This will invalidate any memorised X positions, so we
                                     // clear them unless the user specified not to with 'A'
                                     if (!result.optionsSelected.contains('a')) {
-                                        m_model->clearAllAxis2Memories();
+                                        m_model->clearMemory(2);
                                     }
                                 });
                         });
@@ -1308,14 +1270,14 @@ void Controller::processKey(int t)
             case key::a1_i:
                 {
                     // Note all motors will be stopped when a dialog is displayed
-                    const std::string axisName = m_model->config().read("Axis1Label", "Z");
+                    const std::string axisName = m_model->axisLabel(1);
                     getNumericInput(
                         "Enter " + axisName + " memory value" + unitsSuffix(1),
                         {},
                         0.0,
                         [this](const NumericInputReturn& rc) {
                             if (!rc.cancelled) {
-                                m_model->axis1StorePosition(m_model->fromDisplayUnits(1, rc.value));
+                                m_model->storePosition(1, m_model->fromDisplayUnits(1, rc.value));
                             }
                         });
                     break;
@@ -1323,14 +1285,14 @@ void Controller::processKey(int t)
             case key::a2_i: // Input axis 2 memory value directly
                 {
                     // Note all motors will be stopped when a dialog is displayed
-                    const std::string axisName = m_model->config().read("Axis2Label", "X");
+                    const std::string axisName = m_model->axisLabel(2);
                     getNumericInput(
                         "Enter " + axisName + " memory value" + unitsSuffix(2),
                         {},
                         0.0,
                         [this](const NumericInputReturn& rc) {
                             if (!rc.cancelled) {
-                                m_model->axis2StorePosition(m_model->fromDisplayUnits(2, rc.value));
+                                m_model->storePosition(2, m_model->fromDisplayUnits(2, rc.value));
                             }
                         });
                     break;
@@ -1438,23 +1400,11 @@ void Controller::processKey(int t)
                     }
                     break;
                 }
-            case key::a1_DELETE:
-                {
-                    m_model->clearCurrentMemorySlot(Axis::Axis1);
-                    break;
-                }
-            case key::a2_DELETE:
-                {
-                    m_model->clearCurrentMemorySlot(Axis::Axis2);
-                    break;
-                }
             case key::DELETE:
             case key::aAll_DELETE:
                 {
-                    m_model->clearCurrentMemorySlot(Axis::Axis1);
-                    m_model->clearCurrentMemorySlot(Axis::Axis2);
-                    for (int n = Model::FIRST_MANUAL_AXIS; n <= Model::LAST_MANUAL_AXIS; ++n) {
-                        m_model->clearCurrentManualMemorySlot(n);
+                    for (int n = 1; n <= Model::AXES; ++n) {
+                        m_model->clearCurrentMemorySlot(n);
                     }
                     break;
                 }
@@ -1645,9 +1595,7 @@ void Controller::confirmFeatureLoss(
         lines.push_back("    Ø " + length(2, *featureDiameter));
     }
     if (featureWorkEnd) {
-        lines.push_back(
-            "    end, " + m_model->config().read("Axis1Label", "Z") + " "
-            + length(1, *featureWorkEnd));
+        lines.push_back("    end, " + m_model->axisLabel(1) + " " + length(1, *featureWorkEnd));
     }
     lines.push_back("");
     lines.push_back("Enter (or Y): go ahead   Esc (or N): cancel");
@@ -1761,8 +1709,8 @@ void Controller::confirmMeasureTool(int number, bool isNew)
         return;
     }
     const Tool& from = m_model->toolLibrary().current();
-    const std::string z = m_model->config().read("Axis1Label", "Z");
-    const std::string x = m_model->config().read("Axis2Label", "X");
+    const std::string z = m_model->axisLabel(1);
+    const std::string x = m_model->axisLabel(2);
     okCancel(
         title,
         { "Its offsets are measured from the tool in use,",

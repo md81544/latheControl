@@ -614,35 +614,28 @@ std::vector<Command> buildCommands(
     // Going to, returning to or clearing the current slot needs something in
     // it. The commands for both axes act on each axis in turn, so they're
     // only unavailable when neither axis has anything in the slot
-    const auto axis1SlotSet = [](const Model& m) {
-        return m.getAxis1MemoryAsPosition(m.getCurrentMemorySlot()).has_value();
+    const auto slotSet = [](int n) {
+        return [n](const Model& m) { return m.getMemory(n, m.getCurrentMemorySlot()).has_value(); };
     };
-    const auto axis2SlotSet = [](const Model& m) {
-        return m.getAxis2MemoryAsPosition(m.getCurrentMemorySlot()).has_value();
-    };
-    const auto manualSlotSet = [](int n) {
-        return [n](const Model& m) {
-            return m.getManualAxisMemory(n, m.getCurrentMemorySlot()).has_value();
-        };
-    };
-    const auto anyManualSlotSet = [](const Model& m, bool inGoToOnly) {
-        for (int n = Model::FIRST_MANUAL_AXIS; n <= Model::LAST_MANUAL_AXIS; ++n) {
-            if ((!inGoToOnly || m.manualAxisInSlotGoTo(n))
-                && m.getManualAxisMemory(n, m.getCurrentMemorySlot())) {
-                return true;
+    const auto axis1SlotSet = slotSet(1);
+    const auto axis2SlotSet = slotSet(2);
+    // Whether any axis has something in the slot (of those in a go-to on
+    // every axis, if inGoToOnly)
+    const auto anySlotSetOf = [](bool inGoToOnly) {
+        return [inGoToOnly](const Model& m) {
+            for (int n = 1; n <= Model::AXES; ++n) {
+                if ((!inGoToOnly || m.inSlotGoTo(n)) && m.getMemory(n, m.getCurrentMemorySlot())) {
+                    return true;
+                }
             }
-        }
-        return false;
+            return false;
+        };
     };
     const auto eitherSlotSet = [axis1SlotSet, axis2SlotSet](const Model& m) {
         return axis1SlotSet(m) || axis2SlotSet(m);
     };
-    const auto goToSlotSet = [eitherSlotSet, anyManualSlotSet](const Model& m) {
-        return eitherSlotSet(m) || anyManualSlotSet(m, true);
-    };
-    const auto anySlotSet = [eitherSlotSet, anyManualSlotSet](const Model& m) {
-        return eitherSlotSet(m) || anyManualSlotSet(m, false);
-    };
+    const auto goToSlotSet = anySlotSetOf(true);
+    const auto anySlotSet = anySlotSetOf(false);
     b.add(c, fmt::format("Go to slot: {}", a1), key::a1_ENTER, AXIS1, axis1SlotSet);
     b.add(c, fmt::format("Go to slot: {}", a2), key::a2_ENTER, AXIS2, axis2SlotSet);
     b.add(c, fmt::format("Go to slot: {}", goToAxes), key::aAll_ENTER, BOTH, goToSlotSet);
@@ -663,21 +656,11 @@ std::vector<Command> buildCommands(
     // (A manual axis has no motor, so going to its slot shows the distance
     // to wind it)
     b.add(c, fmt::format("Store {} in slot", a3), key::a3_m, AXIS3);
-    b.add(
-        c,
-        fmt::format("Go to slot: {} (wind it there)", a3),
-        key::a3_ENTER,
-        AXIS3,
-        manualSlotSet(3));
-    b.add(c, fmt::format("Clear slot: {}", a3), key::a3_DELETE, AXIS3, manualSlotSet(3));
+    b.add(c, fmt::format("Go to slot: {} (wind it there)", a3), key::a3_ENTER, AXIS3, slotSet(3));
+    b.add(c, fmt::format("Clear slot: {}", a3), key::a3_DELETE, AXIS3, slotSet(3));
     b.add(c, fmt::format("Store {} in slot", a4), key::a4_m, AXIS4);
-    b.add(
-        c,
-        fmt::format("Go to slot: {} (wind it there)", a4),
-        key::a4_ENTER,
-        AXIS4,
-        manualSlotSet(4));
-    b.add(c, fmt::format("Clear slot: {}", a4), key::a4_DELETE, AXIS4, manualSlotSet(4));
+    b.add(c, fmt::format("Go to slot: {} (wind it there)", a4), key::a4_ENTER, AXIS4, slotSet(4));
+    b.add(c, fmt::format("Clear slot: {}", a4), key::a4_DELETE, AXIS4, slotSet(4));
 
     c = "Position";
     b.add(c, fmt::format("Zero {}", a1), key::a1_z, AXIS1);

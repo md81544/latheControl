@@ -944,7 +944,7 @@ TEST_CASE("UI: knurling through the controller")
     // On Ø 10, by distances. (With no knurling speed in the config, the angle
     // suggested is 45 degrees, and 0.3 mm deep, the starts space the grooves
     // 0.6 mm apart across: π × 10 × cos 45° ÷ 0.6, about 37)
-    tm.model.setAxis2Position(5.0);
+    tm.model.setPosition(2, 5.0);
     tm.model.diameterIsSet();
     whenDialogShows([](QWidget* dialog) {
         typeInto(dialog, "-7");
@@ -1064,7 +1064,7 @@ TEST_CASE("UI: radius on the end through the controller")
 
     // A 10 mm bar, its end at Z 0. A 2 mm radius, 0.3 per pass, with a
     // 0.4 mm nose radius
-    model.setAxis2Position(5.0);
+    model.setPosition(2, 5.0);
     model.diameterIsSet();
     model.markWorkEnd();
     whenDialogShows([](QWidget* dialog) {
@@ -1126,7 +1126,7 @@ TEST_CASE("UI: a shoulder with a fillet through the controller")
 
     // A 10 mm bar, its end at Z 0. Down to 8 mm, 3 mm from the end, with a
     // 0.5 mm fillet, 0.3 per pass, with a 0.1 mm nose radius
-    model.setAxis2Position(5.0);
+    model.setPosition(2, 5.0);
     model.diameterIsSet();
     model.markWorkEnd();
     whenDialogShows([](QWidget* dialog) {
@@ -1557,11 +1557,11 @@ TEST_CASE("UI: multi-pass through the controller")
     tm.model.setAxis1MotorSpeed(500.0);
     tm.model.setAxis2MotorSpeed(20.0);
     // Mem 1 where the tool is (0, 0); Mem 2 at Z 0.3, X 0.02
-    tm.model.axis1StorePosition(0.0);
-    tm.model.axis2StorePosition(0.0);
+    tm.model.storePosition(1, 0.0);
+    tm.model.storePosition(2, 0.0);
     tm.model.selectNextMemorySlot();
-    tm.model.axis1StorePosition(0.3);
-    tm.model.axis2StorePosition(0.02);
+    tm.model.storePosition(1, 0.3);
+    tm.model.storePosition(2, 0.02);
     tm.model.selectPreviousMemorySlot();
 
     // The menu's Modes, Multi-pass: as the tool's at Mem 1, the dialog starts there, ending at
@@ -1839,7 +1839,7 @@ TEST_CASE("UI: the current feature is shown")
     }
     mgo::ViewQt view;
     view.initialise(tm.model);
-    tm.model.setAxis2Position(7.5);
+    tm.model.setPosition(2, 7.5);
     tm.model.diameterIsSet();
     tm.model.markWorkEnd();
     // In multi-pass mode, whose lines run alongside it
@@ -1885,9 +1885,9 @@ TEST_CASE("UI: zeroing or setting a position asks before clearing the current fe
     mgo::Controller controller(&tm.model);
     QWidget* w = mainWindow();
     REQUIRE(w);
-    tm.model.setAxis2Position(7.5);
+    tm.model.setPosition(2, 7.5);
     tm.model.diameterIsSet();
-    tm.model.setAxis1Position(3.0);
+    tm.model.setPosition(1, 3.0);
     tm.model.markWorkEnd();
     bool asked = false;
     const auto answer = [&asked](Qt::Key k) {
@@ -1918,7 +1918,7 @@ TEST_CASE("UI: zeroing or setting a position asks before clearing the current fe
     // ...after which Z Z doesn't ask (there's nothing of the feature to
     // lose). (No answer is set up for it: press() would fail if it asked, as
     // the dialog would stay open)
-    tm.model.setAxis1Position(2.0);
+    tm.model.setPosition(1, 2.0);
     press(w, controller, Qt::Key_Z);
     press(w, controller, Qt::Key_Z);
     REQUIRE(tm.model.getAxis1MotorPosition() == Approx(0.0));
@@ -2003,7 +2003,7 @@ TEST_CASE("UI: a serial scale (simulated) is lined up with the motor, and follow
     REQUIRE(*model.getAxis1ScalePositionMm() == Approx(1.0).margin(0.011));
 
     // Zeroing lines it up again, at the new zero
-    model.axis1Zero();
+    model.zero(1);
     REQUIRE(tickUntil([&model] { return model.getAxis1ScalePositionMm().has_value(); }));
     REQUIRE(*model.getAxis1ScalePositionMm() == Approx(0.0).margin(0.011));
 }
@@ -2142,9 +2142,9 @@ TEST_CASE("UI: memory slots for the manual axes, and going to them by hand", "[t
     windTo(3, 3.0);
     windTo(4, -1.0);
     press(w, controller, Qt::Key_M);
-    REQUIRE(*model.getManualAxisMemory(3, 0) == Approx(3.0).margin(0.005));
-    REQUIRE(*model.getManualAxisMemory(4, 0) == Approx(-1.0).margin(0.005));
-    REQUIRE(!model.getManualAxisMemory(3, 1));
+    REQUIRE(*model.getMemory(3, 0) == Approx(3.0).margin(0.005));
+    REQUIRE(*model.getMemory(4, 0) == Approx(-1.0).margin(0.005));
+    REQUIRE(!model.getMemory(3, 1));
 
     // \ then Enter goes to the slot: Y is to be wound there (not Z, which
     // isn't in the go-to), showing the distance to go
@@ -2184,15 +2184,15 @@ TEST_CASE("UI: memory slots for the manual axes, and going to them by hand", "[t
     // Zeroing Y clears its slots (they were from the old zero), not Z's
     press(w, controller, Qt::Key_Y);
     press(w, controller, Qt::Key_Z);
-    REQUIRE(!model.getManualAxisMemory(3, 0));
-    REQUIRE(model.getManualAxisMemory(4, 0));
+    REQUIRE(!model.getMemory(3, 0));
+    REQUIRE(model.getMemory(4, 0));
     // Its leader then M stores it alone, and then Delete clears it
     press(w, controller, Qt::Key_Y);
     press(w, controller, Qt::Key_M);
-    REQUIRE(*model.getManualAxisMemory(3, 0) == Approx(0.0).margin(0.005));
+    REQUIRE(*model.getMemory(3, 0) == Approx(0.0).margin(0.005));
     press(w, controller, Qt::Key_Y);
     press(w, controller, Qt::Key_Delete);
-    REQUIRE(!model.getManualAxisMemory(3, 0));
+    REQUIRE(!model.getMemory(3, 0));
     // An empty slot says so
     press(w, controller, Qt::Key_Y);
     press(w, controller, Qt::Key_Return);
@@ -2833,7 +2833,7 @@ TEST_CASE("UI: finishing moves on the scale")
         t.model.axis1GoToPosition(2.0);
         REQUIRE(finishedAt(2.0));
         t.model.fakeAxis1Scale()->setErrorMm(0.03);
-        t.model.axis1Zero();
+        t.model.zero(1);
         REQUIRE(t.runUntil([&] { return t.model.getAxis1ScalePositionMm().has_value(); }));
         t.model.axis1GoToPosition(-1.0);
         REQUIRE(finishedAt(-1.0));
@@ -2943,7 +2943,7 @@ TEST_CASE("UI: defining a new tool, then changing tool")
     };
     model.axis1SetSpeed(500.0);
     model.axis2SetSpeed(500.0);
-    model.setAxis2Position(10.0);
+    model.setPosition(2, 10.0);
     model.diameterIsSet();
     model.markWorkEnd();
     const auto moveTo = [&model](double z, double x) {

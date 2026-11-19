@@ -1990,6 +1990,31 @@ change.
       when a manual go-to arrives (the line just clears), and the multi-pass
       dialog doesn't use the manual axes' slots yet (stage 3). Stage 2
       (moving X and A onto the same abstraction) is next
+    - **Done (19 Nov 2026), the first part of stage 2:** memory slots,
+      zero, set and half, and the display, with no change of behaviour.
+      The Model has calls taking an axis number (1 to `Model::AXES`, 4)
+      which work the same for every axis: `hasAxis()`, `axisLabel()`
+      (which replaces the 75 `read("Axis1Label", "Z")`s), `getMemory()`,
+      `storePosition()`, `goToCurrentMemory()`, `clearCurrentMemorySlot()`,
+      `clearMemory()`, `inSlotGoTo()`, `zero()`, `setPosition()`,
+      `half()` and `formatPosition()`. The `axis1...`/`axis2...`/
+      `manualAxis...` versions of these are now private, behind them.
+      Every axis's slots are in one array, in mm (a motorised axis's are
+      whole steps, so going there and "already there" are exact), rather
+      than the motorised axes' in steps with a sentinel for "unset". The
+      controller's keys for these act on `key::axisOfKey()` rather than a
+      case per axis, and the view has one list of axis lines and one of
+      memory rows (the motorised and manual axes differ only in what they
+      show beside the position: speed, or "no reading" and the go-to)
+        - A bug fixed on the way: a memory value typed in (`i`) was
+          truncated to a step, not rounded, so 0.7 mm at 1/1000 mm a step
+          was stored as 699 steps (0.699 mm). Now it's the nearest step
+        - Still to do, in the same way: moves and rapids, nudges, go-tos
+          to a position and breadcrumbs, speeds, statuses, locks, and the
+          scale (which wants to belong to any axis, for a scale on the
+          lathe's X later). These are mostly inside the Model, where the
+          two motorised axes differ most (axis 1's taper, threading and
+          scale; axis 2's retraction), so each wants care
 - [x] `axis.cpp` / `axis.h` are compiled but unused, and their `mgo::Axis`
       class clashes in name with `enum class mgo::Axis` in model.h
     - **Done:** removed (they're in git's history, if the "array of axes"

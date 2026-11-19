@@ -39,8 +39,6 @@ constexpr int INF_RIGHT = std::numeric_limits<int>::min();
 constexpr int INF_OUT = std::numeric_limits<int>::min();
 constexpr int INF_LEFT = std::numeric_limits<int>::max();
 constexpr int INF_IN = std::numeric_limits<int>::max();
-constexpr int AXIS1_UNSET = INF_RIGHT;
-constexpr int AXIS2_UNSET = INF_OUT;
 
 constexpr double DEG_TO_RAD = M_PI / 180.0;
 
@@ -151,14 +149,7 @@ public:
     void axis1GoToPosition(double pos);
     void axis1GoToOffset(double pos);
     void axis1GoToPreviousPosition();
-    void axis1GoToCurrentMemory();
     void axis1Nudge(ZDirection direction, double nudgeAmountMm);
-    void axis1Zero();
-    // Sets axis 1's position to half what it is (e.g. having zeroed it on one
-    // edge and moved to the other, zero is then halfway between them). As
-    // for setting its position, its memory slots (and the work's end) are
-    // cleared. Not while it's moving
-    void axis1Half();
     void axis1SpeedDecrease();
     void axis1SpeedIncrease();
     void axis1FastReturn();
@@ -169,8 +160,6 @@ public:
     // StepperMotor::decelerateToStop()), without waiting. If it's already
     // slowing down, it stops at once
     void axis1StopRamped();
-    void axis1StorePosition();
-    void axis1StorePosition(double mm);
     void axis1Move(ZDirection direction);
     void axis1Rapid(ZDirection direction);
     void axis1SpeedPreset();
@@ -185,20 +174,13 @@ public:
     void axis2Stop();
     // As axis1StopRamped()
     void axis2StopRamped();
-    void axis2Zero();
-    // As axis1Half(), for axis 2 (clearing its memory slots, and the
-    // diameter)
-    void axis2Half();
     void axis2SynchroniseOff();
-    void axis2GoToCurrentMemory();
     void axis2SpeedDecrease();
     void axis2SpeedIncrease();
     void axis2Nudge(XDirection direction, double nudgeAmountMm);
     void axis2FastReturn();
     // Retracts X by Axis2RetractionDistance, or, if retracted, unretracts
     void axis2Retract();
-    void axis2StorePosition();
-    void axis2StorePosition(double mm);
     void axis2Move(XDirection direction);
     void axis2Rapid(XDirection direction);
     void axis2SpeedPreset();
@@ -365,22 +347,67 @@ public:
     // The chosen thread, or nullptr if there are none
     const Thread* getThread() const;
 
+    // Axes are numbered 1 to AXES, as in the config: 1 and 2 have motors
+    // (the lathe's Z and X; the mill's X and A), and 3 and 4 are manual
+    // axes, if any (see manualAxis()). Calls taking an axis number for an
+    // axis that isn't there do nothing (see hasAxis())
+    static constexpr int AXES = 4;
+    // Whether there's an axis numbered axisNumber: axes 1 and 2 always, and
+    // axes 3 and 4 if they're manual axes in the config
+    bool hasAxis(int axisNumber) const;
+    // e.g. "Z" (Axis1Label in the config)
+    std::string axisLabel(int axisNumber) const;
+
+    // Zeroing an axis, setting its position, or halving it. A manual axis
+    // without a reading warns, and changes nothing. Each clears the axis's
+    // memory slots, except setting a motorised axis's position (the dialog
+    // clears them unless told to keep them), and on the lathe, the parts of
+    // the current feature on that axis (axis 1: the work's end; axis 2: the
+    // diameter, as X is no longer known to be measured from the centre).
+    // Setting a motorised axis's position (or zeroing it) also clears a
+    // motor fault, as the position is known again
+    void zero(int axisNumber);
+    // Zeroes every axis (a manual one without a reading warns, and isn't)
+    void zeroAllAxes();
+    void setPosition(int axisNumber, double mm);
+    // Sets the position to half what it is (e.g. having zeroed it on one
+    // edge and moved to the other, zero is then halfway between them). Not
+    // while a motorised axis is moving
+    void half(int axisNumber);
+
+    // Memory slots. Each slot holds a position for every axis, or not, and
+    // one slot is the current one, which storing, going to and clearing use
     void selectPreviousMemorySlot();
     void selectNextMemorySlot();
     std::size_t getCurrentMemorySlot() const;
-
-    long getAxis1Memory(std::size_t index) const;
-    std::optional<double> getAxis1MemoryAsPosition(std::size_t index) const;
-    long getAxis2Memory(std::size_t index) const;
-    std::optional<double> getAxis2MemoryAsPosition(std::size_t index) const;
     unsigned getMemorySize() const;
-    void clearAllAxis1Memories();
-    void clearAllAxis2Memories();
+    // An axis's position in a slot (in mm), or nothing if it isn't set.
+    // Zeroing an axis, setting its position or halving it clears its slots,
+    // as does losing a manual axis's readings (and so its zero)
+    std::optional<double> getMemory(int axisNumber, std::size_t slot) const;
+    // Stores where the axis is in the current slot (a manual axis without a
+    // reading warns, and keeps what it had)
+    void storePosition(int axisNumber);
+    // Stores a position (in mm) in the current slot: for a motorised axis,
+    // the nearest whole step
+    void storePosition(int axisNumber, double mm);
+    void clearCurrentMemorySlot(int axisNumber);
+    // Clears every slot
+    void clearMemory(int axisNumber);
+    // Goes to the current slot. A motorised axis moves there (unless it's
+    // empty, or it's there already). A manual axis has no motor, so the user
+    // winds it there, with the distance to go shown meanwhile (see
+    // manualAxisGoTo()); nothing blocks, and other axes may move at the same
+    // time; it warns if the slot's empty or there's no reading
+    void goToCurrentMemory(int axisNumber);
+    // Whether going to a slot on every axis (\ then Enter) includes this
+    // axis: the motorised ones always, and a manual one unless
+    // Axis3InSlotGoTo is false (e.g. the mill's Z, which the user won't move
+    // while X is moving)
+    bool inSlotGoTo(int axisNumber) const;
 
     void setAxis1MotorSpeed(double speed);
     void setAxis2MotorSpeed(double speed);
-    void setAxis1Position(double mm);
-    void setAxis2Position(double mm);
     void resetMotorThreads();
     double getAxis1MotorPosition() const;
     double getAxis2MotorPosition() const;
@@ -419,8 +446,8 @@ public:
 
     float getChuckAngle() const;
 
-    std::string formatAxis1Position(long step) const;
-    std::string formatAxis2Position(long step) const;
+    // A position (in mm) as shown, in the display units, e.g. " 1.0000"
+    std::string formatPosition(int axisNumber, double mm) const;
 
     // Display units (mm or inches). Everything is metric internally; these
     // affect only what's displayed and what's typed into dialogs
@@ -532,30 +559,6 @@ public:
     static constexpr int LAST_MANUAL_AXIS = 4;
     // The manual axis numbered axisNumber, or nullptr if there isn't one
     const ManualAxis* manualAxis(int axisNumber) const;
-    // Each warns (and changes nothing) if the axis has no reading
-    void manualAxisZero(int axisNumber);
-    // Zeroes every axis: the two motorised ones, and the manual ones (each
-    // of which warns, and isn't zeroed, if it has no reading)
-    void zeroAllAxes();
-    void setManualAxisPosition(int axisNumber, double mm);
-    void manualAxisHalf(int axisNumber);
-    // A manual axis's position in a memory slot (in mm, from its own zero),
-    // or nothing if it isn't set (or there's no such axis). Zeroing, setting
-    // or halving the axis clears its slots, as for the motorised axes, as
-    // does losing its readings (and so its zero)
-    std::optional<double> getManualAxisMemory(int axisNumber, std::size_t slot) const;
-    // Stores where it is in the current slot (warning if it has no reading)
-    void manualAxisStorePosition(int axisNumber);
-    void clearCurrentManualMemorySlot(int axisNumber);
-    // Going to a manual axis's current slot: there's no motor, so the user
-    // winds it there, with the distance to go shown meanwhile (see
-    // manualAxisGoTo()). Nothing blocks, and other axes may move at the same
-    // time. Warns if the slot's empty or there's no reading
-    void manualAxisGoToCurrentMemory(int axisNumber);
-    // Whether going to a slot on every axis (\ then Enter) includes this
-    // manual axis (Axis3InSlotGoTo; e.g. not the mill's Z, which the user
-    // won't move while X is moving)
-    bool manualAxisInSlotGoTo(int axisNumber) const;
     // A manual axis's go-to, while the user winds it there. It ends once the
     // reading has settled within two counts of the target (as close as the
     // scale can tell, with the reading flickering by a count), or when
@@ -576,8 +579,6 @@ public:
     // to a position in mm from where the simulated scale started
     void fakeMoveManualAxis(int axisNumber, double mm);
 #endif
-
-    void clearCurrentMemorySlot(Axis axis);
 
     // Limit switches (LimitSwitchPin in the config): any switch stops all the
     // motors at once (each motor's thread watches the pin), and they refuse
@@ -785,8 +786,6 @@ private:
     // Axes 3 and 4, if they're manual axes (see manualAxis())
     static constexpr std::size_t MANUAL_AXES = LAST_MANUAL_AXIS - FIRST_MANUAL_AXIS + 1;
     std::array<std::unique_ptr<ManualAxis>, MANUAL_AXES> m_manualAxes;
-    // Their memory slots (see getManualAxisMemory())
-    std::array<std::vector<std::optional<double>>, MANUAL_AXES> m_manualMemory;
     // Each one's originChanges() when last seen (see checkManualAxes())
     std::array<int, MANUAL_AXES> m_manualOriginsSeen {};
     // Their go-tos under way (see manualAxisGoTo()): the target, and which
@@ -832,11 +831,20 @@ private:
 #ifdef FAKE
     FakeDroScale* m_fakeAxis1Scale { nullptr };
 #endif
-    std::vector<long> m_axis1Memory { AXIS1_UNSET, AXIS1_UNSET, AXIS1_UNSET,
-                                      AXIS1_UNSET, AXIS1_UNSET, AXIS1_UNSET };
-    std::vector<long> m_axis2Memory { AXIS2_UNSET, AXIS2_UNSET, AXIS2_UNSET,
-                                      AXIS2_UNSET, AXIS2_UNSET, AXIS2_UNSET };
+    // Each axis's memory slots (see getMemory()), indexed by its number less
+    // one: positions in mm, which for a motorised axis are whole steps
+    static constexpr std::size_t MEMORY_SLOTS = 6;
+    std::array<std::vector<std::optional<double>>, AXES> m_memory { [] {
+        std::array<std::vector<std::optional<double>>, AXES> memory;
+        memory.fill(std::vector<std::optional<double>>(MEMORY_SLOTS));
+        return memory;
+    }() };
     std::size_t m_currentMemory { 0 };
+    // A motorised axis's current slot, in steps, or nothing if it's not set
+    std::optional<long> memoryStep(int axisNumber) const;
+    void axis1GoToCurrentMemory();
+    void axis2GoToCurrentMemory();
+    void manualAxisGoToCurrentMemory(int axisNumber);
     ThreadTable m_threads;
     ThreadChoice m_threadChoice;
     std::string m_generalStatus { DEFAULT_GENERAL_STATUS };
@@ -1042,6 +1050,16 @@ private:
     // Creates the manual axes (axes 3 and 4), if the config has them
     void configureManualAxes();
     ManualAxis* manualAxisOrWarn(int axisNumber);
+    // (See zero(), setPosition() and half())
+    void axis1Zero();
+    void axis2Zero();
+    void manualAxisZero(int axisNumber);
+    void setAxis1Position(double mm);
+    void setAxis2Position(double mm);
+    void setManualAxisPosition(int axisNumber, double mm);
+    void axis1Half();
+    void axis2Half();
+    void manualAxisHalf(int axisNumber);
     // Called from checkStatus(): clears a manual axis's memory slots (and
     // cancels its go-to) when its origin changes, and ends each go-to once
     // it's there

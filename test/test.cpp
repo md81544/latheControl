@@ -1730,10 +1730,10 @@ TEST_CASE("Manual axis: made from the config, only with a scale")
         // Wound to the other edge, then halved
         model.fakeMoveManualAxis(3, 20.0);
         REQUIRE(waitFor(3, 20.0));
-        model.manualAxisHalf(3);
+        model.half(3);
         REQUIRE(waitFor(3, 10.0));
         // Z is separate
-        model.setManualAxisPosition(4, -1.5);
+        model.setPosition(4, -1.5);
         REQUIRE(waitFor(4, -1.5));
         REQUIRE(waitFor(3, 10.0));
     }
@@ -1745,17 +1745,38 @@ TEST_CASE("Halving axis 1 or 2's position, to find a centre")
     mgo::MockConfigReader config;
     mgo::Model model(gpio, config);
     model.initialise();
-    model.setAxis1Position(10.0);
-    model.axis1StorePosition();
-    REQUIRE(model.getAxis1MemoryAsPosition(model.getCurrentMemorySlot()));
-    model.axis1Half();
+    model.setPosition(1, 10.0);
+    model.storePosition(1);
+    REQUIRE(model.getMemory(1, model.getCurrentMemorySlot()));
+    model.half(1);
     REQUIRE(model.getAxis1MotorPosition() == Approx(5.0).margin(0.01));
     // (As for setting its position, the memory slots would be wrong)
-    REQUIRE(!model.getAxis1MemoryAsPosition(model.getCurrentMemorySlot()));
+    REQUIRE(!model.getMemory(1, model.getCurrentMemorySlot()));
 
-    model.setAxis2Position(-4.0);
-    model.axis2Half();
+    model.setPosition(2, -4.0);
+    model.half(2);
     REQUIRE(model.getAxis2Position() == Approx(-2.0).margin(0.01));
+}
+
+TEST_CASE("A memory value typed in is stored to the nearest step")
+{
+    mgo::MockGpio gpio(false);
+    mgo::MockConfigReader config;
+    mgo::Model model(gpio, config);
+    model.initialise();
+    // 0.7 / 0.001 is 699.99999... in floating point, which was once
+    // truncated to 699 steps (0.699 mm)
+    model.storePosition(1, 0.7);
+    REQUIRE(*model.getMemory(1, 0) == Approx(0.7).margin(1e-9));
+    model.storePosition(2, -0.7);
+    REQUIRE(*model.getMemory(2, 0) == Approx(-0.7).margin(1e-9));
+    // Between steps, it goes to the nearer one
+    model.storePosition(1, 0.7006);
+    REQUIRE(*model.getMemory(1, 0) == Approx(0.701).margin(1e-9));
+    // Going there moves to that step, and being there is seen as being there
+    model.goToCurrentMemory(1);
+    model.axis1Wait();
+    REQUIRE(model.getAxis1MotorPosition() == Approx(0.701).margin(1e-9));
 }
 
 TEST_CASE("Stepper: driver alarm stops the motor until cleared")
@@ -1849,13 +1870,13 @@ TEST_CASE("Model:   motor fault stops all axes, and re-zeroing clears it")
     REQUIRE(model.getAxis1MotorPosition() == position);
 
     // Re-zeroing while the driver is still in alarm doesn't clear the fault
-    model.axis1Zero();
+    model.zero(1);
     REQUIRE(!model.getFaultMessage().empty());
     REQUIRE(model.getWarning().find("still in alarm") != std::string::npos);
 
     // Once the driver's alarm is cleared, re-zeroing clears the fault
     gpio.setInputPinLevel(ALARM_PIN, mgo::PinState::high);
-    model.axis1Zero();
+    model.zero(1);
     REQUIRE(model.getFaultMessage().empty());
     REQUIRE(model.getWarning().empty());
     model.axis1GoToPosition(0.5);
@@ -2031,8 +2052,8 @@ TEST_CASE("Model:   a locked axis isn't moved by anything")
     model.initialise();
     model.setAxis1MotorSpeed(100.0);
     model.setAxis2MotorSpeed(100.0);
-    model.axis1StorePosition(1.0);
-    model.axis2StorePosition(1.0);
+    model.storePosition(1, 1.0);
+    model.storePosition(2, 1.0);
     const auto stillAt = [&](double z, double x) {
         std::this_thread::sleep_for(std::chrono::milliseconds(20));
         model.checkStatus();
@@ -2044,7 +2065,7 @@ TEST_CASE("Model:   a locked axis isn't moved by anything")
     REQUIRE(model.isAxisLocked(2));
     model.axis2GoToPosition(0.5);
     REQUIRE(model.getWarning() == "Unlock X first");
-    model.axis2GoToCurrentMemory();
+    model.goToCurrentMemory(2);
     model.axis2Retract();
     model.axis2Rapid(mgo::XDirection::Inwards);
     model.axis2Move(mgo::XDirection::Outwards);
@@ -2064,7 +2085,7 @@ TEST_CASE("Model:   a locked axis isn't moved by anything")
     REQUIRE(model.getAxis2Position() == Approx(0.5));
 
     model.lockAxis(1);
-    model.axis1GoToCurrentMemory();
+    model.goToCurrentMemory(1);
     REQUIRE(model.getWarning() == "Unlock Z first");
     model.axis1Rapid(mgo::ZDirection::Left);
     model.axis1Move(mgo::ZDirection::Right);
@@ -2125,11 +2146,11 @@ TEST_CASE("Model:   a multi-pass doesn't start or continue while an axis is lock
     model.initialise();
     model.axis1SetSpeed(200.0);
     model.axis2SetSpeed(100.0);
-    model.axis1StorePosition(0.0);
-    model.axis2StorePosition(0.0);
+    model.storePosition(1, 0.0);
+    model.storePosition(2, 0.0);
     model.selectNextMemorySlot();
-    model.axis1StorePosition(0.2);
-    model.axis2StorePosition(0.05);
+    model.storePosition(1, 0.2);
+    model.storePosition(2, 0.05);
     model.selectPreviousMemorySlot();
     model.changeMode(mgo::Mode::MultiPass);
     REQUIRE(model
@@ -2715,7 +2736,7 @@ TEST_CASE("Commands: the memory slot commands need something in the slot")
     REQUIRE(available(mgo::key::a2_i));
 
     // Only Z stored: Z's and both axes' commands, but not X's
-    model.axis1StorePosition();
+    model.storePosition(1);
     for (const auto k : axis1Keys) {
         REQUIRE(available(k));
     }
@@ -2734,7 +2755,7 @@ TEST_CASE("Commands: the memory slot commands need something in the slot")
     REQUIRE(available(mgo::key::a1_ENTER));
 
     // Cleared again
-    model.clearCurrentMemorySlot(mgo::Axis::Axis1);
+    model.clearCurrentMemorySlot(1);
     REQUIRE(!available(mgo::key::a1_ENTER));
     REQUIRE(!available(mgo::key::DELETE));
 }
@@ -2747,7 +2768,7 @@ TEST_CASE("Model:   diameter, for the surface speed")
     model.initialise();
     // Not known until the X position has been set as a diameter
     REQUIRE(!model.getDiameterMm().has_value());
-    model.setAxis2Position(12.7); // as setting X to a diameter of 25.4 does
+    model.setPosition(2, 12.7); // as setting X to a diameter of 25.4 does
     model.diameterIsSet();
     REQUIRE(model.getDiameterMm() == Approx(25.4).margin(0.001));
 }
@@ -2772,7 +2793,7 @@ TEST_CASE("Model:   display units")
     REQUIRE(model.fromDisplayUnits(1, 0.5) == Approx(12.7));
     REQUIRE(model.axisDecimals(1) == 4);
     // (Axis 1's conversion factor is -1/1000 by default, so -25400 steps is 25.4mm)
-    REQUIRE(model.formatAxis1Position(-25'400) == " 1.0000");
+    REQUIRE(model.formatPosition(1, 25.4) == " 1.0000");
     // ...but an axis in degrees isn't
     REQUIRE(!model.isLengthAxis(2));
     REQUIRE(model.axisUnitName(2) == "deg");
@@ -2837,7 +2858,7 @@ TEST_CASE("Model:   zeroing or setting X clears the diameter")
     mgo::Model model(gpio, config);
     model.initialise();
     const auto setDiameter = [&model] {
-        model.setAxis2Position(12.7);
+        model.setPosition(2, 12.7);
         model.diameterIsSet();
         model.checkStatus();
         REQUIRE(model.getDiameterMm().has_value());
@@ -2845,12 +2866,12 @@ TEST_CASE("Model:   zeroing or setting X clears the diameter")
     };
 
     setDiameter();
-    model.axis2Zero();
+    model.zero(2);
     REQUIRE(!model.getDiameterMm().has_value());
     REQUIRE(model.getGeneralStatus() == mgo::DEFAULT_GENERAL_STATUS);
 
     setDiameter();
-    model.setAxis2Position(3.0); // (not as a diameter)
+    model.setPosition(2, 3.0); // (not as a diameter)
     REQUIRE(!model.getDiameterMm().has_value());
 
     // Moving X doesn't affect it
@@ -2867,7 +2888,7 @@ TEST_CASE("Model:   the diameter doesn't change as X retracts and unretracts")
     mgo::MockGpio gpio(false);
     mgo::Model model(gpio, config);
     model.initialise();
-    model.setAxis2Position(10.0);
+    model.setPosition(2, 10.0);
     model.diameterIsSet();
     model.checkStatus();
     const std::string status = model.getGeneralStatus();
@@ -4438,11 +4459,11 @@ TEST_CASE("Model:   a multi-pass from Mem 1 to Mem 2")
     model.axis1SetSpeed(200.0);
     model.axis2SetSpeed(100.0);
     // Mem 1: the start, where the tool is now (Z 0, X 0). Mem 2: Z 0.2, X 0.025
-    model.axis1StorePosition(0.0);
-    model.axis2StorePosition(0.0);
+    model.storePosition(1, 0.0);
+    model.storePosition(2, 0.0);
     model.selectNextMemorySlot();
-    model.axis1StorePosition(0.2);
-    model.axis2StorePosition(0.025);
+    model.storePosition(1, 0.2);
+    model.storePosition(2, 0.025);
     model.selectPreviousMemorySlot();
 
     model.changeMode(mgo::Mode::MultiPass);
@@ -4593,11 +4614,11 @@ TEST_CASE("Model:   stopping a multi-pass")
     // still be moving when checked below, even if this thread isn't run for
     // a few ms, as happens on a busy Linux desktop)
     model.axis2SetSpeed(1.0);
-    model.axis1StorePosition(0.0);
-    model.axis2StorePosition(0.0);
+    model.storePosition(1, 0.0);
+    model.storePosition(2, 0.0);
     model.selectNextMemorySlot();
-    model.axis1StorePosition(1.0);
-    model.axis2StorePosition(0.1);
+    model.storePosition(1, 1.0);
+    model.storePosition(2, 0.1);
     model.selectPreviousMemorySlot();
     model.changeMode(mgo::Mode::MultiPass);
     REQUIRE(
@@ -5878,11 +5899,11 @@ TEST_CASE("Model:   nudging X while a multi-pass is paused")
     model.initialise();
     model.axis1SetSpeed(200.0);
     model.axis2SetSpeed(100.0);
-    model.axis1StorePosition(0.0);
-    model.axis2StorePosition(0.0);
+    model.storePosition(1, 0.0);
+    model.storePosition(2, 0.0);
     model.selectNextMemorySlot();
-    model.axis1StorePosition(0.2);
-    model.axis2StorePosition(0.05);
+    model.storePosition(1, 0.2);
+    model.storePosition(2, 0.05);
     model.selectPreviousMemorySlot();
     model.changeMode(mgo::Mode::MultiPass);
     REQUIRE(model
@@ -5931,7 +5952,7 @@ TEST_CASE("Model:   knurling is set up only in knurling mode, with a diameter")
     // (X isn't measured from the centre yet)
     REQUIRE(!t.model.setKnurlingSetup(setup).empty());
     REQUIRE(!t.model.getKnurlLeadMm());
-    t.model.setAxis2Position(1.0);
+    t.model.setPosition(2, 1.0);
     t.model.diameterIsSet();
     // (The first time, the dialog suggests the starts and angle)
     REQUIRE(t.model.knurlingDialogSetup().knurlStarts == 0);
@@ -5960,7 +5981,7 @@ TEST_CASE("Model:   knurling passes, each start there and back, locked to the sp
     t.model.checkStatus();
     t.model.changeMode(mgo::Mode::Knurling);
     t.model.axis2SetSpeed(100.0);
-    t.model.setAxis2Position(1.0);
+    t.model.setPosition(2, 1.0);
     t.model.diameterIsSet();
     // Ø 2 at 80 degrees: a lead of 1.108 mm. Z 1 mm, X in 0.02 by 0.01: two
     // passes of two starts
@@ -6057,7 +6078,7 @@ TEST_CASE("Model:   knurling's spindle may turn slower than threading's", "[timi
     t.model.checkStatus();
     t.model.changeMode(mgo::Mode::Knurling);
     REQUIRE(t.model.minimumSpindleRpm() == Approx(mgo::Model::KNURLING_MIN_SPINDLE_RPM));
-    t.model.setAxis2Position(5.0);
+    t.model.setPosition(2, 5.0);
     t.model.diameterIsSet();
     // Ø 10 at 45 degrees: a lead of 31.4 mm, so the spindle may turn at up to
     // 800 / 31.4, about 25 rpm
@@ -6211,7 +6232,7 @@ TEST_CASE("Model:   the current feature is off unless enabled")
     mgo::Model model(gpio, config);
     model.initialise();
     REQUIRE(!model.currentFeatureEnabled());
-    model.setAxis2Position(7.5);
+    model.setPosition(2, 7.5);
     model.diameterIsSet();
     model.markWorkEnd();
     REQUIRE(!model.getFeatureDiameterMm());
@@ -6240,7 +6261,7 @@ TEST_CASE("Model:   setting and clearing the current feature")
     REQUIRE(!model.getWarning().empty());
 
     // Setting the diameter records it, and moving X doesn't change it
-    model.setAxis2Position(7.5);
+    model.setPosition(2, 7.5);
     model.diameterIsSet();
     REQUIRE(model.getFeatureDiameterMm() == Approx(15.0));
     model.setAxis2MotorSpeed(100.0);
@@ -6264,19 +6285,19 @@ TEST_CASE("Model:   setting and clearing the current feature")
     REQUIRE(positions.featureClearance == Approx(0.5));
 
     // Each axis's value goes when its position does
-    model.axis1Zero();
+    model.zero(1);
     REQUIRE(!model.getWorkEndZ());
     REQUIRE(model.getFeatureDiameterMm());
-    model.axis2Zero();
+    model.zero(2);
     REQUIRE(!model.getFeatureDiameterMm());
 
-    model.setAxis2Position(7.5);
+    model.setPosition(2, 7.5);
     model.diameterIsSet();
-    model.setAxis2Position(7.0); // (not as a diameter)
+    model.setPosition(2, 7.0); // (not as a diameter)
     REQUIRE(!model.getFeatureDiameterMm());
 
     // Clearing it
-    model.setAxis2Position(7.5);
+    model.setPosition(2, 7.5);
     model.diameterIsSet();
     model.markWorkEnd();
     model.clearFeature();
@@ -6293,7 +6314,7 @@ TEST_CASE("Model:   a motor fault clears that axis's part of the current feature
     mgo::MockGpio gpio(false);
     mgo::Model model(gpio, config);
     model.initialise();
-    model.setAxis2Position(7.5);
+    model.setPosition(2, 7.5);
     model.diameterIsSet();
     model.markWorkEnd();
     gpio.setInputPinLevel(ALARM_PIN, mgo::PinState::low);
@@ -6316,7 +6337,7 @@ TEST_CASE("Model:   a multi-pass from the work's end sets the feature's diameter
     model.axis1SetSpeed(200.0);
     model.axis2SetSpeed(100.0);
     // The work's end at Z 0, 1.0 diameter (X 0.5)
-    model.setAxis2Position(0.5);
+    model.setPosition(2, 0.5);
     model.diameterIsSet();
     model.markWorkEnd();
 
@@ -6381,7 +6402,7 @@ TEST_CASE("Commands: the current feature's")
     model.initialise();
     REQUIRE(!mgo::isAvailable(*find(mgo::key::a2_d), model));
     REQUIRE(!mgo::isAvailable(*find(mgo::key::clearFeature), model));
-    model.setAxis2Position(7.5);
+    model.setPosition(2, 7.5);
     model.diameterIsSet();
     REQUIRE(mgo::isAvailable(*find(mgo::key::a2_d), model));
     REQUIRE(mgo::isAvailable(*find(mgo::key::clearFeature), model));
@@ -6404,7 +6425,7 @@ struct FeatureModel {
         model.initialise();
         model.axis1SetSpeed(200.0);
         model.axis2SetSpeed(100.0);
-        model.setAxis2Position(0.5);
+        model.setPosition(2, 0.5);
         model.diameterIsSet();
         model.markWorkEnd();
     }
@@ -6810,10 +6831,10 @@ TEST_CASE("Model:   gear cutting, every tooth each pass, then A back to where it
     model.initialise();
     model.axis1SetSpeed(200.0);
     // A starts at 30°, with a memory slot at 30° and one at 100°
-    model.setAxis2Position(30.0);
-    model.axis2StorePosition();
+    model.setPosition(2, 30.0);
+    model.storePosition(2);
     model.selectNextMemorySlot();
-    model.axis2StorePosition(100.0);
+    model.storePosition(2, 100.0);
     model.selectPreviousMemorySlot();
 
     model.changeMode(mgo::Mode::GearCutting);
@@ -6867,8 +6888,8 @@ TEST_CASE("Model:   gear cutting, every tooth each pass, then A back to where it
     // as where it started, and the memory slots are as they were (the same
     // places on the table)
     REQUIRE(model.getAxis2MotorPosition() == Approx(30.0));
-    REQUIRE(*model.getAxis2MemoryAsPosition(0) == Approx(30.0));
-    REQUIRE(*model.getAxis2MemoryAsPosition(1) == Approx(100.0));
+    REQUIRE(*model.getMemory(2, 0) == Approx(30.0));
+    REQUIRE(*model.getMemory(2, 1) == Approx(100.0));
     // (It's ready to go again)
     REQUIRE(model.multiPassAtStart());
     REQUIRE(runUntilStopped(model));
@@ -6963,7 +6984,7 @@ TEST_CASE("Model:   gear cutting stopped between teeth goes on to the next tooth
     model.axis2GoToPosition(100.0);
     REQUIRE(runUntilStopped(model));
     REQUIRE(!model.gearAOnTooth());
-    model.axis2Zero();
+    model.zero(2);
     REQUIRE(model.gearAOnTooth());
 }
 
@@ -7413,7 +7434,7 @@ TEST_CASE("Model:   radius cutting needs the current feature")
     mgo::Model model(gpio, config);
     model.initialise();
     REQUIRE(!model.radiusUnavailable().empty());
-    model.setAxis2Position(5.0);
+    model.setPosition(2, 5.0);
     model.diameterIsSet();
     REQUIRE(!model.radiusUnavailable().empty());
     model.markWorkEnd();
@@ -7441,7 +7462,7 @@ TEST_CASE("Model:   radius cutting, every pass round an arc")
     model.setAxis1MotorSpeed(40.0);
     model.setAxis2MotorSpeed(20.0);
     // A 10 mm bar, its end at Z 0 (Z negative towards the chuck)
-    model.setAxis2Position(5.0);
+    model.setPosition(2, 5.0);
     model.diameterIsSet();
     model.markWorkEnd();
     model.changeMode(mgo::Mode::Radius);
@@ -7514,7 +7535,7 @@ TEST_CASE("Model:   radius cutting, a shoulder with a fillet")
     model.setAxis1MotorSpeed(40.0);
     model.setAxis2MotorSpeed(20.0);
     // A 10 mm bar, its end at Z 0 (Z negative towards the chuck)
-    model.setAxis2Position(5.0);
+    model.setPosition(2, 5.0);
     model.diameterIsSet();
     model.markWorkEnd();
     model.changeMode(mgo::Mode::Radius);
@@ -7744,7 +7765,7 @@ struct ToolModel {
         model.initialise();
         model.axis1SetSpeed(200.0);
         model.axis2SetSpeed(200.0);
-        model.setAxis2Position(10.0);
+        model.setPosition(2, 10.0);
         model.diameterIsSet();
         model.markWorkEnd();
     }
@@ -7776,8 +7797,8 @@ TEST_CASE("Model:   changing tool shifts the positions, keeping memories and the
     // (No file yet: tool 1 only)
     REQUIRE(t.model.toolLibrary().tools().size() == 1);
     REQUIRE(t.model.toolChangeUnavailable().empty());
-    t.model.axis1StorePosition();
-    t.model.axis2StorePosition();
+    t.model.storePosition(1);
+    t.model.storePosition(2);
 
     // Tool 2's tip is 1.5 further towards the chuck than tool 1's, and 0.4
     // further in (towards the centre), so it touches with Z 1.5 further from
@@ -7800,8 +7821,8 @@ TEST_CASE("Model:   changing tool shifts the positions, keeping memories and the
     REQUIRE(t.model.getAxis1MotorPosition() == Approx(0.0).margin(0.0011));
     REQUIRE(t.model.getAxis2MotorPosition() == Approx(9.0).margin(0.0011));
     // The memory slot and the feature are where they were on the work
-    REQUIRE(t.model.getAxis1MemoryAsPosition(0) == Approx(0.0));
-    REQUIRE(t.model.getAxis2MemoryAsPosition(0) == Approx(10.0));
+    REQUIRE(t.model.getMemory(1, 0) == Approx(0.0));
+    REQUIRE(t.model.getMemory(2, 0) == Approx(10.0));
     REQUIRE(t.model.getFeatureDiameterMm() == Approx(20.0));
     REQUIRE(t.model.getWorkEndZ() == Approx(0.0));
     // X is still measured from the centre
@@ -7960,7 +7981,7 @@ TEST_CASE("Model:   the unknown tool keeps the positions, until an axis is set w
     // changing to tool 1 can't shift Z, and the work's end (set with tool
     // 1) goes. X is still tool 1's, so shifts as usual, keeping its diameter
     REQUIRE(t.model.selectTool(mgo::ToolLibrary::UNKNOWN_TOOL).empty());
-    t.model.axis1Zero();
+    t.model.zero(1);
     t.model.markWorkEnd();
     REQUIRE(!t.model.positionsTool());
     REQUIRE(t.model.toolChangeClears(2) == std::pair { false, true });

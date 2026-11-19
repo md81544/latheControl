@@ -347,9 +347,9 @@ void Model::initialise()
     MGOLOG(
         fmt::format(
             "Taking up the backlash: {} {} steps, {} {} steps",
-            m_config.read("Axis1Label", "Z"),
+            axisLabel(1),
             zBacklashCompensation,
-            m_config.read("Axis2Label", "X"),
+            axisLabel(2),
             xBacklashCompensation));
     axis1GoToStep(zBacklashCompensation);
     m_axis1Motor->setBacklashCompensation(zBacklashCompensation, zBacklashCompensation);
@@ -377,8 +377,8 @@ void Model::checkStatus()
     recordSpindleSample();
     checkSpindleStopped(chuckRpm);
     checkEncoderLostPulses();
-    logMotorMovement(*m_axis1Motor, m_axis1MotorLog, m_config.read("Axis1Label", "Z"));
-    logMotorMovement(*m_axis2Motor, m_axis2MotorLog, m_config.read("Axis2Label", "X"));
+    logMotorMovement(*m_axis1Motor, m_axis1MotorLog, axisLabel(1));
+    logMotorMovement(*m_axis2Motor, m_axis2MotorLog, axisLabel(2));
     if (m_axis1Scale) {
         m_axis1Scale->update(
             m_axis1Motor->getPosition(), m_axis1Motor->isRunning(), m_axis1Motor->getSpeed());
@@ -679,8 +679,7 @@ void Model::clearMotorFault(Axis axis)
     if (!faulted) {
         return;
     }
-    const std::string label
-        = axis == Axis::Axis1 ? m_config.read("Axis1Label", "Z") : m_config.read("Axis2Label", "X");
+    const std::string label = axis == Axis::Axis1 ? axisLabel(1) : axisLabel(2);
     if (motor.clearFault()) {
         faulted = false;
         m_warning = "";
@@ -701,10 +700,10 @@ std::string Model::getFaultMessage() const
             "{} MOTOR FAULT: position lost. Clear the driver alarm, then re-zero {}", label, label);
     };
     if (m_axis1Faulted) {
-        add(m_config.read("Axis1Label", "Z"));
+        add(axisLabel(1));
     }
     if (m_axis2Faulted) {
-        add(m_config.read("Axis2Label", "X"));
+        add(axisLabel(2));
     }
     if (limitSwitchTripped()) {
         if (!message.empty()) {
@@ -1174,10 +1173,7 @@ void Model::threadingCheckMoveEnded()
     if (m_axis2Motor->isRunning()) {
         MGOLOG("Threading: X was moving at the end of a pass, so wasn't retracted");
         setThreadingWarning(
-            fmt::format(
-                "{} was moving, so wasn't retracted automatically",
-                m_config.read("Axis2Label", "X")),
-            true);
+            fmt::format("{} was moving, so wasn't retracted automatically", axisLabel(2)), true);
         return;
     }
     // (axis2Retract() toggles, and the action always matches the current state)
@@ -1244,10 +1240,8 @@ void Model::axis1GoToPreviousPosition()
 
 void Model::axis1GoToCurrentMemory()
 {
-    if (m_axis1Memory.at(m_currentMemory) == AXIS1_UNSET) {
-        return;
-    }
-    if (m_axis1Memory.at(m_currentMemory) == getAxis1MotorCurrentStep()) {
+    const auto step = memoryStep(1);
+    if (!step || *step == getAxis1MotorCurrentStep()) {
         return;
     }
     if (axis1MoveRefused()) {
@@ -1256,9 +1250,9 @@ void Model::axis1GoToCurrentMemory()
     axis1Stop();
     m_axis1Status = "returning";
     // (If threading, this waits for zero degrees on the chuck before starting)
-    axis1GoToStep(m_axis1Memory.at(m_currentMemory));
+    axis1GoToStep(*step);
     // (With a scale: see axis1FinishesOnScale())
-    startAxis1Finish(m_axis1Memory.at(m_currentMemory));
+    startAxis1Finish(*step);
 }
 
 void Model::axis1Nudge(ZDirection direction, double nudgeAmountMm)
@@ -1300,18 +1294,14 @@ void Model::axis1Zero()
     if (m_mode == Mode::Taper) {
         changeMode(Mode::None);
     }
-    MGOLOG(
-        fmt::format(
-            "{} zeroed at {:.4f}", m_config.read("Axis1Label", "Z"), m_axis1Motor->getPosition()));
+    MGOLOG(fmt::format("{} zeroed at {:.4f}", axisLabel(1), m_axis1Motor->getPosition()));
     m_axis1Motor->zeroPosition();
     m_axis1MotorLog.step = 0;
     if (m_axis1Scale) {
         m_axis1Scale->realign();
     }
     // Zeroing will invalidate any memorised Z positions, so we clear them
-    for (auto& m : m_axis1Memory) {
-        m = AXIS1_UNSET;
-    }
+    clearMemory(1);
     // Also clear any "breadcrumb" positions
     axis1ClearBreadcrumbs();
     clearWorkEnd();
@@ -1326,7 +1316,7 @@ void Model::axis1Half()
         return;
     }
     setAxis1Position(m_axis1Motor->getPosition() / 2.0);
-    clearAllAxis1Memories();
+    clearMemory(1);
     clearWorkEnd();
 }
 
@@ -1360,7 +1350,8 @@ void Model::axis1SpeedIncrease()
 
 void Model::axis1FastReturn()
 {
-    if (m_axis1Memory.at(m_currentMemory) == AXIS1_UNSET || m_axis1FastReturning) {
+    const auto step = memoryStep(1);
+    if (!step || m_axis1FastReturning) {
         return;
     }
     if (axis1MoveRefused()) {
@@ -1378,7 +1369,7 @@ void Model::axis1FastReturn()
         m_axis1Motor->setSpeed(m_axis1Motor->getMaxRpm());
     }
     m_axis1Status = "fast returning";
-    axis1GoToStep(m_axis1Memory.at(m_currentMemory));
+    axis1GoToStep(*step);
 }
 
 void Model::axis2GoToPosition(double pos)
@@ -1569,17 +1560,6 @@ bool Model::rapidReleased()
     return true;
 }
 
-void Model::axis1StorePosition()
-{
-    m_axis1Memory.at(m_currentMemory) = getAxis1MotorCurrentStep();
-}
-
-void Model::axis1StorePosition(double mm)
-{
-    const auto stepValue = mm / m_axis1Motor->getConversionFactor();
-    m_axis1Memory.at(m_currentMemory) = stepValue;
-}
-
 void Model::axis2SetSpeed(double speed)
 {
     m_axis2Motor->setSpeed(speed);
@@ -1599,17 +1579,13 @@ void Model::axis2Zero()
     if (m_mode == Mode::Taper) {
         changeMode(Mode::None);
     }
-    MGOLOG(
-        fmt::format(
-            "{} zeroed at {:.4f}", m_config.read("Axis2Label", "X"), m_axis2Motor->getPosition()));
+    MGOLOG(fmt::format("{} zeroed at {:.4f}", axisLabel(2), m_axis2Motor->getPosition()));
     m_axis2Motor->zeroPosition();
     m_axis2MotorLog.step = 0;
     // (Gear cutting's teeth are now wherever axis 2 is when it starts)
     m_gearToothOrigin.reset();
     // Zeroing will invalidate any memorised X positions, so we clear them
-    for (auto& m : m_axis2Memory) {
-        m = AXIS2_UNSET;
-    }
+    clearMemory(2);
     // Also clear any "breadcrumb" positions
     axis2ClearBreadcrumbs();
     // The position is known again, so a motor fault can be cleared
@@ -1625,7 +1601,7 @@ void Model::axis2Half()
         return;
     }
     setAxis2Position(m_axis2Motor->getPosition() / 2.0);
-    clearAllAxis2Memories();
+    clearMemory(2);
 }
 
 void Model::axis2SynchroniseOff()
@@ -1635,8 +1611,8 @@ void Model::axis2SynchroniseOff()
 
 void Model::axis2GoToCurrentMemory()
 {
-    if (m_axis2Memory.at(m_currentMemory) == AXIS2_UNSET
-        || m_axis2Memory.at(m_currentMemory) == m_axis2Motor->getCurrentStep()) {
+    const auto step = memoryStep(2);
+    if (!step || *step == m_axis2Motor->getCurrentStep()) {
         return;
     }
     if (axis2MoveRefused()) {
@@ -1644,7 +1620,7 @@ void Model::axis2GoToCurrentMemory()
     }
     axis2Stop();
     m_axis2Status = "returning";
-    m_axis2Motor->goToStep(m_axis2Memory.at(m_currentMemory));
+    m_axis2Motor->goToStep(*step);
 }
 
 void Model::axis2SpeedDecrease()
@@ -1697,7 +1673,8 @@ void Model::axis2Nudge(XDirection direction, double nudgeAmountMm)
 
 void Model::axis2FastReturn()
 {
-    if (m_axis2Memory.at(m_currentMemory) == AXIS2_UNSET || m_axis2FastReturning) {
+    const auto step = memoryStep(2);
+    if (!step || m_axis2FastReturning) {
         return;
     }
     if (axis2MoveRefused()) {
@@ -1708,7 +1685,7 @@ void Model::axis2FastReturn()
     axis2Stop();
     m_axis2Motor->setSpeed(m_axis2Motor->getMaxRpm());
     m_axis2Status = "fast returning";
-    m_axis2Motor->goToStep(m_axis2Memory.at(m_currentMemory));
+    m_axis2Motor->goToStep(*step);
 }
 
 bool Model::axis2CanRetract() const
@@ -1796,17 +1773,6 @@ void Model::axis2RetractTo(double position, double minimum)
     // How far out position is from X (negative if it's further in)
     const double out = (m_axis2Motor->getPosition() - position) * axis2IntoWorkSign();
     axis2RetractBy(std::max(out, minimum));
-}
-
-void Model::axis2StorePosition()
-{
-    m_axis2Memory.at(m_currentMemory) = m_axis2Motor->getCurrentStep();
-}
-
-void Model::axis2StorePosition(double mm)
-{
-    const auto stepValue = mm / m_axis2Motor->getConversionFactor();
-    m_axis2Memory.at(m_currentMemory) = stepValue;
 }
 
 void Model::axis2Move(XDirection direction)
@@ -1959,7 +1925,7 @@ bool Model::recordFeatureDiameter()
         return false;
     }
     if (!getDiameterMm()) {
-        m_warning = "Set " + m_config.read("Axis2Label", "X") + " as a diameter first";
+        m_warning = "Set " + axisLabel(2) + " as a diameter first";
         return false;
     }
     m_featureX = axis2WorkPosition();
@@ -2071,7 +2037,7 @@ void Model::featureGoToWorkEnd(bool clear)
     if (m_featureX
         && (m_axis2Motor->getPosition() - *m_featureX) * axis2IntoWorkSign()
             > MultiPass::TOLERANCE) {
-        m_warning = "Move " + m_config.read("Axis2Label", "X") + " clear of the work first";
+        m_warning = "Move " + axisLabel(2) + " clear of the work first";
         return;
     }
     m_warning = "";
@@ -2163,8 +2129,7 @@ void Model::shiftPositionsForTool(Axis axis, double fromMm, double toMm)
 std::string Model::saveToolLibrary()
 {
     const std::string path = m_config.read("ToolLibraryFile", "tools.cfg");
-    const std::string error = writeToolLibrary(
-        m_toolLibrary, path, m_config.read("Axis1Label", "Z"), m_config.read("Axis2Label", "X"));
+    const std::string error = writeToolLibrary(m_toolLibrary, path, axisLabel(1), axisLabel(2));
     if (!error.empty()) {
         MGOLOG("*** Warning *** " << error);
         m_warning = "The tool library couldn't be saved (see lc.log)";
@@ -2241,13 +2206,13 @@ std::string Model::selectTool(int number)
             from,
             to->number,
             to->description,
-            m_config.read("Axis1Label", "Z"),
+            axisLabel(1),
             axis1From ? fmt::format(
                             "shifted by {:.4f} (from T{})",
                             to->axis1OffsetMm - axis1From->axis1OffsetMm,
                             axis1From->number)
                       : std::string("not shifted (set with an unknown tool)"),
-            m_config.read("Axis2Label", "X"),
+            axisLabel(2),
             axis2From ? fmt::format(
                             "shifted by {:.4f} (from T{})",
                             to->axis2OffsetMm - axis2From->axis2OffsetMm,
@@ -2293,7 +2258,7 @@ std::string Model::toolMeasurementUnavailable(int number) const
         return "Only external tools can be measured so far (the retraction is set for boring)";
     }
     if (m_axis2Retracted) {
-        return "Unretract " + m_config.read("Axis2Label", "X") + " first";
+        return "Unretract " + axisLabel(2) + " first";
     }
     if (isAxisLocked(1) || isAxisLocked(2)) {
         return "Unlock the axes first";
@@ -2348,8 +2313,8 @@ bool Model::recordToolTouch()
         // The tool comes in on to the diameter, so X's backlash is taken up
         // the same way for each tool
         if (lastMoveSign(*m_axis2Motor) != static_cast<int>(axis2IntoWorkSign())) {
-            m_warning = "Touch the diameter moving " + m_config.read("Axis2Label", "X")
-                + " in (back off, and come in again)";
+            m_warning
+                = "Touch the diameter moving " + axisLabel(2) + " in (back off, and come in again)";
             return false;
         }
         position = m_axis2Motor->getPosition();
@@ -2358,7 +2323,7 @@ bool Model::recordToolTouch()
         const int towardsChuck
             = m_config.read("Axis1TowardsChuck", "negative") == "positive" ? 1 : -1;
         if (lastMoveSign(*m_axis1Motor) != towardsChuck) {
-            m_warning = "Touch the end moving " + m_config.read("Axis1Label", "Z")
+            m_warning = "Touch the end moving " + axisLabel(1)
                 + " towards the chuck (back off, and come in again)";
             return false;
         }
@@ -2634,7 +2599,7 @@ void Model::selectPreviousMemorySlot()
 
 void Model::selectNextMemorySlot()
 {
-    if (m_currentMemory < m_axis1Memory.size() - 1) {
+    if (m_currentMemory < MEMORY_SLOTS - 1) {
         ++m_currentMemory;
     }
 }
@@ -2644,51 +2609,128 @@ std::size_t Model::getCurrentMemorySlot() const
     return m_currentMemory;
 }
 
-long Model::getAxis1Memory(std::size_t index) const
-{
-    return m_axis1Memory.at(index);
-}
-
-std::optional<double> Model::getAxis1MemoryAsPosition(std::size_t index) const
-{
-    long step = m_axis1Memory.at(index);
-    if (step == AXIS1_UNSET) {
-        return std::nullopt;
-    }
-    return step * m_axis1Motor->getConversionFactor();
-}
-
-long Model::getAxis2Memory(std::size_t index) const
-{
-    return m_axis2Memory.at(index);
-}
-
-std::optional<double> Model::getAxis2MemoryAsPosition(std::size_t index) const
-{
-    long step = m_axis2Memory.at(index);
-    if (step == AXIS2_UNSET) {
-        return std::nullopt;
-    }
-    return step * m_axis2Motor->getConversionFactor();
-}
-
 unsigned Model::getMemorySize() const
 {
-    return m_axis1Memory.size();
+    return MEMORY_SLOTS;
 }
 
-void Model::clearAllAxis1Memories()
+bool Model::hasAxis(int axisNumber) const
 {
-    for (auto& m : m_axis1Memory) {
-        m = AXIS1_UNSET;
+    if (axisNumber == 1 || axisNumber == 2) {
+        return true;
+    }
+    return manualAxis(axisNumber) != nullptr;
+}
+
+std::string Model::axisLabel(int axisNumber) const
+{
+    switch (axisNumber) {
+        case 1:
+            return m_config.read("Axis1Label", "Z");
+        case 2:
+            return m_config.read("Axis2Label", "X");
+        default:
+            {
+                const ManualAxis* axis = manualAxis(axisNumber);
+                return axis ? axis->label() : "";
+            }
     }
 }
 
-void Model::clearAllAxis2Memories()
+std::optional<double> Model::getMemory(int axisNumber, std::size_t slot) const
 {
-    for (auto& m : m_axis2Memory) {
-        m = AXIS2_UNSET;
+    if (!hasAxis(axisNumber) || slot >= MEMORY_SLOTS) {
+        return std::nullopt;
     }
+    return m_memory.at(static_cast<std::size_t>(axisNumber - 1)).at(slot);
+}
+
+std::optional<long> Model::memoryStep(int axisNumber) const
+{
+    const StepperMotor* motor = axisNumber == 1 ? m_axis1Motor.get() : m_axis2Motor.get();
+    const auto mm = getMemory(axisNumber, m_currentMemory);
+    if (!mm || !motor) {
+        return std::nullopt;
+    }
+    // (Stored as a whole number of steps, so this is exact)
+    return std::lround(*mm / motor->getConversionFactor());
+}
+
+void Model::storePosition(int axisNumber)
+{
+    if (!hasAxis(axisNumber)) {
+        return;
+    }
+    auto& slot = m_memory.at(static_cast<std::size_t>(axisNumber - 1)).at(m_currentMemory);
+    switch (axisNumber) {
+        case 1:
+            slot = m_axis1Motor->getPosition();
+            break;
+        case 2:
+            slot = m_axis2Motor->getPosition();
+            break;
+        default:
+            if (ManualAxis* axis = manualAxisOrWarn(axisNumber)) {
+                slot = axis->positionMm();
+            }
+            break;
+    }
+}
+
+void Model::storePosition(int axisNumber, double mm)
+{
+    if (!hasAxis(axisNumber)) {
+        return;
+    }
+    auto& slot = m_memory.at(static_cast<std::size_t>(axisNumber - 1)).at(m_currentMemory);
+    if (axisNumber == 1 || axisNumber == 2) {
+        // (To the nearest step: a slot holds a position the motor can go to
+        // exactly, so that being there is seen as being there)
+        const StepperMotor& motor = axisNumber == 1 ? *m_axis1Motor : *m_axis2Motor;
+        slot = motor.getPosition(std::lround(mm / motor.getConversionFactor()));
+    } else {
+        slot = mm;
+    }
+}
+
+void Model::clearCurrentMemorySlot(int axisNumber)
+{
+    if (hasAxis(axisNumber)) {
+        m_memory.at(static_cast<std::size_t>(axisNumber - 1)).at(m_currentMemory).reset();
+    }
+}
+
+void Model::clearMemory(int axisNumber)
+{
+    if (hasAxis(axisNumber)) {
+        for (auto& slot : m_memory.at(static_cast<std::size_t>(axisNumber - 1))) {
+            slot.reset();
+        }
+    }
+}
+
+void Model::goToCurrentMemory(int axisNumber)
+{
+    switch (axisNumber) {
+        case 1:
+            axis1GoToCurrentMemory();
+            break;
+        case 2:
+            axis2GoToCurrentMemory();
+            break;
+        default:
+            manualAxisGoToCurrentMemory(axisNumber);
+            break;
+    }
+}
+
+bool Model::inSlotGoTo(int axisNumber) const
+{
+    if (axisNumber == 1 || axisNumber == 2) {
+        return true;
+    }
+    return manualAxis(axisNumber)
+        && m_config.readBool(fmt::format("Axis{}InSlotGoTo", axisNumber), true);
 }
 
 void Model::setAxis1MotorSpeed(double speed)
@@ -2709,7 +2751,7 @@ void Model::setAxis1Position(double mm)
     MGOLOG(
         fmt::format(
             "{} position set to {:.4f} (was {:.4f})",
-            m_config.read("Axis1Label", "Z"),
+            axisLabel(1),
             mm,
             m_axis1Motor->getPosition()));
     m_axis1Motor->setPosition(mm);
@@ -2729,7 +2771,7 @@ void Model::setAxis2Position(double mm)
     MGOLOG(
         fmt::format(
             "{} position set to {:.4f} (was {:.4f})",
-            m_config.read("Axis2Label", "X"),
+            axisLabel(2),
             mm,
             m_axis2Motor->getPosition()));
     m_axis2Motor->setPosition(mm);
@@ -2848,20 +2890,9 @@ std::string formatValue(double value, int decimals)
 
 } // end anonymous namespace
 
-std::string Model::formatAxis1Position(long step) const
+std::string Model::formatPosition(int axisNumber, double mm) const
 {
-    if (!m_axis1Motor) {
-        return std::string();
-    }
-    return formatValue(toDisplayUnits(1, m_axis1Motor->getPosition(step)), axisDecimals(1));
-}
-
-std::string Model::formatAxis2Position(long step) const
-{
-    if (!m_axis2Motor) {
-        return std::string();
-    }
-    return formatValue(toDisplayUnits(2, m_axis2Motor->getPosition(step)), axisDecimals(2));
+    return formatValue(toDisplayUnits(axisNumber, mm), axisDecimals(axisNumber));
 }
 
 DisplayUnits Model::getDisplayUnits() const
@@ -3032,7 +3063,7 @@ void Model::axis1MeasureBacklash()
         fmt::format(
             "Measuring {}'s backlash: moves of {:.3f} mm, with compensation of {} steps "
             "({:.4f} mm)",
-            m_config.read("Axis1Label", "Z"),
+            axisLabel(1),
             axis1BacklashMeasureDistanceMm(),
             m_config.readLong("Axis1BacklashCompensationSteps", 0),
             axis1BacklashCompensationMm()));
@@ -3047,7 +3078,7 @@ void Model::backlashMeasurementMove()
     m_axis1Motor->goToStep(step);
     if (!m_axis1Motor->isRunning() && m_axis1Motor->getCurrentStep() != step) {
         // Refused (e.g. a limit switch, or the driver's alarm)
-        endBacklashMeasurement(fmt::format("{} didn't move", m_config.read("Axis1Label", "Z")));
+        endBacklashMeasurement(fmt::format("{} didn't move", axisLabel(1)));
     }
 }
 
@@ -3056,7 +3087,7 @@ void Model::advanceBacklashMeasurement()
     if (!m_backlashMeasurement) {
         return;
     }
-    const std::string label = m_config.read("Axis1Label", "Z");
+    const std::string label = axisLabel(1);
     const auto scaleMm = m_axis1Scale->positionMm();
     if (!scaleMm) {
         endBacklashMeasurement(fmt::format("{}'s scale has no reading", label));
@@ -3134,9 +3165,7 @@ void Model::checkAxis1ScaleAtRest()
     // settled: it may not, for a long time (half an hour, on the mill)
     if (const auto jump = m_axis1Scale->misreadJumpMm(); jump && !m_axis1ScaleMisreadJumpMm) {
         const auto difference = getAxis1ScaleDifferenceMm();
-        MGOLOG(
-            fmt::format(
-                "{}'s scale is misreading: stopping everything", m_config.read("Axis1Label", "Z")));
+        MGOLOG(fmt::format("{}'s scale is misreading: stopping everything", axisLabel(1)));
         stopAllMotors();
         m_axis1ScaleMisreadJumpMm = *jump;
         m_axis1ScaleMismatchMm = difference.value_or(*jump);
@@ -3154,7 +3183,7 @@ void Model::checkAxis1ScaleAtRest()
         m_axis1StallStopped = false;
     } else if (!m_axis1StallStopped) {
         m_axis1StallStopped = true;
-        const std::string label = m_config.read("Axis1Label", "Z");
+        const std::string label = axisLabel(1);
         MGOLOG(fmt::format("{} stalled: stopping everything", label));
         stopAllMotors();
         m_warning = fmt::format(
@@ -3186,7 +3215,7 @@ void Model::checkAxis1ScaleAtRest()
     if (!difference || m_axis1Motor->isRunning() || m_axis1Motor->isFaulted()) {
         return;
     }
-    const std::string label = m_config.read("Axis1Label", "Z");
+    const std::string label = axisLabel(1);
     double limit = m_config.readDouble("Axis1ScaleWarnMm", 0.0);
     // A table which has gone further than the motor, the way it was moving,
     // has carried on into the slack: the motor stops dead, even from full
@@ -3294,7 +3323,7 @@ void Model::rebaseAxis1FromScale(const char* why)
     MGOLOG(
         fmt::format(
             "{} {} from its scale: {:.4f} to {:.4f} ({:+.4f} mm)",
-            m_config.read("Axis1Label", "Z"),
+            axisLabel(1),
             why,
             before,
             m_axis1Motor->getPosition(),
@@ -3312,7 +3341,7 @@ void Model::toggleAxis1FinishOnScale()
     MGOLOG(
         fmt::format(
             "Finishing {}'s moves on the scale turned {}",
-            m_config.read("Axis1Label", "Z"),
+            axisLabel(1),
             m_axis1FinishOnScale ? "on" : "off"));
     if (!m_axis1FinishOnScale && m_axis1Finish) {
         // (Where it's got to is where it stays)
@@ -3377,7 +3406,7 @@ void Model::advanceAxis1Finish()
         return;
     }
     if (f.corrections >= MAX_SCALE_CORRECTIONS) {
-        const std::string label = m_config.read("Axis1Label", "Z");
+        const std::string label = axisLabel(1);
         m_warning = fmt::format(
             "{} is {:.3f} {} from its target after {} corrections",
             label,
@@ -3395,7 +3424,7 @@ void Model::advanceAxis1Finish()
         MGOLOG(
             fmt::format(
                 "{} {:.4f} mm short of {:.4f}: moving on (correction {})",
-                m_config.read("Axis1Label", "Z"),
+                axisLabel(1),
                 std::abs(error),
                 f.targetMm,
                 f.corrections));
@@ -3409,7 +3438,7 @@ void Model::advanceAxis1Finish()
             fmt::format(
                 "{} {:.4f} mm past {:.4f}: backing off {:.3f} mm to approach again (correction "
                 "{})",
-                m_config.read("Axis1Label", "Z"),
+                axisLabel(1),
                 std::abs(error),
                 f.targetMm,
                 backOff,
@@ -3437,7 +3466,7 @@ void Model::endAxis1Finish(const std::string& why)
         MGOLOG(
             fmt::format(
                 "{}: finishing on the scale at {:.4f} ended ({}), after {} correction{}",
-                m_config.read("Axis1Label", "Z"),
+                axisLabel(1),
                 m_axis1Finish->targetMm,
                 why,
                 m_axis1Finish->corrections,
@@ -3476,7 +3505,7 @@ void Model::acceptAxis1ScalePosition()
     if (!m_axis1ScaleMismatchMm) {
         return;
     }
-    const std::string label = m_config.read("Axis1Label", "Z");
+    const std::string label = axisLabel(1);
     // (Only answered this way from a dialog shown before the misread was
     // seen: its own dialog follows)
     if (m_axis1ScaleMisreadJumpMm) {
@@ -3513,7 +3542,7 @@ void Model::rebaseAxis1FromScaleByHand()
     if (!m_axis1Scale) {
         return;
     }
-    const std::string label = m_config.read("Axis1Label", "Z");
+    const std::string label = axisLabel(1);
     if (m_axis1Motor->isRunning()) {
         m_warning = "Stop the motors first";
         return;
@@ -3541,10 +3570,7 @@ void Model::keepAxis1MotorPosition()
     m_axis1ScaleMismatchMm.reset();
     m_axis1ScaleMisreadJumpMm.reset();
     m_axis1ScaleAskAgain = false;
-    MGOLOG(
-        fmt::format(
-            "{}'s position kept: lining its scale up with it again",
-            m_config.read("Axis1Label", "Z")));
+    MGOLOG(fmt::format("{}'s position kept: lining its scale up with it again", axisLabel(1)));
     if (m_axis1Scale) {
         m_axis1Scale->realign();
     }
@@ -3564,7 +3590,7 @@ void Model::configureAxis1Scale()
         return;
     }
     AxisScale::Settings settings {
-        .axisLabel = m_config.read("Axis1Label", "Z"),
+        .axisLabel = axisLabel(1),
         .countsPerMm = m_config.readDouble("Axis1ScaleCountsPerMm", 200.0),
         .reversed = m_config.readBool("Axis1ScaleReversed", false),
         .settleTime = std::chrono::milliseconds(m_config.readLong("Axis1ScaleSettleMs", 500)),
@@ -3681,9 +3707,6 @@ std::unique_ptr<IScale> Model::makeScale(
 
 void Model::configureManualAxes()
 {
-    for (auto& memory : m_manualMemory) {
-        memory.assign(getMemorySize(), std::nullopt);
-    }
     for (int n = FIRST_MANUAL_AXIS; n <= LAST_MANUAL_AXIS; ++n) {
         const std::string kind = m_config.read(fmt::format("Axis{}Kind", n), "none");
         if (kind == "none") {
@@ -3782,12 +3805,55 @@ void Model::manualAxisZero(int axisNumber)
 
 void Model::zeroAllAxes()
 {
-    axis1Zero();
-    axis2Zero();
-    for (int n = FIRST_MANUAL_AXIS; n <= LAST_MANUAL_AXIS; ++n) {
-        if (manualAxis(n)) {
-            manualAxisZero(n);
+    for (int n = 1; n <= AXES; ++n) {
+        if (hasAxis(n)) {
+            zero(n);
         }
+    }
+}
+
+void Model::zero(int axisNumber)
+{
+    switch (axisNumber) {
+        case 1:
+            axis1Zero();
+            break;
+        case 2:
+            axis2Zero();
+            break;
+        default:
+            manualAxisZero(axisNumber);
+            break;
+    }
+}
+
+void Model::setPosition(int axisNumber, double mm)
+{
+    switch (axisNumber) {
+        case 1:
+            setAxis1Position(mm);
+            break;
+        case 2:
+            setAxis2Position(mm);
+            break;
+        default:
+            setManualAxisPosition(axisNumber, mm);
+            break;
+    }
+}
+
+void Model::half(int axisNumber)
+{
+    switch (axisNumber) {
+        case 1:
+            axis1Half();
+            break;
+        case 2:
+            axis2Half();
+            break;
+        default:
+            manualAxisHalf(axisNumber);
+            break;
     }
 }
 
@@ -3807,42 +3873,9 @@ void Model::manualAxisHalf(int axisNumber)
     }
 }
 
-std::optional<double> Model::getManualAxisMemory(int axisNumber, std::size_t slot) const
-{
-    if (!manualAxis(axisNumber)) {
-        return std::nullopt;
-    }
-    const auto& memory
-        = m_manualMemory.at(static_cast<std::size_t>(axisNumber - FIRST_MANUAL_AXIS));
-    return slot < memory.size() ? memory[slot] : std::nullopt;
-}
-
-void Model::manualAxisStorePosition(int axisNumber)
-{
-    if (ManualAxis* axis = manualAxisOrWarn(axisNumber)) {
-        m_manualMemory.at(static_cast<std::size_t>(axisNumber - FIRST_MANUAL_AXIS))
-            .at(m_currentMemory) = axis->positionMm();
-    }
-}
-
-void Model::clearCurrentManualMemorySlot(int axisNumber)
-{
-    if (manualAxis(axisNumber)) {
-        m_manualMemory.at(static_cast<std::size_t>(axisNumber - FIRST_MANUAL_AXIS))
-            .at(m_currentMemory)
-            .reset();
-    }
-}
-
-bool Model::manualAxisInSlotGoTo(int axisNumber) const
-{
-    return manualAxis(axisNumber)
-        && m_config.readBool(fmt::format("Axis{}InSlotGoTo", axisNumber), true);
-}
-
 void Model::manualAxisGoToCurrentMemory(int axisNumber)
 {
-    const auto target = getManualAxisMemory(axisNumber, m_currentMemory);
+    const auto target = getMemory(axisNumber, m_currentMemory);
     ManualAxis* axis = manualAxisOrWarn(axisNumber);
     if (!axis) {
         return;
@@ -3900,9 +3933,7 @@ void Model::checkManualAxes()
         // would be somewhere else now
         if (axis->originChanges() != m_manualOriginsSeen.at(index)) {
             m_manualOriginsSeen.at(index) = axis->originChanges();
-            for (auto& slot : m_manualMemory.at(index)) {
-                slot.reset();
-            }
+            clearMemory(static_cast<int>(index) + FIRST_MANUAL_AXIS);
             if (goTo) {
                 MGOLOG(fmt::format("{}: go to cancelled, as its zero changed", axis->label()));
                 goTo.reset();
@@ -3938,16 +3969,6 @@ void Model::fakeMoveManualAxis(int axisNumber, double mm)
     m_fakeManualAxisMm.at(static_cast<std::size_t>(axisNumber - FIRST_MANUAL_AXIS)) = mm;
 }
 #endif
-
-void Model::clearCurrentMemorySlot(Axis axis)
-{
-    if (axis == Axis::Axis1) {
-        m_axis1Memory.at(m_currentMemory) = AXIS1_UNSET;
-    }
-    if (axis == Axis::Axis2) {
-        m_axis2Memory.at(m_currentMemory) = AXIS2_UNSET;
-    }
-}
 
 bool Model::limitSwitchTripped() const
 {
@@ -3989,9 +4010,9 @@ void Model::checkLimitSwitch()
     MGOLOG(
         fmt::format(
             "*** Limit switch: all motors stopped, at {} {}, {} {}",
-            m_config.read("Axis1Label", "Z"),
+            axisLabel(1),
             m_axis1Motor->getPosition(),
-            m_config.read("Axis2Label", "X"),
+            axisLabel(2),
             m_axis2Motor->getPosition()));
     // e.g. a multi-pass, a motion sequence, or X synchronised to Z. Each motor
     // only stops itself when it sees the switch, which an idle one may not
@@ -4017,8 +4038,7 @@ bool Model::lockRefused(unsigned axisNumber) const
 void Model::lockAxis(unsigned axisNumber)
 {
     if (lockRefused(axisNumber)) {
-        const std::string label
-            = axisNumber == 1 ? m_config.read("Axis1Label", "Z") : m_config.read("Axis2Label", "X");
+        const std::string label = axisNumber == 1 ? axisLabel(1) : axisLabel(2);
         m_warning = "Stop " + label + " before locking it";
         m_lockWarning = m_warning;
         m_lockRefusedAxis = axisNumber;
@@ -4059,8 +4079,8 @@ bool Model::moveRefused(bool axis1, bool axis2)
     if (!z && !x) {
         return false;
     }
-    const std::string zLabel = m_config.read("Axis1Label", "Z");
-    const std::string xLabel = m_config.read("Axis2Label", "X");
+    const std::string zLabel = axisLabel(1);
+    const std::string xLabel = axisLabel(2);
     const std::string which = z && x ? zLabel + " and " + xLabel : (z ? zLabel : xLabel);
     m_warning = "Unlock " + which + " first";
     m_lockWarning = m_warning;
@@ -4103,11 +4123,8 @@ const IConfigReader& Model::config() const
 
 std::string Model::setMultiPassSetup(const MultiPassSetup& setup)
 {
-    const MultiPassResolved resolved = resolveMultiPass(
-        setup,
-        multiPassPositions(),
-        m_config.read("Axis1Label", "Z"),
-        m_config.read("Axis2Label", "X"));
+    const MultiPassResolved resolved
+        = resolveMultiPass(setup, multiPassPositions(), axisLabel(1), axisLabel(2));
     if (!resolved.error.empty()) {
         return resolved.error;
     }
@@ -4156,11 +4173,8 @@ std::string Model::setThreadingPassesSetup(const MultiPassSetup& setup)
     // (The return isn't locked to the spindle, so would drag the tool across
     // the thread)
     s.retract = true;
-    const MultiPassResolved resolved = resolveMultiPass(
-        s,
-        multiPassPositions(),
-        m_config.read("Axis1Label", "Z"),
-        m_config.read("Axis2Label", "X"));
+    const MultiPassResolved resolved
+        = resolveMultiPass(s, multiPassPositions(), axisLabel(1), axisLabel(2));
     if (!resolved.error.empty()) {
         return resolved.error;
     }
@@ -4231,8 +4245,7 @@ std::string Model::setKnurlingSetup(const MultiPassSetup& setup)
         return "Knurling passes are only in knurling mode";
     }
     if (!m_xDiameterSet) {
-        return "Set " + m_config.read("Axis2Label", "X")
-            + " as a diameter first: the knurl's lead depends on it";
+        return "Set " + axisLabel(2) + " as a diameter first: the knurl's lead depends on it";
     }
     if (setup.knurlStarts < 1) {
         return "There must be at least one start";
@@ -4243,11 +4256,8 @@ std::string Model::setKnurlingSetup(const MultiPassSetup& setup)
     MultiPassSetup s = setup;
     // (Both ways are cuts, with the tool in)
     s.retract = false;
-    const MultiPassResolved resolved = resolveMultiPass(
-        s,
-        multiPassPositions(),
-        m_config.read("Axis1Label", "Z"),
-        m_config.read("Axis2Label", "X"));
+    const MultiPassResolved resolved
+        = resolveMultiPass(s, multiPassPositions(), axisLabel(1), axisLabel(2));
     if (!resolved.error.empty()) {
         return resolved.error;
     }
@@ -4308,7 +4318,7 @@ std::string Model::gearCuttingUnavailable() const
     }
     // (Its indexes are fractions of 360)
     if (m_config.read("Axis2DisplayUnits", "mm") != "deg") {
-        return "Gear cutting needs " + m_config.read("Axis2Label", "X")
+        return "Gear cutting needs " + axisLabel(2)
             + " to be a rotary table (Axis2DisplayUnits = deg)";
     }
     return {};
@@ -4322,8 +4332,7 @@ std::string Model::setGearSetup(const GearSetup& setup)
     if (const std::string error = gearCuttingUnavailable(); !error.empty()) {
         return error;
     }
-    const GearCutResolved resolved
-        = resolveGearCut(setup, multiPassPositions(), m_config.read("Axis1Label", "Z"));
+    const GearCutResolved resolved = resolveGearCut(setup, multiPassPositions(), axisLabel(1));
     if (!resolved.error.empty()) {
         return resolved.error;
     }
@@ -4386,8 +4395,8 @@ GearSetup Model::gearDialogSetup() const
 
 std::string Model::radiusUnavailable() const
 {
-    const std::string z = m_config.read("Axis1Label", "Z");
-    const std::string x = m_config.read("Axis2Label", "X");
+    const std::string z = axisLabel(1);
+    const std::string x = axisLabel(2);
     if (!currentFeatureEnabled()) {
         return "Radius cutting needs the current feature (CurrentFeature = true in the config)";
     }
@@ -4429,8 +4438,7 @@ std::string Model::setRadiusSetup(const RadiusSetup& setup)
     if (work.xSign * axis2IntoWorkSign() > 0.0) {
         // X's position must get smaller (nearer the centre) going into the
         // work, as it does on the outside of it
-        return m_config.read("Axis2Label", "X")
-            + " goes the wrong way into the work for a radius on its outside";
+        return axisLabel(2) + " goes the wrong way into the work for a radius on its outside";
     }
     RadiusPlan plan = planRadius(setup, work);
     if (!plan.error.empty()) {
@@ -4500,9 +4508,9 @@ MultiPassPositions Model::multiPassPositions() const
     MultiPassPositions p;
     p.cutHere = m_axis1Motor->getPosition();
     p.feedHere = m_axis2Motor->getPosition();
-    for (std::size_t slot = 0; slot < m_axis1Memory.size(); ++slot) {
-        p.cutMemory.push_back(getAxis1MemoryAsPosition(slot));
-        p.feedMemory.push_back(getAxis2MemoryAsPosition(slot));
+    for (std::size_t slot = 0; slot < MEMORY_SLOTS; ++slot) {
+        p.cutMemory.push_back(getMemory(1, slot));
+        p.feedMemory.push_back(getMemory(2, slot));
     }
     p.feedIntoWork = axis2IntoWorkSign();
     if (m_featureX) {
@@ -5148,7 +5156,7 @@ void Model::gearCuttingFinished()
     MGOLOG(
         fmt::format(
             "{} renumbered by {} whole turns, to {:.4f}",
-            m_config.read("Axis2Label", "X"),
+            axisLabel(2),
             -turns,
             m_axis2Motor->getPosition(step)));
     m_axis2Motor->setPosition(m_axis2Motor->getPosition(step));
@@ -5158,7 +5166,7 @@ void Model::gearCuttingFinished()
     MGOLOG(
         fmt::format(
             "Gear cutting finished: {} {} turn(s), so its position is back to {}",
-            m_config.read("Axis2Label", "X"),
+            axisLabel(2),
             turns,
             m_axis2Motor->getPosition()));
 }
