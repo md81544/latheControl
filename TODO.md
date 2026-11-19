@@ -26,7 +26,8 @@
       zeroed on its own with its leader then `z` (18 Nov 2026). Its name in
       the command table would change to suit (e.g. "Zero all axes" when
       there are manual axes)
-    - **Done (18 Nov 2026), not yet tried on the mill:** `Model::zeroAllAxes()`;
+    - **Done (18 Nov 2026), and tried on the mill (19 Nov 2026):** all the
+      axes, Y and Z included, zero with `\z`. `Model::zeroAllAxes()`;
       it's "Zero all axes" in the menu when there are manual axes, and
       still "Zero Z and X" on the lathe. A manual axis with no reading
       warns, as zeroing it alone does, and the rest are still zeroed. No
