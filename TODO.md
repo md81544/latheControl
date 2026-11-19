@@ -7,7 +7,7 @@
       could go to the end?
 
 ### Re-base an axis from its scale by hand
-- [ ] A command to line an axis's position up with its scale at any time
+- [x] A command to line an axis's position up with its scale at any time
       (the user's idea, 18 Nov 2026), rather than only when the mismatch
       check stops everything and its dialog offers it, or when a move
       re-bases at rest. The user suggested `x` then `s`, but on the mill
@@ -18,6 +18,19 @@
       up as the other re-bases do, and add it to the command table, so it's
       in the menu (Position, or System beside "Finishing on the scale").
       Only for axes with a scale
+    - **Done (19 Nov 2026), not yet tried on the mill:** axis 1's leader
+      then `b` (the user's choice; `XB` on the mill), and Position in the
+      menu, only with `Axis1Scale` set. Axis 1 is the only axis that can
+      have a scale for its motor; a manual axis's position is its scale
+      already. Allowed when the re-bases at rest are (no multi-pass, motion
+      sequence, finishing move, backlash measurement or lathe mode), with
+      the axis stopped and the reading steady; otherwise it warns why.
+      Logged as "re-based by hand". **Not yet while a multi-pass is
+      paused**, though that's where it would help most (see the drift under
+      Multi-pass): the engine's start and end positions are in the motor's
+      frame, so re-basing between passes should correct the next pass, but
+      how the engine copes with the cut axis not being where it left it
+      wants checking first
 
 ### Zero all the axes, including the manual ones
 - [x] `\` then `z` ("Zero X and A" on the mill) only zeroes the two

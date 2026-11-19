@@ -490,6 +490,16 @@ public:
     void acceptAxis1ScalePosition();
     // Keep the motor's position, and line the scale up with it again
     void keepAxis1MotorPosition();
+    // Re-basing axis 1 from its scale by hand (axis 1's leader, then B): its
+    // motor's position is set to the scale's, as the re-bases at rest do,
+    // so nothing moves, and the memory slots and current feature stay where
+    // they are on the work. Only when the axis has stopped and its scale's
+    // reading is steady, and not in a multi-pass, a motion sequence (e.g. a
+    // nudge), a finishing move, a backlash measurement, or the lathe's
+    // modes (as for the re-bases at rest)
+    bool canRebaseAxis1FromScale() const;
+    // Re-bases it, or warns why it can't
+    void rebaseAxis1FromScaleByHand();
 
     // Finishing axis 1's positioning moves on its scale (stage 4): after a go
     // to (a memory, a typed or relative position, the last position), once

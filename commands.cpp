@@ -623,6 +623,13 @@ std::vector<Command> buildCommands(
     b.add(c, fmt::format("Repeat offset move: {}", a2), key::a2_FULLSTOP, AXIS2);
     b.add(c, fmt::format("Repeat offset move: {} and {}", a1, a2), key::aAll_FULLSTOP, BOTH);
     b.add(c, fmt::format("Halve {} (to find a centre)", a1), key::a1_h, AXIS1);
+    // (Only with a scale on axis 1)
+    if (config.read("Axis1Scale", "none") != "none") {
+        b.add(
+            c, fmt::format("Re-base {} from its scale", a1), key::a1_b, AXIS1, [](const Model& m) {
+                return m.canRebaseAxis1FromScale();
+            });
+    }
     b.add(c, fmt::format("Halve {} (to find a centre)", a2), key::a2_h, AXIS2);
     // The manual axes (e.g. the mill's Y and Z), which are moved by hand
     b.add(c, fmt::format("Zero {}", a3), key::a3_z, AXIS3);

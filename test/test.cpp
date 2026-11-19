@@ -2436,6 +2436,24 @@ TEST_CASE("Commands: hints after a leader key")
     REQUIRE(mgo::followUpKeyName(mgo::key::a1_FULLSTOP) == ".");
 }
 
+TEST_CASE("Commands: re-basing from the scale is only offered with a scale on axis 1")
+{
+    const auto hasRebase = [](const mgo::IConfigReader& config) {
+        const auto commands = mgo::buildCommands(config);
+        for (const mgo::Command* c : mgo::commandsForLeader(commands, mgo::KeyMode::Axis1)) {
+            if (c->key == mgo::key::a1_b) {
+                return c->description == "Re-base X from its scale";
+            }
+        }
+        return false;
+    };
+    const TestConfigReader mill({ { "Axis1Label", "X" }, { "Axis1Scale", "serial" } });
+    REQUIRE(hasRebase(mill));
+    const TestConfigReader noScale({ { "Axis1Label", "X" } });
+    REQUIRE(!hasRebase(noScale));
+    REQUIRE(mgo::followUpKeyName(mgo::key::a1_b) == "b");
+}
+
 TEST_CASE("Commands: the manual axes (e.g. the mill's Y and Z)")
 {
     TestConfigReader config(

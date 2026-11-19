@@ -1116,6 +1116,11 @@ void Controller::processKey(int t)
                     m_model->markWorkEnd();
                     break;
                 }
+            case key::a1_b: // re-base axis 1 from its scale
+                {
+                    m_model->rebaseAxis1FromScaleByHand();
+                    break;
+                }
             case key::a1_h: // halve axis 1's position (to find a centre)
                 {
                     confirmFeatureLoss(

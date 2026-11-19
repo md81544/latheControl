@@ -3433,6 +3433,39 @@ void Model::acceptAxis1ScalePosition()
     rebaseAxis1FromScale("set (the scale's position accepted)");
 }
 
+bool Model::canRebaseAxis1FromScale() const
+{
+    return m_axis1Scale && !m_axis1Motor->isRunning() && getAxis1ScalePositionMm()
+        && m_axis1Scale->isSteady() && (m_mode == Mode::None || m_mode == Mode::GearCutting)
+        && !m_multiPass.inProgress() && !isMotionSequenceRunning() && !m_axis1Finish
+        && !m_backlashMeasurement;
+}
+
+void Model::rebaseAxis1FromScaleByHand()
+{
+    if (!m_axis1Scale) {
+        return;
+    }
+    const std::string label = m_config.read("Axis1Label", "Z");
+    if (m_axis1Motor->isRunning()) {
+        m_warning = "Stop the motors first";
+        return;
+    }
+    if (!getAxis1ScalePositionMm()) {
+        m_warning = fmt::format("{}'s scale has no reading", label);
+        return;
+    }
+    if (!m_axis1Scale->isSteady()) {
+        m_warning = fmt::format("{}'s scale is still settling: try again in a moment", label);
+        return;
+    }
+    if (!canRebaseAxis1FromScale()) {
+        m_warning = fmt::format("{} can't be re-based from its scale now", label);
+        return;
+    }
+    rebaseAxis1FromScale("re-based by hand");
+}
+
 void Model::keepAxis1MotorPosition()
 {
     if (!m_axis1ScaleMismatchMm) {

@@ -2308,6 +2308,35 @@ TEST_CASE("UI: no re-basing unless the config asks for it")
     REQUIRE(!t.model.axis1ScaleMismatchMm());
 }
 
+TEST_CASE("UI: re-basing from the scale by hand (Z then B)")
+{
+    // (No re-basing at rest, so the difference stays until it's done by hand)
+    ScaleTestModel t;
+    QWidget* w = mainWindow();
+    REQUIRE(w);
+    REQUIRE(t.runUntil([&] { return t.model.getAxis1ScalePositionMm().has_value(); }));
+    t.model.fakeAxis1Scale()->setErrorMm(0.08);
+    t.model.axis1GoToPosition(1.0);
+    REQUIRE(t.runUntil([&] {
+        const auto d = t.model.getAxis1ScaleDifferenceMm();
+        return !t.model.isAxis1MotorRunning() && d && std::abs(*d - 0.08) < 0.011
+            && t.model.axis1ScaleIsSteady();
+    }));
+    REQUIRE(t.model.canRebaseAxis1FromScale());
+    press(w, t.controller, Qt::Key_Z);
+    press(w, t.controller, Qt::Key_B);
+    REQUIRE(t.model.getAxis1MotorPosition() == Approx(1.08).margin(0.011));
+    REQUIRE(std::abs(*t.model.getAxis1ScaleDifferenceMm()) < 0.011);
+
+    // Not while the axis is moving: it warns, and nothing changes
+    t.model.axis1Move(mgo::ZDirection::Left);
+    REQUIRE(t.model.isAxis1MotorRunning());
+    REQUIRE(!t.model.canRebaseAxis1FromScale());
+    t.model.rebaseAxis1FromScaleByHand();
+    REQUIRE(t.model.getWarning() == "Stop the motors first");
+    t.model.stopAllMotors();
+}
+
 TEST_CASE("UI: the scale and motor too far apart stops everything and asks")
 {
     ScaleTestModel t({ { "Axis1ScaleRebase", "true" }, { "Axis1ScaleWarnMm", "0.2" } });

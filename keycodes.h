@@ -129,6 +129,7 @@ constexpr int a1_FULLSTOP = '.' + 0x1000;
 constexpr int a1_DELETE = key::DELETE + 0x1000;
 constexpr int a1_e = e + 0x1000; // mark the work's end (current feature)
 constexpr int a1_h = h + 0x1000; // halve axis 1's position (to find a centre)
+constexpr int a1_b = b + 0x1000; // re-base axis 1 from its scale
 
 // Axis 2 leader-prefixed keys ( 0x2000 = bit 13 is set )
 constexpr int a2_z = z + 0x2000; // axis2 zero
