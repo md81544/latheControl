@@ -496,10 +496,19 @@ public:
     // they are on the work. Only when the axis has stopped and its scale's
     // reading is steady, and not in a multi-pass, a motion sequence (e.g. a
     // nudge), a finishing move, a backlash measurement, or the lathe's
-    // modes (as for the re-bases at rest)
+    // modes (as for the re-bases at rest). The exception: a multi-pass (or
+    // gear cutting) which is paused, as the next pass moves to its start
+    // from wherever the re-base leaves the axis (see also
+    // Axis1ScaleRebaseBetweenPasses, and waitingForScaleToContinue())
     bool canRebaseAxis1FromScale() const;
     // Re-bases it, or warns why it can't
     void rebaseAxis1FromScaleByHand();
+    // With Axis1ScaleRebaseBetweenPasses, while a multi-pass (or gear
+    // cutting) is paused, axis 1 is re-based from its scale each time the
+    // reading settles, as at rest. Enter, to continue, waits until the
+    // reading has settled (re-basing first), if it's still settling after
+    // the pass's return: this is true meanwhile. Space cancels it
+    bool waitingForScaleToContinue() const;
 
     // Finishing axis 1's positioning moves on its scale (stage 4): after a go
     // to (a memory, a typed or relative position, the last position), once
@@ -762,6 +771,8 @@ private:
     int m_axis1ScaleMismatchAsks { 0 };
     // The scale's position was chosen before its reading was steady
     bool m_axis1ScaleAskAgain { false };
+    // (See waitingForScaleToContinue())
+    bool m_multiPassContinueWhenSettled { false };
     // See axis1FinishesOnScale()
     bool m_axis1FinishOnScale { false };
     struct Axis1Finish {
@@ -1005,6 +1016,17 @@ private:
     void checkAxis1ScaleAtRest();
     // Sets axis 1's motor's position to the scale's
     void rebaseAxis1FromScale(const char* why);
+    // Whether a multi-pass is paused where axis 1 may be re-based from its
+    // scale: a plain multi-pass, or gear cutting (not threading, knurling or
+    // a radius, which haven't been tried with it)
+    bool multiPassPausedForRebase() const;
+    // Re-bases axis 1 from its scale if the reading is steady and more than
+    // a count from the motor's position, and nothing (e.g. a nudge) is
+    // moving it
+    void rebaseAxis1IfApart(const char* why);
+    // Called from checkStatus(): continues a paused multi-pass once axis 1's
+    // scale has settled (see waitingForScaleToContinue())
+    void continueMultiPassOnceSettled();
     // After a positioning move to step has started: finish it on the scale,
     // if that's on and can be done now
     void startAxis1Finish(long step);

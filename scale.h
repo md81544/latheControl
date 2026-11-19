@@ -106,6 +106,11 @@ public:
     // settle time, or (after the longest time) had only flickered by a count
     // for the settle time before that. Not while it's settling again
     bool isSteady() const;
+    // Whether the reading has settled (steady or not) since the motor last
+    // moved or the reading last changed at rest: false while it's moving or
+    // settling. (A reading which keeps changing settles after the longest
+    // time, so this doesn't stay false for long once the motor stops)
+    bool isSettled() const;
     // If the reading has jumped at rest by more than faultMm since it was
     // last lined up, by how much (the first such jump, in mm)
     std::optional<double> misreadJumpMm() const;

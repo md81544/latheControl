@@ -3493,6 +3493,27 @@ TEST_CASE("MultiPass: pausing between passes")
     REQUIRE(mp.state() == mgo::MultiPass::State::Finished);
 }
 
+TEST_CASE("MultiPass: the cut axis re-based while paused moves to the pass's start first")
+{
+    // e.g. the mill's X, re-based from its scale at a pause after losing
+    // steps: the motor's position no longer says it's at the start
+    FakeMultiPassMachine machine;
+    mgo::MultiPass mp(machine);
+    auto plan = basicPlan();
+    plan.pause = true;
+    REQUIRE(mp.start(plan).empty());
+    machine.run(mp);
+    REQUIRE(mp.state() == mgo::MultiPass::State::Paused);
+    machine.log.clear();
+    machine.m_cut = 0.12;
+    mp.continueAfterPause();
+    machine.run(mp);
+    // Back to the start (at full speed, clear of the work), then the cut,
+    // which still ends at the cut's end, and the return to the start
+    REQUIRE(machine.log == Log { "feed 4.8", "cut 0 at 1000", "cut -10 at 40", "cut 0 at 1000" });
+    REQUIRE(mp.state() == mgo::MultiPass::State::Paused);
+}
+
 TEST_CASE("MultiPass: asking for a pause before the next pass")
 {
     FakeMultiPassMachine machine;

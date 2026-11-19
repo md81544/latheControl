@@ -31,6 +31,12 @@
       frame, so re-basing between passes should correct the next pass, but
       how the engine copes with the cut axis not being where it left it
       wants checking first
+    - **Done (19 Nov 2026), not yet tried on the mill:** allowed while a
+      multi-pass or gear cutting is paused too. The engine copes as hoped:
+      on continuing, a cut axis that isn't at the pass's start is moved
+      there first (at full speed, as it's clear of the work), and the cut
+      still ends at the cut's end (unit tested). See "Re-basing between
+      passes" under Multi-pass
 
 ### Zero all the axes, including the manual ones
 - [x] `\` then `z` ("Zero X and A" on the mill) only zeroes the two
@@ -324,6 +330,25 @@
       **Fixed by deceleration ramping** (see under Motion and timing), on
       for the mill's X. **Tried on the mill (18 Nov 2026):** a large set of
       passes at 800 rpm again, and it worked perfectly: no drift
+    - **Re-basing between passes: done (19 Nov 2026), not yet tried on the
+      mill.** `Axis1ScaleRebaseBetweenPasses` (off unless set; on for the
+      mill), separate from `Axis1ScaleRebase`, as the lathe's Z scale is new.
+      While a plain multi-pass or gear cutting is paused, axis 1 is re-based
+      each time its scale settles (logged as "re-based between passes"), and
+      Enter straight after a return waits for the settle ("Waiting for X's
+      scale to settle"), re-bases, then continues; Space cancels. The engine
+      needed no change (see "Re-base an axis from its scale by hand").
+      Not for threading, knurling or a radius, which haven't been tried with
+      it. **Still to do:** a check for runs with no pauses, which never rest
+      long enough for the scale to settle (the 4.5 mm above went unseen):
+      e.g. at each end of a pass, a short dwell for the scale, or a
+      comparison while moving that allows for the scale's lag. Also
+      noticed: the re-base at rest is off in multi-pass mode altogether
+      (not just during a run), so after a multi-pass finishes, X isn't
+      re-based until the mode is left. That may be fine, but worth
+      checking on the mill. **To try on the mill:** a paused multi-pass
+      (slot) with Enter pressed straight after each return, watching
+      lc.log for the re-bases and the wait
     - **Slot:** cut along X, pause (re-basing X), the user feeds Z down,
       cut back at cutting speed, pause again (re-basing X), and repeat until
       the full depth. Each end of the slot finishes on X's scale (backing

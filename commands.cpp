@@ -442,6 +442,12 @@ bool keyAllowedInCurrentMode(int k, const Model& model)
             && (k == key::w || k == key::W || k == key::s || k == key::S)) {
             return true;
         }
+        // Axis 1 may be re-based from its scale while paused (where that's
+        // allowed: see Model::canRebaseAxis1FromScale()), as the next pass
+        // moves it to its start from wherever that leaves it
+        if (model.multiPass().state() == MultiPass::State::Paused && k == key::a1_b) {
+            return true;
+        }
         // Between spring passes, Z can move too (e.g. off the end, to try the
         // nut on): Enter moves back before the next pass. (Not between the
         // threading passes themselves)

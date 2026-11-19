@@ -390,6 +390,7 @@ void Model::checkStatus()
     }
     advanceBacklashMeasurement();
     checkAxis1ScaleAtRest();
+    continueMultiPassOnceSettled();
     advanceAxis1Finish();
 
     if (const auto diameter = getDiameterMm()) {
@@ -805,6 +806,10 @@ void Model::stopAllMotors()
         m_axis2Motor->setSpeed(m_previousAxis2Speed);
     }
     m_multiPass.stop("stopped");
+    if (std::exchange(m_multiPassContinueWhenSettled, false)) {
+        // (Its "waiting for the scale" warning no longer applies)
+        m_warning.clear();
+    }
     if (m_mode == Mode::Threading) {
         // (In case a threading multi-pass was stopped during a return, which
         // turns it on)
@@ -3195,24 +3200,75 @@ void Model::checkAxis1ScaleAtRest()
         ++m_axis1ScaleMismatchAsks;
         return;
     }
-    // Nor from a reading which only settled because it ran out of time,
-    // still jumping about (e.g. a misreading scale)
-    if (!m_config.readBool("Axis1ScaleRebase", false) || !m_axis1Scale->isSteady()) {
+    // Paused between a multi-pass's passes, only with its own setting. The
+    // next pass moves the axis to its start first, from wherever the re-base
+    // leaves it, so the cut goes where the table really is: without it, a
+    // stall or drift builds up from pass to pass (seen on the mill, 18 Nov
+    // 2026)
+    if (multiPassPausedForRebase()) {
+        if (m_config.readBool("Axis1ScaleRebaseBetweenPasses", false)) {
+            rebaseAxis1IfApart("re-based between passes");
+        }
+        return;
+    }
+    if (!m_config.readBool("Axis1ScaleRebase", false)) {
         return;
     }
     // Not part way through something which works from the motor's position,
-    // e.g. between a multi-pass's passes (only once it's finished), nor in
-    // the lathe's modes (threading, tapers, etc.), which haven't been tried
-    // with it
-    if ((m_mode != Mode::None && m_mode != Mode::GearCutting) || m_multiPass.inProgress()
-        || isMotionSequenceRunning() || limitSwitchTripped()) {
+    // e.g. while a multi-pass's pass is under way, nor in the lathe's modes
+    // (threading, tapers, etc.), which haven't been tried with it
+    if ((m_mode != Mode::None && m_mode != Mode::GearCutting) || m_multiPass.inProgress()) {
         return;
     }
+    rebaseAxis1IfApart("re-based");
+}
+
+bool Model::multiPassPausedForRebase() const
+{
+    return m_multiPass.state() == MultiPass::State::Paused
+        && (m_mode == Mode::MultiPass || m_mode == Mode::GearCutting);
+}
+
+void Model::rebaseAxis1IfApart(const char* why)
+{
+    // Not from a reading which only settled because it ran out of time, still
+    // jumping about (e.g. a misreading scale), nor while something is moving
+    // the axis (e.g. a nudge), nor while the scale and motor disagree (the
+    // user is asked which to believe)
+    if (!m_axis1Scale || !m_axis1Scale->isSteady() || m_axis1Motor->isRunning()
+        || isMotionSequenceRunning() || limitSwitchTripped() || m_axis1ScaleMismatchMm) {
+        return;
+    }
+    const auto difference = getAxis1ScaleDifferenceMm();
     // (Less than a count apart is as close as the scale can tell)
-    if (std::abs(*difference) * m_axis1Scale->countsPerMm() < 1.0) {
+    if (!difference || std::abs(*difference) * m_axis1Scale->countsPerMm() < 1.0) {
         return;
     }
-    rebaseAxis1FromScale("re-based");
+    rebaseAxis1FromScale(why);
+}
+
+bool Model::waitingForScaleToContinue() const
+{
+    return m_multiPassContinueWhenSettled;
+}
+
+void Model::continueMultiPassOnceSettled()
+{
+    if (!m_multiPassContinueWhenSettled) {
+        return;
+    }
+    // (e.g. stopped, or the scale and motor were too far apart)
+    if (m_multiPass.state() != MultiPass::State::Paused) {
+        m_multiPassContinueWhenSettled = false;
+        return;
+    }
+    if (m_axis1Scale && m_axis1Scale->hasReading() && !m_axis1Scale->isSettled()) {
+        return;
+    }
+    m_multiPassContinueWhenSettled = false;
+    m_warning.clear();
+    // (As if Enter were pressed now: it re-bases, then continues)
+    multiPassGo();
 }
 
 void Model::rebaseAxis1FromScale(const char* why)
@@ -3435,10 +3491,11 @@ void Model::acceptAxis1ScalePosition()
 
 bool Model::canRebaseAxis1FromScale() const
 {
+    const bool atRest
+        = (m_mode == Mode::None || m_mode == Mode::GearCutting) && !m_multiPass.inProgress();
     return m_axis1Scale && !m_axis1Motor->isRunning() && getAxis1ScalePositionMm()
-        && m_axis1Scale->isSteady() && (m_mode == Mode::None || m_mode == Mode::GearCutting)
-        && !m_multiPass.inProgress() && !isMotionSequenceRunning() && !m_axis1Finish
-        && !m_backlashMeasurement;
+        && m_axis1Scale->isSteady() && (atRest || multiPassPausedForRebase())
+        && !isMotionSequenceRunning() && !m_axis1Finish && !m_backlashMeasurement;
 }
 
 void Model::rebaseAxis1FromScaleByHand()
@@ -4509,6 +4566,25 @@ void Model::multiPassGo()
         return;
     }
     if (m_multiPass.state() == MultiPass::State::Paused) {
+        if (multiPassPausedForRebase()
+            && m_config.readBool("Axis1ScaleRebaseBetweenPasses", false)) {
+            // The axis has only just stopped (e.g. the pass's return), so its
+            // scale is still settling: wait for it (see
+            // continueMultiPassOnceSettled()), so the next pass starts from
+            // where the table really is
+            if (m_axis1Scale && m_axis1Scale->isAligned() && m_axis1Scale->hasReading()
+                && !m_axis1Scale->isSettled()) {
+                if (!m_multiPassContinueWhenSettled) {
+                    MGOLOG("Multi-pass: continuing once the scale has settled");
+                }
+                m_multiPassContinueWhenSettled = true;
+                m_warning = fmt::format(
+                    "Waiting for {}'s scale to settle", m_config.read("Axis1Label", "Z"));
+                return;
+            }
+            // (Usually done already, when the reading settled)
+            rebaseAxis1IfApart("re-based between passes");
+        }
         MGOLOG("Multi-pass: continuing");
         m_multiPass.continueAfterPause();
         return;

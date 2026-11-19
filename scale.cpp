@@ -231,6 +231,11 @@ bool AxisScale::isSteady() const
     return m_aligned && m_state == State::Settled && m_lastSettleSteady;
 }
 
+bool AxisScale::isSettled() const
+{
+    return m_state == State::Settled;
+}
+
 std::optional<double> AxisScale::misreadJumpMm() const
 {
     return m_misreadJumpMm;
