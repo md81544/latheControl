@@ -1795,6 +1795,14 @@ change.
           wouldn't fit without rethinking the pinning
         - The lathe stays at two axes (no topslide scale: the user never
           uses the topslide)
+        - A scale on the lathe's X (axis 2) may come later (the user,
+          19 Nov 2026). That should then be a config change too, so the
+          scale handling (lining up, the mismatch check and dialog,
+          re-basing at rest and by hand, finishing moves, backlash
+          measurement, the display) wants to belong to any axis, not
+          axis 1 alone as now. A quadrature scale on X would also need a
+          second pin callback in the GPIO layer (only
+          `setLinearScaleAxis1Callback()` exists) and two free pins
     - **Plan, in stages, each tested and working before the next:**
         1. The axis abstraction, with the new manual axes built on it from
            the start: config, calibration (Y and Z probably need their own
