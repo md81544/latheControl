@@ -401,15 +401,23 @@ void Controller::logKey(int key) const
 
 void Controller::processKey(int t)
 {
+    if (m_model->getKeyMode() != KeyMode::None) {
+        // After a leader key (e.g. z), the key becomes that axis's (e.g. z h,
+        // halve Z), and it's that which is checked against the mode below, as
+        // the menu does: not the key on its own (h, the quick chamfer, which
+        // the mill's config turns off). Space after a leader is still Space,
+        // which always stops everything, and Esc just cancels the leader
+        if (t == key::ESC) {
+            m_model->setKeyMode(KeyMode::None);
+            return;
+        }
+        if (t != key::SPACE) {
+            t = processLeaderKeyModeKeyPress(t);
+        }
+        m_model->setKeyMode(KeyMode::None);
+    }
     t = checkKeyAllowedForMode(t);
     if (t != key::None) {
-        if (m_model->getKeyMode() != KeyMode::None) {
-            // If we are in a "leader key mode" (i.e. the first "prefix" key has
-            // already been pressed) then we can modify t here. If the key
-            // combination is recognised, we get a "chord" keypress e.g. key::xz.
-            t = processLeaderKeyModeKeyPress(t);
-            m_model->setKeyMode(KeyMode::None);
-        }
         m_model->setKeyPressed(t);
         // Modify key press if it is a known axis leader key:
         m_model->setKeyPressed(checkForAxisLeaderKeys(m_model->getKeyPressed()));

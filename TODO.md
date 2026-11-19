@@ -984,6 +984,22 @@
       room. If the lag model is wrong (the sender isn't a plain one-second
       average), fast moves could stop falsely; the log will show. Still to
       do: the gibs, and a lower rapid speed for X if they don't cure it
+    - **Tried on the mill (19 Nov 2026):** at 3 mm, the misread check went
+      off on every rapid (the user put it up to 5 to get on). lc.log of four
+      rapids at 800 mm/min with it back at 3: each tripped "ahead of the
+      motor" after 0.5-0.65 s, with the reading only 1.0-1.6 mm behind the
+      motor, where a 1000 ms average expects 4-5 mm. That's a box average of
+      150-245 ms, so the lag was wrong, not the scale: 1000 came from the
+      reading still changing 0.7-0.9 s after a stop (2.2-2.4 s to settle,
+      less the 1.5 s window), which is the last count or two creeping in,
+      not the sender smoothing the whole move. `Axis1ScaleLagMs` is now 200
+      on the mill (within 0.3 mm of all four), and the limit back at 3.
+      Not yet tried. If it holds, both limits could come down (to 2, say),
+      which would catch a stall sooner still
+        - The dialog only flashed up: it was "press any key", and the
+          rapid's arrow, still held, closed it at once (choosing "keep X's
+          position", unseen). Fixed: "press any key" now ignores repeats,
+          arrows, and anything with Alt
 - [ ] **Rapids use the maximum rpm as mm/min.** `axis1Rapid()` and
       `axis2Rapid()` set the speed to `getMaxRpm()`, and multi-pass returns
       use `cutMaxSpeed()`, which is the same, but `setSpeed()` takes
@@ -1952,6 +1968,17 @@ change.
         - Half for the motorised axes too (`XH`, etc.): as setting the
           position, it clears that axis's memory slots and asks before
           clearing the current feature. Not while the axis is moving
+        - **Tried on the mill (19 Nov 2026): halving did nothing on any
+          axis.** The controller checked the key against the mode before
+          adding the leader to it, so after `y` it saw a plain `h`, the
+          quick chamfer, which lc_mill.cfg's DisabledModes turns off. Fixed:
+          the key after a leader is checked as the leader's key (`a3_h`), as
+          the menu already did. The same fault meant `z b` (re-base) while
+          a multi-pass was paused never got through either (`z` on its own
+          wasn't allowed then), so axis 1's leader is now allowed then too.
+          Space after a leader is now plain Space (it was the leader's
+          Space, which stopped everything but didn't cancel a manual go-to),
+          and Esc after a leader just cancels it (it stopped everything)
         - Not allowed during a multi-pass (nor are any other keys but a
           few), though zeroing a manual axis moves nothing. The slot and
           face/pocket modes may want Z zeroed at a pause

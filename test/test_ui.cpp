@@ -18,6 +18,7 @@
 #include <QApplication>
 #include <QFile>
 #include <QFontDatabase>
+#include <QKeyEvent>
 #include <QLabel>
 #include <QTest>
 #include <QTimer>
@@ -474,6 +475,30 @@ TEST_CASE("UI: press any key")
 
     whenDialogShows([](QWidget* dialog) { QTest::keyClick(inputWidget(dialog), Qt::Key_Q); });
     const auto rc = getInput(view, mgo::Input::Type::PressAnyKey, "Help", { "Some text" });
+    REQUIRE(!rc.cancelled);
+}
+
+TEST_CASE("UI: press any key isn't closed by a key held from before (e.g. a rapid's)")
+{
+    TestModel tm;
+    mgo::ViewQt view;
+    view.initialise(tm.model);
+
+    bool stillOpen = false;
+    whenDialogShows([&stillOpen](QWidget* dialog) {
+        QWidget* input = inputWidget(dialog);
+        // A rapid (Alt + an arrow), the arrow on its own (as its repeats can
+        // be, on the Pi), and a key marked as a repeat
+        QTest::keyClick(input, Qt::Key_Right, Qt::AltModifier);
+        QTest::keyClick(input, Qt::Key_Right);
+        QKeyEvent repeat(QEvent::KeyPress, Qt::Key_Q, Qt::NoModifier, "q", true);
+        QApplication::sendEvent(input, &repeat);
+        stillOpen = dialog->isVisible();
+        // A fresh key closes it
+        QTest::keyClick(input, Qt::Key_Q);
+    });
+    const auto rc = getInput(view, mgo::Input::Type::PressAnyKey, "Warning", { "Some text" });
+    REQUIRE(stillOpen);
     REQUIRE(!rc.cancelled);
 }
 
@@ -2085,30 +2110,75 @@ TEST_CASE("UI: \\ z zeroes every axis, including the manual ones")
 namespace {
 
 // As on the mill: Y and Z moved by hand, with Z left out of going to a slot
-MapConfigReader millLikeConfig()
+// (With extra, or different, values from extra)
+MapConfigReader millLikeConfig(const std::map<std::string, std::string>& extra = {})
 {
-    return MapConfigReader { { { "Axis3Kind", "manual" },
-                               { "Axis3Label", "Y" },
-                               { "Axis3Leader", "121" },
-                               { "Axis3Scale", "serial" },
-                               { "Axis3ScaleSerialLetter", "Y" },
-                               { "Axis3ScaleCountsPerMm", "100" },
-                               { "Axis4Kind", "manual" },
-                               { "Axis4Label", "Z" },
-                               { "Axis4Leader", "122" },
-                               { "Axis4Scale", "serial" },
-                               { "Axis4ScaleSerialLetter", "Z" },
-                               { "Axis4ScaleCountsPerMm", "100" },
-                               { "Axis4InSlotGoTo", "false" },
-                               // (X and A, as the mill's axes 1 and 2)
-                               { "Axis1Label", "X" },
-                               { "Axis1Leader", "120" },
-                               { "Axis2Label", "A" },
-                               { "Axis2Leader", "97" },
-                               { "DisableRpm", "true" } } };
+    std::map<std::string, std::string> values { { "Axis3Kind", "manual" },
+                                                { "Axis3Label", "Y" },
+                                                { "Axis3Leader", "121" },
+                                                { "Axis3Scale", "serial" },
+                                                { "Axis3ScaleSerialLetter", "Y" },
+                                                { "Axis3ScaleCountsPerMm", "100" },
+                                                { "Axis4Kind", "manual" },
+                                                { "Axis4Label", "Z" },
+                                                { "Axis4Leader", "122" },
+                                                { "Axis4Scale", "serial" },
+                                                { "Axis4ScaleSerialLetter", "Z" },
+                                                { "Axis4ScaleCountsPerMm", "100" },
+                                                { "Axis4InSlotGoTo", "false" },
+                                                // (X and A, as the mill's axes 1 and 2)
+                                                { "Axis1Label", "X" },
+                                                { "Axis1Leader", "120" },
+                                                { "Axis2Label", "A" },
+                                                { "Axis2Leader", "97" },
+                                                { "DisableRpm", "true" } };
+    for (const auto& [key, value] : extra) {
+        values[key] = value;
+    }
+    return MapConfigReader { values };
 }
 
 } // namespace
+
+TEST_CASE("UI: halving after a leader key, with the quick chamfer turned off")
+{
+    // As on the mill: h on its own is the quick chamfer, which DisabledModes
+    // turns off. That once threw away the h after a leader key too, so
+    // halving did nothing on any axis
+    MapConfigReader config
+        = millLikeConfig({ { "DisabledModes", "threading, taper, chamfer, knurling" } });
+    mgo::MockGpio gpio { false };
+    mgo::Model model { gpio, config };
+    mgo::Controller controller(&model);
+    QWidget* w = mainWindow();
+    REQUIRE(w);
+    const mgo::ManualAxis* y = model.manualAxis(3);
+    REQUIRE(y);
+    REQUIRE(waitUntil([&] {
+        controller.tick();
+        return y->hasReading();
+    }));
+
+    // Axis 1 (X)
+    model.setPosition(1, 10.0);
+    press(w, controller, Qt::Key_X);
+    press(w, controller, Qt::Key_H);
+    REQUIRE(model.motorPosition(1) == Approx(5.0).margin(0.01));
+    // Y (manual)
+    model.setPosition(3, 8.0);
+    press(w, controller, Qt::Key_Y);
+    press(w, controller, Qt::Key_H);
+    REQUIRE(*y->positionMm() == Approx(4.0).margin(0.01));
+    // h on its own is still refused
+    press(w, controller, Qt::Key_H);
+    REQUIRE(model.getMode() == mgo::Mode::None);
+    // Esc after a leader cancels it, and nothing else
+    press(w, controller, Qt::Key_X);
+    REQUIRE(model.getKeyMode() == mgo::KeyMode::Axis1);
+    press(w, controller, Qt::Key_Escape);
+    REQUIRE(model.getKeyMode() == mgo::KeyMode::None);
+    REQUIRE(model.motorPosition(1) == Approx(5.0).margin(0.01));
+}
 
 TEST_CASE("UI: memory slots for the manual axes, and going to them by hand", "[timing]")
 {
@@ -2532,10 +2602,14 @@ TEST_CASE("UI: no re-basing between passes unless the config asks for it", "[tim
         return multiPassIn(t.model, mgo::MultiPass::State::Paused) && t.model.axis1ScaleIsSteady();
     }));
     REQUIRE(t.model.motorPosition(1) == Approx(0.0).margin(0.0001));
-    // But it can be done by hand (Z then B)
+    // But it can be done by hand (Z then B: through the keys, as the leader
+    // key was once refused while paused, so B never got there)
     REQUIRE(t.model.canRebaseAxis1FromScale());
     REQUIRE(mgo::keyAllowedInCurrentMode(mgo::key::a1_b, t.model));
-    t.model.rebaseAxis1FromScaleByHand();
+    QWidget* w = mainWindow();
+    REQUIRE(w);
+    press(w, t.controller, Qt::Key_Z);
+    press(w, t.controller, Qt::Key_B);
     REQUIRE(t.model.motorPosition(1) == Approx(0.05).margin(0.011));
     // And the next pass doesn't wait for the scale
     bool settling = false;

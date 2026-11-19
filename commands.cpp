@@ -445,7 +445,10 @@ bool keyAllowedInCurrentMode(int k, const Model& model)
         // Axis 1 may be re-based from its scale while paused (where that's
         // allowed: see Model::canRebaseAxis1FromScale()), as the next pass
         // moves it to its start from wherever that leaves it
-        if (model.multiPass().state() == MultiPass::State::Paused && k == key::a1_b) {
+        // (And so axis 1's leader key, which comes first)
+        if (model.multiPass().state() == MultiPass::State::Paused
+            && (k == key::a1_b
+                || k == static_cast<int>(model.config().readLong("Axis1Leader", 122L)))) {
             return true;
         }
         // Between spring passes, Z can move too (e.g. off the end, to try the

@@ -283,7 +283,16 @@ private:
             return true;
         }
         if (m_type == Input::Type::PressAnyKey) {
-            if (!isModifierKey(qtKey)) {
+            // Not a key which may still be held from before it opened: a
+            // warning which opens during a rapid (e.g. the scale misreading)
+            // was closed at once by the held arrow, unseen (on the mill, 19
+            // Nov 2026). So not a repeat, nor an arrow, nor anything with Alt
+            // (a rapid's or a nudge's), which on the Pi aren't always marked
+            // as repeats
+            const bool arrow = qtKey == Qt::Key_Left || qtKey == Qt::Key_Right
+                || qtKey == Qt::Key_Up || qtKey == Qt::Key_Down;
+            if (!isModifierKey(qtKey) && !event->isAutoRepeat() && !arrow
+                && !(event->modifiers() & Qt::AltModifier)) {
                 accept();
             }
             return true;
