@@ -1227,6 +1227,15 @@
       "dead reckoning" (the motor's step count), which is wrong from the
       moment a step is lost. Should position come solely from the scale, or
       should the scale correct the expected position? Thoughts so far:
+    - **The lathe's scale, being fitted (19 Nov 2026):** a "Garosa Linear
+      Scale 250mm" from Amazon (a generic 5µm, 5V TTL quadrature scale; no
+      manual). Its DB9 is **not** the common Sino pinout (2 = 0V, 6 = A,
+      7 = +5V, 8 = B): the user's proof-of-concept socket has **1 = +5V,
+      2 = GND, 3 = A, 4 = B**. A and B are 5V signals, and the Pi's GPIOs
+      aren't 5V tolerant, so they go through a 2-channel level shifter (5V
+      side to the scale, 3.3V side to GPIO 5 and 6). (The proof of concept
+      fed them in directly, but only on an old, now spare, Pi 3.) Then
+      check the sign, the counts per mm (200, as set) and the settle time
     - **Things that shape the answer** (figures from lc.cfg):
         - The scale (200 counts/mm, so 5µm) is *coarser* than the motor
           (1µm per step on Z). So the scale can't control the motor step by
