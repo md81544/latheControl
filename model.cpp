@@ -388,6 +388,7 @@ void Model::checkStatus()
             axis->update();
         }
     }
+    checkManualAxes();
     advanceBacklashMeasurement();
     checkAxis1ScaleAtRest();
     advanceAxis1Finish();
@@ -3680,6 +3681,9 @@ std::unique_ptr<IScale> Model::makeScale(
 
 void Model::configureManualAxes()
 {
+    for (auto& memory : m_manualMemory) {
+        memory.assign(getMemorySize(), std::nullopt);
+    }
     for (int n = FIRST_MANUAL_AXIS; n <= LAST_MANUAL_AXIS; ++n) {
         const std::string kind = m_config.read(fmt::format("Axis{}Kind", n), "none");
         if (kind == "none") {
@@ -3698,6 +3702,8 @@ void Model::configureManualAxes()
             .label = m_config.read(fmt::format("Axis{}Label", n), n == 3 ? "Y" : "Z"),
             .countsPerMm = m_config.readDouble(fmt::format("Axis{}ScaleCountsPerMm", n), 100.0),
             .reversed = m_config.readBool(fmt::format("Axis{}ScaleReversed", n), false),
+            .settleTime = std::chrono::milliseconds(
+                m_config.readLong(fmt::format("Axis{}ScaleSettleMs", n), 500)),
         };
         // (A manual axis is only known from its scale, so it must have one)
         const std::string type = m_config.read(fmt::format("Axis{}Scale", n), "none");
@@ -3743,6 +3749,7 @@ void Model::configureManualAxes()
         }
         m_manualAxes.at(index)
             = std::make_unique<ManualAxis>(std::move(scale), std::move(settings));
+        m_manualOriginsSeen.at(index) = m_manualAxes.at(index)->originChanges();
     }
 }
 
@@ -3768,6 +3775,8 @@ void Model::manualAxisZero(int axisNumber)
 {
     if (ManualAxis* axis = manualAxisOrWarn(axisNumber)) {
         axis->zero();
+        // (Its memory slots are cleared now, not at the next update)
+        checkManualAxes();
     }
 }
 
@@ -3786,6 +3795,7 @@ void Model::setManualAxisPosition(int axisNumber, double mm)
 {
     if (ManualAxis* axis = manualAxisOrWarn(axisNumber)) {
         axis->setPositionMm(mm);
+        checkManualAxes();
     }
 }
 
@@ -3793,6 +3803,132 @@ void Model::manualAxisHalf(int axisNumber)
 {
     if (ManualAxis* axis = manualAxisOrWarn(axisNumber)) {
         axis->half();
+        checkManualAxes();
+    }
+}
+
+std::optional<double> Model::getManualAxisMemory(int axisNumber, std::size_t slot) const
+{
+    if (!manualAxis(axisNumber)) {
+        return std::nullopt;
+    }
+    const auto& memory
+        = m_manualMemory.at(static_cast<std::size_t>(axisNumber - FIRST_MANUAL_AXIS));
+    return slot < memory.size() ? memory[slot] : std::nullopt;
+}
+
+void Model::manualAxisStorePosition(int axisNumber)
+{
+    if (ManualAxis* axis = manualAxisOrWarn(axisNumber)) {
+        m_manualMemory.at(static_cast<std::size_t>(axisNumber - FIRST_MANUAL_AXIS))
+            .at(m_currentMemory) = axis->positionMm();
+    }
+}
+
+void Model::clearCurrentManualMemorySlot(int axisNumber)
+{
+    if (manualAxis(axisNumber)) {
+        m_manualMemory.at(static_cast<std::size_t>(axisNumber - FIRST_MANUAL_AXIS))
+            .at(m_currentMemory)
+            .reset();
+    }
+}
+
+bool Model::manualAxisInSlotGoTo(int axisNumber) const
+{
+    return manualAxis(axisNumber)
+        && m_config.readBool(fmt::format("Axis{}InSlotGoTo", axisNumber), true);
+}
+
+void Model::manualAxisGoToCurrentMemory(int axisNumber)
+{
+    const auto target = getManualAxisMemory(axisNumber, m_currentMemory);
+    ManualAxis* axis = manualAxisOrWarn(axisNumber);
+    if (!axis) {
+        return;
+    }
+    if (!target) {
+        m_warning = fmt::format("{} isn't set in this slot", axis->label());
+        return;
+    }
+    const double from = *axis->positionMm();
+    const std::size_t index = static_cast<std::size_t>(axisNumber - FIRST_MANUAL_AXIS);
+    m_manualGoTos.at(index)
+        = ManualGoToTarget { .targetMm = *target, .direction = *target >= from ? 1.0 : -1.0 };
+    MGOLOG(
+        fmt::format("{}: go to {:.4f} (from {:.4f}), wound by hand", axis->label(), *target, from));
+}
+
+std::optional<Model::ManualAxisGoTo> Model::manualAxisGoTo(int axisNumber) const
+{
+    const ManualAxis* axis = manualAxis(axisNumber);
+    if (!axis) {
+        return std::nullopt;
+    }
+    const auto& goTo = m_manualGoTos.at(static_cast<std::size_t>(axisNumber - FIRST_MANUAL_AXIS));
+    const auto position = axis->positionMm();
+    if (!goTo || !position) {
+        return std::nullopt;
+    }
+    const double toGo = goTo->targetMm - *position;
+    const double tolerance = 2.0 * axis->countMm();
+    return ManualAxisGoTo { .targetMm = goTo->targetMm,
+                            .toGoMm = toGo,
+                            .past = toGo * goTo->direction < -tolerance,
+                            .there = std::abs(toGo) <= tolerance };
+}
+
+void Model::cancelManualAxisGoTos()
+{
+    for (std::size_t index = 0; index < MANUAL_AXES; ++index) {
+        if (m_manualGoTos.at(index)) {
+            MGOLOG(fmt::format("{}: go to cancelled", m_manualAxes.at(index)->label()));
+            m_manualGoTos.at(index).reset();
+        }
+    }
+}
+
+void Model::checkManualAxes()
+{
+    for (std::size_t index = 0; index < MANUAL_AXES; ++index) {
+        const ManualAxis* axis = m_manualAxes.at(index).get();
+        if (!axis) {
+            continue;
+        }
+        auto& goTo = m_manualGoTos.at(index);
+        // Zeroed, set, halved, or started again: positions kept from before
+        // would be somewhere else now
+        if (axis->originChanges() != m_manualOriginsSeen.at(index)) {
+            m_manualOriginsSeen.at(index) = axis->originChanges();
+            for (auto& slot : m_manualMemory.at(index)) {
+                slot.reset();
+            }
+            if (goTo) {
+                MGOLOG(fmt::format("{}: go to cancelled, as its zero changed", axis->label()));
+                goTo.reset();
+            }
+        }
+        if (!goTo) {
+            continue;
+        }
+        const int axisNumber = static_cast<int>(index) + FIRST_MANUAL_AXIS;
+        const auto status = manualAxisGoTo(axisNumber);
+        if (!status) {
+            // (Its readings were lost, so it can't be followed)
+            MGOLOG(fmt::format("{}: go to cancelled, with no reading", axis->label()));
+            m_warning = fmt::format("{} has no reading from its scale", axis->label());
+            goTo.reset();
+            continue;
+        }
+        if (status->there && axis->isSettled()) {
+            MGOLOG(
+                fmt::format(
+                    "{}: at {:.4f} ({:+.4f} mm)",
+                    axis->label(),
+                    status->targetMm,
+                    -status->toGoMm));
+            goTo.reset();
+        }
     }
 }
 

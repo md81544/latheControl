@@ -2084,6 +2084,122 @@ TEST_CASE("UI: \\ z zeroes every axis, including the manual ones")
     REQUIRE(*y->positionMm() == Approx(0.0).margin(0.005));
 }
 
+namespace {
+
+// As on the mill: Y and Z moved by hand, with Z left out of going to a slot
+MapConfigReader millLikeConfig()
+{
+    return MapConfigReader { { { "Axis3Kind", "manual" },
+                               { "Axis3Label", "Y" },
+                               { "Axis3Leader", "121" },
+                               { "Axis3Scale", "serial" },
+                               { "Axis3ScaleSerialLetter", "Y" },
+                               { "Axis3ScaleCountsPerMm", "100" },
+                               { "Axis4Kind", "manual" },
+                               { "Axis4Label", "Z" },
+                               { "Axis4Leader", "122" },
+                               { "Axis4Scale", "serial" },
+                               { "Axis4ScaleSerialLetter", "Z" },
+                               { "Axis4ScaleCountsPerMm", "100" },
+                               { "Axis4InSlotGoTo", "false" },
+                               // (X and A, as the mill's axes 1 and 2)
+                               { "Axis1Label", "X" },
+                               { "Axis1Leader", "120" },
+                               { "Axis2Label", "A" },
+                               { "Axis2Leader", "97" },
+                               { "DisableRpm", "true" } } };
+}
+
+} // namespace
+
+TEST_CASE("UI: memory slots for the manual axes, and going to them by hand", "[timing]")
+{
+    MapConfigReader config = millLikeConfig();
+    mgo::MockGpio gpio { false };
+    mgo::Model model { gpio, config };
+    mgo::Controller controller(&model);
+    QWidget* w = mainWindow();
+    REQUIRE(w);
+    const auto tickUntil = [&](const std::function<bool()>& condition) {
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        while (!condition() && std::chrono::steady_clock::now() < deadline) {
+            controller.tick();
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        }
+        return condition();
+    };
+    const mgo::ManualAxis* y = model.manualAxis(3);
+    const mgo::ManualAxis* z = model.manualAxis(4);
+    REQUIRE(y);
+    REQUIRE(z);
+    const auto windTo = [&](int axisNumber, double mm) {
+        const mgo::ManualAxis* axis = model.manualAxis(axisNumber);
+        model.fakeMoveManualAxis(axisNumber, mm);
+        REQUIRE(tickUntil([&] { return std::abs(*axis->positionMm() - mm) < 0.005; }));
+    };
+
+    // M stores every axis, Y and Z included
+    windTo(3, 3.0);
+    windTo(4, -1.0);
+    press(w, controller, Qt::Key_M);
+    REQUIRE(*model.getManualAxisMemory(3, 0) == Approx(3.0).margin(0.005));
+    REQUIRE(*model.getManualAxisMemory(4, 0) == Approx(-1.0).margin(0.005));
+    REQUIRE(!model.getManualAxisMemory(3, 1));
+
+    // \ then Enter goes to the slot: Y is to be wound there (not Z, which
+    // isn't in the go-to), showing the distance to go
+    windTo(3, 10.0);
+    windTo(4, -2.0);
+    press(w, controller, Qt::Key_Backslash);
+    press(w, controller, Qt::Key_Return);
+    REQUIRE(model.manualAxisGoTo(3));
+    REQUIRE(!model.manualAxisGoTo(4));
+    REQUIRE(model.manualAxisGoTo(3)->targetMm == Approx(3.0).margin(0.005));
+    REQUIRE(model.manualAxisGoTo(3)->toGoMm == Approx(-7.0).margin(0.01));
+    REQUIRE(!model.manualAxisGoTo(3)->past);
+    controller.tick();
+    snapshot(w, "manual-axis-go-to");
+    // Wound part way, then past it, then back to it: once the reading has
+    // settled there, it's done
+    windTo(3, 5.0);
+    REQUIRE(model.manualAxisGoTo(3)->toGoMm == Approx(-2.0).margin(0.01));
+    windTo(3, 2.5);
+    REQUIRE(model.manualAxisGoTo(3)->past);
+    windTo(3, 3.0);
+    REQUIRE(tickUntil([&] { return !model.manualAxisGoTo(3); }));
+
+    // Z by itself, with its leader then Enter, and Esc cancels it
+    press(w, controller, Qt::Key_Z);
+    press(w, controller, Qt::Key_Return);
+    REQUIRE(model.manualAxisGoTo(4));
+    press(w, controller, Qt::Key_Escape);
+    REQUIRE(!model.manualAxisGoTo(4));
+    // As does Space
+    press(w, controller, Qt::Key_Z);
+    press(w, controller, Qt::Key_Return);
+    REQUIRE(model.manualAxisGoTo(4));
+    press(w, controller, Qt::Key_Space);
+    REQUIRE(!model.manualAxisGoTo(4));
+
+    // Zeroing Y clears its slots (they were from the old zero), not Z's
+    press(w, controller, Qt::Key_Y);
+    press(w, controller, Qt::Key_Z);
+    REQUIRE(!model.getManualAxisMemory(3, 0));
+    REQUIRE(model.getManualAxisMemory(4, 0));
+    // Its leader then M stores it alone, and then Delete clears it
+    press(w, controller, Qt::Key_Y);
+    press(w, controller, Qt::Key_M);
+    REQUIRE(*model.getManualAxisMemory(3, 0) == Approx(0.0).margin(0.005));
+    press(w, controller, Qt::Key_Y);
+    press(w, controller, Qt::Key_Delete);
+    REQUIRE(!model.getManualAxisMemory(3, 0));
+    // An empty slot says so
+    press(w, controller, Qt::Key_Y);
+    press(w, controller, Qt::Key_Return);
+    REQUIRE(!model.manualAxisGoTo(3));
+    REQUIRE(model.getWarning() == "Y isn't set in this slot");
+}
+
 TEST_CASE("UI: start-up sets the motors' speeds before taking up the backlash")
 {
     // (A motor at zero speed cancels any move, so the backlash was never

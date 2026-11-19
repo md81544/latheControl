@@ -583,7 +583,32 @@ std::vector<Command> buildCommands(
     c = "Memory";
     b.add(c, "Previous memory slot", key::LBRACKET, NONE);
     b.add(c, "Next memory slot", key::RBRACKET, NONE);
-    b.add(c, fmt::format("Store {} and {} in slot", a1, a2), key::m, BOTH);
+    // The manual axes (e.g. the mill's Y and Z) are in the slots too, and
+    // those in the go-to (Axis3InSlotGoTo) are wound there by hand
+    const auto isManual = [&config](int n) {
+        return config.read(fmt::format("Axis{}Kind", n), "none") == "manual";
+    };
+    const bool anyManual = isManual(3) || isManual(4);
+    std::string goToAxes = fmt::format("{} and {}", a1, a2);
+    {
+        std::vector<std::string> labels { a1, a2 };
+        for (int n = 3; n <= 4; ++n) {
+            if (isManual(n) && config.readBool(fmt::format("Axis{}InSlotGoTo", n), true)) {
+                labels.push_back(n == 3 ? a3 : a4);
+            }
+        }
+        if (labels.size() > 2) {
+            goToAxes.clear();
+            for (std::size_t i = 0; i < labels.size(); ++i) {
+                goToAxes += (i == 0 ? "" : i + 1 == labels.size() ? " and " : ", ") + labels[i];
+            }
+        }
+    }
+    b.add(
+        c,
+        anyManual ? "Store every axis in slot" : fmt::format("Store {} and {} in slot", a1, a2),
+        key::m,
+        BOTH);
     b.add(c, fmt::format("Store {} in slot", a1), key::a1_m, AXIS1);
     b.add(c, fmt::format("Store {} in slot", a2), key::a2_m, AXIS2);
     // Going to, returning to or clearing the current slot needs something in
@@ -595,12 +620,32 @@ std::vector<Command> buildCommands(
     const auto axis2SlotSet = [](const Model& m) {
         return m.getAxis2MemoryAsPosition(m.getCurrentMemorySlot()).has_value();
     };
+    const auto manualSlotSet = [](int n) {
+        return [n](const Model& m) {
+            return m.getManualAxisMemory(n, m.getCurrentMemorySlot()).has_value();
+        };
+    };
+    const auto anyManualSlotSet = [](const Model& m, bool inGoToOnly) {
+        for (int n = Model::FIRST_MANUAL_AXIS; n <= Model::LAST_MANUAL_AXIS; ++n) {
+            if ((!inGoToOnly || m.manualAxisInSlotGoTo(n))
+                && m.getManualAxisMemory(n, m.getCurrentMemorySlot())) {
+                return true;
+            }
+        }
+        return false;
+    };
     const auto eitherSlotSet = [axis1SlotSet, axis2SlotSet](const Model& m) {
         return axis1SlotSet(m) || axis2SlotSet(m);
     };
+    const auto goToSlotSet = [eitherSlotSet, anyManualSlotSet](const Model& m) {
+        return eitherSlotSet(m) || anyManualSlotSet(m, true);
+    };
+    const auto anySlotSet = [eitherSlotSet, anyManualSlotSet](const Model& m) {
+        return eitherSlotSet(m) || anyManualSlotSet(m, false);
+    };
     b.add(c, fmt::format("Go to slot: {}", a1), key::a1_ENTER, AXIS1, axis1SlotSet);
     b.add(c, fmt::format("Go to slot: {}", a2), key::a2_ENTER, AXIS2, axis2SlotSet);
-    b.add(c, fmt::format("Go to slot: {} and {}", a1, a2), key::aAll_ENTER, BOTH, eitherSlotSet);
+    b.add(c, fmt::format("Go to slot: {}", goToAxes), key::aAll_ENTER, BOTH, goToSlotSet);
     b.add(c, fmt::format("Fast return to slot: {}", a1), key::a1_f, AXIS1, axis1SlotSet);
     b.add(c, fmt::format("Fast return to slot: {}", a2), key::a2_f, AXIS2, axis2SlotSet);
     b.add(
@@ -609,7 +654,30 @@ std::vector<Command> buildCommands(
     b.add(c, fmt::format("Enter a {} value for slot...", a2), key::a2_i, AXIS2);
     b.add(c, fmt::format("Clear slot: {}", a1), key::a1_DELETE, AXIS1, axis1SlotSet);
     b.add(c, fmt::format("Clear slot: {}", a2), key::a2_DELETE, AXIS2, axis2SlotSet);
-    b.add(c, fmt::format("Clear slot: {} and {}", a1, a2), key::DELETE, BOTH, eitherSlotSet);
+    b.add(
+        c,
+        anyManual ? "Clear slot: every axis" : fmt::format("Clear slot: {} and {}", a1, a2),
+        key::DELETE,
+        BOTH,
+        anySlotSet);
+    // (A manual axis has no motor, so going to its slot shows the distance
+    // to wind it)
+    b.add(c, fmt::format("Store {} in slot", a3), key::a3_m, AXIS3);
+    b.add(
+        c,
+        fmt::format("Go to slot: {} (wind it there)", a3),
+        key::a3_ENTER,
+        AXIS3,
+        manualSlotSet(3));
+    b.add(c, fmt::format("Clear slot: {}", a3), key::a3_DELETE, AXIS3, manualSlotSet(3));
+    b.add(c, fmt::format("Store {} in slot", a4), key::a4_m, AXIS4);
+    b.add(
+        c,
+        fmt::format("Go to slot: {} (wind it there)", a4),
+        key::a4_ENTER,
+        AXIS4,
+        manualSlotSet(4));
+    b.add(c, fmt::format("Clear slot: {}", a4), key::a4_DELETE, AXIS4, manualSlotSet(4));
 
     c = "Position";
     b.add(c, fmt::format("Zero {}", a1), key::a1_z, AXIS1);

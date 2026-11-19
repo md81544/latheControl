@@ -525,8 +525,9 @@ public:
 
     // The axes moved by hand (axes 3 and 4: Axis3Kind = manual in the
     // config), e.g. the mill's Y and Z, whose positions are read from their
-    // scales, as on a DRO. Only zeroing, setting and halving them so far:
-    // no memory slots or go-tos. (See "An array of axes" in TODO.md)
+    // scales, as on a DRO: zeroed, set and halved, with memory slots, and
+    // go-tos which the user winds the handle for. (See "An array of axes" in
+    // TODO.md)
     static constexpr int FIRST_MANUAL_AXIS = 3;
     static constexpr int LAST_MANUAL_AXIS = 4;
     // The manual axis numbered axisNumber, or nullptr if there isn't one
@@ -538,6 +539,38 @@ public:
     void zeroAllAxes();
     void setManualAxisPosition(int axisNumber, double mm);
     void manualAxisHalf(int axisNumber);
+    // A manual axis's position in a memory slot (in mm, from its own zero),
+    // or nothing if it isn't set (or there's no such axis). Zeroing, setting
+    // or halving the axis clears its slots, as for the motorised axes, as
+    // does losing its readings (and so its zero)
+    std::optional<double> getManualAxisMemory(int axisNumber, std::size_t slot) const;
+    // Stores where it is in the current slot (warning if it has no reading)
+    void manualAxisStorePosition(int axisNumber);
+    void clearCurrentManualMemorySlot(int axisNumber);
+    // Going to a manual axis's current slot: there's no motor, so the user
+    // winds it there, with the distance to go shown meanwhile (see
+    // manualAxisGoTo()). Nothing blocks, and other axes may move at the same
+    // time. Warns if the slot's empty or there's no reading
+    void manualAxisGoToCurrentMemory(int axisNumber);
+    // Whether going to a slot on every axis (\ then Enter) includes this
+    // manual axis (Axis3InSlotGoTo; e.g. not the mill's Z, which the user
+    // won't move while X is moving)
+    bool manualAxisInSlotGoTo(int axisNumber) const;
+    // A manual axis's go-to, while the user winds it there. It ends once the
+    // reading has settled within two counts of the target (as close as the
+    // scale can tell, with the reading flickering by a count), or when
+    // cancelled (Space, Esc, or its origin changing)
+    struct ManualAxisGoTo {
+        double targetMm { 0.0 };
+        // The target less where it is now
+        double toGoMm { 0.0 };
+        // Past the target, the way it was being wound
+        bool past { false };
+        // Within two counts of it, waiting for the reading to settle
+        bool there { false };
+    };
+    std::optional<ManualAxisGoTo> manualAxisGoTo(int axisNumber) const;
+    void cancelManualAxisGoTos();
 #ifdef FAKE
     // Moves a manual axis's simulated scale (as if its handle were wound),
     // to a position in mm from where the simulated scale started
@@ -750,7 +783,19 @@ private:
     std::array<std::atomic<double>, LAST_MANUAL_AXIS - FIRST_MANUAL_AXIS + 1> m_fakeManualAxisMm {};
 #endif
     // Axes 3 and 4, if they're manual axes (see manualAxis())
-    std::array<std::unique_ptr<ManualAxis>, LAST_MANUAL_AXIS - FIRST_MANUAL_AXIS + 1> m_manualAxes;
+    static constexpr std::size_t MANUAL_AXES = LAST_MANUAL_AXIS - FIRST_MANUAL_AXIS + 1;
+    std::array<std::unique_ptr<ManualAxis>, MANUAL_AXES> m_manualAxes;
+    // Their memory slots (see getManualAxisMemory())
+    std::array<std::vector<std::optional<double>>, MANUAL_AXES> m_manualMemory;
+    // Each one's originChanges() when last seen (see checkManualAxes())
+    std::array<int, MANUAL_AXES> m_manualOriginsSeen {};
+    // Their go-tos under way (see manualAxisGoTo()): the target, and which
+    // way it was to be wound (+1 or -1)
+    struct ManualGoToTarget {
+        double targetMm { 0.0 };
+        double direction { 1.0 };
+    };
+    std::array<std::optional<ManualGoToTarget>, MANUAL_AXES> m_manualGoTos;
     // While measuring the backlash (see axis1MeasureBacklash())
     std::optional<BacklashMeasurement> m_backlashMeasurement;
     // The scale's settleCount() when the measurement's last move started
@@ -997,6 +1042,10 @@ private:
     // Creates the manual axes (axes 3 and 4), if the config has them
     void configureManualAxes();
     ManualAxis* manualAxisOrWarn(int axisNumber);
+    // Called from checkStatus(): clears a manual axis's memory slots (and
+    // cancels its go-to) when its origin changes, and ends each go-to once
+    // it's there
+    void checkManualAxes();
     // Called from checkStatus(): records each move's reading once the scale
     // has settled, and starts the next move, or reports the result
     void advanceBacklashMeasurement();

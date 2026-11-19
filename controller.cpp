@@ -335,6 +335,7 @@ void Controller::processKeyPress()
         if ((k & ~key::JOYSTICK) == key::SPACE) {
             MGOLOG("Stopping all motors: Space during a motion sequence");
             m_model->stopAllMotors();
+            m_model->cancelManualAxisGoTos();
             m_heldKeys.clear();
         } else if (k != key::None) {
             m_heldKeys.push_back(k);
@@ -535,6 +536,32 @@ void Controller::processKey(int t)
                 {
                     m_model->axis1StorePosition();
                     m_model->axis2StorePosition();
+                    // (Every axis is stored: a manual axis with no reading
+                    // keeps what it had)
+                    for (int n = Model::FIRST_MANUAL_AXIS; n <= Model::LAST_MANUAL_AXIS; ++n) {
+                        const ManualAxis* axis = m_model->manualAxis(n);
+                        if (axis && axis->hasReading()) {
+                            m_model->manualAxisStorePosition(n);
+                        }
+                    }
+                    break;
+                }
+            case key::a3_m:
+            case key::a4_m:
+                {
+                    m_model->manualAxisStorePosition(kp == key::a3_m ? 3 : 4);
+                    break;
+                }
+            case key::a3_ENTER:
+            case key::a4_ENTER:
+                {
+                    m_model->manualAxisGoToCurrentMemory(kp == key::a3_ENTER ? 3 : 4);
+                    break;
+                }
+            case key::a3_DELETE:
+            case key::a4_DELETE:
+                {
+                    m_model->clearCurrentManualMemorySlot(kp == key::a3_DELETE ? 3 : 4);
                     break;
                 }
             case key::a2_ENTER:
@@ -546,6 +573,14 @@ void Controller::processKey(int t)
                 {
                     m_model->axis1GoToCurrentMemory();
                     m_model->axis2GoToCurrentMemory();
+                    // The manual axes in the go-to (e.g. the mill's Y, but not
+                    // its Z) are wound there at the same time, if they're set
+                    for (int n = Model::FIRST_MANUAL_AXIS; n <= Model::LAST_MANUAL_AXIS; ++n) {
+                        if (m_model->manualAxisInSlotGoTo(n)
+                            && m_model->getManualAxisMemory(n, m_model->getCurrentMemorySlot())) {
+                            m_model->manualAxisGoToCurrentMemory(n);
+                        }
+                    }
                     break;
                 }
             case key::ENTER:
@@ -1332,6 +1367,7 @@ void Controller::processKey(int t)
                     // Cancel any retract as well
                     m_model->setIsAxis2Retracted(false);
                     m_model->changeMode(Mode::None);
+                    m_model->cancelManualAxisGoTos();
                     break;
                 }
             case key::h:
@@ -1417,6 +1453,9 @@ void Controller::processKey(int t)
                 {
                     m_model->clearCurrentMemorySlot(Axis::Axis1);
                     m_model->clearCurrentMemorySlot(Axis::Axis2);
+                    for (int n = Model::FIRST_MANUAL_AXIS; n <= Model::LAST_MANUAL_AXIS; ++n) {
+                        m_model->clearCurrentManualMemorySlot(n);
+                    }
                     break;
                 }
             default: // e.g. key::SPACE to stop all motors
@@ -1426,6 +1465,11 @@ void Controller::processKey(int t)
                         MGOLOG("Stopping all motors: key " << kp);
                     }
                     m_model->stopAllMotors();
+                    // (Only Space ends a go-to on a manual axis: not a stray
+                    // key, e.g. from the gamepad)
+                    if ((kp & ~key::JOYSTICK) == key::SPACE) {
+                        m_model->cancelManualAxisGoTos();
+                    }
                     break;
                 }
         }

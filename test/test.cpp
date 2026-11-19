@@ -2614,7 +2614,8 @@ TEST_CASE("Commands: the manual axes (e.g. the mill's Y and Z)")
           { "Axis4Label", "Z" },
           { "Axis4Leader", "122" },
           { "Axis1Label", "X" },
-          { "Axis1Leader", "120" } });
+          { "Axis1Leader", "120" },
+          { "Axis2Label", "A" } });
     const auto commands = mgo::buildCommands(config);
     const auto keysFor = [&commands](mgo::KeyMode mode) {
         std::set<int> keys;
@@ -2623,12 +2624,24 @@ TEST_CASE("Commands: the manual axes (e.g. the mill's Y and Z)")
         }
         return keys;
     };
+    // (Zero, set and halve, and its memory slot: store, go to and clear)
     REQUIRE(
         keysFor(mgo::KeyMode::Axis3)
-        == std::set<int> { mgo::key::a3_z, mgo::key::a3_s, mgo::key::a3_h });
+        == std::set<int> { mgo::key::a3_z,
+                           mgo::key::a3_s,
+                           mgo::key::a3_h,
+                           mgo::key::a3_m,
+                           mgo::key::a3_ENTER,
+                           mgo::key::a3_DELETE });
     REQUIRE(
         keysFor(mgo::KeyMode::Axis4)
-        == std::set<int> { mgo::key::a4_z, mgo::key::a4_s, mgo::key::a4_h });
+        == std::set<int> { mgo::key::a4_z,
+                           mgo::key::a4_s,
+                           mgo::key::a4_h,
+                           mgo::key::a4_m,
+                           mgo::key::a4_ENTER,
+                           mgo::key::a4_DELETE });
+
     REQUIRE(!keysFor(mgo::KeyMode::Axis1).contains(mgo::key::a3_z));
     REQUIRE(mgo::shortcutText(mgo::key::a3_z, config) == "y z");
     REQUIRE(mgo::shortcutText(mgo::key::a4_h, config) == "z h");
@@ -2640,6 +2653,10 @@ TEST_CASE("Commands: the manual axes (e.g. the mill's Y and Z)")
     };
     REQUIRE(described(mgo::key::a3_h) == "Halve Y (to find a centre)");
     REQUIRE(described(mgo::key::a4_z) == "Zero Z");
+    REQUIRE(mgo::followUpKeyName(mgo::key::a3_ENTER) == mgo::followUpKeyName(mgo::key::a1_ENTER));
+    // (Z isn't left out of going to a slot by this config)
+    REQUIRE(described(mgo::key::aAll_ENTER) == "Go to slot: X, A, Y and Z");
+    REQUIRE(described(mgo::key::m) == "Store every axis in slot");
     // \ z zeroes them too
     REQUIRE(described(mgo::key::aAll_z) == "Zero all axes");
     // Without manual axes, it's the two motorised ones

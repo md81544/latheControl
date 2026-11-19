@@ -1927,8 +1927,9 @@ change.
     - The `Axis1*` / `Axis2*` config keys stay as they are; the new axes
       are `Axis3*` and `Axis4*` on the mill
     - **Done (18 Nov 2026), the first part of stage 1, not yet tried on the
-      mill:** Y and Z as DRO lines, with zero, set and half. Not yet the
-      go-to prompt, memory slots, or a settled/steady reading (which the
+      mill:** Y and Z as DRO lines, with zero, set and half. Not yet (see
+      below for those, done since) the go-to prompt, memory slots, or a
+      settled/steady reading (which the
       go-to prompt and the modes will need)
         - `Axis3Kind` / `Axis4Kind` = manual (none by default), with a label,
           a leader key (none by default; y and z on the mill), and the same
@@ -1970,6 +1971,25 @@ change.
       few tens of microns of the plan in each dimension, so the nominal
       counts per mm look right, though they haven't been calibrated against
       a known move yet. No clashes with the y and z leader keys seen
+    - **Done (19 Nov 2026), the rest of stage 1, not yet tried on the
+      mill:** memory slots for the manual axes, and going to them by hand.
+      `M` stores every axis; a manual axis's leader then `m`, `Enter` and
+      `Delete` store, go to and clear it alone. Going to a slot shows the
+      distance to wind on the axis's own line ("to 12.50: 0.34 to go", red
+      once past), and ends once the reading has settled within two counts
+      of the target (`ManualAxis::isSettled()`: within a count, as it
+      flickers, for `Axis3ScaleSettleMs`, 1500 on the mill). Nothing blocks:
+      `\` then `Enter` moves X and A while Y is wound, and Space or Esc
+      cancels. `Axis4InSlotGoTo = false` leaves the mill's Z out of `\`
+      then `Enter`, as decided (z then Enter still goes to Z's alone).
+      Zeroing, setting or halving a manual axis clears its slots, as for the
+      motorised axes (positions from the old zero would be somewhere else),
+      as does losing its readings. On the mill, the memory rows are a
+      little smaller, to fit Y's and Z's above the mode's lines. Plain
+      Enter still goes to axis 1's slot alone, as before. Not done: a sound
+      when a manual go-to arrives (the line just clears), and the multi-pass
+      dialog doesn't use the manual axes' slots yet (stage 3). Stage 2
+      (moving X and A onto the same abstraction) is next
 - [x] `axis.cpp` / `axis.h` are compiled but unused, and their `mgo::Axis`
       class clashes in name with `enum class mgo::Axis` in model.h
     - **Done:** removed (they're in git's history, if the "array of axes"

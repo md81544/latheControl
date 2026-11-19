@@ -472,8 +472,18 @@ struct ViewQt::Impl {
         TextItem units;
         // "no reading", if it hasn't one
         TextItem status;
+        // While going to a memory slot: the distance to wind it (see
+        // Model::manualAxisGoTo())
+        TextItem goTo;
     };
     std::vector<ManualAxisLine> manualAxisLines;
+    // A manual axis's row of memory slots
+    struct ManualMemoryRow {
+        int axisNumber { 0 };
+        TextItem label;
+        std::vector<TextItem> values;
+    };
+    std::vector<ManualMemoryRow> manualMemoryRows;
 
     // Text items which are displayed sometimes:
     TextItem mode;
@@ -613,6 +623,7 @@ void ViewQt::initialise(const Model& model)
             line.position = make(MANUAL_AXIS_POSITION_X, manualAxisY, MANUAL_AXIS_SIZE, GREEN);
             line.units = make(430, manualAxisY + 15, 30, QColor(0, 127, 0));
             line.status = make(550, manualAxisY + 20, 20, QColor(209, 209, 50));
+            line.goTo = make(550, manualAxisY + 10, 30, YELLOW);
             d.manualAxisLines.push_back(line);
             manualAxisY += 50;
         }
@@ -624,20 +635,41 @@ void ViewQt::initialise(const Model& model)
     d.rpmUnits = make(430, 160, 30, QColor(0, 127, 0));
     d.rpmUnits.text = "rpm";
 
-    // Memory banks
-    constexpr float MEMORY_Y = 250;
+    // Memory banks. With manual axes, a row for each of them too, so the
+    // rows are a little smaller and closer, to fit above the mode's lines
     const QColor grey(128, 128, 128);
+    const bool manualRows = !d.manualAxisLines.empty();
+    const float memoryY = manualRows ? 232.f : 250.f;
+    const int memorySize = manualRows ? 25 : 30;
+    const float rowGap = manualRows ? 26.f : 30.f;
+    // (The values, 9 characters, right-aligned under each slot's label)
+    const float columnWidth = 180.f;
+    const float valuesX = manualRows ? 60.f + 9 * 0.6f * (30 - 25) : 60.f;
     for (unsigned n = 0; n < model.getMemorySize(); ++n) {
-        auto label = make(60.f + n * 180.f, MEMORY_Y, 30, grey);
+        auto label = make(valuesX + n * columnWidth, memoryY, memorySize, grey);
         label.text = fmt::format("    Mem {}", n + 1);
         d.memoryLabel.push_back(label);
-        d.axis1MemoryValue.push_back(make(60.f + n * 180.f, MEMORY_Y + 25, 30, grey));
-        d.axis2MemoryValue.push_back(make(60.f + n * 180.f, MEMORY_Y + 55, 30, grey));
+        d.axis1MemoryValue.push_back(
+            make(valuesX + n * columnWidth, memoryY + 25, memorySize, grey));
+        d.axis2MemoryValue.push_back(
+            make(valuesX + n * columnWidth, memoryY + 25 + rowGap, memorySize, grey));
     }
-    d.axis1MemoryLabel = make(24, MEMORY_Y + 25, 30, grey);
+    d.axis1MemoryLabel = make(24, memoryY + 25, memorySize, grey);
     d.axis1MemoryLabel.text = model.config().read("Axis1Label", "Z") + ":";
-    d.axis2MemoryLabel = make(24, MEMORY_Y + 55, 30, grey);
+    d.axis2MemoryLabel = make(24, memoryY + 25 + rowGap, memorySize, grey);
     d.axis2MemoryLabel.text = model.config().read("Axis2Label", "X") + ":";
+    float manualRowY = memoryY + 25 + 2 * rowGap;
+    for (const auto& line : d.manualAxisLines) {
+        Impl::ManualMemoryRow row;
+        row.axisNumber = line.axisNumber;
+        row.label = make(24, manualRowY, memorySize, grey);
+        row.label.text = line.label.text;
+        for (unsigned n = 0; n < model.getMemorySize(); ++n) {
+            row.values.push_back(make(valuesX + n * columnWidth, manualRowY, memorySize, grey));
+        }
+        d.manualMemoryRows.push_back(row);
+        manualRowY += rowGap;
+    }
 
     // STATUS BAR (at bottom of screen). These are where its items usually
     // go: one which is longer than usual moves those after it along (see
@@ -1356,6 +1388,9 @@ void ViewQt::updateDisplay(const Model& model)
             draw(line.position);
             draw(line.units);
             draw(line.status);
+            if (!line.goTo.text.empty()) {
+                draw(line.goTo);
+            }
         }
         if (!model.config().readBool("DisableRpm", false)) {
             draw(d.rpmLabel);
@@ -1389,6 +1424,19 @@ void ViewQt::updateDisplay(const Model& model)
             }
             if (!model.config().readBool("DisableAxis2", false)) {
                 draw(d.axis2MemoryValue.at(n));
+            }
+        }
+        for (auto& row : d.manualMemoryRows) {
+            if (!model.manualAxis(row.axisNumber)) {
+                continue;
+            }
+            const bool leader = (row.axisNumber == 3 && model.getKeyMode() == KeyMode::Axis3)
+                || (row.axisNumber == 4 && model.getKeyMode() == KeyMode::Axis4)
+                || model.getKeyMode() == KeyMode::AxisAll;
+            row.label.colour = leader ? RED : QColor(128, 128, 128);
+            draw(row.label);
+            for (const auto& value : row.values) {
+                draw(value);
             }
         }
         // Z/X labels - make red if keyMode corresponds. (As in the SFML
@@ -1551,6 +1599,41 @@ void ViewQt::Impl::updateTextFromModel(const Model& model)
         } else {
             line.position.text = "     ---";
             line.status.text = "no reading";
+        }
+        line.goTo.text.clear();
+        if (const auto goTo = model.manualAxisGoTo(line.axisNumber)) {
+            const auto value = [&](double mm) {
+                return fmt::format(
+                    "{:.{}f}",
+                    model.toDisplayUnits(line.axisNumber, mm),
+                    model.axisDecimals(line.axisNumber));
+            };
+            if (goTo->there) {
+                line.goTo.text = fmt::format("at {}: settling", value(goTo->targetMm));
+                line.goTo.colour = GREEN;
+            } else if (goTo->past) {
+                line.goTo.text = fmt::format(
+                    "to {}: {} past", value(goTo->targetMm), value(std::abs(goTo->toGoMm)));
+                line.goTo.colour = RED;
+            } else {
+                line.goTo.text = fmt::format(
+                    "to {}: {} to go", value(goTo->targetMm), value(std::abs(goTo->toGoMm)));
+                line.goTo.colour = YELLOW;
+            }
+        }
+    }
+    for (auto& row : manualMemoryRows) {
+        for (std::size_t n = 0; n < row.values.size(); ++n) {
+            row.values.at(n).colour
+                = model.getCurrentMemorySlot() == n ? QColor(255, 255, 255) : QColor(100, 100, 100);
+            const auto memory = model.getManualAxisMemory(row.axisNumber, n);
+            row.values.at(n).text = memory ? fmt::format(
+                                                 "{: >9}",
+                                                 fmt::format(
+                                                     "{:.{}f}",
+                                                     model.toDisplayUnits(row.axisNumber, *memory),
+                                                     model.axisDecimals(row.axisNumber)))
+                                           : "        -";
         }
     }
 

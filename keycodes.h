@@ -171,6 +171,12 @@ constexpr int a3_h = h + 0x8000; // halve axis 3's position (to find a centre)
 constexpr int a4_z = z + 0x20000; // zero axis 4
 constexpr int a4_s = s + 0x20000; // set axis 4's position
 constexpr int a4_h = h + 0x20000; // halve axis 4's position (to find a centre)
+constexpr int a3_m = m + 0x8000; // store axis 3 in the memory slot
+constexpr int a4_m = m + 0x20000; // store axis 4 in the memory slot
+constexpr int a3_ENTER = ENTER + 0x8000; // go to axis 3's memory slot (by hand)
+constexpr int a4_ENTER = ENTER + 0x20000; // go to axis 4's memory slot (by hand)
+constexpr int a3_DELETE = key::DELETE + 0x8000; // clear axis 3's memory slot
+constexpr int a4_DELETE = key::DELETE + 0x20000; // clear axis 4's memory slot
 
 // Commands with no shortcut of their own, chosen from the menu. The f2 names
 // are from the F2 leader key they used to follow
