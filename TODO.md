@@ -37,6 +37,9 @@
       there first (at full speed, as it's clear of the work), and the cut
       still ends at the cut's end (unit tested). See "Re-basing between
       passes" under Multi-pass
+    - **On the mill (19 Nov 2026):** not needed in a two or three hour
+      session: the automatic re-bases (at rest and between passes) covered
+      everything, including several stalls. So `XB` is still untried
 
 ### Zero all the axes, including the manual ones
 - [x] `\` then `z` ("Zero X and A" on the mill) only zeroes the two
@@ -353,6 +356,17 @@
       each return) and one without, watching lc.log for the re-bases, and
       whether the wait per pass is bearable. If it isn't, a shorter settle
       for this, or only every few passes
+    - **Tried on the mill (19 Nov 2026), paused only:** two or three hours
+      machining a mounting bracket (for the lathe's Z scale), feeding Z down
+      by hand at each pause. No lost position: the automatic re-bases
+      covered every stall. The wait wasn't intrusive (the user prefers
+      accuracy to speed anyway), but a couple of times a key did nothing
+      because it was still settling, which wasn't obvious from the status
+      line. **Wanted:** while `Settling`, a large overlay saying it's waiting
+      for X's scale (not a modal dialog: Space must still stop everything,
+      and it goes by itself once settled), and perhaps a keypress refused
+      meanwhile could say why rather than doing nothing. Not yet tried
+      without pauses
     - **Slot:** cut along X, pause (re-basing X), the user feeds Z down,
       cut back at cutting speed, pause again (re-basing X), and repeat until
       the full depth. Each end of the slot finishes on X's scale (backing
@@ -920,6 +934,19 @@
           (or a lower maximum X speed) is worth doing
     - Related idea, for sizing: after setting the measured diameter, type the
       target diameter and X moves straight to it
+- [ ] **X stalls on Alt+arrow rapids near the table's ends (mill, 19 Nov
+      2026).** Several times in a session, after moving the head well away
+      from the work (to get calipers on it), an Alt+Right rapid back towards
+      the start stalled. The scale's re-base caught each one, so no
+      position was lost. The user suspects the gibs are tighter towards the
+      ends of the table, as the stalls weren't seen in the middle. Not yet
+      known: whether it stalls at the start of the rapid (after the
+      backlash take-up, if it reversed) or once at speed. lc.log's motor
+      lines and the re-base sizes should tell. Ideas: adjust the gibs; a
+      lower rapid speed, or a gentler ramp, for X (note that rapids go at
+      800 mm/min: see the next item); a separate, slower speed for long
+      rapids. Related: "Motor stalls: stop when the driver goes into its
+      error mode", as the closed-loop driver would know at once
 - [ ] **Rapids use the maximum rpm as mm/min.** `axis1Rapid()` and
       `axis2Rapid()` set the speed to `getMaxRpm()`, and multi-pass returns
       use `cutMaxSpeed()`, which is the same, but `setSpeed()` takes
@@ -1889,6 +1916,14 @@ change.
     - **To try on the mill:** each scale's counts per mm (the nominal 2560
       per inch so far: calibrate against a known move, as for X), and that
       the y and z leader keys don't clash with anything in use
+    - **Used on the mill (19 Nov 2026)** for a whole job (a mounting
+      bracket), without TouchDRO: Y and Z zero and set worked as expected
+      (half not needed yet). The user's workflow for Z: bring the tool down
+      to the work, set Z to the work's current thickness, then machine down
+      to the thickness wanted by Z's reading. The part came out within a
+      few tens of microns of the plan in each dimension, so the nominal
+      counts per mm look right, though they haven't been calibrated against
+      a known move yet. No clashes with the y and z leader keys seen
 - [x] `axis.cpp` / `axis.h` are compiled but unused, and their `mgo::Axis`
       class clashes in name with `enum class mgo::Axis` in model.h
     - **Done:** removed (they're in git's history, if the "array of axes"
@@ -2561,6 +2596,11 @@ change.
           lock-ups over longer runs, repeat the multi-pass return stall
           test (under Multi-pass), and wire the enable pins and limit
           switches (GPIO11, GPIO16, GPIO2; see Motion and timing)
+        - **No lock-ups in two or three hours of real machining on the Pi
+          4 (19 Nov 2026)**, with the DRO reader, scales and multi-pass all
+          in use. On the 3B+, at least one would have been expected in that
+          time. Promising, but keep watching over longer runs before putting
+          it down to the 3B+ for good
         - Nine of the settles hit the 3 s limit ("still changing"): the
           reading flickers at rest sometimes, so a settled value can be a
           count out
