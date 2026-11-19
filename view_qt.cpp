@@ -499,6 +499,8 @@ struct ViewQt::Impl {
     KeyMode hintKeyMode { KeyMode::None };
     QElapsedTimer hintTimer;
     void drawLeaderHints(std::vector<DrawItem>& frame, const Model& model) const;
+    // (See settlingOverlayText())
+    void drawSettlingOverlay(std::vector<DrawItem>& frame, const Model& model) const;
 
     // The current feature (diameter and work end), when either is set
     void drawFeature(std::vector<DrawItem>& frame, const Model& model) const;
@@ -1148,6 +1150,40 @@ void ViewQt::Impl::updateToolMeasurementData(const Model& model)
     misc6.text = "Only scratch the surfaces. External tools only, so far";
 }
 
+std::vector<std::string> settlingOverlayText(const Model& model)
+{
+    if (model.multiPass().state() != MultiPass::State::Settling) {
+        return {};
+    }
+    return { fmt::format("Waiting for {}'s scale", model.config().read("Axis1Label", "Z")),
+             "to settle before the next cut",
+             "(Space stops)" };
+}
+
+void ViewQt::Impl::drawSettlingOverlay(std::vector<DrawItem>& frame, const Model& model) const
+{
+    const auto lines = settlingOverlayText(model);
+    if (lines.empty()) {
+        return;
+    }
+    // A box in the middle of the display, over the axes, but not a dialog:
+    // keys still work (Space stops), and it goes by itself once settled
+    constexpr float width = 800.f;
+    constexpr float height = 200.f;
+    constexpr float x = (LOGICAL_WIDTH - width) / 2.f;
+    constexpr float y = (LOGICAL_HEIGHT - height) / 2.f;
+    frame.push_back(RectItem { QRectF(x, y, width, height), QColor(40, 40, 0), YELLOW });
+    // Each line centred (the font's characters are 0.6 of its size wide)
+    const auto centred = [&](const std::string& text, float top, int size, QColor colour) {
+        const float textWidth = 0.6f * static_cast<float>(size * text.size());
+        frame.push_back(
+            TextItem { QPointF(x + (width - textWidth) / 2.f, top), size, colour, text, true });
+    };
+    centred(lines.at(0), y + 25.f, 50, YELLOW);
+    centred(lines.at(1), y + 90.f, 40, YELLOW);
+    centred(lines.at(2), y + 145.f, 26, QColor(200, 200, 200));
+}
+
 void ViewQt::Impl::drawLeaderHints(std::vector<DrawItem>& frame, const Model& model) const
 {
     // In the same place as the menu
@@ -1378,6 +1414,7 @@ void ViewQt::updateDisplay(const Model& model)
         draw(d.misc4);
         draw(d.misc5);
         draw(d.misc6);
+        d.drawSettlingOverlay(frame, model);
         d.fault.text = model.getFaultMessage();
         if (!d.fault.text.empty()) {
             d.fault.colour = ++d.faultIteration % 6 < 3 ? RED : YELLOW;

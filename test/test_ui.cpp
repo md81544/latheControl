@@ -2397,8 +2397,16 @@ TEST_CASE("UI: Space stops a multi-pass waiting for the scale to settle", "[timi
     ScaleTestModel t({ { "Axis1ScaleRebaseBetweenPasses", "true" } });
     REQUIRE(t.runUntil([&] { return t.model.axis1ScaleIsSteady(); }));
     startMultiPass(t, false);
+    REQUIRE(mgo::settlingOverlayText(t.model).empty());
     REQUIRE(t.runUntil([&] { return multiPassIn(t.model, mgo::MultiPass::State::Settling); }));
+    // An overlay says why keys do nothing meanwhile
+    const auto overlay = mgo::settlingOverlayText(t.model);
+    REQUIRE(!overlay.empty());
+    REQUIRE(overlay.front() == "Waiting for Z's scale");
+    t.controller.tick();
+    snapshot(mainWindow(), "settling_overlay");
     t.model.stopAllMotors();
+    REQUIRE(mgo::settlingOverlayText(t.model).empty());
     REQUIRE(!t.model.multiPass().inProgress());
 }
 

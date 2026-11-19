@@ -9,6 +9,8 @@
 
 namespace mgo {
 
+class Model;
+
 // Qt implementation of the view. Qt types are kept out of this header (they
 // live in the implementation, view_qt.cpp), so the rest of the program doesn't
 // depend on Qt.
@@ -69,5 +71,10 @@ private:
 // moved along to leave gap after that one. Given each item's usual x and its
 // width, in order; returns each one's x
 std::vector<float> lineUpItems(const std::vector<std::pair<float, float>>& items, float gap);
+
+// While a multi-pass waits for axis 1's scale to settle before a cut (see
+// IMultiPassMachine::cutReady()), the lines of the overlay shown over the
+// display, so it's clear why keys do nothing meanwhile; otherwise empty
+std::vector<std::string> settlingOverlayText(const Model& model);
 
 } // namespace mgo

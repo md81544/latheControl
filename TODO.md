@@ -367,6 +367,12 @@
       and it goes by itself once settled), and perhaps a keypress refused
       meanwhile could say why rather than doing nothing. Not yet tried
       without pauses
+    - **Done (19 Nov 2026), not yet seen on the mill:** a box in the
+      middle of the display while `Settling` ("Waiting for X's scale / to
+      settle before the next cut / (Space stops)"), drawn over the display
+      rather than as a dialog, so keys still go through and it goes by
+      itself. Refused keys still do nothing, without saying so: the box
+      should be explanation enough
     - **Slot:** cut along X, pause (re-basing X), the user feeds Z down,
       cut back at cutting speed, pause again (re-basing X), and repeat until
       the full depth. Each end of the slot finishes on X's scale (backing
