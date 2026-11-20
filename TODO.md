@@ -125,7 +125,8 @@
           full, so the monitor doesn't mute its own audio while the sink is
           idle. lc can just play its sounds when needed, with no stream
           held open
-        - Still to do: the same config on the mill
+        - The same config is on the mill too (done by the user, noted
+          2026-11-20)
 
 ### Make the interface less cryptic
 - [ ] A modification to recent changes:
