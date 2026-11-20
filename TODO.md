@@ -2216,6 +2216,42 @@ change.
           approaching again as a finishing move does; the re-base after it
           catches what's left, within the three tries. **To try on the
           lathe**, once X has its scale. This completes stage 2
+        - **Then (20 Nov 2026), approaching on the scale** (the user's
+          question: could an overshoot cut what it shouldn't? Yes, where the
+          tool is in the work, e.g. finishing at a pocket's end wall on the
+          mill; a correction afterwards can't undo it. The feed is normally
+          clear of the work, with Z off the end, but correcting an
+          overshoot by reversing leaves the slack the wrong way, so the cut
+          can push the tool out, and a pass starting inside the material
+          would plunge too deep). An overshoot comes from momentum at a stop
+          from speed, and from the backlash compensation on a reversal (a
+          fixed 820 steps on the mill's X, where the backlash is 0.31-0.45
+          mm). So, with `AxisNScaleApproachMm` (off unless set) and
+          `AxisNScaleApproachSpeed` (20 if not set): a move finished on the
+          scale stops that far short, waits for the scale, then creeps the
+          rest the same way (not counted as a correction; a move shorter
+          than the approach creeps all the way; backing off after going
+          past returns to the approach's start, then creeps). The creep's
+          speed is put back afterwards, as a stop from it would leave it
+          (`speedAfterStop()`, so a fast go-to still ends at
+          `AxisNSpeedResetTo`). The multi-pass feed (axis 2, with
+          `Axis2ScaleRebaseBetweenPasses`) does the same inside the Model
+          (`FeedApproach`: back off if past, move short, wait for the scale
+          and re-base, creep in), with `feedMoving()` true throughout, so
+          the multi-pass sees one feed; this also replaces the reversing
+          correction noted as not done above. Only the feed before a pass,
+          not a radius's path. On for the mill's X at 0.2 mm and 20 mm/min
+          (the user's choice), **not yet tried on the mill**. Tests: with
+          the table running 0.05 mm ahead of the motor, a go-to's scale
+          never reads past the target with the approach, and does (by more
+          than 0.04) without; a short move creeps all the way; and a
+          multi-pass whose X table gets 0.03 mm ahead at the last feed never
+          goes deeper than the depth with it, and does (by more than 0.02)
+          without. Still to do, as a follow-up: a multi-pass cut's end in Z
+          (e.g. into a shoulder) isn't checked against the scale, and the
+          cut starts with a reversal from the return, so the backlash
+          compensation's error shifts where it ends; it would want to stop
+          short and creep in too
 - [x] `axis.cpp` / `axis.h` are compiled but unused, and their `mgo::Axis`
       class clashes in name with `enum class mgo::Axis` in model.h
     - **Done:** removed (they're in git's history, if the "array of axes"

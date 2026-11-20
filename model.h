@@ -869,6 +869,19 @@ private:
         double approachMm { 0.0 };
         // The scale's settleCount() when its last move started
         int settles { 0 };
+        // Stopped short of the target, by AxisNScaleApproachMm, for the
+        // rest to be crept (see prepareFinish())
+        bool approaching { false };
+        // The speed before creeping (at AxisNScaleApproachSpeed), to go back
+        // to after
+        std::optional<double> speedBeforeCreep;
+    };
+    // Where a positioning move which is to finish on the scale goes first
+    // (see prepareFinish())
+    struct FinishStart {
+        long firstStep { 0 };
+        // The motor's speed before (if the whole move creeps, it's changed)
+        double speed { 0.0 };
     };
     // A motorised axis's scale, if it has one, and its checks against the
     // motor (see checkScaleAtRest())
@@ -1157,14 +1170,38 @@ private:
     // moving it
     void rebaseIfApart(int axisNumber, const char* why);
 
-    // After a positioning move of an axis to step has started: finish it on
-    // the axis's scale, if that's on and can be done now
-    void startFinish(int axisNumber, long step);
+    // Whether an axis's positioning moves finish on its scale now (see
+    // finishesOnScale())
+    bool finishApplies(int axisNumber) const;
+    // The approach (AxisNScaleApproachMm, off unless set, and
+    // AxisNScaleApproachSpeed): a move which is to finish on the scale, or a
+    // multi-pass's feed which is to be re-based (see feedReady()), stops
+    // this far short of its target, waits for the scale, then creeps the
+    // rest at this speed, the same way. So the last of it never reverses
+    // (so neither the backlash compensation nor its error comes into it),
+    // has next to no momentum to carry it past, and leaves the slack taken
+    // up the way the tool goes into the work. An overshoot into the work
+    // can't be undone by a correction afterwards
+    double scaleApproachMm(int axisNumber) const;
+    double scaleApproachSpeed(int axisNumber) const;
+    // The speed an axis's motor is left at after a move at this speed has
+    // stopped: AxisNSpeedResetTo, if it was at or above AxisNSpeedResetAbove
+    // (see checkStatus()), so a fast move ending with a creep still leaves
+    // it slow
+    double speedAfterStop(int axisNumber, double speed) const;
+    // Before a positioning move of an axis to step: where it should go first,
+    // if it's to finish on the scale with an approach (the approach short of
+    // step; or step, at the approach speed, if it's closer than that)
+    FinishStart prepareFinish(int axisNumber, long step);
+    // After the move has started (to start.firstStep): finish it on the
+    // axis's scale, if that's on and can be done now
+    void startFinish(int axisNumber, long step, const FinishStart& start);
     // Called from checkStatus(): each time the scale settles, corrects or
     // finishes
     void advanceFinish(int axisNumber);
-    // Starts one of its moves, to a position (in mm)
-    void finishMove(int axisNumber, double position);
+    // Starts one of its moves, to a position (in mm), creeping (at the
+    // approach speed) or at the speed it was at
+    void finishMove(int axisNumber, double position, bool creep);
     void endFinish(int axisNumber, const std::string& why);
     // Logs a motor starting or stopping, with where it was, where it's going,
     // and how fast, for diagnosing problems from lc.log. It's called on each
@@ -1198,6 +1235,33 @@ private:
     // re-bases it, so the pass is cut at the depth the scale says (the
     // multi-pass feeds again if the re-base leaves it short or past)
     bool feedReady() override;
+    // A multi-pass's feed with an approach (see scaleApproachMm()): moving
+    // short of the depth (backing off first, if past it), waiting for the
+    // scale and re-basing, then creeping the rest. feedMoving() is true
+    // until it's done
+    struct FeedApproach {
+        enum class Phase {
+            BackingOff,
+            MovingShort,
+            Settling,
+            Creeping
+        };
+        Phase phase { Phase::MovingShort };
+        // In the motor's frame (re-basing keeps the same as the scale's)
+        double targetMm { 0.0 };
+        // +1 or -1: the way the feed goes in (from feedStart to feedEnd)
+        int direction { 1 };
+        // The scale's settleCount() when the move short started
+        int settles { 0 };
+        double speedBeforeCreep { 0.0 };
+    };
+    std::optional<FeedApproach> m_feedApproach;
+    // Whether the feed now is to approach (Axis2ScaleApproachMm, with
+    // Axis2ScaleRebaseBetweenPasses, as for feedReady())
+    bool feedApproaches() const;
+    // Called from checkStatus(): moves the feed's approach on
+    void advanceFeedApproach();
+    void endFeedApproach();
     bool cutMoving() const override;
     void cutMoveTo(double position, double feedFollows) override;
     double cutSpeed() const override;

@@ -2665,6 +2665,51 @@ TEST_CASE("UI: re-basing axis 2 after each feed of a multi-pass", "[timing]")
     REQUIRE(std::abs(*t.model.scaleDifferenceMm(2)) < 0.011);
 }
 
+TEST_CASE("UI: a multi-pass's feed approaches its depth, never going past it", "[timing]")
+{
+    // As the last pass's feed starts, X's table gets 0.03mm ahead of its
+    // motor, into the work (as an offset: the re-base then takes it out). Fed
+    // straight to the depth, it goes 0.03 too deep, before the re-base brings
+    // it back out (leaving the slack the wrong way)
+    const bool approach = GENERATE(false, true);
+    INFO((approach ? "With an approach" : "Without"));
+    std::map<std::string, std::string> settings { { "Axis2ScaleRebaseBetweenPasses", "true" } };
+    if (approach) {
+        settings.insert(
+            { { "Axis2ScaleApproachMm", "0.05" }, { "Axis2ScaleApproachSpeed", "20" } });
+    }
+    ScaleTestModel t(withAxis2Scale(settings));
+    REQUIRE(t.runUntil([&] { return t.model.scaleIsSteady(1) && t.model.scaleIsSteady(2); }));
+    startMultiPass(t, false);
+    const double depth = t.model.multiPass().plan().feedEnd;
+    const int in = depth < t.model.multiPass().plan().feedStart ? -1 : 1;
+    bool shifted = false;
+    double deepest = 0.0;
+    REQUIRE(t.runUntil([&] {
+        if (!shifted && t.model.multiPass().pass() == 2
+            && multiPassIn(t.model, mgo::MultiPass::State::Feeding)) {
+            t.model.fakeScale(2)->setErrorMm(0.03 * in);
+            shifted = true;
+        }
+        if (const auto x = t.model.scalePositionMm(2)) {
+            deepest = std::max(deepest, *x * in);
+        }
+        return !t.model.multiPass().inProgress();
+    }));
+    INFO("Stopped: " << t.model.multiPass().message() << " / " << t.model.getWarning());
+    REQUIRE(t.model.multiPass().state() == mgo::MultiPass::State::Finished);
+    REQUIRE(shifted);
+    REQUIRE(t.runUntil([&] { return t.model.scaleIsSteady(2); }));
+    REQUIRE(*t.model.scalePositionMm(2) == Approx(depth).margin(0.011));
+    if (approach) {
+        REQUIRE(deepest < depth * in + 0.011);
+    } else {
+        REQUIRE(deepest > depth * in + 0.02);
+    }
+    // (The feed's speed is put back after creeping)
+    REQUIRE(t.model.motorSpeed(2) == Approx(100.0));
+}
+
 TEST_CASE("UI: Space stops a multi-pass waiting for the scale to settle", "[timing]")
 {
     ScaleTestModel t({ { "Axis1ScaleRebaseBetweenPasses", "true" } });
@@ -3186,6 +3231,62 @@ TEST_CASE("UI: finishing moves on the scale")
             return !t.model.isMotorRunning(1) && std::abs(t.model.motorPosition(1) - 0.95) < 0.011;
         }));
     }
+}
+
+TEST_CASE("UI: finishing on the scale with an approach never goes past the target")
+{
+    // The table runs 0.05mm ahead of the motor's steps (as on the mill, where
+    // the backlash is less than its compensation): a go-to straight there
+    // would end past it, e.g. into a pocket's end wall
+    const bool approach = GENERATE(false, true);
+    INFO((approach ? "With an approach" : "Without"));
+    std::map<std::string, std::string> settings { { "Axis1ScaleFinishMoves", "true" } };
+    if (approach) {
+        settings.insert({ { "Axis1ScaleApproachMm", "0.2" }, { "Axis1ScaleApproachSpeed", "20" } });
+    }
+    ScaleTestModel t(settings);
+    REQUIRE(t.runUntil([&] { return t.model.scaleIsSteady(1); }));
+    t.model.fakeScale(1)->setErrorMm(0.05);
+    t.model.goToPosition(1, 1.0);
+    REQUIRE(t.model.isFinishingOnScale(1));
+    double furthest = 0.0;
+    bool crept = false;
+    REQUIRE(t.runUntil([&] {
+        furthest = std::max(furthest, t.model.scalePositionMm(1).value_or(0.0));
+        crept = crept || (t.model.isMotorRunning(1) && t.model.motorSpeed(1) == Approx(20.0));
+        const auto scale = t.model.scalePositionMm(1);
+        return !t.model.isFinishingOnScale(1) && !t.model.isMotorRunning(1) && scale
+            && std::abs(*scale - 1.0) < 0.011;
+    }));
+    REQUIRE(t.model.getWarning().empty());
+    if (approach) {
+        // Stopped 0.2 short, then crept the rest: never past it
+        REQUIRE(crept);
+        REQUIRE(furthest < 1.011);
+    } else {
+        REQUIRE(furthest > 1.04);
+    }
+    // Either way the speed ends as a stop from it leaves it (Axis1SpeedPreset2,
+    // 600, reset to 40 on stopping)
+    REQUIRE(t.model.motorSpeed(1) == Approx(40.0));
+}
+
+TEST_CASE("UI: a move closer than the approach creeps all the way")
+{
+    ScaleTestModel t(
+        { { "Axis1ScaleFinishMoves", "true" },
+          { "Axis1ScaleApproachMm", "0.2" },
+          { "Axis1ScaleApproachSpeed", "20" } });
+    REQUIRE(t.runUntil([&] { return t.model.scaleIsSteady(1); }));
+    t.model.setMotorSpeed(1, 60.0);
+    t.model.goToPosition(1, 0.1);
+    REQUIRE(t.model.isMotorRunning(1));
+    REQUIRE(t.model.motorSpeed(1) == Approx(20.0));
+    REQUIRE(
+        t.runUntil([&] { return !t.model.isFinishingOnScale(1) && !t.model.isMotorRunning(1); }));
+    REQUIRE(*t.model.scalePositionMm(1) == Approx(0.1).margin(0.011));
+    // (Back to its speed, which is below the reset)
+    REQUIRE(t.model.motorSpeed(1) == Approx(60.0));
 }
 
 TEST_CASE("UI: finishing axis 2's moves on its scale")

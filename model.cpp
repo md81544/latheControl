@@ -397,6 +397,7 @@ void Model::checkStatus()
     checkScaleAtRest(2);
     advanceFinish(1);
     advanceFinish(2);
+    advanceFeedApproach();
 
     if (const auto diameter = getDiameterMm()) {
         m_generalStatus = fmt::format(
@@ -795,6 +796,7 @@ void Model::stopAllMotors()
             endFinish(n, "stopped");
         }
     }
+    endFeedApproach();
     // (After stopping, so a sequence's end, e.g. restoring a nudge's speed,
     // doesn't race with a move it started)
     m_motionSequence.cancel();
@@ -1197,9 +1199,10 @@ void Model::axis1GoToPosition(double pos)
         return;
     }
     const long step = std::lround(pos / motor(1)->getConversionFactor());
-    axis1GoToStep(step);
     // (With a scale: see finishesOnScale(1))
-    startFinish(1, step);
+    const FinishStart start = prepareFinish(1, step);
+    axis1GoToStep(start.firstStep);
+    startFinish(1, step, start);
     if (std::abs(pos) < 0.00001) {
         // Round to zero for display purposes, just to
         // avoid having "-0.000" displayed
@@ -1229,10 +1232,11 @@ void Model::axis1GoToCurrentMemory()
     }
     stopAxis(1);
     axisState(1).status = "returning";
-    // (If threading, this waits for zero degrees on the chuck before starting)
-    axis1GoToStep(*step);
     // (With a scale: see finishesOnScale(1))
-    startFinish(1, *step);
+    const FinishStart start = prepareFinish(1, *step);
+    // (If threading, this waits for zero degrees on the chuck before starting)
+    axis1GoToStep(start.firstStep);
+    startFinish(1, *step, start);
 }
 
 void Model::axis1Zero()
@@ -1276,9 +1280,10 @@ void Model::axis2GoToPosition(double pos)
     }
     // (As the motor's goToPosition() rounds it)
     const long step = std::lround(pos / motor(2)->getConversionFactor());
-    motor(2)->goToStep(step);
     // (With a scale: see finishesOnScale(2))
-    startFinish(2, step);
+    const FinishStart start = prepareFinish(2, step);
+    motor(2)->goToStep(start.firstStep);
+    startFinish(2, step, start);
     axisState(2).status = fmt::format("Going to {:.3f}", pos);
 }
 
@@ -1364,9 +1369,10 @@ void Model::axis2GoToCurrentMemory()
     }
     stopAxis(2);
     axisState(2).status = "returning";
-    motor(2)->goToStep(*step);
     // (With a scale: see finishesOnScale(2))
-    startFinish(2, *step);
+    const FinishStart start = prepareFinish(2, *step);
+    motor(2)->goToStep(start.firstStep);
+    startFinish(2, *step, start);
 }
 
 bool Model::axis2CanRetract() const
@@ -3228,24 +3234,88 @@ bool Model::isFinishingOnScale(int axisNumber) const
     return scaleState(axisNumber).finish.has_value();
 }
 
-void Model::startFinish(int axisNumber, long step)
+bool Model::finishApplies(int axisNumber) const
 {
+    return scaleState(axisNumber).finishOnScale && scale(axisNumber)
+        && scale(axisNumber)->isAligned() && (m_mode == Mode::None || m_mode == Mode::GearCutting)
+        && !m_multiPass.inProgress();
+}
+
+double Model::scaleApproachMm(int axisNumber) const
+{
+    return std::max(
+        0.0, m_config.readDouble(fmt::format("Axis{}ScaleApproachMm", axisNumber), 0.0));
+}
+
+double Model::scaleApproachSpeed(int axisNumber) const
+{
+    return m_config.readDouble(fmt::format("Axis{}ScaleApproachSpeed", axisNumber), 20.0);
+}
+
+double Model::speedAfterStop(int axisNumber, double speed) const
+{
+    // (As checkStatus() does, each axis as it always has: axis 1's above
+    // the limit, axis 2's at or above it)
+    const double above = m_config.readDouble(
+        fmt::format("Axis{}SpeedResetAbove", axisNumber), axisNumber == 1 ? 100.0 : 80.0);
+    const bool resets = axisNumber == 1 ? speed > above : speed >= above;
+    return resets
+        ? m_config.readDouble(
+              fmt::format("Axis{}SpeedResetTo", axisNumber), axisNumber == 1 ? 40.0 : 20.0)
+        : speed;
+}
+
+Model::FinishStart Model::prepareFinish(int axisNumber, long step)
+{
+    StepperMotor* m = motor(axisNumber);
+    FinishStart start { .firstStep = step, .speed = m->getSpeed() };
+    const double margin = scaleApproachMm(axisNumber);
+    if (margin <= 0.0 || !finishApplies(axisNumber)) {
+        return start;
+    }
+    const double target = m->getPosition(step);
+    const double distance = target - m->getPosition();
+    if (std::abs(distance) > margin) {
+        const int direction = distance > 0.0 ? 1 : -1;
+        start.firstStep = std::lround((target - direction * margin) / m->getConversionFactor());
+    } else {
+        // (All of it is the approach)
+        m->setSpeed(scaleApproachSpeed(axisNumber));
+    }
+    return start;
+}
+
+void Model::startFinish(int axisNumber, long step, const FinishStart& start)
+{
+    StepperMotor* m = motor(axisNumber);
     scaleState(axisNumber).finish.reset();
-    if (!scaleState(axisNumber).finishOnScale || !scale(axisNumber)
-        || !scale(axisNumber)->isAligned() || (m_mode != Mode::None && m_mode != Mode::GearCutting)
-        || m_multiPass.inProgress()) {
+    if (!finishApplies(axisNumber)) {
         return;
     }
     // (Only if it's moving: not if refused, e.g. a locked axis, or already there)
-    if (!motor(axisNumber)->isRunning() && !isMotionSequenceRunning()) {
+    if (!m->isRunning() && !isMotionSequenceRunning()) {
+        m->setSpeed(start.speed);
         return;
     }
-    const double target = motor(axisNumber)->getPosition(step);
+    const double target = m->getPosition(step);
     scaleState(axisNumber).finish = ScaleFinish {
         .targetMm = target,
-        .direction = target >= motor(axisNumber)->getPosition() ? 1 : -1,
+        .direction = target >= m->getPosition() ? 1 : -1,
         .settles = scale(axisNumber)->settleCount(),
+        .approaching = start.firstStep != step,
     };
+    if (m->getSpeed() != start.speed) {
+        // (Creeping all the way: see prepareFinish())
+        scaleState(axisNumber).finish->speedBeforeCreep = start.speed;
+    }
+    if (start.firstStep != step) {
+        MGOLOG(
+            fmt::format(
+                "{} going to {:.4f} on the scale: stopping {:.3f} mm short first",
+                axisLabel(axisNumber),
+                target,
+                scaleApproachMm(axisNumber)));
+    }
 }
 
 void Model::advanceFinish(int axisNumber)
@@ -3255,10 +3325,13 @@ void Model::advanceFinish(int axisNumber)
         return;
     }
     ScaleFinish& f = *scaleState(axisNumber).finish;
+    const double margin = scaleApproachMm(axisNumber);
     if (f.backingOff) {
-        // (No need to wait for the scale: it's only to come back)
+        // (No need to wait for the scale: it's only to come back.) With an
+        // approach, to the approach's start, and then creep the rest
         f.backingOff = false;
-        finishMove(axisNumber, f.approachMm);
+        f.approaching = margin > 0.0;
+        finishMove(axisNumber, f.approachMm - f.direction * margin, false);
         return;
     }
     if (scale(axisNumber)->settleCount() == f.settles) {
@@ -3279,6 +3352,18 @@ void Model::advanceFinish(int axisNumber)
     // (A count is as close as the scale can tell)
     if (std::abs(error) < 1.5 * countMm) {
         endFinish(axisNumber, fmt::format("on target ({:+.4f} mm)", -error));
+        return;
+    }
+    // Stopped short on purpose (see scaleApproachMm()): creep the rest, the
+    // same way. (Not a correction: it was the plan)
+    if (std::exchange(f.approaching, false) && error * f.direction > 0.0) {
+        MGOLOG(
+            fmt::format(
+                "{} {:.4f} mm short of {:.4f}: creeping the rest",
+                axisLabel(axisNumber),
+                std::abs(error),
+                f.targetMm));
+        finishMove(axisNumber, motor(axisNumber)->getPosition() + error, true);
         return;
     }
     if (f.corrections >= MAX_SCALE_CORRECTIONS) {
@@ -3304,7 +3389,8 @@ void Model::advanceFinish(int axisNumber)
                 std::abs(error),
                 f.targetMm,
                 f.corrections));
-        finishMove(axisNumber, approach);
+        // (Creeping, with an approach: it's only a little way, into the work)
+        finishMove(axisNumber, approach, margin > 0.0);
     } else {
         // Past it: back off past the backlash, and approach again the same
         // way, rather than reverse onto it (which would leave the slack the
@@ -3321,16 +3407,26 @@ void Model::advanceFinish(int axisNumber)
                 f.corrections));
         f.backingOff = true;
         f.approachMm = approach;
-        finishMove(axisNumber, approach - f.direction * backOff);
+        finishMove(axisNumber, approach - f.direction * (backOff + margin), false);
     }
 }
 
-void Model::finishMove(int axisNumber, double position)
+void Model::finishMove(int axisNumber, double position, bool creep)
 {
-    const long step = std::lround(position / motor(axisNumber)->getConversionFactor());
-    scaleState(axisNumber).finish->settles = scale(axisNumber)->settleCount();
-    motor(axisNumber)->goToStep(step);
-    if (!motor(axisNumber)->isRunning() && motor(axisNumber)->getCurrentStep() != step) {
+    StepperMotor* m = motor(axisNumber);
+    ScaleFinish& f = *scaleState(axisNumber).finish;
+    if (creep) {
+        if (!f.speedBeforeCreep) {
+            f.speedBeforeCreep = m->getSpeed();
+        }
+        m->setSpeed(scaleApproachSpeed(axisNumber));
+    } else if (f.speedBeforeCreep) {
+        m->setSpeed(speedAfterStop(axisNumber, *std::exchange(f.speedBeforeCreep, std::nullopt)));
+    }
+    const long step = std::lround(position / m->getConversionFactor());
+    f.settles = scale(axisNumber)->settleCount();
+    m->goToStep(step);
+    if (!m->isRunning() && m->getCurrentStep() != step) {
         // Refused (e.g. a limit switch, or the driver's alarm)
         endFinish(axisNumber, "the move was refused");
     }
@@ -3347,6 +3443,9 @@ void Model::endFinish(int axisNumber, const std::string& why)
                 why,
                 scaleState(axisNumber).finish->corrections,
                 scaleState(axisNumber).finish->corrections == 1 ? "" : "s"));
+        if (const auto speed = scaleState(axisNumber).finish->speedBeforeCreep) {
+            motor(axisNumber)->setSpeed(speedAfterStop(axisNumber, *speed));
+        }
     }
     scaleState(axisNumber).finish.reset();
 }
@@ -4905,13 +5004,113 @@ double Model::feedPosition() const
 
 bool Model::feedMoving() const
 {
-    return axisState(2).wasRunning;
+    return axisState(2).wasRunning || m_feedApproach.has_value();
 }
 
 void Model::feedMoveTo(double position)
 {
-    motor(2)->goToPosition(position + multiPassXCorrection());
-    axisState(2).wasRunning = motor(2)->isRunning();
+    const double target = position + multiPassXCorrection();
+    if (!feedApproaches()) {
+        motor(2)->goToPosition(target);
+        axisState(2).wasRunning = motor(2)->isRunning();
+        return;
+    }
+    StepperMotor* m = motor(2);
+    const MultiPassPlan& plan = m_multiPass.plan();
+    const int direction = plan.feedEnd >= plan.feedStart ? 1 : -1;
+    const double margin = scaleApproachMm(2);
+    const double toGo = (target - m->getPosition()) * direction;
+    const double halfStep = std::abs(m->getConversionFactor()) / 2.0;
+    m_feedApproach = FeedApproach { .targetMm = target, .direction = direction };
+    if (toGo > margin) {
+        // Short of the depth by the approach, then (once the scale has
+        // settled) creep the rest
+        m_feedApproach->phase = FeedApproach::Phase::MovingShort;
+        m_feedApproach->settles = scale(2)->settleCount();
+        m->goToPosition(target - direction * margin);
+    } else if (toGo > halfStep) {
+        // (All of it is the approach)
+        m_feedApproach->phase = FeedApproach::Phase::Creeping;
+        m_feedApproach->speedBeforeCreep = m->getSpeed();
+        m->setSpeed(scaleApproachSpeed(2));
+        m->goToPosition(target);
+    } else if (toGo < -halfStep) {
+        // Past it (e.g. fed again after a re-base): back off past the
+        // backlash, then approach again the same way, rather than reverse
+        // onto it, which would leave the slack the wrong way, for the cut to
+        // push the tool out
+        const double backOff = std::max(0.5, 2.0 * backlashCompensationMm(2));
+        MGOLOG(
+            fmt::format(
+                "{} {:.4f} mm past the feed's depth: backing off {:.3f} mm to approach again",
+                axisLabel(2),
+                -toGo,
+                backOff));
+        m_feedApproach->phase = FeedApproach::Phase::BackingOff;
+        m->goToPosition(target - direction * (margin + backOff));
+    } else {
+        // (There already)
+        m_feedApproach.reset();
+    }
+    axisState(2).wasRunning = m->isRunning();
+}
+
+bool Model::feedApproaches() const
+{
+    // (As feedReady() re-bases, and only the feed before a pass: not, e.g.,
+    // a radius's path, whose feed moves are cuts)
+    return scaleApproachMm(2) > 0.0 && scale(2) && scale(2)->isAligned()
+        && m_config.readBool("Axis2ScaleRebaseBetweenPasses", false)
+        && (m_mode == Mode::MultiPass || m_mode == Mode::GearCutting)
+        && m_multiPass.state() == MultiPass::State::Feeding;
+}
+
+void Model::advanceFeedApproach()
+{
+    if (!m_feedApproach || motor(2)->isRunning()) {
+        return;
+    }
+    FeedApproach& a = *m_feedApproach;
+    StepperMotor* m = motor(2);
+    switch (a.phase) {
+        case FeedApproach::Phase::BackingOff:
+            a.phase = FeedApproach::Phase::MovingShort;
+            a.settles = scale(2)->settleCount();
+            m->goToPosition(a.targetMm - a.direction * scaleApproachMm(2));
+            return;
+        case FeedApproach::Phase::MovingShort:
+            a.phase = FeedApproach::Phase::Settling;
+            return;
+        case FeedApproach::Phase::Settling:
+            // (Without a reading, it won't settle: creep the rest anyway)
+            if (scale(2)->hasReading() && scale(2)->settleCount() == a.settles) {
+                return;
+            }
+            rebaseIfApart(2, "re-based before creeping to the feed's depth");
+            a.phase = FeedApproach::Phase::Creeping;
+            a.speedBeforeCreep = m->getSpeed();
+            MGOLOG(
+                fmt::format(
+                    "{} {:.4f} mm short of the feed's depth, {:.4f}: creeping the rest",
+                    axisLabel(2),
+                    (a.targetMm - m->getPosition()) * a.direction,
+                    a.targetMm));
+            m->setSpeed(scaleApproachSpeed(2));
+            m->goToPosition(a.targetMm);
+            return;
+        case FeedApproach::Phase::Creeping:
+            endFeedApproach();
+            return;
+    }
+}
+
+void Model::endFeedApproach()
+{
+    if (m_feedApproach && m_feedApproach->phase == FeedApproach::Phase::Creeping) {
+        // (The multi-pass sets the feed axis's speed itself: no reset)
+        motor(2)->setSpeed(m_feedApproach->speedBeforeCreep);
+    }
+    m_feedApproach.reset();
 }
 
 void Model::retract(std::optional<double> to)
