@@ -471,18 +471,6 @@ void Controller::processKey(int t)
                     m_model->repeatLastRelativeMove(2);
                     break;
                 }
-            case key::a2_MINUS:
-                {
-                    // X-axis speed decrease
-                    m_model->axis2SpeedDecrease();
-                    break;
-                }
-            case key::a2_EQUALS:
-                {
-                    // X-axis speed increase
-                    m_model->axis2SpeedIncrease();
-                    break;
-                }
             // Nudge in X axis
             case key::W:
                 {
@@ -515,16 +503,20 @@ void Controller::processKey(int t)
                     m_model->axis2Nudge(XDirection::Outwards, 0.1);
                     break;
                 }
+            // Faster and slower: = (i.e. plus) and - for axis 1, or after
+            // either motorised axis's leader key
+            case key::EQUALS:
             case key::a1_EQUALS:
-            case key::EQUALS: // (i.e. plus)
+            case key::a2_EQUALS:
                 {
-                    m_model->axis1SpeedIncrease();
+                    m_model->speedIncrease(kp == key::EQUALS ? 1 : key::axisOfKey(kp));
                     break;
                 }
-            case key::a1_MINUS:
             case key::MINUS:
+            case key::a1_MINUS:
+            case key::a2_MINUS:
                 {
-                    m_model->axis1SpeedDecrease();
+                    m_model->speedDecrease(kp == key::MINUS ? 1 : key::axisOfKey(kp));
                     break;
                 }
             case key::a1_m:
@@ -755,7 +747,7 @@ void Controller::processKey(int t)
             case key::FOUR:
             case key::FIVE:
                 {
-                    m_model->axis1SpeedPreset();
+                    m_model->selectSpeedPreset(1, kp - key::ONE + 1);
                     break;
                 }
             // Speed presets for X with number keys 6-0 or X leader + 1-5
@@ -770,7 +762,11 @@ void Controller::processKey(int t)
             case key::a2_4:
             case key::a2_5:
                 {
-                    m_model->axis2SpeedPreset();
+                    // (0 is the fifth, after 9)
+                    const int preset = kp >= key::a2_1 ? kp - key::a2_1 + 1
+                        : kp == key::ZERO              ? 5
+                                                       : kp - key::SIX + 1;
+                    m_model->selectSpeedPreset(2, preset);
                     break;
                 }
             case key::a1_f:

@@ -162,11 +162,21 @@ public:
     // Goes back along the axis's "breadcrumb" trail: to the last position
     // it stopped at (or was nudged to) before this one
     void goToPreviousPosition(int axisNumber);
+    // Speeds the motor up or slows it down by a step: fine steps at low
+    // speeds, coarse ones above (axis 1: 1 below 20, then 20; axis 2: 2
+    // below 10, then 10), never above the axis's AxisNMaxMotorRpm. Axis 1's
+    // speed is left alone when threading, as the spindle sets it
+    void speedIncrease(int axisNumber);
+    void speedDecrease(int axisNumber);
+    // Sets the axis's speed to one of its presets (1 to 5), except when
+    // threading
+    void selectSpeedPreset(int axisNumber, int preset);
+    // An axis's preset speed (1 to 5): AxisNSpeedPresetM, or its default.
+    // The menu shows these too
+    static double speedPreset(const IConfigReader& config, int axisNumber, int preset);
 
     void axis1GoToStep(long step);
     void axis1Nudge(ZDirection direction, double nudgeAmountMm);
-    void axis1SpeedDecrease();
-    void axis1SpeedIncrease();
     void axis1FastReturn();
     void axis1Stop();
     // Stops axis 1, slowing down first if it decelerates (see
@@ -175,21 +185,17 @@ public:
     void axis1StopRamped();
     void axis1Move(ZDirection direction);
     void axis1Rapid(ZDirection direction);
-    void axis1SpeedPreset();
 
     void axis2Stop();
     // As axis1StopRamped()
     void axis2StopRamped();
     void axis2SynchroniseOff();
-    void axis2SpeedDecrease();
-    void axis2SpeedIncrease();
     void axis2Nudge(XDirection direction, double nudgeAmountMm);
     void axis2FastReturn();
     // Retracts X by Axis2RetractionDistance, or, if retracted, unretracts
     void axis2Retract();
     void axis2Move(XDirection direction);
     void axis2Rapid(XDirection direction);
-    void axis2SpeedPreset();
 
     // The X position has been set as a diameter (so X is now measured from
     // the centre). This lasts until X is zeroed, or its position is set again.

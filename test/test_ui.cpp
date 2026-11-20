@@ -2140,6 +2140,45 @@ MapConfigReader millLikeConfig(const std::map<std::string, std::string>& extra =
 
 } // namespace
 
+TEST_CASE("UI: speed keys: the presets, faster and slower, for each axis")
+{
+    // The lathe's keys, with the presets' defaults: 1-5 for Z, 6-0 or x then
+    // 1-5 for X, = and - (or after a leader key) for faster and slower
+    MapConfigReader config { { { "Axis2SpeedPreset5", "200" } } };
+    mgo::MockGpio gpio { false };
+    mgo::Model model { gpio, config };
+    mgo::Controller controller(&model);
+    QWidget* w = mainWindow();
+    REQUIRE(w);
+
+    press(w, controller, Qt::Key_3);
+    REQUIRE(model.motorSpeed(1) == Approx(100.0));
+    press(w, controller, Qt::Key_Equal);
+    REQUIRE(model.motorSpeed(1) == Approx(120.0));
+    press(w, controller, Qt::Key_Z);
+    press(w, controller, Qt::Key_Minus);
+    press(w, controller, Qt::Key_Minus);
+    REQUIRE(model.motorSpeed(1) == Approx(80.0)); // (- alone is Z's too)
+    press(w, controller, Qt::Key_Z);
+    press(w, controller, Qt::Key_Equal);
+    REQUIRE(model.motorSpeed(1) == Approx(100.0));
+
+    press(w, controller, Qt::Key_9);
+    REQUIRE(model.motorSpeed(2) == Approx(80.0));
+    press(w, controller, Qt::Key_0);
+    REQUIRE(model.motorSpeed(2) == Approx(200.0)); // (0 is X's fifth)
+    press(w, controller, Qt::Key_X);
+    press(w, controller, Qt::Key_2);
+    REQUIRE(model.motorSpeed(2) == Approx(20.0));
+    press(w, controller, Qt::Key_X);
+    press(w, controller, Qt::Key_Equal);
+    REQUIRE(model.motorSpeed(2) == Approx(30.0));
+    press(w, controller, Qt::Key_X);
+    press(w, controller, Qt::Key_Minus);
+    REQUIRE(model.motorSpeed(2) == Approx(20.0));
+    REQUIRE(model.motorSpeed(1) == Approx(100.0)); // (Z untouched)
+}
+
 TEST_CASE("UI: halving after a leader key, with the quick chamfer turned off")
 {
     // As on the mill: h on its own is the quick chamfer, which DisabledModes

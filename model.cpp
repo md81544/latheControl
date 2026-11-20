@@ -1296,34 +1296,6 @@ void Model::axis1Half()
     clearWorkEnd();
 }
 
-void Model::axis1SpeedDecrease()
-{
-    if (m_mode == Mode::Threading) {
-        return;
-    }
-    if (m_axis1Motor->getSpeed() > 20) {
-        m_axis1Motor->setSpeed(m_axis1Motor->getSpeed() - 20.0);
-    } else {
-        if (m_axis1Motor->getSpeed() > 1) {
-            m_axis1Motor->setSpeed(m_axis1Motor->getSpeed() - 1.0);
-        }
-    }
-}
-
-void Model::axis1SpeedIncrease()
-{
-    if (m_mode == Mode::Threading) {
-        return;
-    }
-    if (m_axis1Motor->getSpeed() < 20.0) {
-        m_axis1Motor->setSpeed(m_axis1Motor->getSpeed() + 1.0);
-    } else {
-        if (m_axis1Motor->getSpeed() <= m_config.readDouble("Axis1MaxMotorRpm", 1'000.0) - 20) {
-            m_axis1Motor->setSpeed(m_axis1Motor->getSpeed() + 20.0);
-        }
-    }
-}
-
 void Model::axis1FastReturn()
 {
     const auto step = memoryStep(1);
@@ -1414,30 +1386,6 @@ void Model::axis1Rapid(ZDirection direction)
     axisState(1).rapidInProgress = true;
     m_axis1Motor->setSpeed(m_axis1Motor->getMaxRpm());
     axis1Move(direction);
-}
-
-void Model::axis1SpeedPreset()
-{
-    if (m_mode == Mode::Threading) {
-        return;
-    }
-    switch (m_keyPressed) {
-        case key::ONE:
-            m_axis1Motor->setSpeed(m_config.readDouble("Axis1SpeedPreset1", 20.0));
-            break;
-        case key::TWO:
-            m_axis1Motor->setSpeed(m_config.readDouble("Axis1SpeedPreset2", 40.0));
-            break;
-        case key::THREE:
-            m_axis1Motor->setSpeed(m_config.readDouble("Axis1SpeedPreset3", 100.0));
-            break;
-        case key::FOUR:
-            m_axis1Motor->setSpeed(m_config.readDouble("Axis1SpeedPreset4", 250.0));
-            break;
-        case key::FIVE:
-            m_axis1Motor->setSpeed(m_config.readDouble("Axis1SpeedPreset5", 1'000.0));
-            break;
-    }
 }
 
 void Model::axis1Stop()
@@ -1541,24 +1489,6 @@ void Model::axis2GoToCurrentMemory()
     axis2Stop();
     axisState(2).status = "returning";
     m_axis2Motor->goToStep(*step);
-}
-
-void Model::axis2SpeedDecrease()
-{
-    if (m_axis2Motor->getSpeed() > 10.1) {
-        m_axis2Motor->setSpeed(m_axis2Motor->getSpeed() - 10.0);
-    } else if (m_axis2Motor->getSpeed() > 2.1) {
-        m_axis2Motor->setSpeed(m_axis2Motor->getSpeed() - 2.0);
-    }
-}
-
-void Model::axis2SpeedIncrease()
-{
-    if (m_axis2Motor->getSpeed() < 10.0) {
-        m_axis2Motor->setSpeed(m_axis2Motor->getSpeed() + 2.0);
-    } else if (m_axis2Motor->getSpeed() < m_config.readDouble("Axis2MaxMotorRpm", 1'000.0)) {
-        m_axis2Motor->setSpeed(m_axis2Motor->getSpeed() + 10.0);
-    }
 }
 
 void Model::axis2Nudge(XDirection direction, double nudgeAmountMm)
@@ -1738,35 +1668,6 @@ void Model::axis2Rapid(XDirection direction)
     axisState(2).rapidInProgress = true;
     m_axis2Motor->setSpeed(m_axis2Motor->getMaxRpm());
     axis2Move(direction);
-}
-
-void Model::axis2SpeedPreset()
-{
-    if (m_mode == Mode::Threading) {
-        return;
-    }
-    switch (m_keyPressed) {
-        case key::a2_1:
-        case key::SIX:
-            m_axis2Motor->setSpeed(m_config.readDouble("Axis2SpeedPreset1", 5.0));
-            break;
-        case key::a2_2:
-        case key::SEVEN:
-            m_axis2Motor->setSpeed(m_config.readDouble("Axis2SpeedPreset2", 20.0));
-            break;
-        case key::a2_3:
-        case key::EIGHT:
-            m_axis2Motor->setSpeed(m_config.readDouble("Axis2SpeedPreset3", 40.0));
-            break;
-        case key::a2_4:
-        case key::NINE:
-            m_axis2Motor->setSpeed(m_config.readDouble("Axis2SpeedPreset4", 80.0));
-            break;
-        case key::a2_5:
-        case key::ZERO:
-            m_axis2Motor->setSpeed(m_config.readDouble("Axis2SpeedPreset5", 1'00.0));
-            break;
-    }
 }
 
 void Model::diameterIsSet()
@@ -2562,6 +2463,75 @@ void Model::repeatLastRelativeMove(int axisNumber)
     if (axisState(axisNumber).lastRelativeMove != 0.0) {
         goToOffset(axisNumber, axisState(axisNumber).lastRelativeMove);
     }
+}
+
+namespace {
+
+// Each motorised axis's speed steps (see Model::speedIncrease()): fine below
+// the coarse step, coarse above it. They're as they were before the axes
+// shared this code (axis 1's 1 and 20 mm/min suit the lathe's Z; axis 2's 2
+// and 10 its X, or the mill's rotary table)
+struct SpeedSteps {
+    double fine;
+    double coarse;
+};
+constexpr std::array<SpeedSteps, 2> SPEED_STEPS { { { 1.0, 20.0 }, { 2.0, 10.0 } } };
+
+// A speed read back from the motor is worked out from its rpm, so may be a
+// hair either side of the speed which was set: this keeps e.g. 20 from
+// counting as above 20
+constexpr double SPEED_SLACK = 0.1;
+
+} // namespace
+
+double Model::speedPreset(const IConfigReader& config, int axisNumber, int preset)
+{
+    assert(axisNumber == 1 || axisNumber == 2);
+    assert(preset >= 1 && preset <= 5);
+    static constexpr std::array<std::array<double, 5>, 2> DEFAULTS { {
+        { 20.0, 40.0, 100.0, 250.0, 1'000.0 },
+        { 5.0, 20.0, 40.0, 80.0, 100.0 },
+    } };
+    return config.readDouble(
+        fmt::format("Axis{}SpeedPreset{}", axisNumber, preset),
+        DEFAULTS.at(axisNumber - 1).at(preset - 1));
+}
+
+void Model::speedIncrease(int axisNumber)
+{
+    if (axisNumber == 1 && m_mode == Mode::Threading) {
+        return;
+    }
+    const auto& steps = SPEED_STEPS.at(axisNumber - 1);
+    const double speed = motorSpeed(axisNumber);
+    const double max = m_config.readDouble(fmt::format("Axis{}MaxMotorRpm", axisNumber), 1'000.0);
+    if (speed < steps.coarse - SPEED_SLACK) {
+        setMotorSpeed(axisNumber, std::min(speed + steps.fine, max));
+    } else if (speed < max - SPEED_SLACK) {
+        setMotorSpeed(axisNumber, std::min(speed + steps.coarse, max));
+    }
+}
+
+void Model::speedDecrease(int axisNumber)
+{
+    if (axisNumber == 1 && m_mode == Mode::Threading) {
+        return;
+    }
+    const auto& steps = SPEED_STEPS.at(axisNumber - 1);
+    const double speed = motorSpeed(axisNumber);
+    if (speed > steps.coarse + SPEED_SLACK) {
+        setMotorSpeed(axisNumber, speed - steps.coarse);
+    } else if (speed > steps.fine + SPEED_SLACK) {
+        setMotorSpeed(axisNumber, speed - steps.fine);
+    }
+}
+
+void Model::selectSpeedPreset(int axisNumber, int preset)
+{
+    if (m_mode == Mode::Threading) {
+        return;
+    }
+    setMotorSpeed(axisNumber, speedPreset(m_config, axisNumber, preset));
 }
 
 void Model::goToPreviousPosition(int axisNumber)

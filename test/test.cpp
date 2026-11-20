@@ -6101,6 +6101,90 @@ TEST_CASE("Model:   knurling's spindle may turn slower than threading's", "[timi
     REQUIRE(t.model.minimumSpindleRpm() == Approx(30.f));
 }
 
+TEST_CASE("Model:   faster and slower step finely at low speeds, coarsely above")
+{
+    mgo::MockConfigReader config;
+    mgo::MockGpio gpio(false);
+    mgo::Model model(gpio, config);
+    model.initialise();
+
+    // Axis 1: by 1 below 20, then by 20
+    model.setMotorSpeed(1, 18.0);
+    model.speedIncrease(1);
+    REQUIRE(model.motorSpeed(1) == Approx(19.0));
+    model.speedIncrease(1);
+    model.speedIncrease(1);
+    REQUIRE(model.motorSpeed(1) == Approx(40.0));
+    model.speedDecrease(1);
+    model.speedDecrease(1);
+    REQUIRE(model.motorSpeed(1) == Approx(19.0));
+    model.setMotorSpeed(1, 2.0);
+    model.speedDecrease(1);
+    REQUIRE(model.motorSpeed(1) == Approx(1.0));
+    model.speedDecrease(1); // (no lower)
+    REQUIRE(model.motorSpeed(1) == Approx(1.0));
+
+    // Axis 2: by 2 below 10, then by 10
+    model.setMotorSpeed(2, 6.0);
+    model.speedIncrease(2);
+    REQUIRE(model.motorSpeed(2) == Approx(8.0));
+    model.speedIncrease(2);
+    model.speedIncrease(2);
+    REQUIRE(model.motorSpeed(2) == Approx(20.0));
+    model.speedDecrease(2);
+    model.speedDecrease(2);
+    REQUIRE(model.motorSpeed(2) == Approx(8.0));
+    model.setMotorSpeed(2, 3.0);
+    model.speedDecrease(2);
+    REQUIRE(model.motorSpeed(2) == Approx(1.0));
+    model.speedDecrease(2); // (no lower)
+    REQUIRE(model.motorSpeed(2) == Approx(1.0));
+}
+
+TEST_CASE("Model:   faster goes up to the axis's maximum, and no further")
+{
+    // Axis1MaxMotorRpm defaults to 1000. (It's compared with the speed, as
+    // it always has been, though it's in rpm: see "Rapids use the maximum
+    // rpm as mm/min" in TODO.md. Axis 2's motor stops at 800 here anyway)
+    mgo::MockConfigReader config;
+    mgo::MockGpio gpio(false);
+    mgo::Model model(gpio, config);
+    model.initialise();
+    model.setMotorSpeed(1, 990.0);
+    model.speedIncrease(1);
+    REQUIRE(model.motorSpeed(1) == Approx(1'000.0));
+    model.speedIncrease(1);
+    REQUIRE(model.motorSpeed(1) == Approx(1'000.0));
+}
+
+TEST_CASE("Model:   speed presets, and threading leaving axis 1's speed alone")
+{
+    mgo::MockConfigReader config;
+    mgo::MockGpio gpio(false);
+    mgo::Model model(gpio, config);
+    model.initialise();
+    model.selectSpeedPreset(1, 3);
+    REQUIRE(model.motorSpeed(1) == Approx(100.0)); // (Axis1SpeedPreset3's default)
+    model.selectSpeedPreset(2, 4);
+    REQUIRE(model.motorSpeed(2) == Approx(80.0)); // (Axis2SpeedPreset4's default)
+    REQUIRE(mgo::Model::speedPreset(config, 1, 5) == Approx(1'000.0));
+    REQUIRE(mgo::Model::speedPreset(config, 2, 1) == Approx(5.0));
+
+    // Threading: the spindle sets axis 1's speed, and the presets are off
+    // for both; axis 2's faster and slower still work
+    model.changeMode(mgo::Mode::Threading);
+    const double z = model.motorSpeed(1);
+    model.speedIncrease(1);
+    model.speedDecrease(1);
+    model.speedDecrease(1);
+    model.selectSpeedPreset(1, 1);
+    REQUIRE(model.motorSpeed(1) == Approx(z));
+    model.selectSpeedPreset(2, 1);
+    REQUIRE(model.motorSpeed(2) == Approx(80.0));
+    model.speedIncrease(2);
+    REQUIRE(model.motorSpeed(2) == Approx(90.0));
+}
+
 TEST_CASE("Model:   leaving threading mode resets Z's speed")
 {
     mgo::MockConfigReader config;

@@ -2054,8 +2054,23 @@ change.
           motors themselves are still `m_axis1Motor`/`m_axis2Motor` (about
           400 uses), with `motor(n)` for code taking a number: they can
           move into the state with the moves
+        - **Then (20 Nov 2026), speed:** `speedIncrease()`,
+          `speedDecrease()` and `selectSpeedPreset()` take the axis number,
+          in place of the six `axisNSpeed...()`, and the controller's cases
+          for `=`, `-` and the presets are one each. Each axis keeps its own
+          steps (axis 1: 1 below 20, then 20; axis 2: 2 below 10, then 10),
+          in a table, and axis 1's is still left alone when threading
+          (where the presets are off for both). `Model::speedPreset()`
+          gives a preset's speed, so the menu no longer has its own copy of
+          the defaults. Two small differences, both deliberate: faster now
+          goes up to the maximum rather than stopping short of it on axis 1
+          (e.g. 990 went no further, with 1000 the maximum) or going past
+          it on axis 2 (391 went to 401, with 400 the maximum, on the
+          lathe's X); and a speed within 0.1 of a step's boundary (e.g.
+          20.0001, read back from the motor's rpm) counts as on it, as
+          axis 2's already did
         - Still to do, in the same way: moves and rapids, nudges, fast
-          returns, speed up and down and presets, stopping, locks, and the
+          returns, stopping, locks, and the
           scale (which wants to belong to any axis, for a scale on the
           lathe's X later). These are inside the Model, where the two
           motorised axes differ most (axis 1's taper, threading and scale;

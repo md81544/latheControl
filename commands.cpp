@@ -555,10 +555,8 @@ std::vector<Command> buildCommands(
     c = "Speed";
     b.add(c, fmt::format("{} faster", a1), key::EQUALS, AXIS1, axis1SpeedAdjustable);
     b.add(c, fmt::format("{} slower", a1), key::MINUS, AXIS1, axis1SpeedAdjustable);
-    const std::vector<double> axis1Defaults { 20.0, 40.0, 100.0, 250.0, 1'000.0 };
     for (int n = 0; n < 5; ++n) {
-        const double presetSpeed
-            = config.readDouble(fmt::format("Axis1SpeedPreset{}", n + 1), axis1Defaults.at(n));
+        const double presetSpeed = Model::speedPreset(config, 1, n + 1);
         b.add(
             c,
             fmt::format("{} speed preset {}: {}", a1, n + 1, speed(presetSpeed, u1)),
@@ -568,13 +566,11 @@ std::vector<Command> buildCommands(
     }
     b.add(c, fmt::format("{} faster", a2), key::a2_EQUALS, AXIS2);
     b.add(c, fmt::format("{} slower", a2), key::a2_MINUS, AXIS2);
-    const std::vector<double> axis2Defaults { 5.0, 20.0, 40.0, 80.0, 100.0 };
     const std::vector<int> axis2PresetKeys {
         key::SIX, key::SEVEN, key::EIGHT, key::NINE, key::ZERO
     };
     for (int n = 0; n < 5; ++n) {
-        const double presetSpeed
-            = config.readDouble(fmt::format("Axis2SpeedPreset{}", n + 1), axis2Defaults.at(n));
+        const double presetSpeed = Model::speedPreset(config, 2, n + 1);
         b.add(
             c,
             fmt::format("{} speed preset {}: {}", a2, n + 1, speed(presetSpeed, u2)),
