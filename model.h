@@ -82,6 +82,25 @@ enum class ZDirection {
     Right
 };
 
+// Which way a motorised axis moves, for its moves, rapids and nudges. Forward
+// is the left and up arrows' way: on the lathe, Z to the left and X in; on
+// the mill, X to the left and A up. Forward raises the motor's step count,
+// unless AxisNMotorFlipDirection is set
+enum class AxisDirection {
+    Forward,
+    Back
+};
+
+constexpr AxisDirection axisDirection(ZDirection d)
+{
+    return d == ZDirection::Left ? AxisDirection::Forward : AxisDirection::Back;
+}
+
+constexpr AxisDirection axisDirection(XDirection d)
+{
+    return d == XDirection::Inwards ? AxisDirection::Forward : AxisDirection::Back;
+}
+
 // The touches which measure a tool's offsets, in order (see
 // Model::startToolMeasurement()): the current tool on the work's diameter,
 // then on its end; then, after changing tool, the tool being measured on the
@@ -154,6 +173,18 @@ public:
     // StepperMotor::decelerateToStop()), without waiting. If it's already
     // slowing down, it stops at once (e.g. a key pressed again meanwhile)
     void stopAxisRamped(int axisNumber);
+    // Moves with no end, until stopped: pressing the same key again (i.e. a
+    // move or rapid while it's moving) stops it, slowing down first if the
+    // axis decelerates. A rapid is at the motor's full speed, and only when
+    // not in a mode. Axis 1's follow the taper or the thread, in those modes
+    void move(int axisNumber, AxisDirection direction);
+    void rapid(int axisNumber, AxisDirection direction);
+    // A short move by mm, at a tenth of the motor's full speed, which keys
+    // wait for
+    void nudge(int axisNumber, AxisDirection direction, double mm);
+    // At full speed to the current memory slot, if it's set for the axis
+    // (axis 1, in a taper, at 100 mm/min, which X can follow)
+    void fastReturn(int axisNumber);
     long motorStep(int axisNumber) const;
     // The motor's position (for axis 2, what's shown is getAxis2Position(),
     // less any taper correction)
@@ -183,18 +214,10 @@ public:
     static double speedPreset(const IConfigReader& config, int axisNumber, int preset);
 
     void axis1GoToStep(long step);
-    void axis1Nudge(ZDirection direction, double nudgeAmountMm);
-    void axis1FastReturn();
-    void axis1Move(ZDirection direction);
-    void axis1Rapid(ZDirection direction);
 
     void axis2SynchroniseOff();
-    void axis2Nudge(XDirection direction, double nudgeAmountMm);
-    void axis2FastReturn();
     // Retracts X by Axis2RetractionDistance, or, if retracted, unretracts
     void axis2Retract();
-    void axis2Move(XDirection direction);
-    void axis2Rapid(XDirection direction);
 
     // The X position has been set as a diameter (so X is now measured from
     // the centre). This lasts until X is zeroed, or its position is set again.
@@ -1166,6 +1189,9 @@ private:
     void checkLockRefusal();
     // A move of axis 1, which X follows in a taper
     bool axis1MoveRefused();
+    bool axisMoveRefused(int axisNumber);
+    // +1 if the motor's step count rises going that way, or -1
+    int stepSign(int axisNumber, AxisDirection direction) const;
     bool axis2MoveRefused();
     // Moving to the multi-pass's start (see multiPassGo())
     void multiPassMoveToStart();

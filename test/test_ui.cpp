@@ -570,7 +570,7 @@ TEST_CASE("UI: letting go of Alt with no rapid running stops everything, as Spac
     REQUIRE(w);
 
     // A jog (not a rapid), then Alt pressed and let go
-    tm.model.axis1Move(mgo::ZDirection::Left);
+    tm.model.move(1, mgo::axisDirection(mgo::ZDirection::Left));
     REQUIRE(tm.model.isMotorRunning(1));
     QTest::keyPress(w, Qt::Key_Alt);
     QTest::keyRelease(w, Qt::Key_Alt);
@@ -2550,7 +2550,7 @@ TEST_CASE("UI: re-basing from the scale by hand (Z then B)")
     REQUIRE(std::abs(*t.model.getAxis1ScaleDifferenceMm()) < 0.011);
 
     // Not while the axis is moving: it warns, and nothing changes
-    t.model.axis1Move(mgo::ZDirection::Left);
+    t.model.move(1, mgo::axisDirection(mgo::ZDirection::Left));
     REQUIRE(t.model.isMotorRunning(1));
     REQUIRE(!t.model.canRebaseAxis1FromScale());
     t.model.rebaseAxis1FromScaleByHand();

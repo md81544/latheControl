@@ -1231,37 +1231,6 @@ void Model::axis1GoToCurrentMemory()
     startAxis1Finish(*step);
 }
 
-void Model::axis1Nudge(ZDirection direction, double nudgeAmountMm)
-{
-    if (axis1MoveRefused()) {
-        return;
-    }
-    // (First, so that its end can't restore a speed over ours)
-    m_motionSequence.cancel();
-    if (m_axis1Motor->isRunning()) {
-        stopAxis(1);
-    }
-    const double oldSpeed = m_axis1Motor->getSpeed();
-    m_axis1Motor->setSpeed(m_axis1Motor->getMaxRpm() / 10.0);
-    long steps = nudgeAmountMm / m_axis1Motor->getConversionFactor();
-    if (direction == ZDirection::Left) {
-        steps = -steps;
-    }
-    m_axis1Motor->stop();
-    // The nudge is a sequence which ends when the move does, so that (as
-    // with any sequence) keys pressed meanwhile wait until it's finished,
-    // and a quick series of nudges each moves the full amount
-    auto moveSteps = axis1MoveSteps(motorStep(1) + steps);
-    moveSteps.back().done = [this]() { return !m_axis1Motor->isRunning(); };
-    m_motionSequence.start(std::move(moveSteps), [this, oldSpeed]() {
-        m_axis1Motor->setSpeed(oldSpeed);
-        // A nudge isn't a threading pass, so it shouldn't retract X when it ends
-        m_threadingMoveInProgress = false;
-        // Save position
-        saveBreadcrumbPosition(1);
-    });
-}
-
 void Model::axis1Zero()
 {
     // (The positions now read the tip of the tool in use, which may be the
@@ -1296,30 +1265,6 @@ void Model::axis1Half()
     clearWorkEnd();
 }
 
-void Model::axis1FastReturn()
-{
-    const auto step = memoryStep(1);
-    if (!step || axisState(1).fastReturning) {
-        return;
-    }
-    if (axis1MoveRefused()) {
-        return;
-    }
-    axisState(1).previousSpeed = m_axis1Motor->getSpeed();
-    axisState(1).fastReturning = true;
-    stopAxis(1);
-    if (m_mode == Mode::Taper) {
-        // If we are tapering, we need to set a speed the x-axis motor can keep up with
-        m_axis1Motor->setSpeed(100.0);
-        axisState(2).previousSpeed = m_axis2Motor->getSpeed();
-        // (axis1GoToStep() takes up the backlash and synchronises X)
-    } else {
-        m_axis1Motor->setSpeed(m_axis1Motor->getMaxRpm());
-    }
-    axisState(1).status = "fast returning";
-    axis1GoToStep(*step);
-}
-
 void Model::axis2GoToPosition(double pos)
 {
     if (axis2MoveRefused()) {
@@ -1337,55 +1282,6 @@ void Model::axis2GoToOffset(double offset)
     axisState(2).lastRelativeMove = offset;
     axis2GoToPosition(m_axis2Motor->getPosition() + offset);
     axisState(2).status = fmt::format("To rel {}", offset);
-}
-
-void Model::axis1Move(ZDirection direction)
-{
-    // Issuing the same command (i.e. pressing the same key)
-    // when it is already running will cause the motor to stop
-    if (m_axis1Motor->isRunning()) {
-        stopAxisRamped(1);
-        return;
-    }
-    if (axis1MoveRefused()) {
-        return;
-    }
-    if (direction == ZDirection::Left) {
-        axisState(1).status = "moving left";
-        if (!m_config.readBool("Axis1MotorFlipDirection", false)) {
-            axis1GoToStep(INF_LEFT);
-        } else {
-            axis1GoToStep(INF_RIGHT);
-        }
-    } else {
-        axisState(1).status = "moving right";
-        if (!m_config.readBool("Axis1MotorFlipDirection", false)) {
-            axis1GoToStep(INF_RIGHT);
-        } else {
-            axis1GoToStep(INF_LEFT);
-        }
-    }
-}
-
-void Model::axis1Rapid(ZDirection direction)
-{
-    // Don't allow rapids if in a mode;
-    if (m_mode != Mode::None) {
-        return;
-    }
-    if (axis1MoveRefused()) {
-        return;
-    }
-    // Issuing the same command (i.e. pressing the same key)
-    // when it is already running will cause the motor to stop
-    if (m_axis1Motor->isRunning()) {
-        stopAxisRamped(1);
-        return;
-    }
-    axisState(1).previousSpeed = m_axis1Motor->getSpeed();
-    axisState(1).rapidInProgress = true;
-    m_axis1Motor->setSpeed(m_axis1Motor->getMaxRpm());
-    axis1Move(direction);
 }
 
 bool Model::rapidReleased()
@@ -1457,53 +1353,6 @@ void Model::axis2GoToCurrentMemory()
     }
     stopAxis(2);
     axisState(2).status = "returning";
-    m_axis2Motor->goToStep(*step);
-}
-
-void Model::axis2Nudge(XDirection direction, double nudgeAmountMm)
-{
-    if (axis2MoveRefused()) {
-        return;
-    }
-    // (First, so that its end can't restore a speed over ours)
-    m_motionSequence.cancel();
-    if (m_axis2Motor->isRunning()) {
-        stopAxis(2);
-    }
-    const double oldSpeed = m_axis2Motor->getSpeed();
-    m_axis2Motor->setSpeed(m_axis2Motor->getMaxRpm() / 10.0);
-    long steps = nudgeAmountMm / m_axis2Motor->getConversionFactor();
-    if (direction == XDirection::Inwards) {
-        steps = -steps;
-    }
-    if (m_config.readBool("Axis2MotorFlipDirection", false)) {
-        steps = -steps;
-    }
-    // (A sequence, for the same reasons as a Z nudge)
-    m_motionSequence.start(
-        { { [this, steps]() { m_axis2Motor->goToStep(m_axis2Motor->getCurrentStep() + steps); },
-            [this]() { return !m_axis2Motor->isRunning(); } } },
-        [this, oldSpeed]() {
-            m_axis2Motor->setSpeed(oldSpeed);
-            // Save position
-            saveBreadcrumbPosition(2);
-        });
-}
-
-void Model::axis2FastReturn()
-{
-    const auto step = memoryStep(2);
-    if (!step || axisState(2).fastReturning) {
-        return;
-    }
-    if (axis2MoveRefused()) {
-        return;
-    }
-    axisState(2).previousSpeed = m_axis2Motor->getSpeed();
-    axisState(2).fastReturning = true;
-    stopAxis(2);
-    m_axis2Motor->setSpeed(m_axis2Motor->getMaxRpm());
-    axisState(2).status = "fast returning";
     m_axis2Motor->goToStep(*step);
 }
 
@@ -1592,51 +1441,6 @@ void Model::axis2RetractTo(double position, double minimum)
     // How far out position is from X (negative if it's further in)
     const double out = (m_axis2Motor->getPosition() - position) * axis2IntoWorkSign();
     axis2RetractBy(std::max(out, minimum));
-}
-
-void Model::axis2Move(XDirection direction)
-{
-    if (m_axis2Motor->isRunning()) {
-        stopAxisRamped(2);
-        return;
-    }
-    if (axis2MoveRefused()) {
-        return;
-    }
-    if (direction == XDirection::Inwards) {
-        axisState(2).status = "moving in";
-        if (m_config.readBool("Axis2MotorFlipDirection", false)) {
-            m_axis2Motor->goToStep(INF_OUT);
-        } else {
-            m_axis2Motor->goToStep(INF_IN);
-        }
-    } else {
-        axisState(2).status = "moving out";
-        if (m_config.readBool("Axis2MotorFlipDirection", false)) {
-            m_axis2Motor->goToStep(INF_IN);
-        } else {
-            m_axis2Motor->goToStep(INF_OUT);
-        }
-    }
-}
-
-void Model::axis2Rapid(XDirection direction)
-{
-    // Don't allow rapids if in a mode;
-    if (m_mode != Mode::None) {
-        return;
-    }
-    if (axis2MoveRefused()) {
-        return;
-    }
-    if (m_axis2Motor->isRunning()) {
-        stopAxisRamped(2);
-        return;
-    }
-    axisState(2).previousSpeed = m_axis2Motor->getSpeed();
-    axisState(2).rapidInProgress = true;
-    m_axis2Motor->setSpeed(m_axis2Motor->getMaxRpm());
-    axis2Move(direction);
 }
 
 void Model::diameterIsSet()
@@ -2521,9 +2325,142 @@ void Model::selectSpeedPreset(int axisNumber, int preset)
     setMotorSpeed(axisNumber, speedPreset(m_config, axisNumber, preset));
 }
 
+bool Model::axisMoveRefused(int axisNumber)
+{
+    return axisNumber == 1 ? axis1MoveRefused() : axis2MoveRefused();
+}
+
+int Model::stepSign(int axisNumber, AxisDirection direction) const
+{
+    const bool flip = m_config.readBool(fmt::format("Axis{}MotorFlipDirection", axisNumber), false);
+    return (direction == AxisDirection::Forward) != flip ? 1 : -1;
+}
+
+void Model::move(int axisNumber, AxisDirection direction)
+{
+    // Issuing the same command (i.e. pressing the same key)
+    // when it is already running will cause the motor to stop
+    if (isMotorRunning(axisNumber)) {
+        stopAxisRamped(axisNumber);
+        return;
+    }
+    if (axisMoveRefused(axisNumber)) {
+        return;
+    }
+    const bool forward = direction == AxisDirection::Forward;
+    if (axisNumber == 1) {
+        axisState(1).status = forward ? "moving left" : "moving right";
+    } else {
+        axisState(2).status = forward ? "moving in" : "moving out";
+    }
+    // (INF_LEFT and INF_IN are the highest step, INF_RIGHT and INF_OUT the
+    // lowest)
+    const long target = stepSign(axisNumber, direction) > 0 ? INF_LEFT : INF_RIGHT;
+    if (axisNumber == 1) {
+        // (Through the motion sequence, for a taper or threading)
+        axis1GoToStep(target);
+    } else {
+        m_axis2Motor->goToStep(target);
+    }
+}
+
+void Model::rapid(int axisNumber, AxisDirection direction)
+{
+    // Don't allow rapids if in a mode;
+    if (m_mode != Mode::None) {
+        return;
+    }
+    if (axisMoveRefused(axisNumber)) {
+        return;
+    }
+    // Issuing the same command (i.e. pressing the same key)
+    // when it is already running will cause the motor to stop
+    if (isMotorRunning(axisNumber)) {
+        stopAxisRamped(axisNumber);
+        return;
+    }
+    StepperMotor* m = motor(axisNumber);
+    axisState(axisNumber).previousSpeed = m->getSpeed();
+    axisState(axisNumber).rapidInProgress = true;
+    m->setSpeed(m->getMaxRpm());
+    move(axisNumber, direction);
+}
+
+void Model::nudge(int axisNumber, AxisDirection direction, double mm)
+{
+    if (axisMoveRefused(axisNumber)) {
+        return;
+    }
+    // (First, so that its end can't restore a speed over ours)
+    m_motionSequence.cancel();
+    if (isMotorRunning(axisNumber)) {
+        stopAxis(axisNumber);
+    }
+    StepperMotor* m = motor(axisNumber);
+    const double oldSpeed = m->getSpeed();
+    m->setSpeed(m->getMaxRpm() / 10.0);
+    // The same way as a move (see AxisDirection). (Until 20 Nov 2026, a nudge
+    // took its direction from the conversion factor's sign instead, which
+    // agreed with the moves on the lathe and the mill's X, but turned the
+    // mill's rotary table the opposite way to its arrow keys)
+    const long steps
+        = stepSign(axisNumber, direction) * std::lround(mm / std::abs(m->getConversionFactor()));
+    const long target = motorStep(axisNumber) + steps;
+    // The nudge is a sequence which ends when the move does, so that (as
+    // with any sequence) keys pressed meanwhile wait until it's finished,
+    // and a quick series of nudges each moves the full amount
+    std::vector<MotionSequence::Step> moveSteps;
+    if (axisNumber == 1) {
+        // (Following the taper or the thread, in those modes)
+        moveSteps = axis1MoveSteps(target);
+    } else {
+        moveSteps = { { [this, target]() { m_axis2Motor->goToStep(target); }, {} } };
+    }
+    moveSteps.back().done = [this, axisNumber]() { return !isMotorRunning(axisNumber); };
+    m_motionSequence.start(std::move(moveSteps), [this, axisNumber, oldSpeed]() {
+        motor(axisNumber)->setSpeed(oldSpeed);
+        if (axisNumber == 1) {
+            // A nudge isn't a threading pass, so it shouldn't retract X when it ends
+            m_threadingMoveInProgress = false;
+        }
+        // Save position
+        saveBreadcrumbPosition(axisNumber);
+    });
+}
+
+void Model::fastReturn(int axisNumber)
+{
+    const auto step = memoryStep(axisNumber);
+    auto& state = axisState(axisNumber);
+    if (!step || state.fastReturning) {
+        return;
+    }
+    if (axisMoveRefused(axisNumber)) {
+        return;
+    }
+    StepperMotor* m = motor(axisNumber);
+    state.previousSpeed = m->getSpeed();
+    state.fastReturning = true;
+    stopAxis(axisNumber);
+    if (axisNumber == 1 && m_mode == Mode::Taper) {
+        // If we are tapering, we need to set a speed the x-axis motor can keep up with
+        m->setSpeed(100.0);
+        axisState(2).previousSpeed = m_axis2Motor->getSpeed();
+        // (axis1GoToStep() takes up the backlash and synchronises X)
+    } else {
+        m->setSpeed(m->getMaxRpm());
+    }
+    state.status = "fast returning";
+    if (axisNumber == 1) {
+        axis1GoToStep(*step);
+    } else {
+        m_axis2Motor->goToStep(*step);
+    }
+}
+
 void Model::goToPreviousPosition(int axisNumber)
 {
-    if (axisNumber == 1 ? axis1MoveRefused() : axis2MoveRefused()) {
+    if (axisMoveRefused(axisNumber)) {
         return;
     }
     stopAxis(axisNumber);

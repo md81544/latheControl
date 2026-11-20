@@ -64,7 +64,7 @@ For general **movement** of the carriages, use the arrow keys. Press the same ke
 
 Control **speed of motion** with number keys. `1`-`5` controls Z and `6`-`0` controls X. For finer control of speed, use the `-` and `+` (or `=`) keys for the Z axis, and use the leader `X` with the same keys for the X axis (for example, press `X`, then `-`).
 
-"**Nudging**" the axes can be achieved with the `W`, `A`, `S`, and `D` keys. Each "nudge" is 0.05mm. To move less (0.01mm), press `shift` plus a nudge key. To move more (0.1mm), press `Alt` plus a nudge key. If you're pressing these keys a lot, look at relative motion (below) instead.
+"**Nudging**" the axes can be achieved with the `W`, `A`, `S`, and `D` keys. Each "nudge" is 0.05mm. To move less (0.01mm), press `shift` plus a nudge key. To move more (0.1mm), press `Alt` plus a nudge key. Each goes the same way as its arrow key (`W` as up, `A` as left, `S` as down, `D` as right). (Until 20 Nov 2026, the mill's rotary table turned the opposite way for `W` and `S` to its arrow keys.) If you're pressing these keys a lot, look at relative motion (below) instead.
 
 There are six **memory locations**, you can select which one is active by means of the `[` and `]` keys. Press `M` to store the current X and Z position in the current memory slot.
 

@@ -474,33 +474,33 @@ void Controller::processKey(int t)
             // Nudge in X axis
             case key::W:
                 {
-                    m_model->axis2Nudge(XDirection::Inwards, 0.01);
+                    m_model->nudge(2, axisDirection(XDirection::Inwards), 0.01);
                     break;
                 }
             case key::w:
                 {
-                    m_model->axis2Nudge(XDirection::Inwards, 0.05);
+                    m_model->nudge(2, axisDirection(XDirection::Inwards), 0.05);
                     break;
                 }
             case key::AltW:
                 {
-                    m_model->axis2Nudge(XDirection::Inwards, 0.1);
+                    m_model->nudge(2, axisDirection(XDirection::Inwards), 0.1);
                     break;
                 }
             // Nudge out X axis
             case key::S:
                 {
-                    m_model->axis2Nudge(XDirection::Outwards, 0.01);
+                    m_model->nudge(2, axisDirection(XDirection::Outwards), 0.01);
                     break;
                 }
             case key::s:
                 {
-                    m_model->axis2Nudge(XDirection::Outwards, 0.05);
+                    m_model->nudge(2, axisDirection(XDirection::Outwards), 0.05);
                     break;
                 }
             case key::AltS:
                 {
-                    m_model->axis2Nudge(XDirection::Outwards, 0.1);
+                    m_model->nudge(2, axisDirection(XDirection::Outwards), 0.1);
                     break;
                 }
             // Faster and slower: = (i.e. plus) and - for axis 1, or after
@@ -598,42 +598,42 @@ void Controller::processKey(int t)
                 }
             case key::UP:
                 {
-                    m_model->axis2Move(XDirection::Inwards);
+                    m_model->move(2, axisDirection(XDirection::Inwards));
                     break;
                 }
             case key::DOWN:
                 {
-                    m_model->axis2Move(XDirection::Outwards);
+                    m_model->move(2, axisDirection(XDirection::Outwards));
                     break;
                 }
             case key::LEFT:
                 {
-                    m_model->axis1Move(ZDirection::Left);
+                    m_model->move(1, axisDirection(ZDirection::Left));
                     break;
                 }
             case key::RIGHT:
                 {
-                    m_model->axis1Move(ZDirection::Right);
+                    m_model->move(1, axisDirection(ZDirection::Right));
                     break;
                 }
             case key::AltUp:
                 {
-                    m_model->axis2Rapid(XDirection::Inwards);
+                    m_model->rapid(2, axisDirection(XDirection::Inwards));
                     break;
                 }
             case key::AltDown:
                 {
-                    m_model->axis2Rapid(XDirection::Outwards);
+                    m_model->rapid(2, axisDirection(XDirection::Outwards));
                     break;
                 }
             case key::AltLeft:
                 {
-                    m_model->axis1Rapid(ZDirection::Left);
+                    m_model->rapid(1, axisDirection(ZDirection::Left));
                     break;
                 }
             case key::AltRight:
                 {
-                    m_model->axis1Rapid(ZDirection::Right);
+                    m_model->rapid(1, axisDirection(ZDirection::Right));
                     break;
                 }
             // Joystick-specific rapids
@@ -642,28 +642,28 @@ void Controller::processKey(int t)
             case key::js_rapid_up:
                 {
                     if (!m_model->isMotorRunning(1)) {
-                        m_model->axis2Rapid(XDirection::Inwards);
+                        m_model->rapid(2, axisDirection(XDirection::Inwards));
                     }
                     break;
                 }
             case key::js_rapid_down:
                 {
                     if (!m_model->isMotorRunning(1)) {
-                        m_model->axis2Rapid(XDirection::Outwards);
+                        m_model->rapid(2, axisDirection(XDirection::Outwards));
                     }
                     break;
                 }
             case key::js_rapid_left:
                 {
                     if (!m_model->isMotorRunning(2)) {
-                        m_model->axis1Rapid(ZDirection::Left);
+                        m_model->rapid(1, axisDirection(ZDirection::Left));
                     }
                     break;
                 }
             case key::js_rapid_right:
                 {
                     if (!m_model->isMotorRunning(2)) {
-                        m_model->axis1Rapid(ZDirection::Right);
+                        m_model->rapid(1, axisDirection(ZDirection::Right));
                     }
                     break;
                 }
@@ -673,60 +673,60 @@ void Controller::processKey(int t)
             case key::js_up:
                 {
                     if (!m_model->isMotorRunning(1)) {
-                        m_model->axis2Move(XDirection::Inwards);
+                        m_model->move(2, axisDirection(XDirection::Inwards));
                     }
                     break;
                 }
             case key::js_down:
                 {
                     if (!m_model->isMotorRunning(1)) {
-                        m_model->axis2Move(XDirection::Outwards);
+                        m_model->move(2, axisDirection(XDirection::Outwards));
                     }
                     break;
                 }
             case key::js_left:
                 {
                     if (!m_model->isMotorRunning(2)) {
-                        m_model->axis1Move(ZDirection::Left);
+                        m_model->move(1, axisDirection(ZDirection::Left));
                     }
                     break;
                 }
             case key::js_right:
                 {
                     if (!m_model->isMotorRunning(2)) {
-                        m_model->axis1Move(ZDirection::Right);
+                        m_model->move(1, axisDirection(ZDirection::Right));
                     }
                     break;
                 }
 
             case key::a:
                 {
-                    m_model->axis1Nudge(ZDirection::Left, 0.05);
+                    m_model->nudge(1, axisDirection(ZDirection::Left), 0.05);
                     break;
                 }
             case key::A:
                 {
-                    m_model->axis1Nudge(ZDirection::Left, 0.01);
+                    m_model->nudge(1, axisDirection(ZDirection::Left), 0.01);
                     break;
                 }
             case key::AltA:
                 {
-                    m_model->axis1Nudge(ZDirection::Left, 0.1);
+                    m_model->nudge(1, axisDirection(ZDirection::Left), 0.1);
                     break;
                 }
             case key::d:
                 {
-                    m_model->axis1Nudge(ZDirection::Right, 0.05);
+                    m_model->nudge(1, axisDirection(ZDirection::Right), 0.05);
                     break;
                 }
             case key::D:
                 {
-                    m_model->axis1Nudge(ZDirection::Right, 0.01);
+                    m_model->nudge(1, axisDirection(ZDirection::Right), 0.01);
                     break;
                 }
             case key::AltD:
                 {
-                    m_model->axis1Nudge(ZDirection::Right, 0.1);
+                    m_model->nudge(1, axisDirection(ZDirection::Right), 0.1);
                     break;
                 }
             case key::LBRACKET: // [
@@ -770,21 +770,16 @@ void Controller::processKey(int t)
                     break;
                 }
             case key::a1_f:
-                {
-                    // Fast return to point
-                    m_model->axis1FastReturn();
-                    break;
-                }
             case key::a2_f:
                 {
-                    // Fast return to point
-                    m_model->axis2FastReturn();
+                    // Fast return to the current memory slot
+                    m_model->fastReturn(key::axisOfKey(kp));
                     break;
                 }
             case key::aAll_f:
                 {
-                    m_model->axis1FastReturn();
-                    m_model->axis2FastReturn();
+                    m_model->fastReturn(1);
+                    m_model->fastReturn(2);
                     break;
                 }
             case key::r:

@@ -2067,10 +2067,10 @@ TEST_CASE("Model:   a locked axis isn't moved by anything")
     REQUIRE(model.getWarning() == "Unlock X first");
     model.goToCurrentMemory(2);
     model.axis2Retract();
-    model.axis2Rapid(mgo::XDirection::Inwards);
-    model.axis2Move(mgo::XDirection::Outwards);
-    model.axis2Nudge(mgo::XDirection::Inwards, 0.1);
-    model.axis2FastReturn();
+    model.rapid(2, mgo::axisDirection(mgo::XDirection::Inwards));
+    model.move(2, mgo::axisDirection(mgo::XDirection::Outwards));
+    model.nudge(2, mgo::axisDirection(mgo::XDirection::Inwards), 0.1);
+    model.fastReturn(2);
     REQUIRE(stillAt(0.0, 0.0));
     REQUIRE(!model.getIsAxis2Retracted());
     // Z isn't locked, so moves
@@ -2087,10 +2087,10 @@ TEST_CASE("Model:   a locked axis isn't moved by anything")
     model.lockAxis(1);
     model.goToCurrentMemory(1);
     REQUIRE(model.getWarning() == "Unlock Z first");
-    model.axis1Rapid(mgo::ZDirection::Left);
-    model.axis1Move(mgo::ZDirection::Right);
-    model.axis1Nudge(mgo::ZDirection::Left, 0.1);
-    model.axis1FastReturn();
+    model.rapid(1, mgo::axisDirection(mgo::ZDirection::Left));
+    model.move(1, mgo::axisDirection(mgo::ZDirection::Right));
+    model.nudge(1, mgo::axisDirection(mgo::ZDirection::Left), 0.1);
+    model.fastReturn(1);
     model.repeatLastRelativeMove(1);
     REQUIRE(stillAt(0.5, 0.5));
     model.unlockAxis(1);
@@ -3144,6 +3144,69 @@ TEST_CASE("Sequence: cancelling")
     REQUIRE(secondRan == 0);
 }
 
+TEST_CASE("Model:   moves, rapids and nudges go the same way, as the flip setting says")
+{
+    // Forward (left or up) raises the step count unless the axis is flipped,
+    // whatever the conversion factor's sign. A nudge used to take its way
+    // from that sign, which turned the mill's rotary table (a positive
+    // conversion, not flipped) the opposite way to its arrow keys
+    struct Machine {
+        std::string name;
+        std::map<std::string, std::string> settings;
+        std::array<int, 2> forwardSign; // axis 1's and 2's
+    };
+    const std::vector<Machine> machines {
+        { "lathe",
+          { { "Axis1ConversionNumerator", "-1" },
+            { "Axis1ConversionDivisor", "1000" },
+            { "Axis2ConversionNumerator", "-1" },
+            { "Axis2ConversionDivisor", "2400" } },
+          { 1, 1 } },
+        { "mill",
+          { { "Axis1ConversionNumerator", "2" },
+            { "Axis1ConversionDivisor", "6400" },
+            { "Axis1MotorFlipDirection", "true" },
+            { "Axis2ConversionNumerator", "5" },
+            { "Axis2ConversionDivisor", "4000" } },
+          { -1, 1 } },
+    };
+    for (const auto& machine : machines) {
+        TestConfigReader config(machine.settings);
+        mgo::MockGpio gpio(false);
+        mgo::Model model(gpio, config);
+        model.initialise();
+        REQUIRE(runUntilStopped(model));
+        for (const int axis : { 1, 2 }) {
+            INFO(machine.name << ", axis " << axis);
+            const int forward = machine.forwardSign.at(axis - 1);
+            for (const auto direction : { mgo::AxisDirection::Forward, mgo::AxisDirection::Back }) {
+                const int sign = direction == mgo::AxisDirection::Forward ? forward : -forward;
+                INFO((direction == mgo::AxisDirection::Forward ? "forward" : "back"));
+                for (const bool rapid : { false, true }) {
+                    INFO((rapid ? "rapid" : "move"));
+                    const long before = model.motorStep(axis);
+                    if (rapid) {
+                        model.rapid(axis, direction);
+                    } else {
+                        model.move(axis, direction);
+                    }
+                    REQUIRE(waitFor([&] { return model.motorStep(axis) != before; }));
+                    model.stopAllMotors();
+                    REQUIRE((model.motorStep(axis) - before) * sign > 0);
+                    REQUIRE(runUntilStopped(model));
+                }
+                INFO("nudge");
+                const long before = model.motorStep(axis);
+                const double beforeMm = model.motorPosition(axis);
+                model.nudge(axis, direction, 0.1);
+                REQUIRE(runUntilStopped(model));
+                REQUIRE((model.motorStep(axis) - before) * sign > 0);
+                REQUIRE(std::abs(model.motorPosition(axis) - beforeMm) == Approx(0.1));
+            }
+        }
+    }
+}
+
 TEST_CASE("Model:   a nudge doesn't block, and restores the speed when done")
 {
     mgo::MockConfigReader config;
@@ -3152,7 +3215,7 @@ TEST_CASE("Model:   a nudge doesn't block, and restores the speed when done")
     model.initialise();
     model.setMotorSpeed(1, 40.0);
     // (At the nudge speed, 1mm takes over half a second)
-    model.axis1Nudge(mgo::ZDirection::Left, 1.0);
+    model.nudge(1, mgo::axisDirection(mgo::ZDirection::Left), 1.0);
     REQUIRE(model.isMotionSequenceRunning());
     REQUIRE(model.isMotorRunning(1));
     REQUIRE(runUntilStopped(model));
@@ -3161,7 +3224,7 @@ TEST_CASE("Model:   a nudge doesn't block, and restores the speed when done")
 
     // Stopping all motors part way cancels it, and still restores the speed
     model.setMotorSpeed(2, 20.0);
-    model.axis2Nudge(mgo::XDirection::Inwards, 1.0);
+    model.nudge(2, mgo::axisDirection(mgo::XDirection::Inwards), 1.0);
     REQUIRE(model.isMotionSequenceRunning());
     REQUIRE(waitFor([&] { return std::abs(model.motorPosition(2)) > 0.01; }));
     model.stopAllMotors();
@@ -3182,7 +3245,7 @@ TEST_CASE("Model:   a released rapid slows down to a stop, if it can", "[timing]
         REQUIRE(runUntilStopped(model));
         // Nothing to release: the caller stops everything, as for Space
         REQUIRE(!model.rapidReleased());
-        model.axis1Rapid(mgo::ZDirection::Left);
+        model.rapid(1, mgo::axisDirection(mgo::ZDirection::Left));
         // (Long enough to speed up beyond where the ramp starts)
         std::this_thread::sleep_for(std::chrono::milliseconds(200));
         model.checkStatus();
@@ -3205,7 +3268,7 @@ TEST_CASE("Model:   a released rapid slows down to a stop, if it can", "[timing]
         mgo::Model model(gpio, config);
         model.initialise();
         REQUIRE(runUntilStopped(model));
-        model.axis1Rapid(mgo::ZDirection::Left);
+        model.rapid(1, mgo::axisDirection(mgo::ZDirection::Left));
         std::this_thread::sleep_for(std::chrono::milliseconds(200));
         REQUIRE(model.rapidReleased());
         REQUIRE(!model.isMotorRunning(1));
@@ -3223,9 +3286,9 @@ TEST_CASE("Model:   a ramped stop slows down; stopped again, it stops at once", 
     for (const int axis : { 1, 2 }) {
         INFO("axis " << axis);
         if (axis == 1) {
-            model.axis1Rapid(mgo::ZDirection::Left);
+            model.rapid(1, mgo::axisDirection(mgo::ZDirection::Left));
         } else {
-            model.axis2Rapid(mgo::XDirection::Inwards);
+            model.rapid(2, mgo::axisDirection(mgo::XDirection::Inwards));
         }
         // (Long enough to speed up beyond where the ramp starts)
         std::this_thread::sleep_for(std::chrono::milliseconds(200));
@@ -5577,7 +5640,10 @@ TEST_CASE("Model:   spring passes after the threading passes", "[timing]")
     REQUIRE(mgo::keyAllowedInCurrentMode(mgo::key::w, t.model));
     REQUIRE(!mgo::keyAllowedInCurrentMode(mgo::key::AltW, t.model));
     const double intoWork = xEnd < t.model.getMultiPassRange().feedStart ? -1.0 : 1.0;
-    t.model.axis2Nudge(intoWork < 0.0 ? mgo::XDirection::Inwards : mgo::XDirection::Outwards, 0.01);
+    t.model.nudge(
+        2,
+        mgo::axisDirection(intoWork < 0.0 ? mgo::XDirection::Inwards : mgo::XDirection::Outwards),
+        0.01);
     runUntilMoved(t);
     const double nudged = t.model.motorPosition(2);
     REQUIRE(nudged == Approx(xEnd + intoWork * 0.01).margin(0.0001));
@@ -5595,7 +5661,7 @@ TEST_CASE("Model:   spring passes after the threading passes", "[timing]")
 
     // X moved out while paused (e.g. to try the nut on): Enter takes it back
     // to the last depth, rather than cutting from there; Enter again cuts
-    t.model.axis2Nudge(out, 0.05);
+    t.model.nudge(2, mgo::axisDirection(out), 0.05);
     runUntilMoved(t);
     REQUIRE(!t.model.springPassAtStart());
     t.model.multiPassGo();
@@ -5652,7 +5718,7 @@ TEST_CASE("Model:   spring passes after the threading passes", "[timing]")
 
     // Stopped, X moved out without retracting: Enter goes back to the last
     // depth first
-    t.model.axis2Nudge(out, 0.05);
+    t.model.nudge(2, mgo::axisDirection(out), 0.05);
     runUntilMoved(t);
     REQUIRE(!t.model.springPassAtStart());
     t.model.multiPassGo();
@@ -5661,7 +5727,7 @@ TEST_CASE("Model:   spring passes after the threading passes", "[timing]")
     REQUIRE(t.model.motorPosition(2) == Approx(nudged).margin(0.0001));
 
     // Stopped, X nudged in: deeper is on purpose, so Enter cuts from there
-    t.model.axis2Nudge(in, 0.01);
+    t.model.nudge(2, mgo::axisDirection(in), 0.01);
     runUntilMoved(t);
     const double deeper = t.model.motorPosition(2);
     REQUIRE(deeper == Approx(nudged + intoWork * 0.01).margin(0.0001));

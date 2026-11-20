@@ -2077,8 +2077,27 @@ change.
           together. A new test presses "stop" twice on each axis with
           deceleration ramping: the first slows down, the second stops at
           once
-        - Still to do, in the same way: moves and rapids, nudges, fast
-          returns, locks, and the
+        - **Then (20 Nov 2026), moves, rapids, nudges and fast returns:**
+          `move()`, `rapid()`, `nudge()` and `fastReturn()` take the axis
+          number, in place of the eight `axisN...()`, with one direction
+          type for every motorised axis, `AxisDirection` (`Forward` is the
+          left and up arrows' way; `axisDirection()` turns a `ZDirection` or
+          `XDirection` into one). Axis 1's moves still go through the
+          motion sequence (for a taper or threading), and its fast return
+          in a taper is still at 100 mm/min. Nothing tested the directions,
+          and they turned out not to agree: a move's direction came from
+          `AxisNMotorFlipDirection`, but a nudge's from the conversion
+          factor's sign (and, on axis 2 only, the flip as well). Those
+          agreed on the lathe and the mill's X, but on the mill's rotary
+          table (a positive conversion, not flipped) `W`/`S` turned it the
+          opposite way to Up/Down. Decided (20 Nov 2026): the arrows' way,
+          so a nudge's direction now comes from the flip alone, as a
+          move's does, and only A's nudges change. A test now checks every
+          move, rapid and nudge's direction with both machines' settings
+          (and fails on the old rule, for the mill's A nudge alone). A
+          nudge's steps are now rounded, rather than truncated. **To check
+          on the mill:** that `W` turns A the same way as Up
+        - Still to do, in the same way: locks, and the
           scale (which wants to belong to any axis, for a scale on the
           lathe's X later). These are inside the Model, where the two
           motorised axes differ most (axis 1's taper, threading and scale;
