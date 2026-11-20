@@ -58,9 +58,20 @@
       have, and halving several axes at once wouldn't make sense)
 
 ### Investigate Sound Output
-- [ ] Still getting the first sound failing - maybe the monitor's audio is
+- [x] Still getting the first sound failing - maybe the monitor's audio is
       also in idle - maybe play the alert sound on program start to kick it
       into life?
+    - **Tried on the lathe (2026-11-20)** with a test key (F12 plays the
+      alert, test code in Controller::processKeyPress, to come out once
+      this is settled). The delay between the key and the sound is too
+      small to notice. A sound 30 minutes after the last one played as
+      usual, so it isn't the output (or the monitor) going back to sleep.
+      It's only the first sound after a reboot that's lost, and lost
+      entirely: `aplay alarm.wav` by hand after a reboot played nothing,
+      and after that, lc's first F12 played
+    - **Done (2026-11-20), not yet tried on the machine:** lc plays the
+      alert once at start-up to wake the output. Not config-driven: it's
+      usually not heard, and it's harmless if it is
 - [x] Could be useful for warnings and prompts.
     - **Done (2026-11-16), not yet tried on the machine:** `SoundAlert` and
       `SoundAlarm` in the config (sounds/alert.wav and sounds/alarm.wav, on

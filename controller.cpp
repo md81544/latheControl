@@ -52,6 +52,11 @@ Controller::Controller(Model* model)
             MGOLOG("Sound file not found: " << *file);
         }
     }
+    // The first sound after the Pi boots is lost entirely (tried on the
+    // machine, 2026-11-20: even aplay run by hand plays nothing), but every
+    // one after it plays, even after 30 minutes' quiet. So one is played now,
+    // to wake the output: it's usually not heard, and it does no harm if it is
+    playSound(Sound::Alert);
     m_view = std::make_unique<ViewQt>();
     m_view->setMenu(&m_menu);
     m_view->initialise(*m_model);
