@@ -448,16 +448,6 @@ void Controller::processKeyPress()
     // Only the menu cares whether a key came from the gamepad
     const bool fromJoystick = k & key::JOYSTICK;
     k &= ~key::JOYSTICK;
-    // TEST CODE (temporary): F12 plays the alert sound and does nothing else.
-    // It's for testing the sound output by hand on the Pi (the delay before a
-    // sound starts, and sounds lost just after start-up): see TODO.md,
-    // "Investigate Sound Output". It's left out of the command table on
-    // purpose, so it isn't in the menu. Remove it once that's settled.
-    if (k == key::F12) {
-        MGOLOG("Test: F12 pressed, playing the alert sound");
-        playSound(Sound::Alert);
-        return;
-    }
     // F1 (help) opens and closes the menu, just as Tab does
     if (k == key::F1) {
         k = key::TAB;
