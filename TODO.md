@@ -2095,8 +2095,9 @@ change.
           move's does, and only A's nudges change. A test now checks every
           move, rapid and nudge's direction with both machines' settings
           (and fails on the old rule, for the mill's A nudge alone). A
-          nudge's steps are now rounded, rather than truncated. **To check
-          on the mill:** that `W` turns A the same way as Up
+          nudge's steps are now rounded, rather than truncated. **Tried on
+          the mill (20 Nov 2026):** nudges used a lot, as normal. **Still to
+          check on the mill:** that `W` turns A the same way as Up
         - **Then (20 Nov 2026), locks:** the lock calls already took an
           axis number; now the refusals do too. `axisMoveRefused()` is the
           one check for a move of an axis (adding X for axis 1 in a taper,
@@ -2116,7 +2117,8 @@ change.
           then axis 2's motor, as it may follow axis 1's in a taper, then
           axis 1's), rather than relying on the members' order. Only the
           app's quit called it before; the tests didn't. No change of
-          behaviour
+          behaviour. **Tried on the mill (20 Nov 2026):** quitting, with no
+          problems
         - **The scale, decided (20 Nov 2026):** a scale on the lathe's X is
           planned, once Z's (the trial: quadrature, straight to two GPIO
           pins, as X's will be, not a DRO sender) is working and proven; it's
@@ -2241,7 +2243,8 @@ change.
           the multi-pass sees one feed; this also replaces the reversing
           correction noted as not done above. Only the feed before a pass,
           not a radius's path. On for the mill's X at 0.2 mm and 20 mm/min
-          (the user's choice), **not yet tried on the mill**. Tests: with
+          (the user's choice). **Tried on the mill (20 Nov 2026):** go-tos
+          on X stop short and creep in as expected. Tests: with
           the table running 0.05 mm ahead of the motor, a go-to's scale
           never reads past the target with the approach, and does (by more
           than 0.04) without; a short move creeps all the way; and a
@@ -2279,7 +2282,12 @@ change.
           cut's end or back past the start; without, it ends 0.05 past the
           end (and with the return left out of the approach, 0.05 past the
           start). On the mill (0.2 mm), each pass now waits about 4 s
-          rather than 2, **not yet tried there**
+          rather than 2. **Tried on the mill (20 Nov 2026):** a multi-pass
+          on X worked as expected, stopping short and creeping at both
+          ends, but not on a real cut: **still to see** whether the dwell
+          0.2 mm before a cut's end leaves a mark (a smaller approach, e.g.
+          0.1, would move it closer to the end). `XB` (re-basing by hand) not
+          tried since the scale's calls moved to axis numbers
         - **Then (20 Nov 2026), in the fake build with lc_mill.cfg**, the
           user saw a multi-pass from 0 to -5 stop at -4.80, jump to about
           -5.08, then go back, rather than creep. The simulated table had
