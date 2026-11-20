@@ -10,6 +10,7 @@
 #include <chrono>
 #include <cstdint>
 #include <functional>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <thread>
@@ -96,21 +97,43 @@ private:
 // its recent readings, so lags a little behind a moving axis, and it starts
 // from an arbitrary count. setErrorMm() makes it read a different position
 // from the one it follows (e.g. to simulate a motor losing steps).
-// position() is called from its own thread, so must be thread-safe
+// position() is called from its own thread, so must be thread-safe.
+// slackMm is the simulated table's backlash: the table stays within a band
+// slackMm wide of position(). Moving the way of slackMm's sign pushes it
+// along; moving the other way, position() first takes up the slack. It
+// starts pushed along (as StepperMotor's backlash compensation expects, after
+// the Model's start-up take-up: so with the same amount, the table follows
+// the motor's reported position exactly)
 class FakeDroScale final : public IScale {
 public:
-    FakeDroScale(std::function<double()> position, double countsPerMm, bool reversed);
+    FakeDroScale(
+        std::function<double()> position,
+        double countsPerMm,
+        bool reversed,
+        double slackMm = 0.0);
     ~FakeDroScale();
     FakeDroScale(const FakeDroScale&) = delete;
     FakeDroScale& operator=(const FakeDroScale&) = delete;
 
     std::optional<int32_t> readCounts() const override;
     void setErrorMm(double mm);
+    // Where the simulated table is now, in mm (what it follows, plus the
+    // error): not averaged, so without the lag (for the tests, e.g. to see a
+    // move that ends past its target, which the reading may not catch up with
+    // before the next move starts)
+    double tableMm() const;
 
     // Where the counts start from, as a real scale's would be
     static constexpr int32_t START_COUNTS = 250'383;
 
 private:
+    // Where the table is now, taking up its slack (thread-safe)
+    double follow() const;
+
+    std::function<double()> m_position;
+    double m_slackMm { 0.0 };
+    mutable std::mutex m_followMutex;
+    mutable std::optional<double> m_table;
     std::atomic<int32_t> m_counts { START_COUNTS };
     std::atomic<double> m_errorMm { 0.0 };
     std::atomic<bool> m_stop { false };

@@ -1122,6 +1122,14 @@ private:
     // set to where it's read from, for the log. fakePosition is what a
     // simulated serial scale follows (in FAKE builds), and fake is set to
     // it
+#ifdef FAKE
+    // A simulated scale's table's backlash (see FakeDroScale), in mm, signed
+    // as the motor's steps go: AxisNFakeBacklashSteps, which defaults to
+    // AxisNBacklashCompensationSteps, so the compensation is right (as on a
+    // machine whose backlash is set well). 0 simulates a table with none,
+    // so the compensation is all error
+    double fakeSlackMm(int axisNumber) const;
+#endif
     std::unique_ptr<IScale> makeScale(
         int axisNumber,
         const std::string& type,
@@ -1184,6 +1192,9 @@ private:
     // can't be undone by a correction afterwards
     double scaleApproachMm(int axisNumber) const;
     double scaleApproachSpeed(int axisNumber) const;
+    // The speed to creep at: the approach's, or slower if the axis was
+    // already going slower (e.g. a fine cut)
+    double creepSpeed(int axisNumber) const;
     // The speed an axis's motor is left at after a move at this speed has
     // stopped: AxisNSpeedResetTo, if it was at or above AxisNSpeedResetAbove
     // (see checkStatus()), so a fast move ending with a creep still leaves
@@ -1235,11 +1246,11 @@ private:
     // re-bases it, so the pass is cut at the depth the scale says (the
     // multi-pass feeds again if the re-base leaves it short or past)
     bool feedReady() override;
-    // A multi-pass's feed with an approach (see scaleApproachMm()): moving
-    // short of the depth (backing off first, if past it), waiting for the
-    // scale and re-basing, then creeping the rest. feedMoving() is true
-    // until it's done
-    struct FeedApproach {
+    // A multi-pass's move of the cut or feed axis with an approach (see
+    // scaleApproachMm()): moving short of the target (backing off first, if
+    // past it), waiting for the scale and re-basing, then creeping the rest.
+    // cutMoving() or feedMoving() is true until it's done
+    struct AxisApproach {
         enum class Phase {
             BackingOff,
             MovingShort,
@@ -1249,19 +1260,32 @@ private:
         Phase phase { Phase::MovingShort };
         // In the motor's frame (re-basing keeps the same as the scale's)
         double targetMm { 0.0 };
-        // +1 or -1: the way the feed goes in (from feedStart to feedEnd)
+        // +1 or -1: the way it approaches the target
         int direction { 1 };
         // The scale's settleCount() when the move short started
         int settles { 0 };
         double speedBeforeCreep { 0.0 };
+        // It has backed off once (it doesn't again: see advanceApproach())
+        bool backedOff { false };
     };
-    std::optional<FeedApproach> m_feedApproach;
-    // Whether the feed now is to approach (Axis2ScaleApproachMm, with
-    // Axis2ScaleRebaseBetweenPasses, as for feedReady())
+    std::array<std::optional<AxisApproach>, 2> m_approaches;
+    // Warns that an axis went past its target before its approach's creep:
+    // its approach is less than it can overshoot by
+    void warnApproachTooShort(int axisNumber, double pastMm);
+    // The return's approach has just re-based axis 1 at the pass's start, so
+    // cutReady() needn't wait for its scale again
+    bool m_returnApproachRebased { false };
+    // Whether a multi-pass's move of the feed axis (the feed before a pass)
+    // or the cut axis (a cut, a return, or a move to a pass's start; not a
+    // radius's path, nor with the feed axis following) is to approach
+    // (AxisNScaleApproachMm, with AxisNScaleRebaseBetweenPasses)
     bool feedApproaches() const;
-    // Called from checkStatus(): moves the feed's approach on
-    void advanceFeedApproach();
-    void endFeedApproach();
+    bool cutApproaches(double feedFollows) const;
+    // Starts one, to target, finally moving direction (+1 or -1)
+    void startApproach(int axisNumber, double targetMm, int direction);
+    // Called from checkStatus(): moves each on
+    void advanceApproach(int axisNumber);
+    void endApproach(int axisNumber);
     bool cutMoving() const override;
     void cutMoveTo(double position, double feedFollows) override;
     double cutSpeed() const override;

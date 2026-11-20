@@ -2364,13 +2364,13 @@ TEST_CASE("UI: keys, moves and zeroing are logged")
 
 TEST_CASE("UI: measuring the backlash with a (simulated) scale")
 {
-    // The simulated scale follows the motor's actual steps, as a table with
-    // no backlash would: so all of the compensation set is too much, and it
-    // should measure no backlash
+    // The simulated table here has no backlash: so all of the compensation
+    // set is too much, and it should measure no backlash
     MapConfigReader config { { { "Axis1Scale", "serial" },
                                { "Axis1ScaleCountsPerMm", "100" },
                                { "Axis1ScaleSettleMs", "200" },
                                { "Axis1BacklashCompensationSteps", "200" },
+                               { "Axis1FakeBacklashSteps", "0" },
                                { "Axis1SpeedPreset2", "600" } } };
     mgo::MockGpio gpio { false };
     mgo::Model model { gpio, config };
@@ -2708,6 +2708,125 @@ TEST_CASE("UI: a multi-pass's feed approaches its depth, never going past it", "
     }
     // (The feed's speed is put back after creeping)
     REQUIRE(t.model.motorSpeed(2) == Approx(100.0));
+}
+
+TEST_CASE("UI: a multi-pass's cut approaches its end, never going past it", "[timing]")
+{
+    // As the second pass's cut starts, Z's table gets 0.05mm ahead of its
+    // motor, the way it's cutting (as the backlash compensation on the
+    // reversal into the cut can do): cut straight to the end, it would end
+    // 0.05 past it, e.g. into a shoulder. Then, as the return starts, it
+    // gets 0.05 ahead the other way (from the frame the cut's approach
+    // re-based it to): the return straight back would end 0.05 past the
+    // start (e.g. into a pocket's other wall). Without the approach, that
+    // second shift just cancels the first, so only the cut's end is checked
+    // then. (Checked by hand: with the return left out of the approach, the
+    // table goes back 0.05 past the start)
+    const bool approach = GENERATE(false, true);
+    INFO((approach ? "With an approach" : "Without"));
+    std::map<std::string, std::string> settings {
+        { "Axis1ScaleRebaseBetweenPasses", "true" },
+        { "Axis1ScaleWarnMm", "0.2" },
+    };
+    if (approach) {
+        settings.insert({ { "Axis1ScaleApproachMm", "0.2" }, { "Axis1ScaleApproachSpeed", "20" } });
+    }
+    ScaleTestModel t(settings);
+    REQUIRE(t.runUntil([&] { return t.model.scaleIsSteady(1); }));
+    startMultiPass(t, false);
+    const double start = t.model.multiPass().plan().cutStart;
+    const double end = t.model.multiPass().plan().cutEnd;
+    const int way = end < start ? -1 : 1;
+    bool shiftedCut = false;
+    bool shiftedReturn = false;
+    bool crept = false;
+    double furthest = 0.0;
+    double furthestBack = 0.0;
+    REQUIRE(t.runUntil([&] {
+        using State = mgo::MultiPass::State;
+        if (!shiftedCut && t.model.multiPass().pass() == 2
+            && multiPassIn(t.model, State::Cutting)) {
+            t.model.fakeScale(1)->setErrorMm(0.05 * way);
+            shiftedCut = true;
+        }
+        if (shiftedCut && !shiftedReturn && multiPassIn(t.model, State::Returning)) {
+            t.model.fakeScale(1)->setErrorMm(0.05 * way - 0.05 * way);
+            shiftedReturn = true;
+        }
+        crept = crept
+            || (multiPassIn(t.model, State::Cutting) && t.model.isMotorRunning(1)
+                && t.model.motorSpeed(1) == Approx(20.0));
+        // (Where the table really is: the reading lags, and the return
+        // starts before it would catch up)
+        const double z = t.model.fakeScale(1)->tableMm();
+        furthest = std::max(furthest, (z - start) * way);
+        furthestBack = std::max(furthestBack, (start - z) * way);
+        return !t.model.multiPass().inProgress();
+    }));
+    INFO("Stopped: " << t.model.multiPass().message() << " / " << t.model.getWarning());
+    REQUIRE(t.model.multiPass().state() == mgo::MultiPass::State::Finished);
+    REQUIRE(shiftedReturn);
+    const double length = (end - start) * way;
+    if (approach) {
+        REQUIRE(crept);
+        REQUIRE(furthest < length + 0.011);
+        REQUIRE(furthestBack < 0.011);
+    } else {
+        REQUIRE(furthest > length + 0.03);
+    }
+    // (The cut speed is kept from pass to pass)
+    REQUIRE(t.model.motorSpeed(1) == Approx(500.0));
+}
+
+TEST_CASE("UI: a cut's approach with backlash compensation (the fake build's mill)", "[timing]")
+{
+    // As found in the fake build with lc_mill.cfg (20 Nov 2026): 0.256mm of
+    // backlash compensation, and an approach of 0.2. The simulated table
+    // used to have no backlash, so each reversal into a cut took it 0.256
+    // further than the motor said: past the stop-short point, and the end.
+    // Now its backlash matches the compensation (as on a machine set up
+    // well), so the cut stops short, creeps in, and ends at the end
+    const bool tableHasBacklash = GENERATE(true, false);
+    INFO((tableHasBacklash ? "The table's backlash as compensated" : "A table with no backlash"));
+    std::map<std::string, std::string> settings {
+        { "Axis1ScaleRebaseBetweenPasses", "true" }, { "Axis1ScaleWarnMm", "0.5" },
+        { "Axis1ScaleApproachMm", "0.2" },           { "Axis1ScaleApproachSpeed", "20" },
+        { "Axis1BacklashCompensationSteps", "256" },
+    };
+    if (!tableHasBacklash) {
+        settings.insert({ "Axis1FakeBacklashSteps", "0" });
+    }
+    ScaleTestModel t(settings);
+    REQUIRE(t.runUntil([&] { return t.model.scaleIsSteady(1); }));
+    // (The simulated table follows the motor's actual steps, which the
+    // start-up's backlash take-up moved before the position was zeroed: so
+    // it's measured from where it was then)
+    const double tableOffset = t.model.fakeScale(1)->tableMm() - t.model.motorPosition(1);
+    startMultiPass(t, false);
+    const double start = t.model.multiPass().plan().cutStart;
+    const double end = t.model.multiPass().plan().cutEnd;
+    const int way = end < start ? -1 : 1;
+    double furthest = 0.0;
+    std::string warning;
+    REQUIRE(t.runUntil([&] {
+        furthest
+            = std::max(furthest, (t.model.fakeScale(1)->tableMm() - tableOffset - start) * way);
+        if (warning.empty()) {
+            warning = t.model.getWarning();
+        }
+        return !t.model.multiPass().inProgress();
+    }));
+    INFO("Stopped: " << t.model.multiPass().message() << " / " << warning);
+    REQUIRE(t.model.multiPass().state() == mgo::MultiPass::State::Finished);
+    const double length = (end - start) * way;
+    if (tableHasBacklash) {
+        REQUIRE(furthest < length + 0.011);
+        REQUIRE(warning.empty());
+    } else {
+        // It's past the stop-short point already: it says so, rather than
+        // just reversing onto the end
+        REQUIRE(warning.find("past its target") != std::string::npos);
+    }
 }
 
 TEST_CASE("UI: Space stops a multi-pass waiting for the scale to settle", "[timing]")
@@ -3376,7 +3495,9 @@ TEST_CASE("UI: the table carrying on into the slack is allowed for")
     ScaleTestModel t(
         { { "Axis1ScaleRebase", "true" },
           { "Axis1ScaleWarnMm", "0.2" },
-          { "Axis1BacklashCompensationSteps", "300" } });
+          { "Axis1BacklashCompensationSteps", "300" },
+          // (A simulated table with no backlash: see below)
+          { "Axis1FakeBacklashSteps", "0" } });
     REQUIRE(t.runUntil([&] { return t.model.scalePositionMm(1).has_value(); }));
     const auto stoppedAt = [&t](double position) {
         return t.runUntil([&] {

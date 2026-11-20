@@ -1,5 +1,7 @@
 #include "droserial.h"
 
+#include <algorithm>
+
 #include "log.h"
 
 #include <fmt/format.h>
@@ -171,15 +173,21 @@ void DroSerialReader::run()
     }
 }
 
-FakeDroScale::FakeDroScale(std::function<double()> position, double countsPerMm, bool reversed)
+FakeDroScale::FakeDroScale(
+    std::function<double()> position,
+    double countsPerMm,
+    bool reversed,
+    double slackMm)
+    : m_position(std::move(position))
+    , m_slackMm(slackMm)
 {
-    m_thread = std::thread([this, position = std::move(position), countsPerMm, reversed]() {
+    m_thread = std::thread([this, countsPerMm, reversed]() {
         // A third of a second's readings. (A guess at the real sender's lag,
         // until lc.log shows how long its readings take to settle)
         constexpr std::size_t AVERAGED = 8;
         std::deque<double> recent;
         while (!m_stop) {
-            const double counts = (position() + m_errorMm) * countsPerMm * (reversed ? -1 : 1);
+            const double counts = (follow() + m_errorMm) * countsPerMm * (reversed ? -1 : 1);
             recent.push_back(counts);
             if (recent.size() > AVERAGED) {
                 recent.pop_front();
@@ -210,6 +218,23 @@ std::optional<int32_t> FakeDroScale::readCounts() const
 void FakeDroScale::setErrorMm(double mm)
 {
     m_errorMm = mm;
+}
+
+double FakeDroScale::tableMm() const
+{
+    return follow() + m_errorMm;
+}
+
+double FakeDroScale::follow() const
+{
+    std::lock_guard lock(m_followMutex);
+    const double motor = m_position();
+    // The table is within the slack of the motor: pushed along once the
+    // motor has taken it up
+    const double low = std::min(motor, motor + m_slackMm);
+    const double high = std::max(motor, motor + m_slackMm);
+    m_table = std::clamp(m_table.value_or(motor), low, high);
+    return *m_table;
 }
 
 } // namespace mgo

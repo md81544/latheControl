@@ -1427,6 +1427,31 @@ TEST_CASE("Backlash: too much compensation, measured to the left first")
     REQUIRE(r.backlashMm() == Approx(0.4 + (r.positiveShortfallMm + r.negativeShortfallMm) / 2.0));
 }
 
+TEST_CASE("Scale:   A simulated table with backlash takes up its slack before moving")
+{
+    std::atomic<double> position { 0.0 };
+    for (const int sign : { 1, -1 }) {
+        INFO("slack's sign " << sign);
+        position = 0.0;
+        // 0.3mm of slack, pushed along as the position goes the slack's way
+        mgo::FakeDroScale scale(
+            [&position]() { return position.load(); }, 100.0, false, 0.3 * sign);
+        REQUIRE(scale.tableMm() == Approx(0.0));
+        position = 1.0 * sign;
+        REQUIRE(scale.tableMm() == Approx(1.0 * sign));
+        // Back the other way: the slack is taken up first
+        position = 0.8 * sign;
+        REQUIRE(scale.tableMm() == Approx(1.0 * sign));
+        position = 0.6 * sign;
+        REQUIRE(scale.tableMm() == Approx(0.9 * sign));
+        // And forwards again: the slack again, then it's pushed along
+        position = 0.8 * sign;
+        REQUIRE(scale.tableMm() == Approx(0.9 * sign));
+        position = 1.3 * sign;
+        REQUIRE(scale.tableMm() == Approx(1.3 * sign));
+    }
+}
+
 TEST_CASE("Scale:   The simulated DRO scale follows a position")
 {
     std::atomic<double> position { 0.0 };

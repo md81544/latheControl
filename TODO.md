@@ -2252,6 +2252,54 @@ change.
           cut starts with a reversal from the return, so the backlash
           compensation's error shifts where it ends; it would want to stop
           short and creep in too
+        - **Then (20 Nov 2026), the cut axis's ends:** the user chose, of
+          stopping short and creeping (a dwell with the tool in the work,
+          which may leave a faint mark the approach's distance before the
+          end), or taking up the slack beyond the start and re-basing there
+          before the cut (no dwell in the work, but it needs room beyond the
+          start, which a pocket's wall on the mill hasn't), the first. So the
+          approach is now general (`AxisApproach`, by axis number, in
+          `m_approaches`): besides the feed, axis 1's multi-pass moves (the
+          cut, the cut back, the return, and the move to a pass's start)
+          stop short, wait for the scale and re-base, then creep in, with
+          `Axis1ScaleApproachMm` and `Axis1ScaleRebaseBetweenPasses`. Not a
+          radius's path, threading, or a cut with X following Z, as
+          re-basing Z part way would move X (the follower moves by the
+          leader's change in position: see `StepperMotor::synchronise()`).
+          When the return has just re-based at the start, `cutReady()`
+          doesn't wait for the scale again, so a pass waits twice (the cut's
+          end and the return's), not three times. A creep is never faster
+          than the axis was going (`creepSpeed()`; a fine cut on the lathe
+          may be slower than 20 mm/min), for the finishing moves too. The
+          simulated scale now gives `tableMm()`, where the table really is,
+          without the reading's lag, as the return starts before the reading
+          would catch up with a cut's end. Test: Z's table gets 0.05 mm
+          ahead as the second cut starts, and 0.05 the other way as its
+          return starts: with the approach, the table never goes past the
+          cut's end or back past the start; without, it ends 0.05 past the
+          end (and with the return left out of the approach, 0.05 past the
+          start). On the mill (0.2 mm), each pass now waits about 4 s
+          rather than 2, **not yet tried there**
+        - **Then (20 Nov 2026), in the fake build with lc_mill.cfg**, the
+          user saw a multi-pass from 0 to -5 stop at -4.80, jump to about
+          -5.08, then go back, rather than creep. The simulated table had
+          no backlash, so the mill's 820 steps (0.256 mm) of compensation
+          took it 0.256 further than the motor on each reversal into a cut:
+          past the stop-short point (0.2) and the end, and the re-base (the
+          "jump") then found it there, and the creep reversed onto the end.
+          Two fixes: the simulated table now has backlash
+          (`FakeDroScale`'s slack, `Axis1FakeBacklashSteps`, the
+          compensation unless set; the two tests which want a table with
+          none set it to 0), so the fake build behaves like a machine whose
+          compensation is right; and an approach which finds itself past its
+          target once re-based backs off past the backlash and approaches
+          again (once), with a warning that the approach is shorter than the
+          overshoot ("X went 0.056 mm past its target: make
+          Axis1ScaleApproachMm more than that"), as finishing moves now warn
+          too. Tests: the simulated slack both ways, and the user's case
+          (0.256 compensation, 0.2 approach): with the table's backlash as
+          compensated it stops short, creeps, and never passes the end, with
+          no warning; with none, it warns
 - [x] `axis.cpp` / `axis.h` are compiled but unused, and their `mgo::Axis`
       class clashes in name with `enum class mgo::Axis` in model.h
     - **Done:** removed (they're in git's history, if the "array of axes"
