@@ -2097,7 +2097,16 @@ change.
           (and fails on the old rule, for the mill's A nudge alone). A
           nudge's steps are now rounded, rather than truncated. **To check
           on the mill:** that `W` turns A the same way as Up
-        - Still to do, in the same way: locks, and the
+        - **Then (20 Nov 2026), locks:** the lock calls already took an
+          axis number; now the refusals do too. `axisMoveRefused()` is the
+          one check for a move of an axis (adding X for axis 1 in a taper,
+          as X follows Z), in place of `axis1MoveRefused()` and
+          `axis2MoveRefused()`, and `moveRefused()` takes the axes to check
+          (e.g. `{ 1, 2 }`) rather than a bool for each of two. Axis numbers
+          are `int` throughout, as elsewhere, rather than `unsigned` for
+          the locks. No change of behaviour
+        - Still to do, in the same way: the motors into `MotorAxisState`,
+          and the
           scale (which wants to belong to any axis, for a scale on the
           lathe's X later). These are inside the Model, where the two
           motorised axes differ most (axis 1's taper, threading and scale;

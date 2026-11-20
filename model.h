@@ -21,6 +21,7 @@
 #include <cmath> // IWYU pragma: keep (need for M_PI)
 #include <deque>
 #include <functional>
+#include <initializer_list>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -614,9 +615,9 @@ public:
     // moves are refused while X is locked too. An axis can't be locked
     // while it's moving, or while a multi-pass runs (it can when paused), so
     // nothing already under way finds its axis locked part way through
-    void lockAxis(unsigned axisNumber);
-    void unlockAxis(unsigned axisNumber);
-    bool isAxisLocked(unsigned axisNumber) const;
+    void lockAxis(int axisNumber);
+    void unlockAxis(int axisNumber);
+    bool isAxisLocked(int axisNumber) const;
 
     RotationDirection getChuckRotationDirection() const;
 
@@ -1001,12 +1002,12 @@ private:
     // X is finishing a return: see multiPassXFollowEnded()
     bool m_multiPassXSettling { false };
 
-    std::set<unsigned> m_axisLocks;
+    std::set<int> m_axisLocks;
     // The last warning about a lock, which unlocking clears if still shown
     std::string m_lockWarning;
     // The axis lockAxis() last refused to lock while it was moving, so that
     // checkStatus() can clear the warning once it's stopped
-    std::optional<unsigned> m_lockRefusedAxis;
+    std::optional<int> m_lockRefusedAxis;
 
     // Whether a limit switch trip has been dealt with (see checkLimitSwitch())
     bool m_limitTripSeen { false };
@@ -1179,20 +1180,18 @@ private:
     // Gear cutting has finished: axis 2's position goes back to where the
     // passes started, a whole number of turns ago (see setGearSetup())
     void gearCuttingFinished();
-    // Axis locks (see lockAxis()): true if a move of axis 1 and/or axis 2 is
-    // refused because one of them is locked, in which case the warning says
-    // which to unlock
-    bool moveRefused(bool axis1, bool axis2);
+    // Axis locks (see lockAxis()): true if a move of these axes is refused
+    // because any of them is locked, in which case the warning says which to
+    // unlock
+    bool moveRefused(std::initializer_list<int> axisNumbers);
     // Whether lockAxis() would refuse, as something is moving the axis
-    bool lockRefused(unsigned axisNumber) const;
+    bool lockRefused(int axisNumber) const;
     // Clears lockAxis()'s warning once the axis has stopped
     void checkLockRefusal();
-    // A move of axis 1, which X follows in a taper
-    bool axis1MoveRefused();
+    // A move of one axis (with X too, for axis 1 in a taper, as X follows Z)
     bool axisMoveRefused(int axisNumber);
     // +1 if the motor's step count rises going that way, or -1
     int stepSign(int axisNumber, AxisDirection direction) const;
-    bool axis2MoveRefused();
     // Moving to the multi-pass's start (see multiPassGo())
     void multiPassMoveToStart();
     // Moves both axes to a position without dragging the tool through the

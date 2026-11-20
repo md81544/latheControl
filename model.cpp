@@ -1179,7 +1179,7 @@ void Model::threadingCheckMoveEnded()
 
 void Model::axis1GoToStep(long step)
 {
-    if (axis1MoveRefused()) {
+    if (axisMoveRefused(1)) {
         return;
     }
     // (Usually just the move itself, which starts at once. For a taper, the
@@ -1189,7 +1189,7 @@ void Model::axis1GoToStep(long step)
 
 void Model::axis1GoToPosition(double pos)
 {
-    if (axis1MoveRefused()) {
+    if (axisMoveRefused(1)) {
         return;
     }
     const long step = std::lround(pos / m_axis1Motor->getConversionFactor());
@@ -1206,7 +1206,7 @@ void Model::axis1GoToPosition(double pos)
 
 void Model::axis1GoToOffset(double offset)
 {
-    if (axis1MoveRefused()) {
+    if (axisMoveRefused(1)) {
         return;
     }
     axisState(1).lastRelativeMove = offset;
@@ -1220,7 +1220,7 @@ void Model::axis1GoToCurrentMemory()
     if (!step || *step == motorStep(1)) {
         return;
     }
-    if (axis1MoveRefused()) {
+    if (axisMoveRefused(1)) {
         return;
     }
     stopAxis(1);
@@ -1267,7 +1267,7 @@ void Model::axis1Half()
 
 void Model::axis2GoToPosition(double pos)
 {
-    if (axis2MoveRefused()) {
+    if (axisMoveRefused(2)) {
         return;
     }
     m_axis2Motor->goToPosition(pos);
@@ -1276,7 +1276,7 @@ void Model::axis2GoToPosition(double pos)
 
 void Model::axis2GoToOffset(double offset)
 {
-    if (axis2MoveRefused()) {
+    if (axisMoveRefused(2)) {
         return;
     }
     axisState(2).lastRelativeMove = offset;
@@ -1348,7 +1348,7 @@ void Model::axis2GoToCurrentMemory()
     if (!step || *step == m_axis2Motor->getCurrentStep()) {
         return;
     }
-    if (axis2MoveRefused()) {
+    if (axisMoveRefused(2)) {
         return;
     }
     stopAxis(2);
@@ -1390,7 +1390,7 @@ void Model::axis2Unretract()
     if (!m_axis2Retracted || !axis2CanRetract()) {
         return;
     }
-    if (axis2MoveRefused()) {
+    if (axisMoveRefused(2)) {
         return;
     }
     setRetractSpeed(*m_axis2Motor);
@@ -1410,7 +1410,7 @@ void Model::axis2RetractBy(double distance)
     if (m_axis2Retracted || !axis2CanRetract()) {
         return;
     }
-    if (axis2MoveRefused()) {
+    if (axisMoveRefused(2)) {
         return;
     }
     m_xOldPosition = m_axis2Motor->getCurrentStep();
@@ -1549,7 +1549,7 @@ void Model::featureGoToStart(bool clear)
         m_warning = "The feature's diameter and the work's end are both needed";
         return;
     }
-    if (moveRefused(true, true)) {
+    if (moveRefused({ 1, 2 })) {
         return;
     }
     if (m_axis1Motor->isRunning() || m_axis2Motor->isRunning()) {
@@ -1569,7 +1569,7 @@ void Model::featureGoToDiameter()
         m_warning = "The feature's diameter isn't set";
         return;
     }
-    if (axis2MoveRefused()) {
+    if (axisMoveRefused(2)) {
         return;
     }
     if (m_axis2Motor->isRunning()) {
@@ -2327,7 +2327,11 @@ void Model::selectSpeedPreset(int axisNumber, int preset)
 
 bool Model::axisMoveRefused(int axisNumber)
 {
-    return axisNumber == 1 ? axis1MoveRefused() : axis2MoveRefused();
+    if (axisNumber == 1 && m_mode == Mode::Taper) {
+        // (X follows Z in a taper)
+        return moveRefused({ 1, 2 });
+    }
+    return moveRefused({ axisNumber });
 }
 
 int Model::stepSign(int axisNumber, AxisDirection direction) const
@@ -3837,7 +3841,7 @@ void Model::checkLimitSwitch()
     stopAllMotors();
 }
 
-bool Model::lockRefused(unsigned axisNumber) const
+bool Model::lockRefused(int axisNumber) const
 {
     // Not while anything is moving it, so nothing under way (e.g. a pass, or
     // a nudge's sequence) finds it locked part way through. (In a taper, X
@@ -3851,7 +3855,7 @@ bool Model::lockRefused(unsigned axisNumber) const
     return moving || m_motionSequence.isRunning() || multiPassRunning;
 }
 
-void Model::lockAxis(unsigned axisNumber)
+void Model::lockAxis(int axisNumber)
 {
     if (lockRefused(axisNumber)) {
         const std::string label = axisLabel(static_cast<int>(axisNumber));
@@ -3876,7 +3880,7 @@ void Model::checkLockRefusal()
     m_lockRefusedAxis.reset();
 }
 
-void Model::unlockAxis(unsigned axisNumber)
+void Model::unlockAxis(int axisNumber)
 {
     auto it = m_axisLocks.find(axisNumber);
     if (it != m_axisLocks.end()) {
@@ -3888,16 +3892,17 @@ void Model::unlockAxis(unsigned axisNumber)
     }
 }
 
-bool Model::moveRefused(bool axis1, bool axis2)
+bool Model::moveRefused(std::initializer_list<int> axisNumbers)
 {
-    const bool z = axis1 && isAxisLocked(1);
-    const bool x = axis2 && isAxisLocked(2);
-    if (!z && !x) {
+    std::string which;
+    for (const int n : axisNumbers) {
+        if (isAxisLocked(n)) {
+            which += (which.empty() ? "" : " and ") + axisLabel(n);
+        }
+    }
+    if (which.empty()) {
         return false;
     }
-    const std::string zLabel = axisLabel(1);
-    const std::string xLabel = axisLabel(2);
-    const std::string which = z && x ? zLabel + " and " + xLabel : (z ? zLabel : xLabel);
     m_warning = "Unlock " + which + " first";
     m_lockWarning = m_warning;
     m_lockRefusedAxis.reset();
@@ -3905,17 +3910,7 @@ bool Model::moveRefused(bool axis1, bool axis2)
     return true;
 }
 
-bool Model::axis1MoveRefused()
-{
-    return moveRefused(true, m_mode == Mode::Taper);
-}
-
-bool Model::axis2MoveRefused()
-{
-    return moveRefused(false, true);
-}
-
-bool Model::isAxisLocked(unsigned axisNumber) const
+bool Model::isAxisLocked(int axisNumber) const
 {
     auto it = m_axisLocks.find(axisNumber);
     if (it != m_axisLocks.end()) {
@@ -4519,7 +4514,7 @@ void Model::multiPassGo()
     }
     // (Every branch below may move both axes, except asking for a pause
     // during a pass, but an axis can't be locked while a pass is under way)
-    if (moveRefused(true, true)) {
+    if (moveRefused({ 1, 2 })) {
         return;
     }
     if (m_multiPass.state() == MultiPass::State::Paused && m_springPasses
