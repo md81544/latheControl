@@ -2117,11 +2117,44 @@ change.
           axis 1's), rather than relying on the members' order. Only the
           app's quit called it before; the tests didn't. No change of
           behaviour
-        - Still to do, in the same way: the
-          scale (which wants to belong to any axis, for a scale on the
-          lathe's X later). These are inside the Model, where the two
-          motorised axes differ most (axis 1's taper, threading and scale;
-          axis 2's retraction), so each wants care
+        - **The scale, decided (20 Nov 2026):** a scale on the lathe's X is
+          planned, once Z's (the trial: quadrature, straight to two GPIO
+          pins, as X's will be, not a DRO sender) is working and proven; it's
+          waiting for the 5 V to 3.3 V converter boards. X's is to do
+          everything the mill's X does: the checks at rest and the re-base,
+          the checks while moving, finishing moves, and re-basing between
+          passes (which, on the lathe, covers X's infeed as well as Z). If
+          two axes disagree with their scales at once, one dialog deals with
+          both: it waits until every scale has settled (the first mismatch
+          stops everything, and the axes settle at different moments), then
+          lists each axis's disagreement, and Y/Enter (the scales) or N/Esc
+          (the motors) applies to every axis listed. In three parts, each its
+          own commit:
+            - (a) the scale's state and calls by axis number, with only
+              axis 1 reading a scale: no change of behaviour
+            - (b) axis 2 reading `Axis2Scale...`: the checks at rest and
+              while moving, the combined dialog, the display on X's line,
+              and X's leader then `B`. Tried in the fake build only
+            - (c) finishing moves and re-basing between passes for axis 2,
+              with the retraction and the multi-pass X correction
+        - **Done (20 Nov 2026), part (a):** each motorised axis's
+          `MotorAxisState` has a `ScaleState` (the `AxisScale`, the at-rest
+          check's state, the mismatch and its asks, the stall stop, the
+          finish-on-scale setting and any finishing move under way, and the
+          fake scale), in place of `m_axis1Scale` and its dozen members. Its
+          17 public calls take the axis number (`hasScale()`,
+          `scalePositionMm()`, `scaleDifferenceMm()`, `scaleMismatchMm()`,
+          `acceptScalePosition()`, `keepMotorPosition()`,
+          `rebaseFromScaleByHand()`, `finishesOnScale()`, and so on), as do
+          the at-rest check, the re-bases, `configureScale()` (which reads
+          `AxisNScale...`) and `backlashCompensationMm()`. checkStatus()
+          updates and checks both axes' scales, but only `configureScale(1)`
+          is called, so only axis 1 has one. The scale is declared after the
+          motor in `MotorAxisState`, so destroyed first, and ~Model() stops
+          both scales before the motors anyway. Still axis 1's alone: the
+          finishing moves' logic (part c), `cutReady()` (axis 1 is the cut
+          axis), the backlash measurement, and the controller's dialog and
+          the view's scale text (part b)
 - [x] `axis.cpp` / `axis.h` are compiled but unused, and their `mgo::Axis`
       class clashes in name with `enum class mgo::Axis` in model.h
     - **Done:** removed (they're in git's history, if the "array of axes"

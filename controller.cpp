@@ -26,7 +26,7 @@ Controller::Controller(Model* model)
           model->config(),
           model->getDisplayUnits(),
           model->threadingAutoRetract(),
-          model->axis1FinishesOnScale()))
+          model->finishesOnScale(1)))
 {
     // (Sounds are off unless their files are set)
     m_alertSound = model->config().read("SoundAlert", "");
@@ -65,7 +65,7 @@ void Controller::rebuildMenu()
         m_model->config(),
         m_model->getDisplayUnits(),
         m_model->threadingAutoRetract(),
-        m_model->axis1FinishesOnScale()));
+        m_model->finishesOnScale(1)));
 }
 
 void Controller::run()
@@ -182,8 +182,8 @@ void Controller::confirmMeasureBacklash()
 
 void Controller::checkScaleMismatch()
 {
-    const auto mismatch = m_model->axis1ScaleMismatchMm();
-    const int asks = m_model->axis1ScaleMismatchAsks();
+    const auto mismatch = m_model->scaleMismatchMm(1);
+    const int asks = m_model->scaleMismatchAsks(1);
     // Once per ask, and not over another dialog (it waits until that's
     // closed; nothing can move meanwhile)
     if (!mismatch || asks == m_scaleAsksShown || m_view->isDialogOpen()) {
@@ -200,20 +200,20 @@ void Controller::checkScaleMismatch()
             m_model->axisDecimals(1),
             m_model->axisUnitName(1));
     };
-    if (const auto jump = m_model->axis1ScaleMisreadJumpMm()) {
+    if (const auto jump = m_model->scaleMisreadJumpMm(1)) {
         pressAnyKey(
             fmt::format("{}'s scale is misreading", label),
             { fmt::format(
                   "Its reading jumped by {} with {} at rest, more than the {} allowed,",
                   length(std::abs(*jump)),
                   label,
-                  length(m_model->axis1ScaleMismatchLimitMm())),
+                  length(m_model->scaleMismatchLimitMm(1))),
               "which the table can't have moved: so everything has stopped.",
               "Interference, or a loose connection, can do this.",
               "",
               fmt::format(
                   "Any key: keep {}'s position, and line the scale up with it again.", label) },
-            [this]() { m_model->keepAxis1MotorPosition(); });
+            [this]() { m_model->keepMotorPosition(1); });
         return;
     }
     const double position = m_model->motorPosition(1);
@@ -227,13 +227,13 @@ void Controller::checkScaleMismatch()
             length(std::abs(*mismatch))),
         fmt::format(
             "more than the {} allowed, so everything has stopped.",
-            length(m_model->axis1ScaleMismatchLimitMm())),
+            length(m_model->scaleMismatchLimitMm(1))),
         "The motor may have lost steps (e.g. a stall), or the scale may have misread.",
         "",
         "Y or Enter: use the scale's position (usually right after a stall).",
         fmt::format("N or Esc: keep {}'s position, and line the scale up with it again.", label),
     };
-    if (!m_model->axis1ScaleIsSteady()) {
+    if (!m_model->scaleIsSteady(1)) {
         lines.insert(
             lines.end() - 2,
             "The scale's reading is still changing: Y waits until it settles, and asks again.");
@@ -244,9 +244,9 @@ void Controller::checkScaleMismatch()
         std::move(lines),
         [this](const Input::Return& rc) {
             if (rc.cancelled) {
-                m_model->keepAxis1MotorPosition();
+                m_model->keepMotorPosition(1);
             } else {
-                m_model->acceptAxis1ScalePosition();
+                m_model->acceptScalePosition(1);
             }
         });
 }
@@ -325,7 +325,7 @@ void Controller::processKeyPress()
         }
         return;
     }
-    if (m_model->isMotionSequenceRunning() || m_model->isAxis1FinishingOnScale()) {
+    if (m_model->isMotionSequenceRunning() || m_model->isFinishingOnScale(1)) {
         // Keys wait until the sequence (e.g. a nudge) has finished, as they
         // did when it blocked, so e.g. a quick series of nudges each moves
         // the full amount. Likewise while a move is finished on the scale.
@@ -1132,7 +1132,7 @@ void Controller::processKey(int t)
                 }
             case key::a1_b: // re-base axis 1 from its scale
                 {
-                    m_model->rebaseAxis1FromScaleByHand();
+                    m_model->rebaseFromScaleByHand(1);
                     break;
                 }
             case key::a1_h: // halve an axis's position (to find a centre)
@@ -1313,7 +1313,7 @@ void Controller::processKey(int t)
                 }
             case key::toggleAxis1FinishOnScale:
                 {
-                    m_model->toggleAxis1FinishOnScale();
+                    m_model->toggleFinishOnScale(1);
                     // (The menu shows whether it's on)
                     rebuildMenu();
                     break;

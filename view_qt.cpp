@@ -1359,7 +1359,7 @@ void ViewQt::updateDisplay(const Model& model)
         // scale on its line)
         if (d.axisShown(model, 1)) {
             draw(d.axis1Status);
-            if (model.hasAxis1Scale()) {
+            if (model.hasScale(1)) {
                 draw(d.axis1Scale);
             }
         }
@@ -1565,8 +1565,8 @@ void ViewQt::Impl::updateTextFromModel(const Model& model)
     // motor's, which shows any lost steps. Short, as it's on the axis's row,
     // in its units
     {
-        const auto position = model.getAxis1ScalePositionMm();
-        const auto difference = model.getAxis1ScaleDifferenceMm();
+        const auto position = model.scalePositionMm(1);
+        const auto difference = model.scaleDifferenceMm(1);
         if (position && difference) {
             axis1Scale.text = fmt::format(
                 "scale {:.{}f} ({:+.{}f})",
@@ -1574,7 +1574,7 @@ void ViewQt::Impl::updateTextFromModel(const Model& model)
                 model.axisDecimals(1),
                 model.toDisplayUnits(1, *difference),
                 model.axisDecimals(1));
-        } else if (model.axis1ScaleHasReading()) {
+        } else if (model.scaleHasReading(1)) {
             axis1Scale.text = "scale: settling";
         } else {
             axis1Scale.text = "scale: no reading";

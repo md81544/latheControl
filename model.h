@@ -492,15 +492,15 @@ public:
     int axisDecimals(int axisNumber) const;
 
     float getRotaryEncoderRpm() const;
-    // Axis 1's linear scale (Axis1Scale in the config), if it has one. Its
-    // position is in the motor's frame, so it's only known once the scale
-    // has been lined up with the motor (see AxisScale), and while it has a
-    // recent reading
-    bool hasAxis1Scale() const;
-    bool axis1ScaleHasReading() const;
-    std::optional<double> getAxis1ScalePositionMm() const;
+    // A motorised axis's linear scale (AxisNScale in the config), if it has
+    // one (only axis 1 can, so far). Its position is in the motor's frame,
+    // so it's only known once the scale has been lined up with the motor
+    // (see AxisScale), and while it has a recent reading
+    bool hasScale(int axisNumber) const;
+    bool scaleHasReading(int axisNumber) const;
+    std::optional<double> scalePositionMm(int axisNumber) const;
     // The scale's position less the motor's
-    std::optional<double> getAxis1ScaleDifferenceMm() const;
+    std::optional<double> scaleDifferenceMm(int axisNumber) const;
 
     // Measuring axis 1's backlash with its scale (System menu; see
     // BacklashMeasurement). Only with a scale which has been lined up, in no
@@ -515,35 +515,35 @@ public:
     // Once a measurement has finished, its result, to show (once)
     std::optional<std::vector<std::string>> takeBacklashReport();
 
-    // Axis 1's scale against its motor, each time the axis stops and the
+    // An axis's scale against its motor, each time the axis stops and the
     // scale settles. Within Axis1ScaleWarnMm, with Axis1ScaleRebase, the
     // motor's position is set from the scale's (a re-base: nothing moves),
     // so the position, and every move made from it, follows where the table
     // really is. Further apart than Axis1ScaleWarnMm, everything stops, and
     // this is how far apart they are (the scale less the motor), until
     // dealt with by one of the two below. Nothing can move meanwhile
-    std::optional<double> axis1ScaleMismatchMm() const;
+    std::optional<double> scaleMismatchMm(int axisNumber) const;
     // How far apart they were allowed to be: Axis1ScaleWarnMm, plus the
     // backlash if the table had gone further the way it was moving
-    double axis1ScaleMismatchLimitMm() const;
+    double scaleMismatchLimitMm(int axisNumber) const;
     // If the mismatch is because the scale is misreading (its reading jumped
     // at rest by more than Axis1ScaleFaultMm, which the table can't have
     // done), by how much it jumped. Then only the motor's position can be
     // kept, and the limit above is Axis1ScaleFaultMm
-    std::optional<double> axis1ScaleMisreadJumpMm() const;
+    std::optional<double> scaleMisreadJumpMm(int axisNumber) const;
     // Goes up each time the user is to be asked about a mismatch (a new one,
     // or the same one again), so each is asked about once
-    int axis1ScaleMismatchAsks() const;
+    int scaleMismatchAsks(int axisNumber) const;
     // Whether the scale's reading has settled and is steady (see
     // AxisScale::isSteady())
-    bool axis1ScaleIsSteady() const;
+    bool scaleIsSteady(int axisNumber) const;
     // Use the scale's position (e.g. after a stall). Only once its reading
     // is steady: until then, the mismatch stays, and is asked about again
     // once the reading has settled
-    void acceptAxis1ScalePosition();
+    void acceptScalePosition(int axisNumber);
     // Keep the motor's position, and line the scale up with it again
-    void keepAxis1MotorPosition();
-    // Re-basing axis 1 from its scale by hand (axis 1's leader, then B): its
+    void keepMotorPosition(int axisNumber);
+    // Re-basing an axis from its scale by hand (its leader, then B): its
     // motor's position is set to the scale's, as the re-bases at rest do,
     // so nothing moves, and the memory slots and current feature stay where
     // they are on the work. Only when the axis has stopped and its scale's
@@ -553,11 +553,12 @@ public:
     // gear cutting) which is paused, as the next pass moves to its start
     // from wherever the re-base leaves the axis (see also
     // Axis1ScaleRebaseBetweenPasses, and cutReady())
-    bool canRebaseAxis1FromScale() const;
+    bool canRebaseFromScale(int axisNumber) const;
     // Re-bases it, or warns why it can't
-    void rebaseAxis1FromScaleByHand();
+    void rebaseFromScaleByHand(int axisNumber);
 
-    // Finishing axis 1's positioning moves on its scale (stage 4): after a go
+    // Finishing an axis's positioning moves on its scale (stage 4; only axis
+    // 1's, so far): after a go
     // to (a memory, a typed or relative position, the last position), once
     // the scale has settled, if the table is more than a count from the
     // target, a correction move: on, if short; if past, backing off past the
@@ -568,12 +569,12 @@ public:
     // Axis1ScaleFinishMoves says (off unless set); the menu turns it on and
     // off
     static constexpr int MAX_SCALE_CORRECTIONS = 3;
-    bool axis1FinishesOnScale() const;
-    void toggleAxis1FinishOnScale();
-    bool isAxis1FinishingOnScale() const;
+    bool finishesOnScale(int axisNumber) const;
+    void toggleFinishOnScale(int axisNumber);
+    bool isFinishingOnScale(int axisNumber) const;
 #ifdef FAKE
-    // The simulated scale, if axis 1 has a serial one (for the tests)
-    FakeDroScale* fakeAxis1Scale();
+    // The simulated scale, if the axis has a serial one (for the tests)
+    FakeDroScale* fakeScale(int axisNumber);
 #endif
 
     // The axes moved by hand (axes 3 and 4: Axis3Kind = manual in the
@@ -795,11 +796,10 @@ private:
     IConfigReader& m_config;
     std::unique_ptr<mgo::RotaryEncoder> m_rotaryEncoder;
     // Reads the mill's DRO sender, if any axis's scale is on it. (Declared
-    // before the scales, so outlives them, and after the motors, so the
-    // scales go before the motors, which a simulated scale follows)
+    // before the scales, which are in m_motorAxes and the manual axes, so
+    // outlives them. ~Model() stops each scale before the motors, which a
+    // simulated scale follows)
     std::unique_ptr<mgo::DroSerialReader> m_droReader;
-    // Only axis 1 can have a scale so far
-    std::unique_ptr<mgo::AxisScale> m_axis1Scale;
     // The serial device m_droReader reads (the first axis's to need it)
     std::string m_droDevice;
 #ifdef FAKE
@@ -825,36 +825,6 @@ private:
     int m_backlashSettleCount { 0 };
     double m_backlashPreviousSpeed { 0.0 };
     std::optional<std::vector<std::string>> m_backlashReport;
-    // The scale's settleCount() when last checked against the motor
-    int m_axis1ScaleCheckedSettles { 0 };
-    std::optional<double> m_axis1ScaleMismatchMm;
-    double m_axis1ScaleMismatchLimitMm { 0.0 };
-    std::optional<double> m_axis1ScaleMisreadJumpMm;
-    int m_axis1ScaleMismatchAsks { 0 };
-    // The scale's position was chosen before its reading was steady
-    bool m_axis1ScaleAskAgain { false };
-    // Whether everything has been stopped for the stall the scale saw during
-    // the last move (see AxisScale::stallMm())
-    bool m_axis1StallStopped { false };
-    // See axis1FinishesOnScale()
-    bool m_axis1FinishOnScale { false };
-    struct Axis1Finish {
-        // Where the table should end up (in the motor's frame when it
-        // started, which re-basing keeps the same as the scale's)
-        double targetMm { 0.0 };
-        // +1 or -1: the way the move went, and so the way to approach it
-        int direction { 1 };
-        int corrections { 0 };
-        // Backing off, to approach approachMm again
-        bool backingOff { false };
-        double approachMm { 0.0 };
-        // The scale's settleCount() when its last move started
-        int settles { 0 };
-    };
-    std::optional<Axis1Finish> m_axis1Finish;
-#ifdef FAKE
-    FakeDroScale* m_fakeAxis1Scale { nullptr };
-#endif
     // Each axis's memory slots (see getMemory()), indexed by its number less
     // one: positions in mm, which for a motorised axis are whole steps
     static constexpr std::size_t MEMORY_SLOTS = 6;
@@ -875,6 +845,44 @@ private:
         long step { 0 };
     };
     // What's kept for each motorised axis (axes 1 and 2), besides its motor
+    // A finishing move on the scale under way (see finishesOnScale())
+    struct ScaleFinish {
+        // Where the table should end up (in the motor's frame when it
+        // started, which re-basing keeps the same as the scale's)
+        double targetMm { 0.0 };
+        // +1 or -1: the way the move went, and so the way to approach it
+        int direction { 1 };
+        int corrections { 0 };
+        // Backing off, to approach approachMm again
+        bool backingOff { false };
+        double approachMm { 0.0 };
+        // The scale's settleCount() when its last move started
+        int settles { 0 };
+    };
+    // A motorised axis's scale, if it has one, and its checks against the
+    // motor (see checkScaleAtRest())
+    struct ScaleState {
+        std::unique_ptr<AxisScale> scale;
+        // The scale's settleCount() when last checked against the motor
+        int checkedSettles { 0 };
+        // See scaleMismatchMm(), scaleMismatchLimitMm(),
+        // scaleMisreadJumpMm() and scaleMismatchAsks()
+        std::optional<double> mismatchMm;
+        double mismatchLimitMm { 0.0 };
+        std::optional<double> misreadJumpMm;
+        int mismatchAsks { 0 };
+        // The scale's position was chosen before its reading was steady
+        bool askAgain { false };
+        // Whether everything has been stopped for the stall the scale saw
+        // during the last move (see AxisScale::stallMm())
+        bool stallStopped { false };
+        // See finishesOnScale()
+        bool finishOnScale { false };
+        std::optional<ScaleFinish> finish;
+#ifdef FAKE
+        FakeDroScale* fake { nullptr };
+#endif
+    };
     struct MotorAxisState {
         // Shown on the status line, e.g. "stopped" or "returning"
         std::string status { "stopped" };
@@ -901,6 +909,9 @@ private:
         bool faulted { false };
         // (Null before initialise())
         std::unique_ptr<StepperMotor> motor;
+        // (After the motor, so destroyed before it: a simulated scale reads
+        // it)
+        ScaleState scaleState;
     };
     // (Destroyed in reverse: axis 2's motor, which follows axis 1's in a
     // taper, goes first)
@@ -922,6 +933,10 @@ private:
     // const functions call the motor's non-const ones (e.g. getMaxRpm())
     StepperMotor* motor(int axisNumber);
     StepperMotor* motor(int axisNumber) const;
+    // The axis's scale and its state; scale() is null if it has none
+    ScaleState& scaleState(int axisNumber);
+    const ScaleState& scaleState(int axisNumber) const;
+    AxisScale* scale(int axisNumber) const;
     ThreadTable m_threads;
     ThreadChoice m_threadChoice;
     std::string m_generalStatus { DEFAULT_GENERAL_STATUS };
@@ -1076,8 +1091,8 @@ private:
     // low speeds, a stray edge can flip it for a few milliseconds)
     std::optional<int> spindleTurningSign() const;
     void checkEncoderLostPulses();
-    // Creates axis 1's scale, if the config gives it one
-    void configureAxis1Scale();
+    // Creates an axis's scale, if the config gives it one
+    void configureScale(int axisNumber);
     // Makes the scale described by an axis's Axis<n>Scale... config keys, or
     // returns nullptr (having logged why) if the config is wrong. source is
     // set to where it's read from, for the log. fakePosition is what a
@@ -1115,21 +1130,21 @@ private:
     void backlashMeasurementMove();
     // Ends it (finished or not), putting the speed back
     void endBacklashMeasurement(const std::string& why);
-    // Axis 1's backlash compensation, in mm
-    double axis1BacklashCompensationMm() const;
-    // Called from checkStatus(): compares axis 1's scale with its motor once
-    // it has settled, re-basing or warning (see axis1ScaleMismatchMm())
-    void checkAxis1ScaleAtRest();
-    // Sets axis 1's motor's position to the scale's
-    void rebaseAxis1FromScale(const char* why);
+    // An axis's backlash compensation, in mm
+    double backlashCompensationMm(int axisNumber) const;
+    // Called from checkStatus(): compares an axis's scale with its motor
+    // once it has settled, re-basing or warning (see scaleMismatchMm())
+    void checkScaleAtRest(int axisNumber);
+    // Sets the axis's motor's position to the scale's
+    void rebaseFromScale(int axisNumber, const char* why);
     // Whether a multi-pass is paused where axis 1 may be re-based from its
     // scale: a plain multi-pass, or gear cutting (not threading, knurling or
     // a radius, which haven't been tried with it)
     bool multiPassPausedForRebase() const;
-    // Re-bases axis 1 from its scale if the reading is steady and more than
-    // a count from the motor's position, and nothing (e.g. a nudge) is
+    // Re-bases an axis from its scale if the reading is steady and more
+    // than a count from the motor's position, and nothing (e.g. a nudge) is
     // moving it
-    void rebaseAxis1IfApart(const char* why);
+    void rebaseIfApart(int axisNumber, const char* why);
 
     // After a positioning move to step has started: finish it on the scale,
     // if that's on and can be done now

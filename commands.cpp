@@ -356,7 +356,7 @@ bool keyAllowedInCurrentMode(int k, const Model& model)
     // X back and forth, comparing it with the scale): only stopping it, and
     // keys which don't move anything. Nor while axis 1's scale and motor
     // disagree, until the user has said which to believe
-    if (model.isMeasuringBacklash() || model.axis1ScaleMismatchMm()) {
+    if (model.isMeasuringBacklash() || model.scaleMismatchMm(1)) {
         switch (k) {
             case key::CtrlQ:
             case key::ESC:
@@ -443,7 +443,7 @@ bool keyAllowedInCurrentMode(int k, const Model& model)
             return true;
         }
         // Axis 1 may be re-based from its scale while paused (where that's
-        // allowed: see Model::canRebaseAxis1FromScale()), as the next pass
+        // allowed: see Model::canRebaseFromScale(1)), as the next pass
         // moves it to its start from wherever that leaves it
         // (And so axis 1's leader key, which comes first)
         if (model.multiPass().state() == MultiPass::State::Paused
@@ -683,7 +683,7 @@ std::vector<Command> buildCommands(
     if (config.read("Axis1Scale", "none") != "none") {
         b.add(
             c, fmt::format("Re-base {} from its scale", a1), key::a1_b, AXIS1, [](const Model& m) {
-                return m.canRebaseAxis1FromScale();
+                return m.canRebaseFromScale(1);
             });
     }
     b.add(c, fmt::format("Halve {} (to find a centre)", a2), key::a2_h, AXIS2);
