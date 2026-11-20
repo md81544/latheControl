@@ -141,6 +141,13 @@ public:
         , m_threadingAutoRetract(config.readBool("ThreadingAutoRetract", false))
     {
     }
+    // Stops the scale before the motors, and axis 2's motor before axis 1's
+    // (see resetMotorThreads()), rather than leaving it to the members'
+    // order: the fake scale's thread reads axis 1's motor, and the motors are
+    // in m_motorAxes, which is destroyed first
+    ~Model();
+    Model(const Model&) = delete;
+    Model& operator=(const Model&) = delete;
 
     void initialise();
 
@@ -787,8 +794,6 @@ private:
     IGpio& m_gpio;
     IConfigReader& m_config;
     std::unique_ptr<mgo::RotaryEncoder> m_rotaryEncoder;
-    std::unique_ptr<mgo::StepperMotor> m_axis1Motor;
-    std::unique_ptr<mgo::StepperMotor> m_axis2Motor;
     // Reads the mill's DRO sender, if any axis's scale is on it. (Declared
     // before the scales, so outlives them, and after the motors, so the
     // scales go before the motors, which a simulated scale follows)
@@ -894,7 +899,11 @@ private:
         // also clears the motor's fault, if the driver's alarm has been
         // cleared)
         bool faulted { false };
+        // (Null before initialise())
+        std::unique_ptr<StepperMotor> motor;
     };
+    // (Destroyed in reverse: axis 2's motor, which follows axis 1's in a
+    // taper, goes first)
     std::array<MotorAxisState, 2> m_motorAxes;
     // Axis 1's or axis 2's
     MotorAxisState& axisState(int axisNumber);
@@ -908,9 +917,11 @@ private:
     // already), or clears the trail, leaving only where it is
     void saveBreadcrumbPosition(int axisNumber);
     void clearBreadcrumbs(int axisNumber);
-    // Axis 1's or axis 2's motor (nullptr before initialise())
+    // Axis 1's or axis 2's motor (nullptr before initialise()). The const
+    // one isn't a pointer to const, as the unique_ptr it wraps isn't either:
+    // const functions call the motor's non-const ones (e.g. getMaxRpm())
     StepperMotor* motor(int axisNumber);
-    const StepperMotor* motor(int axisNumber) const;
+    StepperMotor* motor(int axisNumber) const;
     ThreadTable m_threads;
     ThreadChoice m_threadChoice;
     std::string m_generalStatus { DEFAULT_GENERAL_STATUS };

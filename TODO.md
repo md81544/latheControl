@@ -2105,8 +2105,19 @@ change.
           (e.g. `{ 1, 2 }`) rather than a bool for each of two. Axis numbers
           are `int` throughout, as elsewhere, rather than `unsigned` for
           the locks. No change of behaviour
-        - Still to do, in the same way: the motors into `MotorAxisState`,
-          and the
+        - **Then (20 Nov 2026), the motors:** `m_axis1Motor` and
+          `m_axis2Motor` are now each axis's `MotorAxisState::motor`, and
+          the Model's 265 uses go through `motor(n)`. (Its const version
+          returns a plain pointer, as the unique_ptr did, since const
+          functions call the motor's non-const ones.) That changed the
+          order they're destroyed in, after the scale rather than before,
+          and the fake scale's thread reads axis 1's motor: so the Model now
+          has a destructor which calls `resetMotorThreads()` (the scale,
+          then axis 2's motor, as it may follow axis 1's in a taper, then
+          axis 1's), rather than relying on the members' order. Only the
+          app's quit called it before; the tests didn't. No change of
+          behaviour
+        - Still to do, in the same way: the
           scale (which wants to belong to any axis, for a scale on the
           lathe's X later). These are inside the Model, where the two
           motorised axes differ most (axis 1's taper, threading and scale;
