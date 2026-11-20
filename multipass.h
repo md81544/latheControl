@@ -89,6 +89,17 @@ public:
         return 0.0;
     }
 
+    // Whether the feed axis is ready for a pass, once it has fed to the
+    // pass's depth: asked after each feed (or before the pass, if it's there
+    // already), and again on each update() until it is. As for cutReady(),
+    // e.g. the machine may wait for the axis's scale to settle, and correct
+    // its position from it. If that leaves it short of (or past) the depth,
+    // it feeds again, up to MAX_FEED_CORRECTIONS times
+    virtual bool feedReady()
+    {
+        return true;
+    }
+
     // Whether the cut axis is ready for a cut to start: asked before each
     // cut (before moving the cut axis to the pass's start, if it isn't
     // there), and again on each update() until it is. e.g. the machine may
@@ -408,6 +419,7 @@ public:
         Paused, // Waiting for continueAfterPause()
         Unretracting,
         Feeding,
+        FeedSettling, // Waiting for the feed axis to be ready (see IMultiPassMachine::feedReady())
         Settling, // Waiting for the cut axis to be ready (see IMultiPassMachine::cutReady())
         Positioning, // Moving the cut axis to a pass's start (see cutShiftPerFeed)
         Indexing, // Moving the index axis to a start (see indexPerStart)
@@ -417,6 +429,10 @@ public:
 
     // How close (in mm) an axis must be to a position to count as there
     static constexpr double TOLERANCE = 0.0001;
+    // How many times the feed axis feeds again to a pass's depth, if it
+    // isn't there once ready (see IMultiPassMachine::feedReady()), before the
+    // passes stop
+    static constexpr int MAX_FEED_CORRECTIONS = 3;
 
     explicit MultiPass(IMultiPassMachine& machine);
 
@@ -534,6 +550,10 @@ private:
     void readyForNextPass();
     void startNextPass();
     void startFeed();
+    // Once fed to the pass's depth: waits for the feed axis to be ready (see
+    // IMultiPassMachine::feedReady()), then starts the pass, or feeds again
+    void settleFeed();
+    void feedSettled();
     void finish();
     void abandon(const std::string& reason);
 
@@ -545,6 +565,8 @@ private:
     // one last cut, while m_startsBegun counts them
     int m_start { 0 };
     int m_startsBegun { 0 };
+    // How many times this pass's feed has been made again (see feedSettled())
+    int m_feedCorrections { 0 };
     // Threading: the starts still to be cut this pass, there (to cutEnd) and
     // (if cutting back) back, and those offered for the cut being made
     std::vector<int> m_startsThere;

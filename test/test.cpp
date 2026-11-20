@@ -3445,6 +3445,20 @@ public:
         log.push_back(fmt::format("index {:.6g}", position));
         m_indexTarget = position;
     }
+    bool feedReady() override
+    {
+        if (feedNotReadyAsks > 0) {
+            --feedNotReadyAsks;
+            return false;
+        }
+        if (!rebaseFeedTo.empty()) {
+            // (As the model re-bases from a scale)
+            log.push_back(fmt::format("feed re-based {:.6g}", rebaseFeedTo.front()));
+            m_feed = rebaseFeedTo.front();
+            rebaseFeedTo.pop_front();
+        }
+        return true;
+    }
     bool cutReady() override
     {
         if (notReadyAsks > 0) {
@@ -3514,6 +3528,10 @@ public:
     // If set, once cutReady() says yes, the cut axis's position is set to
     // this (e.g. re-based from a scale)
     std::optional<double> rebaseCutTo;
+    // The same for the feed axis: how many more times feedReady() says no,
+    // and where each time it says yes sets the feed axis to, in turn
+    int feedNotReadyAsks { 0 };
+    std::deque<double> rebaseFeedTo;
 
 private:
     std::optional<double> m_cutTarget;
@@ -3855,6 +3873,62 @@ TEST_CASE("MultiPass: each cut waits until the cut axis is ready, paused or not"
     REQUIRE(mp.state() == mgo::MultiPass::State::Settling);
     mp.stop("stopped");
     REQUIRE(!mp.inProgress());
+}
+
+TEST_CASE("MultiPass: each pass waits until the feed axis is ready, feeding again if need be")
+{
+    // e.g. the model waiting for the feed axis's scale to settle after the
+    // feed, then re-basing it (X on the lathe)
+    FakeMultiPassMachine machine;
+    mgo::MultiPass mp(machine);
+    machine.feedNotReadyAsks = 2;
+    REQUIRE(mp.start(basicPlan()).empty());
+    machine.finishMoves();
+    mp.update();
+    REQUIRE(mp.state() == mgo::MultiPass::State::FeedSettling);
+    mp.update();
+    REQUIRE(mp.state() == mgo::MultiPass::State::FeedSettling);
+    mp.update();
+    REQUIRE(mp.state() == mgo::MultiPass::State::Cutting);
+    // The next pass's feed is found short once re-based: it feeds again,
+    // and the re-base then finds it there
+    machine.rebaseFeedTo = { 4.81, 4.8 };
+    machine.run(mp);
+    REQUIRE(mp.state() == mgo::MultiPass::State::Finished);
+    REQUIRE(
+        machine.log
+        == Log { "feed 4.9",
+                 "cut -10 at 40",
+                 "cut 0 at 1000",
+                 "feed 4.8",
+                 "feed re-based 4.81",
+                 "feed 4.8",
+                 "feed re-based 4.8",
+                 "cut -10 at 40",
+                 "cut 0 at 1000",
+                 "feed 4.75",
+                 "cut -10 at 40",
+                 "cut 0 at 1000" });
+
+    // Never there: after MAX_FEED_CORRECTIONS feeds again, the passes stop,
+    // rather than cut at the wrong depth
+    machine.log.clear();
+    machine.m_feed = 5.0;
+    machine.rebaseFeedTo = { 4.91, 4.91, 4.91, 4.91 };
+    REQUIRE(mp.start(basicPlan()).empty());
+    machine.run(mp);
+    REQUIRE(!mp.inProgress());
+    REQUIRE(mp.message().find("depth") != std::string::npos);
+    REQUIRE(
+        machine.log
+        == Log { "feed 4.9",
+                 "feed re-based 4.91",
+                 "feed 4.9",
+                 "feed re-based 4.91",
+                 "feed 4.9",
+                 "feed re-based 4.91",
+                 "feed 4.9",
+                 "feed re-based 4.91" });
 }
 
 TEST_CASE("MultiPass: asking for a pause before the next pass")

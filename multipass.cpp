@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <string>
 
 namespace mgo {
 
@@ -522,7 +523,12 @@ void MultiPass::update()
                 abandon("The feed stopped short");
                 return;
             }
-            startPass();
+            settleFeed();
+            return;
+        case State::FeedSettling:
+            if (m_machine.feedReady()) {
+                feedSettled();
+            }
             return;
         case State::Indexing:
             if (m_machine.indexMoving()) {
@@ -966,16 +972,45 @@ void MultiPass::startNextPass()
 
 void MultiPass::startFeed()
 {
+    m_feedCorrections = 0;
     if (m_plan.feedManual) {
         // (The user fed it on while paused)
         startPass();
         return;
     }
     if (feedAt(m_feedTarget)) {
-        // e.g. repeating the same cut
+        // e.g. repeating the same cut. (Still checked, e.g. on its scale: it
+        // may have been nudged, or re-based, while paused)
+        settleFeed();
+        return;
+    }
+    m_state = State::Feeding;
+    m_machine.feedMoveTo(m_feedTarget);
+}
+
+void MultiPass::settleFeed()
+{
+    if (!m_machine.feedReady()) {
+        m_state = State::FeedSettling;
+        return;
+    }
+    feedSettled();
+}
+
+void MultiPass::feedSettled()
+{
+    // (Being ready may have corrected its position, e.g. from its scale)
+    if (feedAt(m_feedTarget)) {
         startPass();
         return;
     }
+    if (m_feedCorrections >= MAX_FEED_CORRECTIONS) {
+        abandon(
+            "The feed still isn't at the pass's depth after " + std::to_string(m_feedCorrections)
+            + " corrections");
+        return;
+    }
+    ++m_feedCorrections;
     m_state = State::Feeding;
     m_machine.feedMoveTo(m_feedTarget);
 }

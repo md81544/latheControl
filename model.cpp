@@ -395,7 +395,8 @@ void Model::checkStatus()
     advanceBacklashMeasurement();
     checkScaleAtRest(1);
     checkScaleAtRest(2);
-    advanceAxis1Finish();
+    advanceFinish(1);
+    advanceFinish(2);
 
     if (const auto diameter = getDiameterMm()) {
         m_generalStatus = fmt::format(
@@ -789,8 +790,10 @@ void Model::stopAllMotors()
     if (m_backlashMeasurement) {
         endBacklashMeasurement("stopped");
     }
-    if (scaleState(1).finish) {
-        endAxis1Finish("stopped");
+    for (const int n : { 1, 2 }) {
+        if (scaleState(n).finish) {
+            endFinish(n, "stopped");
+        }
     }
     // (After stopping, so a sequence's end, e.g. restoring a nudge's speed,
     // doesn't race with a move it started)
@@ -1196,7 +1199,7 @@ void Model::axis1GoToPosition(double pos)
     const long step = std::lround(pos / motor(1)->getConversionFactor());
     axis1GoToStep(step);
     // (With a scale: see finishesOnScale(1))
-    startAxis1Finish(step);
+    startFinish(1, step);
     if (std::abs(pos) < 0.00001) {
         // Round to zero for display purposes, just to
         // avoid having "-0.000" displayed
@@ -1229,7 +1232,7 @@ void Model::axis1GoToCurrentMemory()
     // (If threading, this waits for zero degrees on the chuck before starting)
     axis1GoToStep(*step);
     // (With a scale: see finishesOnScale(1))
-    startAxis1Finish(*step);
+    startFinish(1, *step);
 }
 
 void Model::axis1Zero()
@@ -1271,7 +1274,11 @@ void Model::axis2GoToPosition(double pos)
     if (axisMoveRefused(2)) {
         return;
     }
-    motor(2)->goToPosition(pos);
+    // (As the motor's goToPosition() rounds it)
+    const long step = std::lround(pos / motor(2)->getConversionFactor());
+    motor(2)->goToStep(step);
+    // (With a scale: see finishesOnScale(2))
+    startFinish(2, step);
     axisState(2).status = fmt::format("Going to {:.3f}", pos);
 }
 
@@ -1290,7 +1297,7 @@ bool Model::rapidReleased()
     if (!axisState(1).rapidInProgress && !axisState(2).rapidInProgress) {
         return false;
     }
-    if (isMotionSequenceRunning() || scaleState(1).finish || m_backlashMeasurement
+    if (isMotionSequenceRunning() || anyFinishingOnScale() || m_backlashMeasurement
         || m_mode != Mode::None) {
         return false;
     }
@@ -1358,6 +1365,8 @@ void Model::axis2GoToCurrentMemory()
     stopAxis(2);
     axisState(2).status = "returning";
     motor(2)->goToStep(*step);
+    // (With a scale: see finishesOnScale(2))
+    startFinish(2, *step);
 }
 
 bool Model::axis2CanRetract() const
@@ -1662,7 +1671,7 @@ std::string Model::toolChangeUnavailable() const
         return "Not during a multi-pass";
     }
     if (motor(1)->isRunning() || motor(2)->isRunning() || m_motionSequence.isRunning()
-        || scaleState(1).finish || m_backlashMeasurement) {
+        || anyFinishingOnScale() || m_backlashMeasurement) {
         return "Stop the motors first";
     }
     return "";
@@ -2082,27 +2091,23 @@ std::string Model::getWarning() const
 
 std::string Model::axisStatus(int axisNumber) const
 {
-    if (axisNumber != 1) {
-        return axisState(axisNumber).status;
-    }
-    if (scaleState(1).finish) {
+    if (const auto& finish = scaleState(axisNumber).finish) {
         // (The move itself as usual, e.g. "Going to 10.000"; then waiting for
         // the scale, and correcting)
-        if (scaleState(1).finish->corrections == 0 && motor(1)->isRunning()) {
-            return axisState(1).status;
+        if (finish->corrections == 0 && motor(axisNumber)->isRunning()) {
+            return axisState(axisNumber).status;
         }
-        return scaleState(1).finish->corrections == 0
+        return finish->corrections == 0
             ? "Finishing on the scale"
-            : fmt::format(
-                  "Finishing on the scale (correction {})", scaleState(1).finish->corrections);
+            : fmt::format("Finishing on the scale (correction {})", finish->corrections);
     }
-    if (m_backlashMeasurement) {
+    if (axisNumber == 1 && m_backlashMeasurement) {
         return fmt::format(
             "Measuring backlash: move {} of {}",
             std::min(m_backlashMeasurement->movesDone() + 1, BacklashMeasurement::MOVES),
             BacklashMeasurement::MOVES);
     }
-    return axisState(1).status;
+    return axisState(axisNumber).status;
 }
 
 std::string Model::getGeneralStatus() const
@@ -3097,9 +3102,7 @@ void Model::checkScaleAtRest(int axisNumber)
     // stall or drift builds up from pass to pass (seen on the mill, 18 Nov
     // 2026)
     if (multiPassPausedForRebase()) {
-        // (Only axis 1's, so far: axis 2's, the infeed on the lathe, is to
-        // come)
-        if (axisNumber == 1 && m_config.readBool(key("RebaseBetweenPasses"), false)) {
+        if (m_config.readBool(key("RebaseBetweenPasses"), false)) {
             rebaseIfApart(axisNumber, "re-based between passes");
         }
         return;
@@ -3138,6 +3141,21 @@ void Model::rebaseIfApart(int axisNumber, const char* why)
         return;
     }
     rebaseFromScale(axisNumber, why);
+}
+
+bool Model::feedReady()
+{
+    // (As for cutReady(), with nothing to wait for without a reading)
+    if (!scale(2) || !m_config.readBool("Axis2ScaleRebaseBetweenPasses", false)
+        || (m_mode != Mode::MultiPass && m_mode != Mode::GearCutting) || !scale(2)->isAligned()
+        || !scale(2)->hasReading()) {
+        return true;
+    }
+    if (!scale(2)->isSettled()) {
+        return false;
+    }
+    rebaseIfApart(2, "re-based after the feed");
+    return true;
 }
 
 bool Model::cutReady()
@@ -3200,130 +3218,137 @@ void Model::toggleFinishOnScale(int axisNumber)
     }
 }
 
+bool Model::anyFinishingOnScale() const
+{
+    return isFinishingOnScale(1) || isFinishingOnScale(2);
+}
+
 bool Model::isFinishingOnScale(int axisNumber) const
 {
     return scaleState(axisNumber).finish.has_value();
 }
 
-void Model::startAxis1Finish(long step)
+void Model::startFinish(int axisNumber, long step)
 {
-    scaleState(1).finish.reset();
-    if (!scaleState(1).finishOnScale || !scale(1) || !scale(1)->isAligned()
-        || (m_mode != Mode::None && m_mode != Mode::GearCutting) || m_multiPass.inProgress()) {
+    scaleState(axisNumber).finish.reset();
+    if (!scaleState(axisNumber).finishOnScale || !scale(axisNumber)
+        || !scale(axisNumber)->isAligned() || (m_mode != Mode::None && m_mode != Mode::GearCutting)
+        || m_multiPass.inProgress()) {
         return;
     }
     // (Only if it's moving: not if refused, e.g. a locked axis, or already there)
-    if (!motor(1)->isRunning() && !isMotionSequenceRunning()) {
+    if (!motor(axisNumber)->isRunning() && !isMotionSequenceRunning()) {
         return;
     }
-    const double target = motor(1)->getPosition(step);
-    scaleState(1).finish = ScaleFinish {
+    const double target = motor(axisNumber)->getPosition(step);
+    scaleState(axisNumber).finish = ScaleFinish {
         .targetMm = target,
-        .direction = target >= motor(1)->getPosition() ? 1 : -1,
-        .settles = scale(1)->settleCount(),
+        .direction = target >= motor(axisNumber)->getPosition() ? 1 : -1,
+        .settles = scale(axisNumber)->settleCount(),
     };
 }
 
-void Model::advanceAxis1Finish()
+void Model::advanceFinish(int axisNumber)
 {
-    if (!scaleState(1).finish || motor(1)->isRunning() || isMotionSequenceRunning()) {
+    if (!scaleState(axisNumber).finish || motor(axisNumber)->isRunning()
+        || isMotionSequenceRunning()) {
         return;
     }
-    ScaleFinish& f = *scaleState(1).finish;
+    ScaleFinish& f = *scaleState(axisNumber).finish;
     if (f.backingOff) {
         // (No need to wait for the scale: it's only to come back)
         f.backingOff = false;
-        axis1FinishMove(f.approachMm);
+        finishMove(axisNumber, f.approachMm);
         return;
     }
-    if (scale(1)->settleCount() == f.settles) {
+    if (scale(axisNumber)->settleCount() == f.settles) {
         return;
     }
-    const auto scaleMm = scale(1)->positionMm();
+    const auto scaleMm = scale(axisNumber)->positionMm();
     if (!scaleMm) {
-        endAxis1Finish("no scale reading");
+        endFinish(axisNumber, "no scale reading");
         return;
     }
     // (A correction from a reading still jumping about could go anywhere)
-    if (!scale(1)->isSteady()) {
-        endAxis1Finish("the scale's reading didn't settle");
+    if (!scale(axisNumber)->isSteady()) {
+        endFinish(axisNumber, "the scale's reading didn't settle");
         return;
     }
-    const double countMm = 1.0 / scale(1)->countsPerMm();
+    const double countMm = 1.0 / scale(axisNumber)->countsPerMm();
     const double error = f.targetMm - *scaleMm;
     // (A count is as close as the scale can tell)
     if (std::abs(error) < 1.5 * countMm) {
-        endAxis1Finish(fmt::format("on target ({:+.4f} mm)", -error));
+        endFinish(axisNumber, fmt::format("on target ({:+.4f} mm)", -error));
         return;
     }
     if (f.corrections >= MAX_SCALE_CORRECTIONS) {
-        const std::string label = axisLabel(1);
+        const std::string label = axisLabel(axisNumber);
         m_warning = fmt::format(
             "{} is {:.3f} {} from its target after {} corrections",
             label,
-            toDisplayUnits(1, std::abs(error)),
-            axisUnitName(1),
+            toDisplayUnits(axisNumber, std::abs(error)),
+            axisUnitName(axisNumber),
             f.corrections);
-        endAxis1Finish(fmt::format("still {:+.4f} mm out", -error));
+        endFinish(axisNumber, fmt::format("still {:+.4f} mm out", -error));
         return;
     }
     ++f.corrections;
     // (The motor's position and the scale's agree, if re-based; this works
     // either way)
-    const double approach = motor(1)->getPosition() + error;
+    const double approach = motor(axisNumber)->getPosition() + error;
     if (error * f.direction > 0.0) {
         MGOLOG(
             fmt::format(
                 "{} {:.4f} mm short of {:.4f}: moving on (correction {})",
-                axisLabel(1),
+                axisLabel(axisNumber),
                 std::abs(error),
                 f.targetMm,
                 f.corrections));
-        axis1FinishMove(approach);
+        finishMove(axisNumber, approach);
     } else {
         // Past it: back off past the backlash, and approach again the same
         // way, rather than reverse onto it (which would leave the slack the
         // other way, and could push back into the work)
-        const double backOff = std::max(0.5, 2.0 * backlashCompensationMm(1));
+        const double backOff = std::max(0.5, 2.0 * backlashCompensationMm(axisNumber));
         MGOLOG(
             fmt::format(
                 "{} {:.4f} mm past {:.4f}: backing off {:.3f} mm to approach again (correction "
                 "{})",
-                axisLabel(1),
+                axisLabel(axisNumber),
                 std::abs(error),
                 f.targetMm,
                 backOff,
                 f.corrections));
         f.backingOff = true;
         f.approachMm = approach;
-        axis1FinishMove(approach - f.direction * backOff);
+        finishMove(axisNumber, approach - f.direction * backOff);
     }
 }
 
-void Model::axis1FinishMove(double position)
+void Model::finishMove(int axisNumber, double position)
 {
-    const long step = std::lround(position / motor(1)->getConversionFactor());
-    scaleState(1).finish->settles = scale(1)->settleCount();
-    motor(1)->goToStep(step);
-    if (!motor(1)->isRunning() && motor(1)->getCurrentStep() != step) {
+    const long step = std::lround(position / motor(axisNumber)->getConversionFactor());
+    scaleState(axisNumber).finish->settles = scale(axisNumber)->settleCount();
+    motor(axisNumber)->goToStep(step);
+    if (!motor(axisNumber)->isRunning() && motor(axisNumber)->getCurrentStep() != step) {
         // Refused (e.g. a limit switch, or the driver's alarm)
-        endAxis1Finish("the move was refused");
+        endFinish(axisNumber, "the move was refused");
     }
 }
 
-void Model::endAxis1Finish(const std::string& why)
+void Model::endFinish(int axisNumber, const std::string& why)
 {
-    if (scaleState(1).finish) {
+    if (scaleState(axisNumber).finish) {
         MGOLOG(
             fmt::format(
                 "{}: finishing on the scale at {:.4f} ended ({}), after {} correction{}",
-                axisLabel(1),
-                scaleState(1).finish->targetMm,
+                axisLabel(axisNumber),
+                scaleState(axisNumber).finish->targetMm,
                 why,
-                scaleState(1).finish->corrections,
-                scaleState(1).finish->corrections == 1 ? "" : "s"));
+                scaleState(axisNumber).finish->corrections,
+                scaleState(axisNumber).finish->corrections == 1 ? "" : "s"));
     }
-    scaleState(1).finish.reset();
+    scaleState(axisNumber).finish.reset();
 }
 
 std::optional<double> Model::scaleMismatchMm(int axisNumber) const
@@ -3402,10 +3427,8 @@ bool Model::canRebaseFromScale(int axisNumber) const
     const bool atRest
         = (m_mode == Mode::None || m_mode == Mode::GearCutting) && !m_multiPass.inProgress();
     return scale(axisNumber) && !motor(axisNumber)->isRunning() && scalePositionMm(axisNumber)
-        && scale(axisNumber)->isSteady()
-        // (Paused in a multi-pass, only axis 1, so far: see checkScaleAtRest())
-        && (atRest || (axisNumber == 1 && multiPassPausedForRebase())) && !isMotionSequenceRunning()
-        && !scaleState(axisNumber).finish && !m_backlashMeasurement;
+        && scale(axisNumber)->isSteady() && (atRest || multiPassPausedForRebase())
+        && !isMotionSequenceRunning() && !scaleState(axisNumber).finish && !m_backlashMeasurement;
 }
 
 void Model::rebaseFromScaleByHand(int axisNumber)

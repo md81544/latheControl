@@ -2182,6 +2182,40 @@ change.
           quadrature scale on axis 2 needing its pins. Still axis 1's alone
           (part c): finishing moves, re-basing between passes, and the
           re-base by hand while a multi-pass is paused
+        - **Done (20 Nov 2026), part (c), not yet tried on a machine:**
+          finishing moves for either axis (`startFinish()`,
+          `advanceFinish()`, `finishMove()` and `endFinish()` take the axis
+          number; X's go-to, relative move and memory return start one, as
+          Z's do), with X's own on and off in the menu
+          (`toggleAxis2FinishOnScale`, System, `G`; `Axis2ScaleFinishMoves`
+          to start on). Keys wait while either axis finishes, and Space ends
+          both. Re-basing between passes for X, the feed axis: the
+          multi-pass asks the new `IMultiPassMachine::feedReady()` after
+          each feed to a pass's depth (or before the pass, if it's there
+          already), in a new `FeedSettling` state, until it's true. The
+          Model's waits for X's scale to settle and re-bases X (with
+          `Axis2ScaleRebaseBetweenPasses`, in a plain multi-pass or gear
+          cutting, as for `cutReady()`). If the re-base leaves X short of or
+          past the depth, the multi-pass feeds again, at most
+          `MAX_FEED_CORRECTIONS` (3) times, then stops with a warning
+          rather than cut at the wrong depth. While paused, X is re-based
+          each time its reading settles, and by hand (`XB`), as Z is. A
+          re-base renumbers the motor's steps, so the retraction's stored
+          step (`m_xOldPosition`) is then the nominal position, which is
+          where the table really is: unretracting goes to the true depth.
+          The multi-pass X correction is only in the shown and feed
+          positions, not the motor's, so a re-base doesn't disturb it. The
+          settling overlay and the status line name X while it waits. New
+          tests: the engine waiting for the feed, feeding again, and giving
+          up after three; X finishing on its scale (short, past, a memory
+          return, Space); X's toggle in the menu; and a multi-pass with X
+          falling 0.03 mm short of its motor, paused and not, which (without
+          the feed's re-base) cuts the last pass 0.03 mm too deep. Not
+          done: a correction that reverses (X fed past the depth) relies on
+          the motor's backlash compensation, rather than backing off and
+          approaching again as a finishing move does; the re-base after it
+          catches what's left, within the three tries. **To try on the
+          lathe**, once X has its scale. This completes stage 2
 - [x] `axis.cpp` / `axis.h` are compiled but unused, and their `mgo::Axis`
       class clashes in name with `enum class mgo::Axis` in model.h
     - **Done:** removed (they're in git's history, if the "array of axes"

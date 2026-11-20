@@ -1186,10 +1186,13 @@ void ViewQt::Impl::updateToolMeasurementData(const Model& model)
 
 std::vector<std::string> settlingOverlayText(const Model& model)
 {
-    if (model.multiPass().state() != MultiPass::State::Settling) {
+    const auto state = model.multiPass().state();
+    if (state != MultiPass::State::Settling && state != MultiPass::State::FeedSettling) {
         return {};
     }
-    return { fmt::format("Waiting for {}'s scale", model.axisLabel(1)),
+    // (The feed axis's, after the feed, or the cut axis's)
+    const int axis = state == MultiPass::State::FeedSettling ? 2 : 1;
+    return { fmt::format("Waiting for {}'s scale", model.axisLabel(axis)),
              "to settle before the next cut",
              "(Space stops)" };
 }
@@ -1921,7 +1924,10 @@ void ViewQt::Impl::updateMultiPassData(const Model& model)
                        : radius ? ": " + x + " to the pass's start"
                                 : ": stepping over");
             break;
-        // (See IMultiPassMachine::cutReady())
+        // (See IMultiPassMachine::feedReady() and cutReady())
+        case MultiPass::State::FeedSettling:
+            status = pass + ": waiting for " + x + "'s scale to settle";
+            break;
         case MultiPass::State::Settling:
             status = pass + ": waiting for " + z + "'s scale to settle";
             break;
@@ -2088,6 +2094,7 @@ void ViewQt::Impl::updateGearData(const Model& model)
         case MultiPass::State::Retracting:
         case MultiPass::State::Unretracting:
         case MultiPass::State::Feeding:
+        case MultiPass::State::FeedSettling:
         case MultiPass::State::Positioning:
             status = tooth;
             break;

@@ -2463,6 +2463,23 @@ struct ScaleTestModel {
 
 } // namespace
 
+namespace {
+
+// Both axes with a (simulated) scale, as the lathe will have
+const std::map<std::string, std::string> axis2Scale {
+    { "Axis2Scale", "serial" },      { "Axis2ScaleCountsPerMm", "100" },
+    { "Axis2ScaleSettleMs", "200" }, { "Axis1ScaleWarnMm", "0.2" },
+    { "Axis2ScaleWarnMm", "0.2" },
+};
+
+std::map<std::string, std::string> withAxis2Scale(std::map<std::string, std::string> extra = {})
+{
+    extra.insert(axis2Scale.begin(), axis2Scale.end());
+    return extra;
+}
+
+} // namespace
+
 TEST_CASE("UI: re-basing from the scale at rest")
 {
     ScaleTestModel t({ { "Axis1ScaleRebase", "true" }, { "Axis1ScaleWarnMm", "0.2" } });
@@ -2611,6 +2628,41 @@ TEST_CASE("UI: re-basing before each pass of a multi-pass", "[timing]")
     REQUIRE(t.runUntil([&] { return t.model.scaleIsSteady(1); }));
     REQUIRE(*t.model.scalePositionMm(1) == Approx(0.0).margin(0.011));
     REQUIRE(std::abs(*t.model.scaleDifferenceMm(1)) < 0.011);
+}
+
+TEST_CASE("UI: re-basing axis 2 after each feed of a multi-pass", "[timing]")
+{
+    // The lathe's X, the feed axis: each pass is cut at the depth its scale
+    // says, not just where the motor's steps say
+    ScaleTestModel t(withAxis2Scale({ { "Axis2ScaleRebaseBetweenPasses", "true" } }));
+    REQUIRE(t.runUntil([&] { return t.model.scaleIsSteady(1) && t.model.scaleIsSteady(2); }));
+    const bool pause = GENERATE(false, true);
+    INFO((pause ? "Pausing" : "Not pausing"));
+    startMultiPass(t, pause);
+    // During the first pass, the table falls 0.03mm short of X's motor
+    t.model.fakeScale(2)->setErrorMm(-0.03);
+    bool feedSettling = false;
+    std::vector<std::string> overlay;
+    REQUIRE(t.runUntil([&] {
+        if (multiPassIn(t.model, mgo::MultiPass::State::FeedSettling)) {
+            feedSettling = true;
+            overlay = mgo::settlingOverlayText(t.model);
+        }
+        if (multiPassIn(t.model, mgo::MultiPass::State::Paused)) {
+            t.model.multiPassGo();
+        }
+        return !t.model.multiPass().inProgress();
+    }));
+    INFO("Stopped: " << t.model.multiPass().message() << " / " << t.model.getWarning());
+    REQUIRE(t.model.multiPass().state() == mgo::MultiPass::State::Finished);
+    REQUIRE(feedSettling);
+    REQUIRE(!overlay.empty());
+    REQUIRE(overlay.front() == "Waiting for X's scale");
+    // The last pass was cut where X's scale says the last depth is
+    REQUIRE(t.runUntil([&] { return t.model.scaleIsSteady(2); }));
+    REQUIRE(
+        *t.model.scalePositionMm(2) == Approx(t.model.multiPass().plan().feedEnd).margin(0.011));
+    REQUIRE(std::abs(*t.model.scaleDifferenceMm(2)) < 0.011);
 }
 
 TEST_CASE("UI: Space stops a multi-pass waiting for the scale to settle", "[timing]")
@@ -2879,23 +2931,6 @@ TEST_CASE("UI: a scale which jumps at rest is misreading, so only the position c
     REQUIRE(t.model.motorPosition(1) == Approx(1.0).margin(0.011));
 }
 
-namespace {
-
-// Both axes with a (simulated) scale, as the lathe will have
-const std::map<std::string, std::string> axis2Scale {
-    { "Axis2Scale", "serial" },      { "Axis2ScaleCountsPerMm", "100" },
-    { "Axis2ScaleSettleMs", "200" }, { "Axis1ScaleWarnMm", "0.2" },
-    { "Axis2ScaleWarnMm", "0.2" },
-};
-
-std::map<std::string, std::string> withAxis2Scale(std::map<std::string, std::string> extra = {})
-{
-    extra.insert(axis2Scale.begin(), axis2Scale.end());
-    return extra;
-}
-
-} // namespace
-
 TEST_CASE("UI: a scale on axis 2 is re-based at rest")
 {
     ScaleTestModel t(withAxis2Scale({ { "Axis2ScaleRebase", "true" } }));
@@ -3150,6 +3185,66 @@ TEST_CASE("UI: finishing moves on the scale")
         REQUIRE(t.runUntil([&] {
             return !t.model.isMotorRunning(1) && std::abs(t.model.motorPosition(1) - 0.95) < 0.011;
         }));
+    }
+}
+
+TEST_CASE("UI: finishing axis 2's moves on its scale")
+{
+    ScaleTestModel t(withAxis2Scale({ { "Axis2ScaleFinishMoves", "true" } }));
+    REQUIRE(t.model.finishesOnScale(2));
+    REQUIRE(!t.model.finishesOnScale(1));
+    // (Its own on and off in the menu, as for axis 1's)
+    const auto commands
+        = mgo::buildCommands(t.config, mgo::DisplayUnits::Metric, false, false, true);
+    const auto toggle = std::ranges::find_if(
+        commands, [](const auto& c) { return c.key == mgo::key::toggleAxis2FinishOnScale; });
+    REQUIRE(toggle != commands.end());
+    REQUIRE(toggle->description == "Finishing on the scale is ON (X)");
+    REQUIRE(t.runUntil([&] { return t.model.scalePositionMm(2).has_value(); }));
+    const auto finishedAt = [&t](double target) {
+        return t.runUntil([&] {
+            const auto scale = t.model.scalePositionMm(2);
+            return !t.model.isFinishingOnScale(2) && !t.model.isMotorRunning(2) && scale
+                && std::abs(*scale - target) < 0.011;
+        });
+    };
+
+    SECTION("Short of the target: moves on")
+    {
+        t.model.fakeScale(2)->setErrorMm(-0.05);
+        t.model.goToPosition(2, 1.0);
+        REQUIRE(t.model.isFinishingOnScale(2));
+        REQUIRE(t.model.anyFinishingOnScale());
+        REQUIRE(t.runUntil([&] {
+            return !t.model.isMotorRunning(2) && t.model.isFinishingOnScale(2)
+                && t.model.axisStatus(2).starts_with("Finishing on the scale");
+        }));
+        REQUIRE(finishedAt(1.0));
+        REQUIRE(t.model.getWarning().empty());
+    }
+    SECTION("Past the target: backs off and approaches again")
+    {
+        t.model.fakeScale(2)->setErrorMm(0.05);
+        t.model.goToPosition(2, 1.0);
+        REQUIRE(t.runUntil([&] { return t.model.motorPosition(2) < 0.6; }));
+        REQUIRE(finishedAt(1.0));
+        REQUIRE(t.model.getWarning().empty());
+    }
+    SECTION("Going to a memory slot")
+    {
+        t.model.storePosition(2, 2.0);
+        t.model.fakeScale(2)->setErrorMm(-0.04);
+        t.model.goToCurrentMemory(2);
+        REQUIRE(t.model.isFinishingOnScale(2));
+        REQUIRE(finishedAt(2.0));
+    }
+    SECTION("Space stops it")
+    {
+        t.model.fakeScale(2)->setErrorMm(-0.05);
+        t.model.goToPosition(2, 1.0);
+        REQUIRE(t.model.isFinishingOnScale(2));
+        t.model.stopAllMotors();
+        REQUIRE(!t.model.anyFinishingOnScale());
     }
 }
 

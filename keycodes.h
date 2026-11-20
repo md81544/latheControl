@@ -226,6 +226,7 @@ constexpr int toolNew = 7022; // tool library: define a new tool (measuring it)
 constexpr int toolMeasureAgain = 7023; // tool library: measure a tool again
 constexpr int toolTouch = 7024; // tool library: record a touch, while measuring (Enter)
 constexpr int toolCancelMeasuring = 7025; // tool library: cancel measuring (Esc)
+constexpr int toggleAxis2FinishOnScale = 7027; // finish axis 2's moves on its scale: on / off
 constexpr int toolEdit = 7026; // tool library: the current tool's description and nose radius
 
 // Joystick specific "keys"

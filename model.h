@@ -566,8 +566,7 @@ public:
     // Re-bases it, or warns why it can't
     void rebaseFromScaleByHand(int axisNumber);
 
-    // Finishing an axis's positioning moves on its scale (stage 4; only axis
-    // 1's, so far): after a go
+    // Finishing an axis's positioning moves on its scale (stage 4): after a go
     // to (a memory, a typed or relative position, the last position), once
     // the scale has settled, if the table is more than a count from the
     // target, a correction move: on, if short; if past, backing off past the
@@ -581,6 +580,9 @@ public:
     bool finishesOnScale(int axisNumber) const;
     void toggleFinishOnScale(int axisNumber);
     bool isFinishingOnScale(int axisNumber) const;
+    // Whether either motorised axis is finishing a move on its scale (keys
+    // wait meanwhile)
+    bool anyFinishingOnScale() const;
 #ifdef FAKE
     // The simulated scale, if the axis has a serial one (for the tests)
     FakeDroScale* fakeScale(int axisNumber);
@@ -1155,15 +1157,15 @@ private:
     // moving it
     void rebaseIfApart(int axisNumber, const char* why);
 
-    // After a positioning move to step has started: finish it on the scale,
-    // if that's on and can be done now
-    void startAxis1Finish(long step);
+    // After a positioning move of an axis to step has started: finish it on
+    // the axis's scale, if that's on and can be done now
+    void startFinish(int axisNumber, long step);
     // Called from checkStatus(): each time the scale settles, corrects or
     // finishes
-    void advanceAxis1Finish();
+    void advanceFinish(int axisNumber);
     // Starts one of its moves, to a position (in mm)
-    void axis1FinishMove(double position);
-    void endAxis1Finish(const std::string& why);
+    void finishMove(int axisNumber, double position);
+    void endFinish(int axisNumber, const std::string& why);
     // Logs a motor starting or stopping, with where it was, where it's going,
     // and how fast, for diagnosing problems from lc.log. It's called on each
     // update, so a move which starts and stops between two of them (e.g. a
@@ -1191,6 +1193,11 @@ private:
     // drift or lost steps are corrected at every pass, paused or not, and a
     // mismatch beyond Axis1ScaleWarnMm stops everything at the next pass
     bool cutReady() override;
+    // The same for the feed axis (axis 2), with Axis2ScaleRebaseBetweenPasses:
+    // after each feed to a pass's depth, waits for its scale to settle, then
+    // re-bases it, so the pass is cut at the depth the scale says (the
+    // multi-pass feeds again if the re-base leaves it short or past)
+    bool feedReady() override;
     bool cutMoving() const override;
     void cutMoveTo(double position, double feedFollows) override;
     double cutSpeed() const override;

@@ -226,6 +226,7 @@ bool menuOnly(int k)
         case key::f2g:
         case key::measureAxis1Backlash:
         case key::toggleAxis1FinishOnScale:
+        case key::toggleAxis2FinishOnScale:
         case key::threadingPasses:
         case key::toggleThreadingAutoRetract:
         case key::clearFeature:
@@ -347,6 +348,7 @@ bool keyAllowedInCurrentMode(int k, const Model& model)
             case key::ASTERISK:
             case key::toggleThreadingAutoRetract:
             case key::toggleAxis1FinishOnScale:
+            case key::toggleAxis2FinishOnScale:
                 return true;
             default:
                 return false;
@@ -442,13 +444,14 @@ bool keyAllowedInCurrentMode(int k, const Model& model)
             && (k == key::w || k == key::W || k == key::s || k == key::S)) {
             return true;
         }
-        // Axis 1 may be re-based from its scale while paused (where that's
-        // allowed: see Model::canRebaseFromScale(1)), as the next pass
-        // moves it to its start from wherever that leaves it
-        // (And so axis 1's leader key, which comes first)
+        // An axis may be re-based from its scale while paused (where that's
+        // allowed: see Model::canRebaseFromScale()), as the next pass moves
+        // axis 1 to its start, and feeds axis 2 to its depth, from wherever
+        // that leaves them. (And so their leader keys, which come first)
         if (model.multiPass().state() == MultiPass::State::Paused
-            && (k == key::a1_b
-                || k == static_cast<int>(model.config().readLong("Axis1Leader", 122L)))) {
+            && (k == key::a1_b || k == key::a2_b
+                || k == static_cast<int>(model.config().readLong("Axis1Leader", 122L))
+                || k == static_cast<int>(model.config().readLong("Axis2Leader", 120L)))) {
             return true;
         }
         // Between spring passes, Z can move too (e.g. off the end, to try the
@@ -476,6 +479,7 @@ bool keyAllowedInCurrentMode(int k, const Model& model)
             case key::U:
             case key::toggleThreadingAutoRetract:
             case key::toggleAxis1FinishOnScale:
+            case key::toggleAxis2FinishOnScale:
                 return true;
             default:
                 return false;
@@ -499,7 +503,8 @@ std::vector<Command> buildCommands(
     const IConfigReader& config,
     DisplayUnits units,
     bool threadingAutoRetract,
-    bool axis1FinishOnScale)
+    bool axis1FinishOnScale,
+    bool axis2FinishOnScale)
 {
     const std::string a1 = config.read("Axis1Label", "Z");
     const std::string a2 = config.read("Axis2Label", "X");
@@ -896,6 +901,17 @@ std::vector<Command> buildCommands(
             AXIS1,
             [](const Model& m) { return m.canMeasureAxis1Backlash(); },
             'b');
+    }
+    // (Only with a scale on axis 2)
+    if (config.read("Axis2Scale", "none") != "none") {
+        b.add(
+            c,
+            fmt::format("Finishing on the scale is {} ({})", axis2FinishOnScale ? "ON" : "OFF", a2),
+            key::toggleAxis2FinishOnScale,
+            AXIS2,
+            nullptr,
+            'g',
+            true);
     }
 
     return b.take();

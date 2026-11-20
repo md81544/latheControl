@@ -46,7 +46,8 @@ std::vector<Command> buildCommands(
     const IConfigReader& config,
     DisplayUnits units = DisplayUnits::Metric,
     bool threadingAutoRetract = false,
-    bool axis1FinishOnScale = false);
+    bool axis1FinishOnScale = false,
+    bool axis2FinishOnScale = false);
 
 // Whether a key is allowed in the current mode (e.g. no X motion while X is
 // retracted, nor a mode's keys if the config disables it). Used by the

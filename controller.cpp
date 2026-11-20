@@ -26,7 +26,8 @@ Controller::Controller(Model* model)
           model->config(),
           model->getDisplayUnits(),
           model->threadingAutoRetract(),
-          model->finishesOnScale(1)))
+          model->finishesOnScale(1),
+          model->finishesOnScale(2)))
 {
     // (Sounds are off unless their files are set)
     m_alertSound = model->config().read("SoundAlert", "");
@@ -65,7 +66,8 @@ void Controller::rebuildMenu()
         m_model->config(),
         m_model->getDisplayUnits(),
         m_model->threadingAutoRetract(),
-        m_model->finishesOnScale(1)));
+        m_model->finishesOnScale(1),
+        m_model->finishesOnScale(2)));
 }
 
 void Controller::run()
@@ -413,7 +415,7 @@ void Controller::processKeyPress()
         }
         return;
     }
-    if (m_model->isMotionSequenceRunning() || m_model->isFinishingOnScale(1)) {
+    if (m_model->isMotionSequenceRunning() || m_model->anyFinishingOnScale()) {
         // Keys wait until the sequence (e.g. a nudge) has finished, as they
         // did when it blocked, so e.g. a quick series of nudges each moves
         // the full amount. Likewise while a move is finished on the scale.
@@ -1401,8 +1403,9 @@ void Controller::processKey(int t)
                     break;
                 }
             case key::toggleAxis1FinishOnScale:
+            case key::toggleAxis2FinishOnScale:
                 {
-                    m_model->toggleFinishOnScale(1);
+                    m_model->toggleFinishOnScale(kp == key::toggleAxis1FinishOnScale ? 1 : 2);
                     // (The menu shows whether it's on)
                     rebuildMenu();
                     break;
