@@ -534,6 +534,15 @@ public:
     // Goes up each time the user is to be asked about a mismatch (a new one,
     // or the same one again), so each is asked about once
     int scaleMismatchAsks(int axisNumber) const;
+    // Whether either motorised axis's scale and motor disagree (as above)
+    bool anyScaleMismatch() const;
+    // Whether a motorised axis with a scale, which doesn't disagree with its
+    // motor (yet), is still moving, or its reading settling. A mismatch
+    // stops everything, and the other axis's scale then settles a little
+    // later, so the controller waits for this to ask about every axis which
+    // disagrees at once. (An axis which already disagrees isn't waited for:
+    // a misreading scale may never settle)
+    bool scalesStillSettling() const;
     // Whether the scale's reading has settled and is steady (see
     // AxisScale::isSteady())
     bool scaleIsSteady(int axisNumber) const;

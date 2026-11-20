@@ -2155,6 +2155,33 @@ change.
           finishing moves' logic (part c), `cutReady()` (axis 1 is the cut
           axis), the backlash measurement, and the controller's dialog and
           the view's scale text (part b)
+        - **Done (20 Nov 2026), part (b), not yet tried on a machine:**
+          `configureScale(2)` reads `Axis2Scale...`, so axis 2 can have a
+          scale, off unless set. It's lined up again wherever X's motor
+          position is set (zeroing, setting, halving, a diameter, and gear
+          cutting's renumbering by whole turns), and has the same checks at
+          rest and while moving as axis 1's, the re-base at rest
+          (`Axis2ScaleRebase`), and the re-base by hand (X's leader then
+          `b`, also in the menu). A quadrature scale on any axis but 1 must
+          have its pins set, as axis 1's default to 5 and 6; in the fake
+          build, it's simulated by following its motor (the mock GPIO only
+          simulates axis 1's). The scale's text is on each motorised axis's
+          line (X's less any multi-pass correction, as X's position is), and
+          with a scale on axis 2, the taper's angle and RETRACTED are drawn a
+          line lower, clear of it (checked on snapshots). One dialog asks
+          about every axis which disagrees: it waits until no other axis's
+          scale is still settling (`Model::scalesStillSettling()`, which
+          doesn't wait for an axis which already disagrees, as a misreading
+          scale may never settle), then lists each, and Y/N applies to every
+          one; an axis whose scale is misreading keeps its motor's position
+          either way. Keys wait while either axis disagrees, and the alarm
+          sounds for either. New tests: X's re-base at rest and by hand,
+          zeroing X lining its scale up, both disagreeing in one dialog, the
+          dialog waiting for the other scale to settle (which fails without
+          the wait), one misreading and the other disagreeing, and a
+          quadrature scale on axis 2 needing its pins. Still axis 1's alone
+          (part c): finishing moves, re-basing between passes, and the
+          re-base by hand while a multi-pass is paused
 - [x] `axis.cpp` / `axis.h` are compiled but unused, and their `mgo::Axis`
       class clashes in name with `enum class mgo::Axis` in model.h
     - **Done:** removed (they're in git's history, if the "array of axes"

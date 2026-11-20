@@ -354,9 +354,9 @@ bool keyAllowedInCurrentMode(int k, const Model& model)
     }
     // While measuring the backlash, nothing else may move the axes (it moves
     // X back and forth, comparing it with the scale): only stopping it, and
-    // keys which don't move anything. Nor while axis 1's scale and motor
+    // keys which don't move anything. Nor while an axis's scale and motor
     // disagree, until the user has said which to believe
-    if (model.isMeasuringBacklash() || model.scaleMismatchMm(1)) {
+    if (model.isMeasuringBacklash() || model.anyScaleMismatch()) {
         switch (k) {
             case key::CtrlQ:
             case key::ESC:
@@ -679,7 +679,7 @@ std::vector<Command> buildCommands(
     b.add(c, fmt::format("Repeat offset move: {}", a2), key::a2_FULLSTOP, AXIS2);
     b.add(c, fmt::format("Repeat offset move: {} and {}", a1, a2), key::aAll_FULLSTOP, BOTH);
     b.add(c, fmt::format("Halve {} (to find a centre)", a1), key::a1_h, AXIS1);
-    // (Only with a scale on axis 1)
+    // (Only with a scale on the axis)
     if (config.read("Axis1Scale", "none") != "none") {
         b.add(
             c, fmt::format("Re-base {} from its scale", a1), key::a1_b, AXIS1, [](const Model& m) {
@@ -687,6 +687,12 @@ std::vector<Command> buildCommands(
             });
     }
     b.add(c, fmt::format("Halve {} (to find a centre)", a2), key::a2_h, AXIS2);
+    if (config.read("Axis2Scale", "none") != "none") {
+        b.add(
+            c, fmt::format("Re-base {} from its scale", a2), key::a2_b, AXIS2, [](const Model& m) {
+                return m.canRebaseFromScale(2);
+            });
+    }
     // The manual axes (e.g. the mill's Y and Z), which are moved by hand
     b.add(c, fmt::format("Zero {}", a3), key::a3_z, AXIS3);
     b.add(c, fmt::format("Set {} position...", a3), key::a3_s, AXIS3);

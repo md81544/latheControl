@@ -468,6 +468,8 @@ struct ViewQt::Impl {
         TextItem units;
         // A motorised axis's speed
         TextItem speed;
+        // A motorised axis's scale, if it has one, after its speed
+        TextItem scale;
         // A manual axis's "no reading", if it hasn't one
         TextItem status;
         // While a manual axis goes to a memory slot: the distance to wind it
@@ -498,7 +500,6 @@ struct ViewQt::Impl {
     TextItem chuckRpm;
     TextItem warning;
     TextItem taperAngle;
-    TextItem axis1Scale;
     TextItem surfaceSpeed; // Vc
 
     // Text items which are displayed sometimes:
@@ -609,6 +610,8 @@ void ViewQt::initialise(const Model& model)
         line.position = make(110, y, 60, GREEN);
         line.units = make(430, y + 30, 30, QColor(0, 127, 0));
         line.speed = make(550, y + 30, 30, QColor(209, 209, 50));
+        // (Lined up with the bottom of the speed's text)
+        line.scale = make(850, y + 33, 25, QColor(209, 209, 50));
         d.axisLines.push_back(line);
     }
 
@@ -695,18 +698,18 @@ void ViewQt::initialise(const Model& model)
 
     d.warning = make(20, MISC_Y + 210, 20, RED);
     // (The mode's name, and those below it, are a line lower than they
-    // were, to make room for axis 1's scale on its row)
+    // were, to make room for axis 1's scale on its row. Those below the
+    // mode's name go a line lower still if axis 2 has a scale, to make room
+    // for it on its row too)
+    const float belowMode = model.config().read("Axis2Scale", "none") != "none" ? 30.f : 0.f;
     d.notification = make(860, 75, 25, RED);
-    d.taperAngle = make(860, 105, 20, RED);
-    d.xRetracted = make(860, 135, 25, RED);
+    d.taperAngle = make(860, 105 + belowMode, 20, RED);
+    d.xRetracted = make(860, 135 + belowMode, 25, RED);
     d.xRetracted.text = "RETRACTED";
-    d.xRetractDirection = make(860, 165, 25, RED);
+    d.xRetractDirection = make(860, 165 + belowMode, 25, RED);
     d.xRetractDirection.text = "-X RTRCT";
     // (Surface speed, on the rpm line, in line with the axes' feed rates)
     d.surfaceSpeed = make(550, 160, 30, QColor(209, 209, 50));
-    // Axis 1's scale, on its row, after its speed (lined up with the bottom
-    // of the speed's text)
-    d.axis1Scale = make(850, 43, 25, QColor(209, 209, 50));
     d.fault = make(20, STATUS_BAR_Y - 30, 22, RED);
 
     // (Joystick support is only available on Linux)
@@ -1355,13 +1358,9 @@ void ViewQt::updateDisplay(const Model& model)
     const auto draw = [&frame](const TextItem& item) { frame.push_back(item); };
 
     if (!model.isShuttingDown()) {
-        // (The status line's items for the motorised axes, and axis 1's
-        // scale on its line)
+        // (The status line's items for the motorised axes)
         if (d.axisShown(model, 1)) {
             draw(d.axis1Status);
-            if (model.hasScale(1)) {
-                draw(d.axis1Scale);
-            }
         }
         if (d.axisShown(model, 2)) {
             draw(d.axis2Status);
@@ -1387,6 +1386,9 @@ void ViewQt::updateDisplay(const Model& model)
                 }
             } else {
                 draw(line.speed);
+                if (model.hasScale(line.axisNumber)) {
+                    draw(line.scale);
+                }
             }
         }
         if (!model.config().readBool("DisableRpm", false)) {
@@ -1561,30 +1563,33 @@ void ViewQt::Impl::updateTextFromModel(const Model& model)
     }
     chuckRpm.text = fmt::format("C: {: >5.1f} deg", model.getChuckAngle());
 
-    // The scale's position, and (in brackets) how far it is from the
-    // motor's, which shows any lost steps. Short, as it's on the axis's row,
-    // in its units
-    {
-        const auto position = model.scalePositionMm(1);
-        const auto difference = model.scaleDifferenceMm(1);
-        if (position && difference) {
-            axis1Scale.text = fmt::format(
-                "scale {:.{}f} ({:+.{}f})",
-                model.toDisplayUnits(1, *position),
-                model.axisDecimals(1),
-                model.toDisplayUnits(1, *difference),
-                model.axisDecimals(1));
-        } else if (model.scaleHasReading(1)) {
-            axis1Scale.text = "scale: settling";
-        } else {
-            axis1Scale.text = "scale: no reading";
-        }
-    }
-
     for (auto& line : axisLines) {
         line.units.text = model.axisUnitName(line.axisNumber);
-        // (The motorised axes' positions and speeds are above)
+        // (The motorised axes' positions and speeds are above.) Their
+        // scale's position, and (in brackets) how far it is from the motor's,
+        // which shows any lost steps. Short, as it's on the axis's line, in
+        // its units
         if (line.axisNumber < Model::FIRST_MANUAL_AXIS) {
+            const int n = line.axisNumber;
+            const auto position = model.scalePositionMm(n);
+            const auto difference = model.scaleDifferenceMm(n);
+            if (position && difference) {
+                // (X's position is shown less any multi-pass correction, so
+                // its scale's is too, to read alongside it)
+                const double shown = n == 2
+                    ? *position - (model.motorPosition(2) - model.getAxis2Position())
+                    : *position;
+                line.scale.text = fmt::format(
+                    "scale {:.{}f} ({:+.{}f})",
+                    model.toDisplayUnits(n, shown),
+                    model.axisDecimals(n),
+                    model.toDisplayUnits(n, *difference),
+                    model.axisDecimals(n));
+            } else if (model.scaleHasReading(n)) {
+                line.scale.text = "scale: settling";
+            } else {
+                line.scale.text = "scale: no reading";
+            }
             continue;
         }
         const ManualAxis* axis = model.manualAxis(line.axisNumber);

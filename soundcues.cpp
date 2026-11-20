@@ -12,7 +12,7 @@ SoundState soundStateOf(const Model& model)
         .warning = model.getWarning(),
         .faulted = !model.getFaultMessage().empty(),
         .limitSwitchTripped = model.limitSwitchTripped(),
-        .scaleMismatchAsks = model.scaleMismatchAsks(1),
+        .scaleMismatchAsks = model.scaleMismatchAsks(1) + model.scaleMismatchAsks(2),
         .multiPassState = model.multiPass().state(),
         .movingToStart = model.multiPassMovingToStart(),
         .atStart = model.multiPassAtStart(),

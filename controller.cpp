@@ -182,71 +182,159 @@ void Controller::confirmMeasureBacklash()
 
 void Controller::checkScaleMismatch()
 {
-    const auto mismatch = m_model->scaleMismatchMm(1);
-    const int asks = m_model->scaleMismatchAsks(1);
+    // Every motorised axis whose scale and motor disagree is asked about in
+    // one dialog. A mismatch stops everything, and the other axis's scale
+    // settles a little later (they stop at different moments), so the
+    // dialog waits for it (see Model::scalesStillSettling()), rather than
+    // asking about one and then, a moment later, the other
+    int asks = 0;
+    std::vector<int> axes;
+    for (const int n : { 1, 2 }) {
+        asks += m_model->scaleMismatchAsks(n);
+        if (m_model->scaleMismatchMm(n)) {
+            axes.push_back(n);
+        }
+    }
     // Once per ask, and not over another dialog (it waits until that's
     // closed; nothing can move meanwhile)
-    if (!mismatch || asks == m_scaleAsksShown || m_view->isDialogOpen()) {
+    if (axes.empty() || asks == m_scaleAsksShown || m_view->isDialogOpen()
+        || m_model->scalesStillSettling()) {
         return;
     }
     m_scaleAsksShown = asks;
     m_model->setKeyMode(KeyMode::None);
     m_heldKeys.clear();
-    const std::string label = m_model->axisLabel(1);
-    const auto length = [this](double mm) {
+    const auto length = [this](int n, double mm) {
         return fmt::format(
             "{:.{}f} {}",
-            m_model->toDisplayUnits(1, mm),
-            m_model->axisDecimals(1),
-            m_model->axisUnitName(1));
+            m_model->toDisplayUnits(n, mm),
+            m_model->axisDecimals(n),
+            m_model->axisUnitName(n));
     };
-    if (const auto jump = m_model->scaleMisreadJumpMm(1)) {
+    const auto misread = [this](int n) { return m_model->scaleMisreadJumpMm(n).has_value(); };
+    const auto labels = [this](const std::vector<int>& numbers) {
+        std::string text;
+        for (const int n : numbers) {
+            text += (text.empty() ? "" : " and ") + m_model->axisLabel(n);
+        }
+        return text;
+    };
+    // A misreading scale's axis keeps its motor's position, whatever's
+    // chosen for any other
+    std::vector<int> misreading;
+    std::vector<int> disagreeing;
+    for (const int n : axes) {
+        (misread(n) ? misreading : disagreeing).push_back(n);
+    }
+    const auto keepMisreading = [this, misreading]() {
+        for (const int n : misreading) {
+            m_model->keepMotorPosition(n);
+        }
+    };
+    std::vector<std::string> lines;
+    for (const int n : misreading) {
+        const std::string label = m_model->axisLabel(n);
+        lines.push_back(
+            fmt::format(
+                "{}'s reading jumped by {} with {} at rest, more than the {} allowed,",
+                label,
+                length(n, std::abs(*m_model->scaleMisreadJumpMm(n))),
+                label,
+                length(n, m_model->scaleMismatchLimitMm(n))));
+        lines.push_back(
+            "which the table can't have moved. Interference, or a loose connection, can do "
+            "this.");
+    }
+    if (!misreading.empty() && !disagreeing.empty()) {
+        lines.push_back("");
+    }
+    for (const int n : disagreeing) {
+        const std::string label = m_model->axisLabel(n);
+        const double position = m_model->motorPosition(n);
+        const double mismatch = *m_model->scaleMismatchMm(n);
+        lines.push_back(
+            fmt::format(
+                "{}'s scale says {}, but {}'s position is {}: {} apart,",
+                label,
+                length(n, position + mismatch),
+                label,
+                length(n, position),
+                length(n, std::abs(mismatch))));
+        lines.push_back(
+            fmt::format("more than the {} allowed.", length(n, m_model->scaleMismatchLimitMm(n))));
+    }
+    lines.push_back("So everything has stopped.");
+    if (disagreeing.empty()) {
+        lines.push_back("");
+        lines.push_back(
+            fmt::format(
+                "Any key: keep {}'s position{}, and line {} up with it again.",
+                labels(misreading),
+                misreading.size() > 1 ? "s" : "",
+                misreading.size() > 1 ? "the scales" : "the scale"));
         pressAnyKey(
-            fmt::format("{}'s scale is misreading", label),
-            { fmt::format(
-                  "Its reading jumped by {} with {} at rest, more than the {} allowed,",
-                  length(std::abs(*jump)),
-                  label,
-                  length(m_model->scaleMismatchLimitMm(1))),
-              "which the table can't have moved: so everything has stopped.",
-              "Interference, or a loose connection, can do this.",
-              "",
-              fmt::format(
-                  "Any key: keep {}'s position, and line the scale up with it again.", label) },
-            [this]() { m_model->keepMotorPosition(1); });
+            fmt::format(
+                "{}'s scale{} misreading",
+                labels(misreading),
+                misreading.size() > 1 ? "s are" : " is"),
+            std::move(lines),
+            keepMisreading);
         return;
     }
-    const double position = m_model->motorPosition(1);
-    std::vector<std::string> lines {
+    const bool several = disagreeing.size() > 1;
+    lines.push_back(
         fmt::format(
-            "{}'s scale says {}, but {}'s position is {}: {} apart,",
-            label,
-            length(position + *mismatch),
-            label,
-            length(position),
-            length(std::abs(*mismatch))),
+            "The motor{} may have lost steps (e.g. a stall), or the scale{} may have misread.",
+            several ? "s" : "",
+            several ? "s" : ""));
+    lines.push_back("");
+    if (!misreading.empty()) {
+        lines.push_back(
+            fmt::format(
+                "{} keeps its position, whichever you choose, as its scale is misreading.",
+                labels(misreading)));
+    }
+    lines.push_back(
         fmt::format(
-            "more than the {} allowed, so everything has stopped.",
-            length(m_model->scaleMismatchLimitMm(1))),
-        "The motor may have lost steps (e.g. a stall), or the scale may have misread.",
-        "",
-        "Y or Enter: use the scale's position (usually right after a stall).",
-        fmt::format("N or Esc: keep {}'s position, and line the scale up with it again.", label),
-    };
-    if (!m_model->scaleIsSteady(1)) {
+            "Y or Enter: use {} position{} (usually right after a stall).",
+            several ? "the scales'" : "the scale's",
+            several ? "s" : ""));
+    lines.push_back(
+        fmt::format(
+            "N or Esc: keep {}'s position{}, and line {} up with {} again.",
+            labels(disagreeing),
+            several ? "s" : "",
+            several ? "the scales" : "the scale",
+            several ? "them" : "it"));
+    std::vector<int> unsteady;
+    for (const int n : disagreeing) {
+        if (!m_model->scaleIsSteady(n)) {
+            unsteady.push_back(n);
+        }
+    }
+    if (!unsteady.empty()) {
         lines.insert(
             lines.end() - 2,
-            "The scale's reading is still changing: Y waits until it settles, and asks again.");
+            fmt::format(
+                "{}'s reading is still changing: Y waits until it settles, and asks again.",
+                labels(unsteady)));
     }
     m_view->openInput(
         Input::Type::OkCancel,
-        fmt::format("{}'s scale and position disagree", label),
+        fmt::format(
+            "{}'s scale{} and position{} disagree",
+            labels(disagreeing),
+            several ? "s" : "",
+            several ? "s" : ""),
         std::move(lines),
-        [this](const Input::Return& rc) {
-            if (rc.cancelled) {
-                m_model->keepMotorPosition(1);
-            } else {
-                m_model->acceptScalePosition(1);
+        [this, disagreeing, keepMisreading](const Input::Return& rc) {
+            keepMisreading();
+            for (const int n : disagreeing) {
+                if (rc.cancelled) {
+                    m_model->keepMotorPosition(n);
+                } else {
+                    m_model->acceptScalePosition(n);
+                }
             }
         });
 }
@@ -1130,9 +1218,10 @@ void Controller::processKey(int t)
                     m_model->markWorkEnd();
                     break;
                 }
-            case key::a1_b: // re-base axis 1 from its scale
+            case key::a1_b: // re-base an axis from its scale
+            case key::a2_b:
                 {
-                    m_model->rebaseFromScaleByHand(1);
+                    m_model->rebaseFromScaleByHand(key::axisOfKey(kp));
                     break;
                 }
             case key::a1_h: // halve an axis's position (to find a centre)

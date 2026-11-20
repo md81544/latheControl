@@ -2879,6 +2879,191 @@ TEST_CASE("UI: a scale which jumps at rest is misreading, so only the position c
     REQUIRE(t.model.motorPosition(1) == Approx(1.0).margin(0.011));
 }
 
+namespace {
+
+// Both axes with a (simulated) scale, as the lathe will have
+const std::map<std::string, std::string> axis2Scale {
+    { "Axis2Scale", "serial" },      { "Axis2ScaleCountsPerMm", "100" },
+    { "Axis2ScaleSettleMs", "200" }, { "Axis1ScaleWarnMm", "0.2" },
+    { "Axis2ScaleWarnMm", "0.2" },
+};
+
+std::map<std::string, std::string> withAxis2Scale(std::map<std::string, std::string> extra = {})
+{
+    extra.insert(axis2Scale.begin(), axis2Scale.end());
+    return extra;
+}
+
+} // namespace
+
+TEST_CASE("UI: a scale on axis 2 is re-based at rest")
+{
+    ScaleTestModel t(withAxis2Scale({ { "Axis2ScaleRebase", "true" } }));
+    REQUIRE(t.model.hasScale(2));
+    REQUIRE(t.runUntil([&] { return t.model.scalePositionMm(2).has_value(); }));
+    // At rest, as for axis 1: the position becomes the scale's
+    t.model.fakeScale(2)->setErrorMm(0.05);
+    t.model.goToPosition(2, 1.0);
+    REQUIRE(t.runUntil([&] {
+        return !t.model.isMotorRunning(2) && std::abs(t.model.motorPosition(2) - 1.05) < 0.011;
+    }));
+    REQUIRE(!t.model.anyScaleMismatch());
+    // Axis 1's scale is left alone
+    REQUIRE(std::abs(*t.model.scaleDifferenceMm(1)) < 0.011);
+}
+
+TEST_CASE("UI: each axis's scale is shown on its line")
+{
+    // (With LC_SNAPSHOT_DIR set, to look at: alongside the taper's angle and
+    // X's retraction, which are drawn to the right of X's line)
+    ScaleTestModel t(withAxis2Scale());
+    QWidget* w = mainWindow();
+    REQUIRE(w);
+    REQUIRE(t.runUntil([&] {
+        return t.model.scalePositionMm(1).has_value() && t.model.scalePositionMm(2).has_value();
+    }));
+    t.model.axis2Retract();
+    REQUIRE(t.runUntil([&] { return !t.model.isMotorRunning(2); }));
+    t.controller.tick();
+    snapshot(w, "scales_retracted");
+    t.model.changeMode(mgo::Mode::Taper);
+    t.controller.tick();
+    snapshot(w, "scales_taper");
+    t.model.stopAllMotors();
+}
+
+TEST_CASE("UI: re-basing axis 2 from its scale by hand (X then B)")
+{
+    // (With re-basing at rest off)
+    ScaleTestModel u(withAxis2Scale());
+    QWidget* w = mainWindow();
+    REQUIRE(w);
+    REQUIRE(u.runUntil([&] { return u.model.scalePositionMm(2).has_value(); }));
+    u.model.fakeScale(2)->setErrorMm(0.08);
+    u.model.goToPosition(2, 1.0);
+    REQUIRE(u.runUntil([&] {
+        const auto d = u.model.scaleDifferenceMm(2);
+        return !u.model.isMotorRunning(2) && d && std::abs(*d - 0.08) < 0.011
+            && u.model.scaleIsSteady(2);
+    }));
+    REQUIRE(u.model.canRebaseFromScale(2));
+    REQUIRE(std::ranges::any_of(mgo::buildCommands(u.config), [](const auto& c) {
+        return c.key == mgo::key::a2_b;
+    }));
+    press(w, u.controller, Qt::Key_X);
+    press(w, u.controller, Qt::Key_B);
+    REQUIRE(u.model.motorPosition(2) == Approx(1.08).margin(0.011));
+    REQUIRE(std::abs(*u.model.scaleDifferenceMm(2)) < 0.011);
+    // Zeroing X lines its scale up with it again
+    u.model.zero(2);
+    REQUIRE(u.runUntil([&] {
+        const auto d = u.model.scaleDifferenceMm(2);
+        return d && std::abs(*d) < 0.011;
+    }));
+}
+
+TEST_CASE("UI: both axes disagreeing with their scales are asked about in one dialog")
+{
+    ScaleTestModel t(withAxis2Scale());
+    REQUIRE(t.runUntil([&] {
+        return t.model.scalePositionMm(1).has_value() && t.model.scalePositionMm(2).has_value();
+    }));
+    t.model.fakeScale(1)->setErrorMm(0.3);
+    t.model.fakeScale(2)->setErrorMm(-0.4);
+    t.model.goToPosition(1, 1.0);
+    t.model.goToPosition(2, 1.0);
+    // The first to settle stops everything; the other is checked once its
+    // scale has settled too
+    REQUIRE(t.runUntil([&] {
+        return t.model.scaleMismatchMm(1).has_value() && t.model.scaleMismatchMm(2).has_value();
+    }));
+    const double z = t.model.motorPosition(1);
+    const double x = t.model.motorPosition(2);
+    int dialogs = 0;
+    QString text;
+    whenDialogShows([&](QWidget* dialog) {
+        ++dialogs;
+        text = dialogText(dialog);
+        QTest::keyClick(inputWidget(dialog), Qt::Key_Y);
+    });
+    t.controller.tick();
+    REQUIRE(waitForDialogToClose());
+    REQUIRE(dialogs == 1);
+    INFO(text.toStdString());
+    REQUIRE(text.contains("Z and X's scales and positions disagree"));
+    REQUIRE(text.contains("Z's scale says"));
+    REQUIRE(text.contains("X's scale says"));
+    // Y: both take their scale's position
+    REQUIRE(!t.model.anyScaleMismatch());
+    REQUIRE(t.model.motorPosition(1) == Approx(z + 0.3).margin(0.011));
+    REQUIRE(t.model.motorPosition(2) == Approx(x - 0.4).margin(0.011));
+}
+
+TEST_CASE("UI: one dialog waits for the other axis's scale to settle")
+{
+    // Z's mismatch is found first; X is still moving when everything stops,
+    // so the dialog waits for X's scale to settle, then asks about both
+    ScaleTestModel t(withAxis2Scale({ { "Axis2ScaleSettleMs", "600" } }));
+    REQUIRE(t.runUntil([&] {
+        return t.model.scalePositionMm(1).has_value() && t.model.scalePositionMm(2).has_value();
+    }));
+    t.model.fakeScale(1)->setErrorMm(0.3);
+    t.model.fakeScale(2)->setErrorMm(0.4);
+    t.model.goToPosition(1, 0.5);
+    t.model.setMotorSpeed(2, 20.0);
+    t.model.goToPosition(2, 5.0);
+    REQUIRE(t.runUntil([&] { return t.model.scaleMismatchMm(1).has_value(); }));
+    REQUIRE(!t.model.scaleMismatchMm(2));
+    REQUIRE(t.model.scalesStillSettling());
+    int dialogs = 0;
+    QString text;
+    whenDialogShows([&](QWidget* dialog) {
+        ++dialogs;
+        text = dialogText(dialog);
+        QTest::keyClick(inputWidget(dialog), Qt::Key_N);
+    });
+    // Not yet
+    t.controller.tick();
+    REQUIRE(dialogs == 0);
+    REQUIRE(t.runUntil([&] { return !t.model.scalesStillSettling(); }));
+    REQUIRE(t.model.scaleMismatchMm(2));
+    t.controller.tick();
+    REQUIRE(waitForDialogToClose());
+    REQUIRE(dialogs == 1);
+    INFO(text.toStdString());
+    REQUIRE(text.contains("Z and X"));
+    // N: both keep their motor's position
+    REQUIRE(!t.model.anyScaleMismatch());
+}
+
+TEST_CASE("UI: one axis misreading and the other disagreeing, in one dialog")
+{
+    ScaleTestModel t(withAxis2Scale({ { "Axis1ScaleFaultMm", "5" } }));
+    REQUIRE(t.runUntil(
+        [&] { return t.model.scaleIsSteady(1) && t.model.scalePositionMm(2).has_value(); }));
+    t.model.fakeScale(2)->setErrorMm(0.3);
+    t.model.goToPosition(2, 1.0);
+    REQUIRE(t.runUntil([&] { return t.model.scaleMismatchMm(2).has_value(); }));
+    // Before it's asked about, Z's scale jumps at rest
+    t.model.fakeScale(1)->setErrorMm(300.0);
+    REQUIRE(t.runUntil([&] { return t.model.scaleMisreadJumpMm(1).has_value(); }));
+    const double z = t.model.motorPosition(1);
+    const double x = t.model.motorPosition(2);
+    QString text;
+    whenDialogShows([&](QWidget* dialog) {
+        text = dialogText(dialog);
+        QTest::keyClick(inputWidget(dialog), Qt::Key_Y);
+    });
+    t.controller.tick();
+    REQUIRE(waitForDialogToClose());
+    INFO(text.toStdString());
+    REQUIRE(text.contains("Z keeps its position"));
+    // Y: X takes its scale's position; Z keeps its motor's, whatever
+    REQUIRE(!t.model.anyScaleMismatch());
+    REQUIRE(t.model.motorPosition(1) == Approx(z).margin(0.0001));
+    REQUIRE(t.model.motorPosition(2) == Approx(x + 0.3).margin(0.011));
+}
+
 TEST_CASE("UI: the status line's items move along to make room")
 {
     // Each fits: where they usually go

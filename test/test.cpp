@@ -6194,6 +6194,29 @@ TEST_CASE("Model:   knurling's spindle may turn slower than threading's", "[timi
     REQUIRE(t.model.minimumSpindleRpm() == Approx(30.f));
 }
 
+TEST_CASE("Model:   a quadrature scale on axis 2 needs its pins set")
+{
+    {
+        // (Axis 1's default to GPIO 5 and 6, which a second scale would share)
+        TestConfigReader config({ { "Axis2Scale", "quadrature" } });
+        mgo::MockGpio gpio(false);
+        mgo::Model model(gpio, config);
+        model.initialise();
+        REQUIRE(!model.hasScale(2));
+    }
+    {
+        TestConfigReader config(
+            { { "Axis2Scale", "quadrature" },
+              { "Axis2ScaleGpioPinA", "13" },
+              { "Axis2ScaleGpioPinB", "19" } });
+        mgo::MockGpio gpio(false);
+        mgo::Model model(gpio, config);
+        model.initialise();
+        REQUIRE(model.hasScale(2));
+        REQUIRE(!model.hasScale(1));
+    }
+}
+
 TEST_CASE("Model:   faster and slower step finely at low speeds, coarsely above")
 {
     mgo::MockConfigReader config;

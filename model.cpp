@@ -327,8 +327,8 @@ void Model::initialise()
                 m_toolLibrary.current().number));
     }
 
-    // (Only axis 1 can have a scale, so far)
     configureScale(1);
+    configureScale(2);
     configureManualAxes();
 
     // We need to ensure that the motors are in a known position with regard to
@@ -1316,6 +1316,9 @@ void Model::axis2Zero()
     MGOLOG(fmt::format("{} zeroed at {:.4f}", axisLabel(2), motor(2)->getPosition()));
     motor(2)->zeroPosition();
     axisState(2).motorLog.step = 0;
+    if (scale(2)) {
+        scale(2)->realign();
+    }
     // (Gear cutting's teeth are now wherever axis 2 is when it starts)
     m_gearToothOrigin.reset();
     // Zeroing will invalidate any memorised X positions, so we clear them
@@ -2664,6 +2667,9 @@ void Model::setAxis2Position(double mm)
             "{} position set to {:.4f} (was {:.4f})", axisLabel(2), mm, motor(2)->getPosition()));
     motor(2)->setPosition(mm);
     axisState(2).motorLog.step = motor(2)->getCurrentStep();
+    if (scale(2)) {
+        scale(2)->realign();
+    }
     // (Gear cutting's teeth are now wherever axis 2 is when it starts)
     m_gearToothOrigin.reset();
     // The position is known again, so a motor fault can be cleared
@@ -3091,7 +3097,9 @@ void Model::checkScaleAtRest(int axisNumber)
     // stall or drift builds up from pass to pass (seen on the mill, 18 Nov
     // 2026)
     if (multiPassPausedForRebase()) {
-        if (m_config.readBool(key("RebaseBetweenPasses"), false)) {
+        // (Only axis 1's, so far: axis 2's, the infeed on the lathe, is to
+        // come)
+        if (axisNumber == 1 && m_config.readBool(key("RebaseBetweenPasses"), false)) {
             rebaseIfApart(axisNumber, "re-based between passes");
         }
         return;
@@ -3372,13 +3380,32 @@ void Model::acceptScalePosition(int axisNumber)
     rebaseFromScale(axisNumber, "set (the scale's position accepted)");
 }
 
+bool Model::anyScaleMismatch() const
+{
+    return scaleState(1).mismatchMm || scaleState(2).mismatchMm;
+}
+
+bool Model::scalesStillSettling() const
+{
+    for (const int n : { 1, 2 }) {
+        const AxisScale* sc = scale(n);
+        if (sc && !scaleState(n).mismatchMm
+            && (motor(n)->isRunning() || (sc->hasReading() && !sc->isSettled()))) {
+            return true;
+        }
+    }
+    return false;
+}
+
 bool Model::canRebaseFromScale(int axisNumber) const
 {
     const bool atRest
         = (m_mode == Mode::None || m_mode == Mode::GearCutting) && !m_multiPass.inProgress();
     return scale(axisNumber) && !motor(axisNumber)->isRunning() && scalePositionMm(axisNumber)
-        && scale(axisNumber)->isSteady() && (atRest || multiPassPausedForRebase())
-        && !isMotionSequenceRunning() && !scaleState(axisNumber).finish && !m_backlashMeasurement;
+        && scale(axisNumber)->isSteady()
+        // (Paused in a multi-pass, only axis 1, so far: see checkScaleAtRest())
+        && (atRest || (axisNumber == 1 && multiPassPausedForRebase())) && !isMotionSequenceRunning()
+        && !scaleState(axisNumber).finish && !m_backlashMeasurement;
 }
 
 void Model::rebaseFromScaleByHand(int axisNumber)
@@ -3501,9 +3528,32 @@ std::unique_ptr<IScale> Model::makeScale(
         return nullptr;
     }
     if (type == "quadrature") {
+        // Axis 1's pins default to 5 and 6, as they always have. Any other
+        // axis's must be given, so two scales can't end up on the same pins
+        if (axisNumber != 1
+            && (m_config.read(key("GpioPinA"), "").empty()
+                || m_config.read(key("GpioPinB"), "").empty())) {
+            MGOLOG(
+                fmt::format(
+                    "*** Warning *** {} and {} must be set for a quadrature scale: no scale",
+                    key("GpioPinA"),
+                    key("GpioPinB")));
+            return nullptr;
+        }
         const long pinA = m_config.readLong(key("GpioPinA"), 5);
         const long pinB = m_config.readLong(key("GpioPinB"), 6);
         source = fmt::format("GPIO {} and {}", pinA, pinB);
+#ifdef FAKE
+        // (The mock GPIO simulates one quadrature scale, axis 1's: any
+        // other follows its motor, as a simulated serial scale does)
+        if (axisNumber != 1 && fakePosition) {
+            auto simulated
+                = std::make_unique<FakeDroScale>(std::move(fakePosition), countsPerMm, reversed);
+            *fake = simulated.get();
+            source += " (simulated)";
+            return simulated;
+        }
+#endif
         return std::make_unique<LinearScale>(m_gpio, pinA, pinB, std::lround(countsPerMm));
     }
     if (type == "serial") {
@@ -5003,6 +5053,9 @@ void Model::gearCuttingFinished()
             motor(2)->getPosition(step)));
     motor(2)->setPosition(motor(2)->getPosition(step));
     axisState(2).motorLog.step = motor(2)->getCurrentStep();
+    if (scale(2)) {
+        scale(2)->realign();
+    }
     // (Going back to them would take whole turns)
     clearBreadcrumbs(2);
     MGOLOG(

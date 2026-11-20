@@ -153,6 +153,7 @@ constexpr int a2_FULLSTOP = '.' + 0x2000;
 constexpr int a2_DELETE = key::DELETE + 0x2000;
 constexpr int a2_d = d + 0x2000; // record the feature's diameter (current feature)
 constexpr int a2_h = h + 0x2000; // halve axis 2's position (to find a centre)
+constexpr int a2_b = b + 0x2000; // re-base axis 2 from its scale
 
 // Axis All leader-prefixed keys ( 0x4000 = bit 14 is set )
 constexpr int aAll_z = z + 0x4000; // All axis zero
