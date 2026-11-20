@@ -2069,8 +2069,16 @@ change.
           lathe's X); and a speed within 0.1 of a step's boundary (e.g.
           20.0001, read back from the motor's rpm) counts as on it, as
           axis 2's already did
+        - **Then (20 Nov 2026), stopping:** `stopAxis()` and
+          `stopAxisRamped()` take the axis number, in place of the four
+          `axisNStop...()`, which were the same but for the motor (and only
+          used inside the Model). `stopAllMotors()` (Space) is unchanged:
+          it signals both motors before waiting for either, so they stop
+          together. A new test presses "stop" twice on each axis with
+          deceleration ramping: the first slows down, the second stops at
+          once
         - Still to do, in the same way: moves and rapids, nudges, fast
-          returns, stopping, locks, and the
+          returns, locks, and the
           scale (which wants to belong to any axis, for a scale on the
           lathe's X later). These are inside the Model, where the two
           motorised axes differ most (axis 1's taper, threading and scale;

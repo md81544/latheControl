@@ -147,6 +147,13 @@ public:
     void setMotorSpeed(int axisNumber, double speed);
     // Waits for the motor to stop (e.g. for the tests)
     void waitForMotor(int axisNumber);
+    // Stops the motor at once, and waits for it to stop. (stopAllMotors(),
+    // for Space, stops both together, and ends whatever they were doing)
+    void stopAxis(int axisNumber);
+    // Stops the motor, slowing down first if it decelerates (see
+    // StepperMotor::decelerateToStop()), without waiting. If it's already
+    // slowing down, it stops at once (e.g. a key pressed again meanwhile)
+    void stopAxisRamped(int axisNumber);
     long motorStep(int axisNumber) const;
     // The motor's position (for axis 2, what's shown is getAxis2Position(),
     // less any taper correction)
@@ -178,17 +185,9 @@ public:
     void axis1GoToStep(long step);
     void axis1Nudge(ZDirection direction, double nudgeAmountMm);
     void axis1FastReturn();
-    void axis1Stop();
-    // Stops axis 1, slowing down first if it decelerates (see
-    // StepperMotor::decelerateToStop()), without waiting. If it's already
-    // slowing down, it stops at once
-    void axis1StopRamped();
     void axis1Move(ZDirection direction);
     void axis1Rapid(ZDirection direction);
 
-    void axis2Stop();
-    // As axis1StopRamped()
-    void axis2StopRamped();
     void axis2SynchroniseOff();
     void axis2Nudge(XDirection direction, double nudgeAmountMm);
     void axis2FastReturn();

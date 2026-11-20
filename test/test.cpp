@@ -3212,6 +3212,33 @@ TEST_CASE("Model:   a released rapid slows down to a stop, if it can", "[timing]
     }
 }
 
+TEST_CASE("Model:   a ramped stop slows down; stopped again, it stops at once", "[timing]")
+{
+    TestConfigReader config(
+        { { "Axis1DecelerationRamping", "true" }, { "Axis2DecelerationRamping", "true" } });
+    mgo::MockGpio gpio(false);
+    mgo::Model model(gpio, config);
+    model.initialise();
+    REQUIRE(runUntilStopped(model));
+    for (const int axis : { 1, 2 }) {
+        INFO("axis " << axis);
+        if (axis == 1) {
+            model.axis1Rapid(mgo::ZDirection::Left);
+        } else {
+            model.axis2Rapid(mgo::XDirection::Inwards);
+        }
+        // (Long enough to speed up beyond where the ramp starts)
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        REQUIRE(model.isMotorRunning(axis));
+        model.stopAxisRamped(axis);
+        REQUIRE(model.isMotorRunning(axis));
+        // e.g. the key pressed again while it slows down
+        model.stopAxisRamped(axis);
+        REQUIRE(!model.isMotorRunning(axis)); // (no waiting needed)
+        model.stopAllMotors();
+    }
+}
+
 TEST_CASE("Model:   a taper's backlash take-up doesn't block")
 {
     // With backlash compensation, reversing Z first takes up the slack (here

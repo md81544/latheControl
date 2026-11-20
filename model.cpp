@@ -823,7 +823,7 @@ void Model::stopAllMotors()
 MotionSequence::Step Model::takeUpZBacklashStep(ZDirection direction)
 {
     return { [this, direction]() {
-                axis1Stop();
+                stopAxis(1);
                 if (direction == ZDirection::Right) {
                     m_axis1Motor->goToStep(motorStep(1) - 1);
                 } else if (direction == ZDirection::Left) {
@@ -1223,7 +1223,7 @@ void Model::axis1GoToCurrentMemory()
     if (axis1MoveRefused()) {
         return;
     }
-    axis1Stop();
+    stopAxis(1);
     axisState(1).status = "returning";
     // (If threading, this waits for zero degrees on the chuck before starting)
     axis1GoToStep(*step);
@@ -1239,7 +1239,7 @@ void Model::axis1Nudge(ZDirection direction, double nudgeAmountMm)
     // (First, so that its end can't restore a speed over ours)
     m_motionSequence.cancel();
     if (m_axis1Motor->isRunning()) {
-        axis1Stop();
+        stopAxis(1);
     }
     const double oldSpeed = m_axis1Motor->getSpeed();
     m_axis1Motor->setSpeed(m_axis1Motor->getMaxRpm() / 10.0);
@@ -1307,7 +1307,7 @@ void Model::axis1FastReturn()
     }
     axisState(1).previousSpeed = m_axis1Motor->getSpeed();
     axisState(1).fastReturning = true;
-    axis1Stop();
+    stopAxis(1);
     if (m_mode == Mode::Taper) {
         // If we are tapering, we need to set a speed the x-axis motor can keep up with
         m_axis1Motor->setSpeed(100.0);
@@ -1344,7 +1344,7 @@ void Model::axis1Move(ZDirection direction)
     // Issuing the same command (i.e. pressing the same key)
     // when it is already running will cause the motor to stop
     if (m_axis1Motor->isRunning()) {
-        axis1StopRamped();
+        stopAxisRamped(1);
         return;
     }
     if (axis1MoveRefused()) {
@@ -1379,38 +1379,13 @@ void Model::axis1Rapid(ZDirection direction)
     // Issuing the same command (i.e. pressing the same key)
     // when it is already running will cause the motor to stop
     if (m_axis1Motor->isRunning()) {
-        axis1StopRamped();
+        stopAxisRamped(1);
         return;
     }
     axisState(1).previousSpeed = m_axis1Motor->getSpeed();
     axisState(1).rapidInProgress = true;
     m_axis1Motor->setSpeed(m_axis1Motor->getMaxRpm());
     axis1Move(direction);
-}
-
-void Model::axis1Stop()
-{
-    m_axis1Motor->stop();
-    m_axis1Motor->wait();
-}
-
-void Model::axis1StopRamped()
-{
-    if (m_axis1Motor->isDecelerating()) {
-        // (e.g. a key pressed again while it slows down)
-        axis1Stop();
-        return;
-    }
-    m_axis1Motor->decelerateToStop();
-}
-
-void Model::axis2StopRamped()
-{
-    if (m_axis2Motor->isDecelerating()) {
-        axis2Stop();
-        return;
-    }
-    m_axis2Motor->decelerateToStop();
 }
 
 bool Model::rapidReleased()
@@ -1422,7 +1397,7 @@ bool Model::rapidReleased()
         || m_mode != Mode::None) {
         return false;
     }
-    // (Not axis1StopRamped(), as letting go of Alt and the arrow are two
+    // (Not stopAxisRamped(), as letting go of Alt and the arrow are two
     // releases, and the second mustn't stop it dead while it slows down)
     if (m_axis1Motor->isRunning()) {
         m_axis1Motor->decelerateToStop();
@@ -1431,12 +1406,6 @@ bool Model::rapidReleased()
         m_axis2Motor->decelerateToStop();
     }
     return true;
-}
-
-void Model::axis2Stop()
-{
-    m_axis2Motor->stop();
-    m_axis2Motor->wait();
 }
 
 void Model::axis2Zero()
@@ -1486,7 +1455,7 @@ void Model::axis2GoToCurrentMemory()
     if (axis2MoveRefused()) {
         return;
     }
-    axis2Stop();
+    stopAxis(2);
     axisState(2).status = "returning";
     m_axis2Motor->goToStep(*step);
 }
@@ -1499,7 +1468,7 @@ void Model::axis2Nudge(XDirection direction, double nudgeAmountMm)
     // (First, so that its end can't restore a speed over ours)
     m_motionSequence.cancel();
     if (m_axis2Motor->isRunning()) {
-        axis2Stop();
+        stopAxis(2);
     }
     const double oldSpeed = m_axis2Motor->getSpeed();
     m_axis2Motor->setSpeed(m_axis2Motor->getMaxRpm() / 10.0);
@@ -1532,7 +1501,7 @@ void Model::axis2FastReturn()
     }
     axisState(2).previousSpeed = m_axis2Motor->getSpeed();
     axisState(2).fastReturning = true;
-    axis2Stop();
+    stopAxis(2);
     m_axis2Motor->setSpeed(m_axis2Motor->getMaxRpm());
     axisState(2).status = "fast returning";
     m_axis2Motor->goToStep(*step);
@@ -1628,7 +1597,7 @@ void Model::axis2RetractTo(double position, double minimum)
 void Model::axis2Move(XDirection direction)
 {
     if (m_axis2Motor->isRunning()) {
-        axis2StopRamped();
+        stopAxisRamped(2);
         return;
     }
     if (axis2MoveRefused()) {
@@ -1661,7 +1630,7 @@ void Model::axis2Rapid(XDirection direction)
         return;
     }
     if (m_axis2Motor->isRunning()) {
-        axis2StopRamped();
+        stopAxisRamped(2);
         return;
     }
     axisState(2).previousSpeed = m_axis2Motor->getSpeed();
@@ -2428,6 +2397,24 @@ void Model::waitForMotor(int axisNumber)
     motor(axisNumber)->wait();
 }
 
+void Model::stopAxis(int axisNumber)
+{
+    StepperMotor* m = motor(axisNumber);
+    m->stop();
+    m->wait();
+}
+
+void Model::stopAxisRamped(int axisNumber)
+{
+    StepperMotor* m = motor(axisNumber);
+    if (m->isDecelerating()) {
+        m->stop();
+        m->wait();
+        return;
+    }
+    m->decelerateToStop();
+}
+
 long Model::motorStep(int axisNumber) const
 {
     const StepperMotor* m = motor(axisNumber);
@@ -2539,11 +2526,7 @@ void Model::goToPreviousPosition(int axisNumber)
     if (axisNumber == 1 ? axis1MoveRefused() : axis2MoveRefused()) {
         return;
     }
-    if (axisNumber == 1) {
-        axis1Stop();
-    } else {
-        axis2Stop();
-    }
+    stopAxis(axisNumber);
     // (Skipping where it is now)
     auto& trail = axisState(axisNumber).previousPositions;
     while (!trail.empty() && (std::abs(trail.top() - motorPosition(axisNumber)) < 0.0001)) {
