@@ -367,6 +367,14 @@ public:
     void setInputString(const std::string& str);
 
     std::string getWarning() const;
+    // Whether F9 can clear the warning being shown (any but the encoder's
+    // lost pulses, which stays until the thread is chosen again, as it's
+    // still true: further passes won't follow the thread)
+    bool warningClearable() const;
+    // F9: the warning goes, but nothing else changes (nothing stops). A
+    // warning whose cause is still there comes back (e.g. the spindle is too
+    // fast to start a threading pass)
+    void clearWarning();
     // Non-empty if a motor has faulted (its driver went into alarm, e.g. after
     // a stall), or a limit switch has stopped the motors (or is still
     // pressed), describing it and what to do

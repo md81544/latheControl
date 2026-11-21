@@ -630,6 +630,36 @@ TEST_CASE("UI: menu through the controller")
     REQUIRE(!controller.isMenuOpen());
 }
 
+TEST_CASE("UI: F9 clears the warning, and nothing else")
+{
+    // (On the mill, Esc was pressed to clear one, which ended a multi-pass)
+    TestModel tm;
+    mgo::Controller controller(&tm.model);
+    QWidget* w = mainWindow();
+    REQUIRE(w);
+    REQUIRE(!tm.model.warningClearable());
+    tm.model.goToPosition(1, 50.0);
+    REQUIRE(waitUntil([&] { return tm.model.isMotorRunning(1); }));
+    // (Refused while Z moves: a warning)
+    tm.model.lockAxis(1);
+    REQUIRE(!tm.model.getWarning().empty());
+    REQUIRE(tm.model.warningClearable());
+    press(w, controller, Qt::Key_F9);
+    REQUIRE(tm.model.getWarning().empty());
+    REQUIRE(!tm.model.warningClearable());
+    REQUIRE(tm.model.isMotorRunning(1));
+    // And with the menu open (which it stays)
+    tm.model.lockAxis(1);
+    REQUIRE(!tm.model.getWarning().empty());
+    press(w, controller, Qt::Key_Tab);
+    REQUIRE(controller.isMenuOpen());
+    press(w, controller, Qt::Key_F9);
+    REQUIRE(tm.model.getWarning().empty());
+    REQUIRE(controller.isMenuOpen());
+    REQUIRE(tm.model.isMotorRunning(1));
+    press(w, controller, Qt::Key_Space);
+}
+
 namespace {
 
 // Types into whichever widget in the dialog has the keyboard focus (as a real

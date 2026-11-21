@@ -1482,6 +1482,11 @@ void Controller::processKey(int t)
                     m_model->clearLimitSwitchTrip();
                     break;
                 }
+            case key::F9: // clear the warning (nothing stops)
+                {
+                    m_model->clearWarning();
+                    break;
+                }
             case key::measureAxis1Backlash:
                 {
                     confirmMeasureBacklash();

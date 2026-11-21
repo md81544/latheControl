@@ -57,6 +57,15 @@ const QColor RED(255, 0, 0);
 const QColor YELLOW(255, 255, 0);
 const QColor WHITE(255, 255, 255);
 
+// The flashing warning line, saying how to clear it if it can be: Esc was
+// pressed to, out of habit, which leaves the mode (on the mill, it ended a
+// multi-pass part way through)
+std::string warningText(const Model& model)
+{
+    const std::string warning = model.getWarning();
+    return warning.empty() || !model.warningClearable() ? warning : warning + "  [F9 to clear]";
+}
+
 // One piece of text on the display. Equivalent to an sf::Text
 struct TextItem {
     QPointF position;
@@ -1671,7 +1680,7 @@ void ViewQt::Impl::updateTextFromModel(const Model& model)
         case Mode::MultiPass:
             {
                 updateMultiPassData(model);
-                warning.text = model.getWarning();
+                warning.text = warningText(model);
                 if (!model.getWarning().empty()) {
                     warning.colour = ++iteration % 6 < 3 ? RED : YELLOW;
                 }
@@ -1697,7 +1706,7 @@ void ViewQt::Impl::updateTextFromModel(const Model& model)
                     misc6.text = "";
                 }
                 // e.g. the spindle is too fast for the pitch
-                warning.text = model.getWarning();
+                warning.text = warningText(model);
                 if (!model.getWarning().empty()) {
                     warning.colour = ++iteration % 6 < 3 ? RED : YELLOW;
                 }
@@ -1714,7 +1723,7 @@ void ViewQt::Impl::updateTextFromModel(const Model& model)
                 misc2.text = misc1.text;
                 misc1.text = knurlDescription(model);
                 // e.g. the spindle is too fast for the lead
-                warning.text = model.getWarning();
+                warning.text = warningText(model);
                 if (!model.getWarning().empty()) {
                     warning.colour = ++iteration % 6 < 3 ? RED : YELLOW;
                 }
@@ -1723,7 +1732,7 @@ void ViewQt::Impl::updateTextFromModel(const Model& model)
         case Mode::GearCutting:
             {
                 updateGearData(model);
-                warning.text = model.getWarning();
+                warning.text = warningText(model);
                 if (!model.getWarning().empty()) {
                     warning.colour = ++iteration % 6 < 3 ? RED : YELLOW;
                 }
@@ -1732,7 +1741,7 @@ void ViewQt::Impl::updateTextFromModel(const Model& model)
         case Mode::Radius:
             {
                 updateMultiPassData(model);
-                warning.text = model.getWarning();
+                warning.text = warningText(model);
                 if (!model.getWarning().empty()) {
                     warning.colour = ++iteration % 6 < 3 ? RED : YELLOW;
                 }
@@ -1753,7 +1762,7 @@ void ViewQt::Impl::updateTextFromModel(const Model& model)
                 if (model.isMeasuringTool()) {
                     updateToolMeasurementData(model);
                 }
-                warning.text = model.getWarning();
+                warning.text = warningText(model);
                 if (!model.getWarning().empty()) {
                     warning.colour = ++iteration % 6 < 3 ? RED : YELLOW;
                 }

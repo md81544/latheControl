@@ -331,6 +331,10 @@ bool keyAllowedInCurrentMode(int k, const Model& model)
     if (keyDisabledByConfig(k, model.config())) {
         return false;
     }
+    // Clearing the warning moves nothing, so it's allowed whatever is going on
+    if (k == key::F9) {
+        return true;
+    }
     // The mode means some keys are ignored, for instance in
     // threading, you cannot change the speed of the z-axis as
     // that would affect the thread pitch
@@ -542,6 +546,9 @@ std::vector<Command> buildCommands(
     b.add(c, fmt::format("Move {} in (again to stop)", a2), key::UP, AXIS2, axis2Free);
     b.add(c, fmt::format("Move {} out (again to stop)", a2), key::DOWN, AXIS2, axis2Free);
     b.add(c, "Stop all motors", key::SPACE, NONE);
+    // (Not Esc, which leaves the mode, e.g. ending a multi-pass)
+    b.add(
+        c, "Clear the warning", key::F9, NONE, [](const Model& m) { return m.warningClearable(); });
 
     c = "Nudge";
     b.add(c, fmt::format("{} left {}", a1, amount(0.05, u1)), key::a, AXIS1, axis1Free);

@@ -2098,6 +2098,24 @@ std::string Model::getWarning() const
     return m_warning;
 }
 
+bool Model::warningClearable() const
+{
+    return !getWarning().empty() && (!m_warning.empty() || !m_threadingPositionLost);
+}
+
+void Model::clearWarning()
+{
+    if (!warningClearable()) {
+        return;
+    }
+    MGOLOG("Warning cleared: " << getWarning());
+    if (!m_warning.empty()) {
+        m_warning = "";
+    } else {
+        setThreadingWarning("", false);
+    }
+}
+
 std::string Model::axisStatus(int axisNumber) const
 {
     if (const auto& finish = scaleState(axisNumber).finish) {
@@ -5200,18 +5218,27 @@ void Model::advanceApproach(int axisNumber)
 
 void Model::warnApproachTooShort(int axisNumber, double pastMm)
 {
+    // It aimed to stop the approach short of the target, so it overshot
+    // where it aimed by the approach as well: that's what the approach has to
+    // be more than. (On the mill, 0.01 mm past the target with a 0.2 mm
+    // approach once read as if 0.01 mm would do)
+    const double overshootMm = scaleApproachMm(axisNumber) + pastMm;
     m_warning = fmt::format(
-        "{} went {:.3f} {} past its target: make Axis{}ScaleApproachMm more than that",
+        "{} went {:.3f} {} past its target ({:.3f} past where it aimed): make "
+        "Axis{}ScaleApproachMm more than {:.3f} mm",
         axisLabel(axisNumber),
         toDisplayUnits(axisNumber, pastMm),
         axisUnitName(axisNumber),
-        axisNumber);
+        toDisplayUnits(axisNumber, overshootMm),
+        axisNumber,
+        overshootMm);
     MGOLOG(
         fmt::format(
-            "*** Warning *** {} went {:.4f} mm past its target, more than its approach ({:.3f} "
-            "mm)",
+            "*** Warning *** {} went {:.4f} mm past its target, {:.4f} mm past where it aimed "
+            "(its approach is {:.3f} mm)",
             axisLabel(axisNumber),
             pastMm,
+            overshootMm,
             scaleApproachMm(axisNumber)));
 }
 

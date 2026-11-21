@@ -2332,6 +2332,35 @@ change.
           (0.256 compensation, 0.2 approach): with the table's backlash as
           compensated it stops short, creeps, and never passes the end, with
           no warning; with none, it warns
+        - **Then (21 Nov 2026), on the mill:** a multi-pass along X from
+          about 0 to -97 mm (cuts at 140 mm/min, returns at 800) gave that
+          warning five times ("X went 0.010 mm past its target"). Each
+          97 mm move there ended 0.11-0.22 mm further than the motor by the
+          scale, whatever the speed (40 to 800 mm/min), and 0.25 mm on a fast
+          return to a slot. So it isn't momentum. Short moves end within
+          about 0.05 mm, and 97 mm moves between -62 and 35 mm only
+          0.04-0.09 mm further, so it looks like the lead screw's pitch
+          varying along its length (not the scale's counts per mm, which
+          would be the same everywhere), which the re-basing deals with. The
+          mill's approach is now 0.35 mm (0.1 more than any seen). The
+          warning's advice was misleading: it gave how far past the target
+          the axis went (0.01), when the approach (0.2) had to be more than
+          the overshoot from where it aimed (0.21). It now says both, and
+          suggests more than the overshoot. **To check on the mill:** no
+          more warnings with 0.35, and (if wanted) the lead screw's error
+          along the table, e.g. by a slow move end to end and the scale's
+          difference every 10 mm
+        - **Then (21 Nov 2026), clearing a warning:** on the mill, Esc was
+          pressed (by instinct) to clear that flashing warning, which left
+          multi-pass mode part way through. So `F9` now clears the warning
+          and does nothing else (allowed whatever is going on, and with the
+          menu open), and a warning which can be cleared ends with
+          "[F9 to clear]". Not the encoder's lost pulses in threading or
+          knurling, which is still true until the thread is chosen again.
+          A warning whose cause is still there comes back. Test: F9 clears
+          a lock refusal while Z keeps moving, with and without the menu
+          open. **Not yet tried on the machine.** Esc ending a multi-pass
+          without asking is still as it was
 - [x] `axis.cpp` / `axis.h` are compiled but unused, and their `mgo::Axis`
       class clashes in name with `enum class mgo::Axis` in model.h
     - **Done:** removed (they're in git's history, if the "array of axes"
