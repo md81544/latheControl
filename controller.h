@@ -98,10 +98,13 @@ private:
     // Wrappers for the view's dialogs, which don't wait: onDone is called
     // with the result when the user closes the dialog. (Until then, the
     // controller's ticks carry on.) All motors are stopped first
+    // unit is the value's, as typed (e.g. "mm", "in", "deg"): for the
+    // calculator's in and mm (see calculator.h)
     void getNumericInput(
         std::string_view prompt,
         std::vector<std::string> additionalText,
         double defaultEntry,
+        std::string unit,
         std::function<void(const NumericInputReturn&)> onDone);
     void listPicker(
         std::string_view prompt,
@@ -109,6 +112,9 @@ private:
         std::function<void(std::optional<std::size_t>)> onDone);
     // The multi-pass dialog's axes, positions and directions (not its setup)
     MultiPassDialogInfo multiPassDialogInfo() const;
+    // Each memory slot's value on each axis, as displayed, for the calculator
+    // in numeric entries (see calculator.h)
+    calc::Memory calculatorMemory() const;
     void pressAnyKey(
         std::string_view prompt,
         std::vector<std::string> additionalText,

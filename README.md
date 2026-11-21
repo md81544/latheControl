@@ -76,6 +76,15 @@ To **return to a position**, select the memory slot with `[` or `]` and press `E
 
 To move to an **absolute position**, press leader + `G` (for "go to") - for example, `ZG` will open a dialog asking for a value for Z to go to.
 
+**A calculator in every numeric entry** - start a number with `=` and type a sum instead, e.g. `=12.7/2`. As you type, the line below the entry shows its value (in green), or what's wrong with it (in red). `Enter` then puts the value in the entry, in place of the sum, and `Enter` again accepts it as usual, so you always see the number before anything uses it. (Moving to another line, in the larger dialogs, puts it in too.) A sum which can't be worked out stays, and isn't accepted. Nor is a value the entry wouldn't take typed in (e.g. a negative step-over): the line says why. lc.log records each sum and its value. A sum can have:
+* numbers, `+`, `-`, `*` and `/` (only `*` multiplies, as `x` would be read as part of a memory slot's name), brackets, and a minus sign in front (e.g. `=-(2+3)`)
+* `p`: the value in the entry before you typed the `=` (e.g. `=p/2`, or `=p-0.05`). Typing `=` replaces the value shown, as any typing does, but `p` still has it
+* `pi`
+* `m1x`, `m2z` and so on: a memory slot's value on an axis, as it's shown on screen (slot 1 to 6, then the axis's letter). E.g. `=m2z-m1z` is the distance between two slots, and `=(m1x+m2x)/2` the point halfway between them. A slot with nothing stored on that axis says so ("Mem 3 has no X")
+* `in` or `mm` after a number, a product or brackets, to give a length in other units: `=3/8in` is three-eighths of an inch (9.525 in an entry in mm), and `=1in+2mm` works too. Only in an entry which is a length (not e.g. an angle or a number of teeth)
+
+Letters may be in either case. Spaces can't be typed in a sum. While you're typing a sum, letters (and `Left` and `Right`) are the entry's, so a dialog's letter options need `Alt` (e.g. `Alt`-`A` for "adjust" when setting a position).
+
 **Relative motion** can be performed by pressing leader + `R` - for example `XR` will open a dialog asking for an offset for X to go to. Once a relative motion has occurred, it can be repeated by simply pressing `.`
 
 **Zeroing** - press `XZ` or `ZZ` to zero the axis at the current position. The "axis leader" key `\` (backslash) selects both axes, so `\z` will zero out both axes at once, and any axes moved by hand too (the mill's Y and Z; below).

@@ -20,6 +20,7 @@
 #include <QFontDatabase>
 #include <QKeyEvent>
 #include <QLabel>
+#include <QLineEdit>
 #include <QTest>
 #include <QTimer>
 
@@ -33,6 +34,7 @@
 #include <iterator>
 #include <map>
 #include <optional>
+#include <set>
 #include <sstream>
 #include <string_view>
 #include <thread>
@@ -76,7 +78,8 @@ mgo::Input::Return getInput(
     std::string_view prompt,
     std::vector<std::string> additionalText,
     std::string_view defaultEntry = "",
-    std::optional<std::vector<std::string>> listItems = std::nullopt)
+    std::optional<std::vector<std::string>> listItems = std::nullopt,
+    mgo::calc::Context calculator = {})
 {
     std::optional<mgo::Input::Return> result;
     view.openInput(
@@ -85,7 +88,8 @@ mgo::Input::Return getInput(
         std::move(additionalText),
         [&result](const mgo::Input::Return& rc) { result = rc; },
         defaultEntry,
-        std::move(listItems));
+        std::move(listItems),
+        std::move(calculator));
     REQUIRE(view.isDialogOpen());
     REQUIRE(QTest::qWaitFor([&result] { return result.has_value(); }, 5'000));
     REQUIRE(!view.isDialogOpen());
@@ -410,6 +414,102 @@ TEST_CASE("UI: numeric dialog, with an option hotkey")
     REQUIRE(rc.optionsSelected == std::set<char> { 'd' });
 }
 
+namespace {
+
+// The text of the label in a dialog showing text which starts with start
+// ("" if there's none)
+std::string labelStartingWith(QWidget* dialog, const std::string& start)
+{
+    for (const QLabel* label : dialog->findChildren<QLabel*>()) {
+        const std::string text = label->text().toStdString();
+        if (text.starts_with(start)) {
+            return text;
+        }
+    }
+    return "";
+}
+
+QLineEdit* lineEdit(QWidget* dialog)
+{
+    return qobject_cast<QLineEdit*>(inputWidget(dialog));
+}
+
+} // end anonymous namespace
+
+TEST_CASE("UI: numeric dialog, with a sum typed after =")
+{
+    TestModel tm;
+    mgo::ViewQt view;
+    view.initialise(tm.model);
+    const mgo::calc::Context calculator { .memory = { { "m1x", 4.5 }, { "m2x", std::nullopt } },
+                                          .unit = "mm" };
+
+    SECTION("Enter puts the value in, and Enter again accepts it")
+    {
+        whenDialogShows([](QWidget* dialog) {
+            QTest::keyClicks(inputWidget(dialog), "=3/8in");
+            REQUIRE(labelStartingWith(dialog, "=3/8in = 9.525") != "");
+            QTest::keyClick(inputWidget(dialog), Qt::Key_Return);
+            REQUIRE(dialog->isVisible());
+            REQUIRE(lineEdit(dialog)->text() == "9.525");
+            REQUIRE(labelStartingWith(dialog, "=3/8in gave 9.525") != "");
+            QTest::keyClick(inputWidget(dialog), Qt::Key_Return);
+        });
+        const auto rc = getInput(
+            view, mgo::Input::Type::Numeric, "Position", {}, "0", std::nullopt, calculator);
+        REQUIRE(!rc.cancelled);
+        REQUIRE(rc.number == Approx(9.525));
+    }
+    SECTION("p is the value shown before, which typing = replaced")
+    {
+        whenDialogShows([](QWidget* dialog) {
+            QTest::keyClicks(inputWidget(dialog), "=p/4");
+            QTest::keyClick(inputWidget(dialog), Qt::Key_Return);
+            QTest::keyClick(inputWidget(dialog), Qt::Key_Return);
+        });
+        const auto rc = getInput(
+            view, mgo::Input::Type::Numeric, "Position", {}, "10", std::nullopt, calculator);
+        REQUIRE(rc.number == Approx(2.5));
+    }
+    SECTION("Letters in a sum are typed, not options; Alt toggles an option")
+    {
+        whenDialogShows([](QWidget* dialog) {
+            QTest::keyClicks(inputWidget(dialog), "=m1x*2");
+            REQUIRE(lineEdit(dialog)->text() == "=m1x*2");
+            QTest::keyClick(inputWidget(dialog), Qt::Key_M, Qt::AltModifier);
+            QTest::keyClick(inputWidget(dialog), Qt::Key_Return);
+            QTest::keyClick(inputWidget(dialog), Qt::Key_Return);
+        });
+        const auto rc = getInput(
+            view,
+            mgo::Input::Type::Numeric,
+            "Position",
+            { "[&M] an option" },
+            "0",
+            std::nullopt,
+            calculator);
+        REQUIRE(rc.number == Approx(9.0));
+        REQUIRE(rc.optionsSelected == std::set<char> { 'm' });
+    }
+    SECTION("A sum which can't be worked out stays, saying why, and isn't accepted")
+    {
+        whenDialogShows([](QWidget* dialog) {
+            QTest::keyClicks(inputWidget(dialog), "=m2x+1");
+            QTest::keyClick(inputWidget(dialog), Qt::Key_Return);
+            REQUIRE(dialog->isVisible());
+            REQUIRE(lineEdit(dialog)->text() == "=m2x+1");
+            REQUIRE(labelStartingWith(dialog, "Mem 2 has no X") != "");
+            // (Spaces, and other characters, can't be typed in a sum)
+            QTest::keyClicks(inputWidget(dialog), " x");
+            REQUIRE(lineEdit(dialog)->text() == "=m2x+1x");
+            QTest::keyClick(inputWidget(dialog), Qt::Key_Escape);
+        });
+        const auto rc = getInput(
+            view, mgo::Input::Type::Numeric, "Position", {}, "0", std::nullopt, calculator);
+        REQUIRE(rc.cancelled);
+    }
+}
+
 TEST_CASE("UI: Esc cancels a dialog")
 {
     TestModel tm;
@@ -520,6 +620,39 @@ TEST_CASE("UI: Z go-to through the controller")
     whenDialogShows([&dialogShown](QWidget* dialog) {
         dialogShown = true;
         QTest::keyClicks(inputWidget(dialog), "5");
+        QTest::keyClick(inputWidget(dialog), Qt::Key_Return);
+    });
+    QTest::keyClick(w, Qt::Key_G);
+    controller.processKeyPress(); // opens the dialog
+    REQUIRE(waitForDialogToClose());
+    REQUIRE(dialogShown);
+
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    while (std::abs(tm.model.motorPosition(1) - 5.0) > 0.001
+           && std::chrono::steady_clock::now() < deadline) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    REQUIRE(tm.model.motorPosition(1) == Approx(5.0).margin(0.001));
+}
+
+TEST_CASE("UI: a go-to with a sum using a memory slot, through the controller")
+{
+    // Mem 1's Z is 3, so =m1z+2 goes to 5
+    TestModel tm;
+    mgo::Controller controller(&tm.model);
+    tm.model.setMotorSpeed(1, 1'000.0);
+    tm.model.storePosition(1, 3.0);
+    QWidget* w = mainWindow();
+    REQUIRE(w);
+
+    QTest::keyClick(w, Qt::Key_Z);
+    controller.processKeyPress();
+    bool dialogShown = false;
+    whenDialogShows([&dialogShown](QWidget* dialog) {
+        dialogShown = true;
+        QTest::keyClicks(inputWidget(dialog), "=M1Z+2");
+        QTest::keyClick(inputWidget(dialog), Qt::Key_Return);
+        REQUIRE(lineEdit(dialog)->text() == "5");
         QTest::keyClick(inputWidget(dialog), Qt::Key_Return);
     });
     QTest::keyClick(w, Qt::Key_G);
@@ -813,6 +946,46 @@ TEST_CASE("UI: multi-pass dialog, from here by distances")
     // Esc cancels
     whenDialogShows([](QWidget* dialog) { key(dialog, Qt::Key_Escape); });
     REQUIRE(!multiPassDialog(view, info).has_value());
+}
+
+TEST_CASE("UI: multi-pass dialog, a sum in an entry")
+{
+    TestModel tm;
+    mgo::ViewQt view;
+    view.initialise(tm.model);
+    auto info = multiPassInfo();
+    info.calculatorMemory = { { "m1z", 2.0 }, { "m2z", 12.5 }, { "m1x", 9.5 } };
+
+    whenDialogShows([](QWidget* dialog) {
+        // Z's distance, from memory slots: Enter puts it in, without
+        // accepting the dialog
+        typeInto(dialog, "=m1z-m2z");
+        snapshot(dialog, "multipass_sum");
+        key(dialog, Qt::Key_Return);
+        REQUIRE(dialog->isVisible());
+        REQUIRE(lineEdit(dialog)->text() == "-10.5");
+        key(dialog, Qt::Key_Down);
+        typeInto(dialog, "=1/2"); // (X's infeed)
+        // Moving to another line puts it in, too
+        key(dialog, Qt::Key_Down, 2); // (past X's end diameter)
+        // The step-over can't be negative: refused, it stays
+        typeInto(dialog, "=0-0.1");
+        key(dialog, Qt::Key_Return);
+        REQUIRE(lineEdit(dialog)->text() == "=0-0.1");
+        REQUIRE(labelStartingWith(dialog, "-0.1: it can't be negative here") != "");
+        snapshot(dialog, "multipass_sum_refused");
+        key(dialog, Qt::Key_Up);
+        REQUIRE(lineEdit(dialog)->text() == "=0-0.1"); // (still there)
+        key(dialog, Qt::Key_Backspace, 6);
+        typeInto(dialog, "=0.5/5");
+        key(dialog, Qt::Key_Return);
+        key(dialog, Qt::Key_Return);
+    });
+    auto setup = multiPassDialog(view, info);
+    REQUIRE(setup.has_value());
+    REQUIRE(setup->cutDistance == Approx(-10.5));
+    REQUIRE(setup->feedInfeed == Approx(0.5));
+    REQUIRE(setup->feedPerPass == Approx(0.1));
 }
 
 TEST_CASE("UI: multi-pass dialog, R cycles the retract")
@@ -1357,6 +1530,17 @@ TEST_CASE("UI: taper dialog")
         QTest::keyClick(inputWidget(dialog), Qt::Key_Return);
     });
     REQUIRE(getTaperAngle(view, 0.0) == Approx(-12.5));
+
+    // A sum: = also switches to a custom angle, and I (in pi) is typed, not
+    // the direction. Enter puts the value in, and Enter again accepts it
+    whenDialogShows([](QWidget* dialog) {
+        typeInto(dialog, "=pi*2");
+        QTest::keyClick(inputWidget(dialog), Qt::Key_Return);
+        REQUIRE(dialog->isVisible());
+        REQUIRE(lineEdit(dialog)->text() == "6.283185");
+        QTest::keyClick(inputWidget(dialog), Qt::Key_Return);
+    });
+    REQUIRE(getTaperAngle(view, 0.0) == Approx(-6.283185));
 
     // Esc cancels
     whenDialogShows([](QWidget* dialog) { QTest::keyClick(inputWidget(dialog), Qt::Key_Escape); });

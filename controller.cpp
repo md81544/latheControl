@@ -10,6 +10,7 @@
 #include <QStringList>
 
 #include <cassert>
+#include <cctype>
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
@@ -917,6 +918,7 @@ void Controller::processKey(int t)
                         "Go to " + axisName + " absolute position" + unitsSuffix(1),
                         { "Specify a value" },
                         0.0,
+                        m_model->axisUnitName(1),
                         [this](const NumericInputReturn& rc) {
                             if (!rc.cancelled) {
                                 m_model->goToPosition(1, m_model->fromDisplayUnits(1, rc.value));
@@ -932,6 +934,7 @@ void Controller::processKey(int t)
                         "Go to " + axisName + " absolute position" + unitsSuffix(2),
                         { "Specify a value" },
                         0.0,
+                        m_model->axisUnitName(2),
                         [this](const NumericInputReturn& rc) {
                             if (!rc.cancelled) {
                                 m_model->goToPosition(2, m_model->fromDisplayUnits(2, rc.value));
@@ -948,6 +951,7 @@ void Controller::processKey(int t)
                         "Go to " + axisName + " relative position" + unitsSuffix(1),
                         { "Specify a RELATIVE offset value" },
                         0.0,
+                        m_model->axisUnitName(1),
                         [this](const NumericInputReturn& rc) {
                             if (!rc.cancelled) {
                                 m_model->goToOffset(1, m_model->fromDisplayUnits(1, rc.value));
@@ -964,6 +968,7 @@ void Controller::processKey(int t)
                         "Go to " + axisName + " relative position" + unitsSuffix(2),
                         { "Specify a RELATIVE offset value" },
                         0.0,
+                        m_model->axisUnitName(2),
                         [this](const NumericInputReturn& rc) {
                             if (!rc.cancelled) {
                                 m_model->goToOffset(2, m_model->fromDisplayUnits(2, rc.value));
@@ -1133,7 +1138,8 @@ void Controller::processKey(int t)
                     GearDialogInfo info { .cut = mp.cut,
                                           .indexLabel = mp.feed.label,
                                           .positions = mp.positions,
-                                          .setup = m_model->gearDialogSetup() };
+                                          .setup = m_model->gearDialogSetup(),
+                                          .calculatorMemory = mp.calculatorMemory };
                     m_view->openGearDialog(info, [this](std::optional<GearSetup> setup) {
                         if (!setup) {
                             return;
@@ -1197,7 +1203,8 @@ void Controller::processKey(int t)
                     RadiusDialogInfo info { .cut = mp.cut,
                                             .feed = mp.feed,
                                             .work = m_model->radiusWork(),
-                                            .setup = m_model->getRadiusSetup() };
+                                            .setup = m_model->getRadiusSetup(),
+                                            .calculatorMemory = mp.calculatorMemory };
                     // (The radius, depth and nose radius carry over from the
                     // other kind, if that was used last)
                     info.setup.kind = kp == key::f2f ? RadiusKind::Shoulder : RadiusKind::End;
@@ -1256,6 +1263,7 @@ void Controller::processKey(int t)
                         m_model->axisLabel(axisNumber) + " position set" + unitsSuffix(axisNumber),
                         {},
                         0.0,
+                        m_model->axisUnitName(axisNumber),
                         [this, axisNumber](const NumericInputReturn& result) {
                             if (!result.cancelled) {
                                 m_model->setPosition(
@@ -1299,6 +1307,7 @@ void Controller::processKey(int t)
                         axisName + " position set" + unitsSuffix(1),
                         { "[&A] adjust (keeps memory slots)" },
                         0.0,
+                        m_model->axisUnitName(1),
                         [this, axisName](const NumericInputReturn& result) {
                             if (result.cancelled) {
                                 return;
@@ -1330,6 +1339,7 @@ void Controller::processKey(int t)
                         axisName + " position set" + unitsSuffix(2),
                         { "[&D] set as diameter", "[&A] adjusts (keeps memory slots)" },
                         0.0,
+                        m_model->axisUnitName(2),
                         [this, axisName](const NumericInputReturn& result) {
                             if (result.cancelled) {
                                 return;
@@ -1370,6 +1380,7 @@ void Controller::processKey(int t)
                         "Enter " + axisName + " memory value" + unitsSuffix(1),
                         {},
                         0.0,
+                        m_model->axisUnitName(1),
                         [this](const NumericInputReturn& rc) {
                             if (!rc.cancelled) {
                                 m_model->storePosition(1, m_model->fromDisplayUnits(1, rc.value));
@@ -1385,6 +1396,7 @@ void Controller::processKey(int t)
                         "Enter " + axisName + " memory value" + unitsSuffix(2),
                         {},
                         0.0,
+                        m_model->axisUnitName(2),
                         [this](const NumericInputReturn& rc) {
                             if (!rc.cancelled) {
                                 m_model->storePosition(2, m_model->fromDisplayUnits(2, rc.value));
@@ -1586,6 +1598,7 @@ void Controller::getNumericInput(
     std::string_view prompt,
     std::vector<std::string> additionalText,
     double defaultEntry,
+    std::string unit,
     std::function<void(const NumericInputReturn&)> onDone)
 {
     // (As with all dialogs, stop all motors first)
@@ -1605,7 +1618,9 @@ void Controller::getNumericInput(
         [onDone = std::move(onDone)](const Input::Return& rc) {
             onDone({ rc.cancelled, rc.number, rc.optionsSelected });
         },
-        defaultEntryAsString);
+        defaultEntryAsString,
+        std::nullopt,
+        calc::Context { .memory = calculatorMemory(), .unit = std::move(unit) });
 }
 
 void Controller::listPicker(
@@ -1639,7 +1654,30 @@ MultiPassDialogInfo Controller::multiPassDialogInfo() const
     info.diameterKnown = m_model->getDiameterMm().has_value();
     info.feedRetractsOutwards = m_model->getRetractionDirection() == XDirection::Outwards;
     info.retractLastPasses = m_model->retractLastPasses();
+    info.calculatorMemory = calculatorMemory();
     return info;
+}
+
+calc::Memory Controller::calculatorMemory() const
+{
+    // e.g. "m1x", for slot 1 (the first) on X: as displayed, so a sum gives
+    // what would be typed in from the screen
+    calc::Memory memory;
+    for (int axis = 1; axis <= Model::AXES; ++axis) {
+        if (!m_model->hasAxis(axis)) {
+            continue;
+        }
+        std::string label = m_model->axisLabel(axis);
+        for (char& c : label) {
+            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        }
+        for (std::size_t slot = 0; slot < m_model->getMemorySize(); ++slot) {
+            const auto mm = m_model->getMemory(axis, slot);
+            memory[fmt::format("m{}{}", slot + 1, label)]
+                = mm ? std::optional(m_model->toDisplayUnits(axis, *mm)) : std::nullopt;
+        }
+    }
+    return memory;
 }
 
 void Controller::pressAnyKey(
@@ -1918,21 +1956,21 @@ void Controller::finishToolMeasurement()
                 return;
             }
             const std::string description = rc.text;
-            m_view->openInput(
-                Input::Type::Numeric,
+            getNumericInput(
                 fmt::format("T{}'s nose radius (mm)", number),
                 { "0 for a sharp tool",
                   "",
                   fmt::format("Enter: store T{}, in use from now", number),
                   "Esc: discard the measurement" },
-                [this, description](const Input::Return& radius) {
+                0.0,
+                "mm",
+                [this, description](const NumericInputReturn& radius) {
                     if (radius.cancelled) {
                         m_model->cancelToolMeasurement();
                         return;
                     }
-                    m_model->finishToolMeasurement(description, radius.number);
-                },
-                "0");
+                    m_model->finishToolMeasurement(description, radius.value);
+                });
         });
 }
 
@@ -1957,6 +1995,7 @@ void Controller::describeCurrentTool()
                 fmt::format("T{}'s nose radius (mm)", tool.number),
                 { "0 for a sharp tool" },
                 tool.noseRadiusMm,
+                "mm",
                 [this, tool, description](const NumericInputReturn& radius) {
                     if (!radius.cancelled) {
                         m_model->editTool(tool.number, description, radius.value);

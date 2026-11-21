@@ -32,6 +32,9 @@ namespace dialog {
 // Lines of additionalText containing "&x" define option hotkeys: pressing x
 // (or Alt-x, which is required in a Text dialog) toggles that option, shown
 // with a tick, and selected options are returned in optionsSelected.
+// A Numeric entry also takes a sum typed after "=" (see calculator.h), using
+// calculator: Enter puts its value in, and Enter again accepts it. Meanwhile
+// plain letters are typed (Alt-x toggles an option).
 QDialog* openInput(
     QWidget* parent,
     const QString& fontFamily,
@@ -40,6 +43,7 @@ QDialog* openInput(
     std::vector<std::string> additionalText,
     std::string_view defaultEntry,
     std::optional<std::vector<std::string>> listItems,
+    calc::Context calculator,
     std::function<void(const Input::Return&)> onDone);
 
 // The taper mode dialog: choose a preset taper (e.g. a Morse taper) or enter

@@ -57,6 +57,7 @@ add_library(shared_with_test OBJECT
 	manualaxis.cpp
 	scale.cpp
 	backlash.cpp
+	calculator.cpp
 	droserial.cpp
 	joystick.cpp
 	commands.cpp

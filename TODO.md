@@ -15,6 +15,34 @@
     - If a feature is defined, and zEnd is present, maybe pressing Z,G,E
       could go to the end?
 
+### A calculator in numeric entries
+- [x] The user's idea (21 Nov 2026, reaching for a calculator at the lathe):
+      any numeric entry takes a sum typed after `=`, worked out when Enter
+      is pressed. See README.md. Decided with the user:
+    - Only `+ - * /`, brackets and a leading minus. No trig: the bolt hole
+      mode covers what trig would mostly be for.
+    - Only `*` multiplies, not `x`, as `x` would clash with memory slot
+      names (`m1x`).
+    - Memory slots are always written in full, `m1x` (the slot and the
+      axis). A shorter `m1` meaning the entry's own axis was considered,
+      and left out to keep it simple.
+    - `p` is the entry's value before the `=` was typed ("previous").
+    - `pi`, and `in` / `mm` suffixes, converted to the entry's units. They
+      apply to the product so far, so `=3/8in` is three-eighths of an inch.
+      They're refused in entries which aren't lengths, so `in` can't
+      silently mean 25.4 in e.g. an angle.
+    - The first Enter puts the value in, and the second accepts it, so the
+      number is seen before it moves anything (accuracy over speed). The
+      value is shown live meanwhile, and a value the entry's own pattern
+      wouldn't accept (e.g. negative) is refused with a reason.
+    - No spaces, so Space can't end up typed into a sum.
+    - lc.log records each sum and its value.
+- [ ] Try it at the machine.
+- [ ] Maybe: in the go-to and position set dialogs, `p` is 0 (their default
+      entry), so it isn't much use there. It could be the axis's current
+      position instead (e.g. `=p+1.5` in a go-to). Not done, as `p` was
+      agreed as "the value in the entry".
+
 ### Re-base an axis from its scale by hand
 - [x] A command to line an axis's position up with its scale at any time
       (the user's idea, 18 Nov 2026), rather than only when the mismatch

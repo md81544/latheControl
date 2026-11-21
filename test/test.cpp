@@ -1,4 +1,5 @@
 #include "backlash.h"
+#include "calculator.h"
 #include "commands.h"
 #include "configreader.h"
 #include "droserial.h"
@@ -8369,5 +8370,116 @@ TEST_CASE("Sound cues: the alarm and the alert")
         const SoundState stopped { .warning = "Multi-pass stopped: X stalled",
                                    .multiPassState = State::Finished };
         REQUIRE(tick(cutting, stopped) == Sound::Alarm);
+    }
+}
+
+TEST_CASE("Calculator: sums typed after = in a numeric entry")
+{
+    using mgo::calc::evaluate;
+    mgo::calc::Context mm { .previous = 10.0,
+                            .memory = { { "m1x", 4.5 }, { "m2x", 1.5 }, { "m3x", std::nullopt } },
+                            .unit = "mm" };
+    const auto value = [&mm](std::string_view text) {
+        const auto v = evaluate(text, mm);
+        INFO(text << ": " << (v ? "" : v.error()));
+        REQUIRE(v.has_value());
+        return *v;
+    };
+    const auto error = [&mm](std::string_view text) {
+        const auto v = evaluate(text, mm);
+        INFO(text);
+        REQUIRE(!v.has_value());
+        return v.error();
+    };
+
+    SECTION("Is it an expression?")
+    {
+        REQUIRE(mgo::calc::isExpression("=1+2"));
+        REQUIRE(!mgo::calc::isExpression("12.5"));
+        REQUIRE(!mgo::calc::isExpression(""));
+    }
+    SECTION("Arithmetic, with * and / before + and -")
+    {
+        REQUIRE(value("=1+2") == Approx(3.0));
+        REQUIRE(value("=2+3*4") == Approx(14.0));
+        REQUIRE(value("=10-4-3") == Approx(3.0)); // (left to right)
+        REQUIRE(value("=12/4/3") == Approx(1.0));
+        REQUIRE(value("=(2+3)*4") == Approx(20.0));
+        REQUIRE(value("=((1+1))*(3)") == Approx(6.0));
+        REQUIRE(value("=.5+5.") == Approx(5.5));
+        REQUIRE(value("1+2") == Approx(3.0)); // (the = is optional here)
+    }
+    SECTION("Minus signs")
+    {
+        REQUIRE(value("=-5") == Approx(-5.0));
+        REQUIRE(value("=-(2+3)") == Approx(-5.0));
+        REQUIRE(value("=3*-2") == Approx(-6.0));
+        REQUIRE(value("=3--2") == Approx(5.0));
+        REQUIRE(value("=+4") == Approx(4.0));
+    }
+    SECTION("p is the value before, and pi")
+    {
+        REQUIRE(value("=p/2") == Approx(5.0));
+        REQUIRE(value("=P-0.05") == Approx(9.95));
+        REQUIRE(value("=2*pi") == Approx(6.283185));
+        mm.previous = std::nullopt;
+        REQUIRE(error("=p/2") == "There's no previous value for p");
+    }
+    SECTION("Memory slots")
+    {
+        REQUIRE(value("=m1x-m2x") == Approx(3.0));
+        REQUIRE(value("=(M1X+m2x)/2") == Approx(3.0));
+        REQUIRE(error("=m3x+1") == "Mem 3 has no X");
+        REQUIRE(error("=m7x") == "Unknown name: m7x");
+    }
+    SECTION("Inches and mm, in an entry in mm")
+    {
+        REQUIRE(value("=3/8in") == Approx(9.525));
+        REQUIRE(value("=(1+1/8)in") == Approx(28.575));
+        REQUIRE(value("=1in+2mm") == Approx(27.4));
+        REQUIRE(value("=-1in") == Approx(-25.4));
+        REQUIRE(error("=p in") == "Spaces can't be used");
+        REQUIRE(error("=in") == "in goes after a number");
+    }
+    SECTION("In an entry in inches")
+    {
+        mm.unit = "in";
+        REQUIRE(value("=1/8in") == Approx(0.125));
+        REQUIRE(value("=25.4mm") == Approx(1.0));
+    }
+    SECTION("Not in an entry which isn't a length")
+    {
+        mm.unit = "deg";
+        REQUIRE(error("=1in") == "This isn't a length, so in can't be used");
+        mm.unit = "";
+        REQUIRE(error("=1mm") == "This isn't a length, so mm can't be used");
+        REQUIRE(value("=360/7") == Approx(51.428571));
+    }
+    SECTION("Mistakes")
+    {
+        REQUIRE(error("=") == "Type a sum after the =");
+        REQUIRE(error("=(3+") == "The sum isn't finished");
+        REQUIRE(error("=(3+4") == "A ( isn't closed");
+        REQUIRE(error("=3+4)") == "A ) has no ( before it");
+        REQUIRE(error("=2x3") == "Use * to multiply");
+        REQUIRE(error("=2(3)") == "Use * to multiply");
+        REQUIRE(error("=x") == "Use * to multiply");
+        REQUIRE(error("=1/0") == "Dividing by zero");
+        REQUIRE(error("=1/(2-2)") == "Dividing by zero");
+        REQUIRE(error("=1.2.3") == "1.2.3 isn't a number");
+        REQUIRE(error("=.") == ". isn't a number");
+        REQUIRE(error("=foo") == "Unknown name: foo");
+        REQUIRE(error("=1 + 2") == "Spaces can't be used");
+        REQUIRE(error("=1+*2") == "* can't go there");
+    }
+    SECTION("Results as they go back into the entry")
+    {
+        using mgo::calc::formatResult;
+        REQUIRE(formatResult(9.525) == "9.525");
+        REQUIRE(formatResult(2.0) == "2");
+        REQUIRE(formatResult(1.0 / 3.0) == "0.333333");
+        REQUIRE(formatResult(-1.0 / 3.0) == "-0.333333");
+        REQUIRE(formatResult(-0.0000001) == "0");
+        REQUIRE(formatResult(0.0) == "0");
     }
 }

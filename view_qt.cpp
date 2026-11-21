@@ -1342,7 +1342,8 @@ void ViewQt::openInput(
     std::vector<std::string> additionalText,
     std::function<void(const Input::Return&)> onDone,
     std::string_view defaultEntry,
-    std::optional<std::vector<std::string>> listItems)
+    std::optional<std::vector<std::string>> listItems,
+    calc::Context calculator)
 {
     assert(!isDialogOpen()); // (one at a time)
     m_impl->setDimmed(true);
@@ -1354,6 +1355,7 @@ void ViewQt::openInput(
         std::move(additionalText),
         defaultEntry,
         std::move(listItems),
+        std::move(calculator),
         [this, onDone = std::move(onDone)](const Input::Return& rc) {
             m_impl->dialogClosed();
             onDone(rc);

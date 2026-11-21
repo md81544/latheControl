@@ -1,5 +1,6 @@
 #include "qt_dialog.h"
 
+#include "calculator.h"
 #include "log.h"
 #include "tapers.h"
 #include "threadpitches.h"
@@ -20,11 +21,14 @@
 #include <QRegularExpressionValidator>
 #include <QSignalBlocker>
 #include <QVBoxLayout>
+#include <QValidator>
 
 #include <algorithm>
 #include <cassert>
 #include <cctype>
 #include <cmath>
+#include <expected>
+#include <functional>
 #include <limits>
 #include <map>
 #include <set>
@@ -68,6 +72,180 @@ bool isModifierKey(int qtKey)
         || qtKey == Qt::Key_AltGr || qtKey == Qt::Key_Meta || qtKey == Qt::Key_CapsLock;
 }
 
+const char* const CALC_VALUE_STYLE = "color: rgb(0, 255, 0);";
+const char* const CALC_ERROR_STYLE = "color: rgb(255, 120, 120);";
+
+// A numeric entry's validator: the entry's own pattern for a number, or, once
+// it starts with "=", a sum (see calculator.h). A sum isn't checked as it's
+// typed, only the characters it may have: what's wrong with it is shown
+// instead (see ExpressionField)
+class ExpressionValidator final : public QValidator {
+public:
+    ExpressionValidator(const QString& numberPattern, QObject* parent)
+        : QValidator(parent)
+        , m_number(QRegularExpression(numberPattern))
+    {
+    }
+
+    State validate(QString& input, int& pos) const override
+    {
+        if (input.startsWith('=')) {
+            static const QRegularExpression sum(R"(^=[0-9A-Za-z.+\-*/()]*$)");
+            return sum.match(input).hasMatch() ? Intermediate : Invalid;
+        }
+        return m_number.validate(input, pos);
+    }
+
+private:
+    QRegularExpressionValidator m_number;
+};
+
+// The calculator in a numeric entry (see calculator.h): typed after "=", a
+// sum's value (or what's wrong with it) is shown in a label as it's typed.
+// Enter then puts the value in the entry in its place, and the dialog's
+// Enter accepts it as usual, so the number can be seen before anything uses
+// it. A value the entry wouldn't take typed (e.g. negative, where it can't
+// be) is refused there and then
+class ExpressionField final : public QObject {
+public:
+    // Sets edit's validator, from numberPattern (a regular expression for the
+    // numbers the entry takes). preview may be shared by several entries in
+    // a dialog: only the one with the focus writes to it
+    ExpressionField(
+        QLineEdit* edit,
+        const QString& numberPattern,
+        calc::Context context,
+        QLabel* preview)
+        : QObject(edit)
+        , m_edit(edit)
+        , m_number(numberPattern)
+        , m_context(std::move(context))
+        , m_preview(preview)
+    {
+        m_edit->setValidator(new ExpressionValidator(numberPattern, m_edit));
+        // (A line kept for it, so the dialog doesn't change size)
+        m_preview->setMinimumHeight(m_preview->fontMetrics().height());
+        m_preview->setTextFormat(Qt::PlainText);
+        notePrevious(m_edit->text());
+        QObject::connect(m_edit, &QLineEdit::textChanged, this, [this](const QString& text) {
+            notePrevious(text);
+            if (m_edit->hasFocus()) {
+                showPreview();
+            }
+        });
+        QObject::connect(m_edit, &QLineEdit::textEdited, this, [this](const QString&) {
+            if (!active() && m_onValueEdited) {
+                m_onValueEdited();
+            }
+        });
+    }
+
+    // Called when the entry's number is edited, as for QLineEdit::textEdited,
+    // but not while a sum is being typed (so the dialog keeps the value from
+    // before it meanwhile), and also when a sum's value is put in
+    void onValueEdited(std::function<void()> fn)
+    {
+        m_onValueEdited = std::move(fn);
+    }
+
+    // Whether a sum is being typed (then keys such as letters, and Left and
+    // Right, are the entry's, not the dialog's)
+    bool active() const
+    {
+        return calc::isExpression(m_edit->text().toStdString());
+    }
+
+    enum class Outcome {
+        Number, // there was no sum (so Enter may go on to accept the dialog)
+        Replaced, // the sum's value has been put in, in its place
+        Invalid // the sum can't be worked out, or its value can't go here
+    };
+
+    // For Enter, or moving to another entry: puts a sum's value in its place
+    Outcome resolve()
+    {
+        if (!active()) {
+            return Outcome::Number;
+        }
+        const std::string sum = m_edit->text().toStdString();
+        const auto value = valueOf(sum);
+        if (!value) {
+            showPreview();
+            return Outcome::Invalid;
+        }
+        const std::string text = calc::formatResult(*value);
+        MGOLOG("Calculator: " << sum << " gave " << text);
+        m_edit->setText(QString::fromStdString(text));
+        if (m_onValueEdited) {
+            m_onValueEdited();
+        }
+        // (After setText(), which clears the preview)
+        m_preview->setStyleSheet(CALC_VALUE_STYLE);
+        m_preview->setText(QString::fromStdString(sum + " gave " + text));
+        return Outcome::Replaced;
+    }
+
+private:
+    // The value in the entry before the sum, for p
+    void notePrevious(const QString& text)
+    {
+        if (calc::isExpression(text.toStdString())) {
+            return;
+        }
+        bool ok = false;
+        const double v = text.toDouble(&ok);
+        m_context.previous = ok ? std::optional<double>(v) : std::nullopt;
+    }
+
+    // The sum's value, if it can go in the entry; otherwise why not
+    std::expected<double, std::string> valueOf(const std::string& sum) const
+    {
+        const auto value = calc::evaluate(sum, m_context);
+        if (!value) {
+            return value;
+        }
+        const QString text = QString::fromStdString(calc::formatResult(*value));
+        if (m_number.match(text).hasMatch()) {
+            return value;
+        }
+        if (*value < 0.0) {
+            return std::unexpected(calc::formatResult(*value) + ": it can't be negative here");
+        }
+        const QString whole = QString::fromStdString(calc::formatResult(std::round(*value)));
+        if (text.contains('.') && m_number.match(whole).hasMatch()) {
+            return std::unexpected(calc::formatResult(*value) + ": it must be a whole number here");
+        }
+        return std::unexpected(calc::formatResult(*value) + ": too large for here");
+    }
+
+    void showPreview()
+    {
+        if (!active()) {
+            m_preview->clear();
+            return;
+        }
+        // (With the sum, as the entries in the larger dialogs are too narrow
+        // to show much of it)
+        const std::string sum = m_edit->text().toStdString();
+        const auto value = valueOf(sum);
+        if (value) {
+            m_preview->setStyleSheet(CALC_VALUE_STYLE);
+            m_preview->setText(
+                QString::fromStdString(
+                    sum + " = " + calc::formatResult(*value) + "   (Enter puts it in)"));
+        } else {
+            m_preview->setStyleSheet(CALC_ERROR_STYLE);
+            m_preview->setText(QString::fromStdString(value.error()));
+        }
+    }
+
+    QLineEdit* m_edit;
+    QRegularExpression m_number;
+    calc::Context m_context;
+    QLabel* m_preview;
+    std::function<void()> m_onValueEdited;
+};
+
 class InputDialog final : public QDialog {
 public:
     InputDialog(
@@ -77,7 +255,8 @@ public:
         std::string_view prompt,
         std::vector<std::string> additionalText,
         std::string_view defaultEntry,
-        const std::optional<std::vector<std::string>>& listItems)
+        const std::optional<std::vector<std::string>>& listItems,
+        calc::Context calculator)
         : QDialog(parent, Qt::Dialog | Qt::FramelessWindowHint)
         , m_type(type)
     {
@@ -110,16 +289,23 @@ public:
             m_edit = new QLineEdit(QString::fromStdString(std::string(defaultEntry)), box);
             m_edit->setFont(promptFont);
             m_edit->setStyleSheet(EDIT_STYLE);
+            QLabel* preview = nullptr;
             if (type == Input::Type::Numeric) {
-                m_edit->setValidator(new QRegularExpressionValidator(
-                    QRegularExpression(R"(^-?[0-9]*\.?[0-9]*$)"), m_edit));
+                preview = new QLabel(box);
+                preview->setFont(bodyFont);
+                m_field = new ExpressionField(
+                    m_edit, R"(^-?[0-9]*\.?[0-9]*$)", std::move(calculator), preview);
             }
             // With the default entry selected, typing replaces it (as before,
             // where the first key press cleared the entry)
             m_edit->selectAll();
             m_edit->installEventFilter(this);
             layout->addWidget(m_edit);
-            layout->addSpacing(10);
+            if (preview) {
+                layout->addWidget(preview);
+            } else {
+                layout->addSpacing(10);
+            }
         }
 
         const QPixmap tick("img/tick.png");
@@ -279,7 +465,10 @@ private:
             return true;
         }
         if (qtKey == Qt::Key_Return || qtKey == Qt::Key_Enter) {
-            accept();
+            // (A sum's value is put in first, to be seen before it's used)
+            if (!m_field || m_field->resolve() == ExpressionField::Outcome::Number) {
+                accept();
+            }
             return true;
         }
         if (m_type == Input::Type::PressAnyKey) {
@@ -309,8 +498,10 @@ private:
             const char c = static_cast<char>('a' + (qtKey - Qt::Key_A));
             const bool alt = event->modifiers() & Qt::AltModifier;
             // In a numeric entry, letters can't be typed, so a plain letter
-            // can toggle an option; in text entry, Alt is needed
-            if ((alt || m_type == Input::Type::Numeric) && m_options.contains(c)) {
+            // can toggle an option; in text entry, or a sum (which can have
+            // letters, e.g. m1x), Alt is needed
+            const bool typing = m_type == Input::Type::Text || (m_field && m_field->active());
+            if ((alt || !typing) && m_options.contains(c)) {
                 toggleOption(c);
                 return true;
             }
@@ -339,6 +530,8 @@ private:
 
     Input::Type m_type;
     QLineEdit* m_edit { nullptr };
+    // (Numeric only; owned by m_edit)
+    ExpressionField* m_field { nullptr };
     QListWidget* m_list { nullptr };
     std::map<char, QLabel*> m_options; // hotkey -> its tick
     std::set<char> m_selected;
@@ -524,9 +717,6 @@ public:
         m_edit->setFont(promptFont);
         m_edit->setStyleSheet(EDIT_STYLE);
         m_edit->setFixedWidth(130);
-        // Positive numbers only: the direction is chosen separately
-        m_edit->setValidator(new QRegularExpressionValidator(
-            QRegularExpression(R"(^[0-9]{0,2}(\.[0-9]*)?$)"), m_edit));
         m_edit->installEventFilter(this);
         auto* degrees = new QLabel("degrees", box);
         degrees->setFont(bodyFont);
@@ -536,6 +726,12 @@ public:
         angleRow->addWidget(degrees);
         angleRow->addStretch();
         right->addLayout(angleRow);
+        auto* preview = new QLabel(box);
+        preview->setFont(bodyFont);
+        right->addWidget(preview);
+        // Positive numbers only: the direction is chosen separately
+        m_field = new ExpressionField(
+            m_edit, R"(^[0-9]{0,2}(\.[0-9]*)?$)", calc::Context { .unit = "deg" }, preview);
 
         // Says which way the tool moves (I toggles it)
         m_direction = new QLabel(box);
@@ -563,7 +759,7 @@ public:
             presetChosen(row);
         });
         // Typing an angle makes it a custom one
-        QObject::connect(m_edit, &QLineEdit::textEdited, m_edit, [this](const QString&) {
+        m_field->onValueEdited([this] {
             if (m_list->currentRow() != customRow()) {
                 const QSignalBlocker blocker(m_list);
                 m_list->setCurrentRow(customRow());
@@ -676,10 +872,16 @@ private:
             return true;
         }
         if (qtKey == Qt::Key_Return || qtKey == Qt::Key_Enter) {
-            if (enteredAngle() > MIN_TAPER_ANGLE) {
+            // (A sum's value is put in first, to be seen before it's used)
+            if (m_field->resolve() == ExpressionField::Outcome::Number
+                && enteredAngle() > MIN_TAPER_ANGLE) {
                 accept();
             }
             return true; // (not accepted without a valid angle)
+        }
+        if (watched == m_edit && m_field->active() && qtKey != Qt::Key_Up
+            && qtKey != Qt::Key_Down) {
+            return false; // (typing a sum: letters, e.g. pi, are the entry's)
         }
         if (qtKey == Qt::Key_I) {
             m_toolMovesIn = !m_toolMovesIn;
@@ -687,17 +889,25 @@ private:
             return true;
         }
         const QString text = event->text();
-        const bool numeric = text.size() == 1 && (text.at(0).isDigit() || text.at(0) == '.');
+        const bool numeric
+            = text.size() == 1 && (text.at(0).isDigit() || text.at(0) == '.' || text.at(0) == '=');
         if (watched == m_list && numeric) {
             // Typing a number while choosing from the list: a custom angle
             m_list->setCurrentRow(customRow());
-            m_edit->clear();
+            if (text == "=") {
+                m_edit->selectAll(); // (so p, in a sum, is the angle shown)
+            } else {
+                m_edit->clear();
+            }
             m_edit->setFocus();
             m_edit->insert(text);
             refresh();
             return true;
         }
         if (watched == m_edit && (qtKey == Qt::Key_Up || qtKey == Qt::Key_Down)) {
+            if (m_field->resolve() == ExpressionField::Outcome::Invalid) {
+                return true; // (stays, showing what's wrong with the sum)
+            }
             // Back to the list
             m_list->setFocus();
             const int row = m_list->currentRow() + (qtKey == Qt::Key_Up ? -1 : 1);
@@ -714,6 +924,8 @@ private:
 
     QListWidget* m_list { nullptr };
     QLineEdit* m_edit { nullptr };
+    // (Owned by m_edit)
+    ExpressionField* m_field { nullptr };
     QLabel* m_direction { nullptr };
     TaperDiagram* m_diagram { nullptr };
     bool m_toolMovesIn;
@@ -1197,6 +1409,9 @@ public:
                                                vGrooves() ? "Infeed per pass" : "Step-over",
                                                "Starts",
                                                "Helix angle (°)" };
+        // (Shared by the rows' entries: added below the options)
+        m_calc = new QLabel(box);
+        m_calc->setFont(m_labelFont);
         for (int r = 0; r < ROW_COUNT; ++r) {
             Row& row = m_rows[r];
             row.name = addLabel(box, grid, r, 0, names[r], m_labelFont);
@@ -1214,8 +1429,15 @@ public:
                     : r == Starts                 ? R"(^[0-9]{0,3}$)"
                     : r == HelixAngle             ? R"(^[0-9]{0,2}(\.[0-9]*)?$)"
                                                   : R"(^[0-9]{0,4}(\.[0-9]*)?$)";
-                row.edit->setValidator(
-                    new QRegularExpressionValidator(QRegularExpression(pattern), row.edit));
+                const std::string unit = r == CutEnd ? m_info.cut.unit
+                    : r == Starts                    ? ""
+                    : r == HelixAngle                ? "deg"
+                                                     : m_info.feed.unit;
+                row.field = new ExpressionField(
+                    row.edit,
+                    pattern,
+                    calc::Context { .memory = m_info.calculatorMemory, .unit = unit },
+                    m_calc);
                 row.edit->installEventFilter(this);
                 grid->addWidget(row.edit, r, 2);
             }
@@ -1227,6 +1449,7 @@ public:
         m_options->setFont(m_labelFont);
         m_options->setStyleSheet(MP_LABEL_STYLE);
         layout->addWidget(m_options);
+        layout->addWidget(m_calc);
 
         m_message = new QLabel(box);
         m_message->setFont(m_labelFont);
@@ -1265,31 +1488,30 @@ public:
         setValue(m_rows[Starts].edit, m_knurlStarts, 0);
         setValue(m_rows[HelixAngle].edit, m_knurlHelixAngleDeg, 1);
 
-        QObject::connect(m_rows[CutEnd].edit, &QLineEdit::textEdited, this, [this] {
+        m_rows[CutEnd].field->onValueEdited([this] {
             const auto v = typed(m_rows[CutEnd].edit);
             m_cutDistanceTyped = v.has_value();
             m_cutDistanceMm = v.value_or(0.0) / m_info.cut.displayPerMm;
             refresh();
         });
-        QObject::connect(m_rows[FeedEnd].edit, &QLineEdit::textEdited, this, [this] {
+        m_rows[FeedEnd].field->onValueEdited([this] {
             m_infeedMm = typed(m_rows[FeedEnd].edit).value_or(0.0) / m_info.feed.displayPerMm;
             m_diameterError.clear();
             refresh();
         });
-        QObject::connect(
-            m_rows[Diameter].edit, &QLineEdit::textEdited, this, [this] { diameterTyped(); });
-        QObject::connect(m_rows[StepOver].edit, &QLineEdit::textEdited, this, [this] {
+        m_rows[Diameter].field->onValueEdited([this] { diameterTyped(); });
+        m_rows[StepOver].field->onValueEdited([this] {
             m_feedPerPassMm = typed(m_rows[StepOver].edit).value_or(0.0) / m_info.feed.displayPerMm;
             refresh();
         });
         // (Typed in, each is kept; cleared, it's suggested again)
-        QObject::connect(m_rows[Starts].edit, &QLineEdit::textEdited, this, [this] {
+        m_rows[Starts].field->onValueEdited([this] {
             const auto v = typed(m_rows[Starts].edit);
             m_setup.knurlStartsChosen = v.has_value();
             m_knurlStarts = static_cast<int>(v.value_or(0.0));
             refresh();
         });
-        QObject::connect(m_rows[HelixAngle].edit, &QLineEdit::textEdited, this, [this] {
+        m_rows[HelixAngle].field->onValueEdited([this] {
             const auto v = typed(m_rows[HelixAngle].edit);
             m_setup.knurlHelixAngleChosen = v.has_value();
             m_knurlHelixAngleDeg = v.value_or(0.0);
@@ -1368,6 +1590,8 @@ private:
         QLabel* source { nullptr };
         // The value typed in (for a distance), or shown in its place
         QLineEdit* edit { nullptr };
+        // Its calculator (owned by edit)
+        ExpressionField* field { nullptr };
         QLabel* fixed { nullptr };
         // The position it comes to
         QLabel* result { nullptr };
@@ -1906,19 +2130,28 @@ private:
     bool handleKey(QObject* /*watched*/, QKeyEvent* event)
     {
         const int qtKey = event->key();
+        ExpressionField* field = m_rows[m_current].field;
         if (qtKey == Qt::Key_Escape) {
             reject();
             return true;
         }
         if (qtKey == Qt::Key_Return || qtKey == Qt::Key_Enter) {
-            if (resolved().error.empty()) {
+            // (A sum's value is put in first, to be seen before it's used)
+            if ((!field || field->resolve() == ExpressionField::Outcome::Number)
+                && resolved().error.empty()) {
                 accept();
             }
             return true; // (not accepted unless it can be used)
         }
         if (qtKey == Qt::Key_Up || qtKey == Qt::Key_Down) {
+            if (field && field->resolve() == ExpressionField::Outcome::Invalid) {
+                return true; // (stays, showing what's wrong with the sum)
+            }
             moveRow(qtKey == Qt::Key_Up ? -1 : 1);
             return true;
+        }
+        if (field && field->active()) {
+            return false; // (typing a sum: letters, and Left and Right, are the entry's)
         }
         if ((qtKey == Qt::Key_Left || qtKey == Qt::Key_Right) && sourceOf(m_current)) {
             cycleSource(qtKey == Qt::Key_Left ? -1 : 1);
@@ -1954,9 +2187,9 @@ private:
             return true;
         }
         const QString text = event->text();
-        // (Only the cut axis's distance can be negative)
+        // (Only the cut axis's distance can be negative. = starts a sum)
         const bool numeric = text.size() == 1
-            && (text.at(0).isDigit() || text.at(0) == '.'
+            && (text.at(0).isDigit() || text.at(0) == '.' || text.at(0) == '='
                 || (text.at(0) == '-' && m_current == CutEnd));
         if (numeric && (m_current == CutEnd || m_current == FeedEnd) && !rowTyped(m_current)) {
             // Typing a number where a memory slot was chosen: a distance instead
@@ -1995,6 +2228,8 @@ private:
     QFont m_labelFont;
     QLabel* m_options { nullptr };
     QLabel* m_message { nullptr };
+    // A sum's value, or what's wrong with it (see ExpressionField)
+    QLabel* m_calc { nullptr };
 };
 
 class GearDialog final : public QDialog {
@@ -2041,6 +2276,9 @@ public:
         const std::string& x = m_info.cut.label;
         const std::string names[ROW_COUNT]
             = { "Module", "Teeth", x + " start", x + " end", "Depth", "Depth per pass" };
+        // (Shared by the rows' entries: added below the grid)
+        m_calc = new QLabel(box);
+        m_calc->setFont(labelFont);
         for (int r = 0; r < ROW_COUNT; ++r) {
             Row& row = m_rows[r];
             row.name = addLabel(box, grid, r, 0, names[r], labelFont);
@@ -2056,14 +2294,21 @@ public:
                 const char* pattern = r == CutEnd ? R"(^-?[0-9]{0,4}(\.[0-9]*)?$)"
                     : r == Teeth                  ? R"(^[0-9]{0,3}$)"
                                                   : R"(^[0-9]{0,2}(\.[0-9]*)?$)";
-                row.edit->setValidator(
-                    new QRegularExpressionValidator(QRegularExpression(pattern), row.edit));
+                // (The module is a number, in mm whatever the display units,
+                // so it isn't given in or mm)
+                const std::string unit = r == Module || r == Teeth ? "" : m_info.cut.unit;
+                row.field = new ExpressionField(
+                    row.edit,
+                    pattern,
+                    calc::Context { .memory = m_info.calculatorMemory, .unit = unit },
+                    m_calc);
                 row.edit->installEventFilter(this);
                 grid->addWidget(row.edit, r, 2);
             }
         }
         grid->setColumnStretch(3, 1);
 
+        layout->addWidget(m_calc);
         m_message = new QLabel(box);
         m_message->setFont(labelFont);
         layout->addWidget(m_message);
@@ -2095,7 +2340,7 @@ public:
         setValue(m_rows[Depth].edit, m_setup.depth * m_info.cut.displayPerMm, 3);
         setValue(m_rows[DepthPerPass].edit, m_setup.depthPerPass * m_info.cut.displayPerMm, 3);
 
-        QObject::connect(m_rows[Module].edit, &QLineEdit::textEdited, this, [this] {
+        m_rows[Module].field->onValueEdited([this] {
             m_setup.module = typed(m_rows[Module].edit).value_or(0.0);
             if (!m_depthTyped) {
                 m_setup.depth = gearWholeDepthMm(m_setup.module);
@@ -2104,22 +2349,22 @@ public:
             }
             refresh();
         });
-        QObject::connect(m_rows[Teeth].edit, &QLineEdit::textEdited, this, [this] {
+        m_rows[Teeth].field->onValueEdited([this] {
             m_setup.teeth = static_cast<int>(typed(m_rows[Teeth].edit).value_or(0.0));
             refresh();
         });
-        QObject::connect(m_rows[CutEnd].edit, &QLineEdit::textEdited, this, [this] {
+        m_rows[CutEnd].field->onValueEdited([this] {
             const auto v = typed(m_rows[CutEnd].edit);
             m_cutDistanceTyped = v.has_value();
             m_setup.cutDistance = v.value_or(0.0) / m_info.cut.displayPerMm;
             refresh();
         });
-        QObject::connect(m_rows[Depth].edit, &QLineEdit::textEdited, this, [this] {
+        m_rows[Depth].field->onValueEdited([this] {
             m_setup.depth = typed(m_rows[Depth].edit).value_or(0.0) / m_info.cut.displayPerMm;
             m_depthTyped = true;
             refresh();
         });
-        QObject::connect(m_rows[DepthPerPass].edit, &QLineEdit::textEdited, this, [this] {
+        m_rows[DepthPerPass].field->onValueEdited([this] {
             m_setup.depthPerPass
                 = typed(m_rows[DepthPerPass].edit).value_or(0.0) / m_info.cut.displayPerMm;
             refresh();
@@ -2176,6 +2421,8 @@ private:
         QLabel* source { nullptr };
         // The value typed in, or shown in its place (a position from a slot)
         QLineEdit* edit { nullptr };
+        // Its calculator (owned by edit)
+        ExpressionField* field { nullptr };
         QLabel* fixed { nullptr };
         // What it comes to
         QLabel* result { nullptr };
@@ -2386,30 +2633,40 @@ private:
     bool handleKey(QKeyEvent* event)
     {
         const int qtKey = event->key();
+        ExpressionField* field = m_rows[m_current].field;
         if (qtKey == Qt::Key_Escape) {
             reject();
             return true;
         }
         if (qtKey == Qt::Key_Return || qtKey == Qt::Key_Enter) {
-            if (resolved().error.empty()) {
+            // (A sum's value is put in first, to be seen before it's used)
+            if ((!field || field->resolve() == ExpressionField::Outcome::Number)
+                && resolved().error.empty()) {
                 accept();
             }
             return true; // (not accepted unless it can be used)
         }
         if (qtKey == Qt::Key_Up || qtKey == Qt::Key_Down) {
+            if (field && field->resolve() == ExpressionField::Outcome::Invalid) {
+                return true; // (stays, showing what's wrong with the sum)
+            }
             const int row = m_current + (qtKey == Qt::Key_Up ? -1 : 1);
             if (row >= 0 && row < ROW_COUNT) {
                 setCurrentRow(row);
             }
             return true;
         }
+        if (field && field->active()) {
+            return false; // (typing a sum: letters, and Left and Right, are the entry's)
+        }
         if ((qtKey == Qt::Key_Left || qtKey == Qt::Key_Right) && sourceOf(m_current)) {
             cycleSource(qtKey == Qt::Key_Left ? -1 : 1);
             return true;
         }
         const QString text = event->text();
+        // (= starts a sum)
         const bool numeric = text.size() == 1
-            && (text.at(0).isDigit() || text.at(0) == '.'
+            && (text.at(0).isDigit() || text.at(0) == '.' || text.at(0) == '='
                 || (text.at(0) == '-' && m_current == CutEnd));
         if (numeric && m_current == CutEnd && !rowTyped(m_current)) {
             // Typing a number where a memory slot was chosen: a distance instead
@@ -2436,6 +2693,8 @@ private:
     Row m_rows[ROW_COUNT];
     int m_current { Module };
     QLabel* m_message { nullptr };
+    // A sum's value, or what's wrong with it (see ExpressionField)
+    QLabel* m_calc { nullptr };
 };
 
 // ---------------------------------------------------------------------------
@@ -2504,6 +2763,9 @@ public:
                                          shoulder ? "Fillet radius" : "Radius",
                                          "Depth per pass",
                                          "Tool nose radius" };
+        // (Shared by the rows' entries: added below the grid)
+        m_calc = new QLabel(box);
+        m_calc->setFont(labelFont);
         for (std::size_t n = 0; n < m_order.size(); ++n) {
             const int r = static_cast<int>(n);
             Row& row = m_rows[m_order[n]];
@@ -2514,8 +2776,14 @@ public:
             row.edit->setFont(valueFont);
             row.edit->setStyleSheet(MP_EDIT_STYLE);
             row.edit->setFixedWidth(120);
-            row.edit->setValidator(new QRegularExpressionValidator(
-                QRegularExpression(R"(^[0-9]{0,3}(\.[0-9]*)?$)"), row.edit));
+            // (The length to the shoulder is along Z, in Z's units)
+            row.field = new ExpressionField(
+                row.edit,
+                R"(^[0-9]{0,3}(\.[0-9]*)?$)",
+                calc::Context { .memory = m_info.calculatorMemory,
+                                .unit = m_order[n] == ShoulderLength ? m_info.cut.unit
+                                                                     : m_info.feed.unit },
+                m_calc);
             row.edit->installEventFilter(this);
             grid->addWidget(row.edit, r, 1);
             row.result = new QLabel(box);
@@ -2525,6 +2793,7 @@ public:
         }
         grid->setColumnStretch(2, 1);
 
+        layout->addWidget(m_calc);
         m_message = new QLabel(box);
         m_message->setFont(labelFont);
         layout->addWidget(m_message);
@@ -2555,7 +2824,7 @@ public:
         for (const RowId r : m_order) {
             // (The nose radius may be 0, a sharp tool)
             setValue(r, value(r), r == Nose);
-            QObject::connect(m_rows[r].edit, &QLineEdit::textEdited, this, [this, r] {
+            m_rows[r].field->onValueEdited([this, r] {
                 // (The length to the shoulder is along Z, in Z's units)
                 const double perMm
                     = r == ShoulderLength ? m_info.cut.displayPerMm : m_info.feed.displayPerMm;
@@ -2617,6 +2886,8 @@ private:
     struct Row {
         QLabel* name { nullptr };
         QLineEdit* edit { nullptr };
+        // Its calculator (owned by edit)
+        ExpressionField* field { nullptr };
         // What it comes to
         QLabel* result { nullptr };
     };
@@ -2734,18 +3005,27 @@ private:
             reject();
             return true;
         }
+        ExpressionField* field = m_rows[m_order[m_current]].field;
         if (qtKey == Qt::Key_Return || qtKey == Qt::Key_Enter) {
-            if (planRadius(m_setup, m_info.work).error.empty()) {
+            // (A sum's value is put in first, to be seen before it's used)
+            if (field->resolve() == ExpressionField::Outcome::Number
+                && planRadius(m_setup, m_info.work).error.empty()) {
                 accept();
             }
             return true; // (not accepted unless it can be used)
         }
         if (qtKey == Qt::Key_Up || qtKey == Qt::Key_Down) {
+            if (field->resolve() == ExpressionField::Outcome::Invalid) {
+                return true; // (stays, showing what's wrong with the sum)
+            }
             const int row = m_current + (qtKey == Qt::Key_Up ? -1 : 1);
             if (row >= 0 && row < static_cast<int>(m_order.size())) {
                 setCurrentRow(row);
             }
             return true;
+        }
+        if (field->active()) {
+            return false; // (typing a sum: letters are the entry's)
         }
         const QString text = event->text();
         if (text.size() == 1 && text.at(0).isLetter()) {
@@ -2762,6 +3042,8 @@ private:
     // (An index into m_order)
     int m_current { 0 };
     QLabel* m_message { nullptr };
+    // A sum's value, or what's wrong with it (see ExpressionField)
+    QLabel* m_calc { nullptr };
 };
 
 } // end anonymous namespace
@@ -2819,13 +3101,21 @@ QDialog* openInput(
     std::vector<std::string> additionalText,
     std::string_view defaultEntry,
     std::optional<std::vector<std::string>> listItems,
+    calc::Context calculator,
     std::function<void(const Input::Return&)> onDone)
 {
     // As before, these are designed to be called from more specialised
     // wrappers in the controller, which never supply both
     assert(additionalText.empty() || !listItems.has_value());
     auto* dlg = new InputDialog(
-        parent, fontFamily, type, prompt, std::move(additionalText), defaultEntry, listItems);
+        parent,
+        fontFamily,
+        type,
+        prompt,
+        std::move(additionalText),
+        defaultEntry,
+        listItems,
+        std::move(calculator));
     // (Deleted once closed, after finished() has been emitted)
     dlg->setAttribute(Qt::WA_DeleteOnClose);
     QObject::connect(dlg, &QDialog::finished, dlg, [dlg, onDone = std::move(onDone)](int) {

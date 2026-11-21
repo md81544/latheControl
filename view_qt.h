@@ -33,7 +33,8 @@ public:
         std::vector<std::string> additionalText,
         std::function<void(const Input::Return&)> onDone,
         std::string_view defaultEntry = "",
-        std::optional<std::vector<std::string>> listItems = std::nullopt) override;
+        std::optional<std::vector<std::string>> listItems = std::nullopt,
+        calc::Context calculator = {}) override;
     void openTaperDialog(double currentAngle, std::function<void(std::optional<double>)> onDone)
         override;
     void openThreadDialog(

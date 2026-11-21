@@ -1,5 +1,6 @@
 #pragma once
 
+#include "calculator.h"
 #include "model.h"
 #include <chrono>
 #include <functional>
@@ -85,6 +86,8 @@ struct MultiPassDialogInfo {
         double minimumInfeedMm { 0.02 };
     };
     std::optional<Knurling> knurling;
+    // The memory slots, for the calculator in the entries (see calculator.h)
+    calc::Memory calculatorMemory;
 };
 
 // What the gear dialog needs to know (see IView::openGearDialog())
@@ -98,6 +101,8 @@ struct GearDialogInfo {
     MultiPassPositions positions;
     // The setup to start with
     GearSetup setup;
+    // The memory slots, for the calculator in the entries (see calculator.h)
+    calc::Memory calculatorMemory;
 };
 
 // What the radius dialog needs to know (see IView::openRadiusDialog())
@@ -109,6 +114,8 @@ struct RadiusDialogInfo {
     RadiusWork work;
     // The setup to start with
     RadiusSetup setup;
+    // The memory slots, for the calculator in the entries (see calculator.h)
+    calc::Memory calculatorMemory;
 };
 
 class IView {
@@ -133,13 +140,17 @@ public:
     // then "Hello" is displayed and an option (say) can be checked
     // or acted upon by the user pressing a modifier (e.g. Alt) and H
     // (in this example).
+    // A numeric entry also takes a sum, typed after "=" (see calculator.h),
+    // which may use what's in calculator (the memory slots, and the entry's
+    // units; its previous value is the entry's own)
     virtual void openInput(
         Input::Type type,
         std::string_view prompt,
         std::vector<std::string> additionalText,
         std::function<void(const Input::Return&)> onDone,
         std::string_view defaultEntry = "",
-        std::optional<std::vector<std::string>> listItems = std::nullopt) = 0;
+        std::optional<std::vector<std::string>> listItems = std::nullopt,
+        calc::Context calculator = {}) = 0;
     // The taper mode dialog (also without waiting): onDone gets the taper
     // angle chosen (negative if the piece gets wider towards the chuck), or
     // nullopt if cancelled
