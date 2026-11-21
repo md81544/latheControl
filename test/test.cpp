@@ -8423,7 +8423,7 @@ TEST_CASE("Calculator: sums typed after = in a numeric entry")
         REQUIRE(value("=P-0.05") == Approx(9.95));
         REQUIRE(value("=2*pi") == Approx(6.283185));
         mm.previous = std::nullopt;
-        REQUIRE(error("=p/2") == "There's no previous value for p");
+        REQUIRE(error("=p/2") == "p has no value here");
     }
     SECTION("Memory slots")
     {
@@ -8438,6 +8438,13 @@ TEST_CASE("Calculator: sums typed after = in a numeric entry")
         REQUIRE(value("=(1+1/8)in") == Approx(28.575));
         REQUIRE(value("=1in+2mm") == Approx(27.4));
         REQUIRE(value("=-1in") == Approx(-25.4));
+        REQUIRE(value("=m1x+1/8in") == Approx(4.5 + 3.175));
+        REQUIRE(value("=2*3/8in") == Approx(19.05));
+        // " is inches too
+        REQUIRE(value("=3/8\"") == Approx(9.525));
+        REQUIRE(value("=(1+1/8)\"+2mm") == Approx(30.575));
+        REQUIRE(value("=M1X+1\"") == Approx(29.9));
+        REQUIRE(error("=\"") == "\" goes after a number");
         REQUIRE(error("=p in") == "Spaces can't be used");
         REQUIRE(error("=in") == "in goes after a number");
     }
@@ -8446,6 +8453,7 @@ TEST_CASE("Calculator: sums typed after = in a numeric entry")
         mm.unit = "in";
         REQUIRE(value("=1/8in") == Approx(0.125));
         REQUIRE(value("=25.4mm") == Approx(1.0));
+        REQUIRE(value("=1/8\"") == Approx(0.125));
     }
     SECTION("Not in an entry which isn't a length")
     {
@@ -8453,6 +8461,7 @@ TEST_CASE("Calculator: sums typed after = in a numeric entry")
         REQUIRE(error("=1in") == "This isn't a length, so in can't be used");
         mm.unit = "";
         REQUIRE(error("=1mm") == "This isn't a length, so mm can't be used");
+        REQUIRE(error("=1\"") == "This isn't a length, so \" can't be used");
         REQUIRE(value("=360/7") == Approx(51.428571));
     }
     SECTION("Mistakes")

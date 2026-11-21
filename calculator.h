@@ -19,9 +19,9 @@ namespace calc {
 // - pi
 // - m1x and so on: a memory slot's value on an axis, as displayed (slot 1 to
 //   6, then the axis's label, e.g. m2z)
-// - in and mm after a number, a product or brackets (e.g. =3/8in, which is
-//   three eighths of an inch, or =(1+1/8)in), converted to the entry's own
-//   units. Only in entries which are lengths
+// - in (or ") and mm after a number, a product or brackets (e.g. =3/8in or
+//   =3/8", which is three eighths of an inch, or =(1+1/8)in), converted to
+//   the entry's own units. Only in entries which are lengths
 // Letters may be upper or lower case. Spaces aren't allowed: Space is kept for
 // stopping everything.
 
@@ -32,8 +32,14 @@ using Memory = std::map<std::string, std::optional<double>>;
 
 // What an expression may refer to
 struct Context {
-    // The value in the entry before the expression was typed (p), if any
+    // p's value, if it has one: the value in the entry before the
+    // expression was typed, or (see previousFixed) e.g. an axis's position
     std::optional<double> previous;
+    // Whether previous is fixed by whoever opens the entry (e.g. the axis's
+    // position, in a go-to), rather than being the entry's value before the
+    // expression (which the entry fills in). If it's fixed and nullopt, p
+    // can't be used (e.g. a manual axis without a reading)
+    bool previousFixed { false };
     Memory memory;
     // The entry's units: "mm" or "in" let the in and mm suffixes be used;
     // anything else (e.g. "deg", or "" for a count) doesn't

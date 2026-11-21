@@ -916,9 +916,9 @@ void Controller::processKey(int t)
                     const std::string axisName = m_model->axisLabel(1);
                     getNumericInput(
                         "Go to " + axisName + " absolute position" + unitsSuffix(1),
-                        { "Specify a value" },
+                        { "Specify a value", pHint(1) },
                         0.0,
-                        m_model->axisUnitName(1),
+                        positionCalculator(1),
                         [this](const NumericInputReturn& rc) {
                             if (!rc.cancelled) {
                                 m_model->goToPosition(1, m_model->fromDisplayUnits(1, rc.value));
@@ -932,9 +932,9 @@ void Controller::processKey(int t)
                     const std::string axisName = m_model->axisLabel(2);
                     getNumericInput(
                         "Go to " + axisName + " absolute position" + unitsSuffix(2),
-                        { "Specify a value" },
+                        { "Specify a value", pHint(2) },
                         0.0,
-                        m_model->axisUnitName(2),
+                        positionCalculator(2),
                         [this](const NumericInputReturn& rc) {
                             if (!rc.cancelled) {
                                 m_model->goToPosition(2, m_model->fromDisplayUnits(2, rc.value));
@@ -951,7 +951,7 @@ void Controller::processKey(int t)
                         "Go to " + axisName + " relative position" + unitsSuffix(1),
                         { "Specify a RELATIVE offset value" },
                         0.0,
-                        m_model->axisUnitName(1),
+                        calc::Context { .unit = m_model->axisUnitName(1) },
                         [this](const NumericInputReturn& rc) {
                             if (!rc.cancelled) {
                                 m_model->goToOffset(1, m_model->fromDisplayUnits(1, rc.value));
@@ -968,7 +968,7 @@ void Controller::processKey(int t)
                         "Go to " + axisName + " relative position" + unitsSuffix(2),
                         { "Specify a RELATIVE offset value" },
                         0.0,
-                        m_model->axisUnitName(2),
+                        calc::Context { .unit = m_model->axisUnitName(2) },
                         [this](const NumericInputReturn& rc) {
                             if (!rc.cancelled) {
                                 m_model->goToOffset(2, m_model->fromDisplayUnits(2, rc.value));
@@ -1261,9 +1261,9 @@ void Controller::processKey(int t)
                     }
                     getNumericInput(
                         m_model->axisLabel(axisNumber) + " position set" + unitsSuffix(axisNumber),
-                        {},
+                        { pHint(axisNumber) },
                         0.0,
-                        m_model->axisUnitName(axisNumber),
+                        positionCalculator(axisNumber),
                         [this, axisNumber](const NumericInputReturn& result) {
                             if (!result.cancelled) {
                                 m_model->setPosition(
@@ -1305,9 +1305,9 @@ void Controller::processKey(int t)
                     const std::string axisName = m_model->axisLabel(1);
                     getNumericInput(
                         axisName + " position set" + unitsSuffix(1),
-                        { "[&A] adjust (keeps memory slots)" },
+                        { "[&A] adjust (keeps memory slots)", pHint(1) },
                         0.0,
-                        m_model->axisUnitName(1),
+                        positionCalculator(1),
                         [this, axisName](const NumericInputReturn& result) {
                             if (result.cancelled) {
                                 return;
@@ -1337,9 +1337,9 @@ void Controller::processKey(int t)
                     const std::string axisName = m_model->axisLabel(2);
                     getNumericInput(
                         axisName + " position set" + unitsSuffix(2),
-                        { "[&D] set as diameter", "[&A] adjusts (keeps memory slots)" },
+                        { "[&D] set as diameter", "[&A] adjusts (keeps memory slots)", pHint(2) },
                         0.0,
-                        m_model->axisUnitName(2),
+                        positionCalculator(2),
                         [this, axisName](const NumericInputReturn& result) {
                             if (result.cancelled) {
                                 return;
@@ -1380,7 +1380,7 @@ void Controller::processKey(int t)
                         "Enter " + axisName + " memory value" + unitsSuffix(1),
                         {},
                         0.0,
-                        m_model->axisUnitName(1),
+                        calc::Context { .unit = m_model->axisUnitName(1) },
                         [this](const NumericInputReturn& rc) {
                             if (!rc.cancelled) {
                                 m_model->storePosition(1, m_model->fromDisplayUnits(1, rc.value));
@@ -1396,7 +1396,7 @@ void Controller::processKey(int t)
                         "Enter " + axisName + " memory value" + unitsSuffix(2),
                         {},
                         0.0,
-                        m_model->axisUnitName(2),
+                        calc::Context { .unit = m_model->axisUnitName(2) },
                         [this](const NumericInputReturn& rc) {
                             if (!rc.cancelled) {
                                 m_model->storePosition(2, m_model->fromDisplayUnits(2, rc.value));
@@ -1598,11 +1598,12 @@ void Controller::getNumericInput(
     std::string_view prompt,
     std::vector<std::string> additionalText,
     double defaultEntry,
-    std::string unit,
+    calc::Context calculator,
     std::function<void(const NumericInputReturn&)> onDone)
 {
     // (As with all dialogs, stop all motors first)
     m_model->stopAllMotors();
+    calculator.memory = calculatorMemory();
     std::string defaultEntryAsString = std::to_string(defaultEntry);
     // Remove excess trailing zeros after decimal point (if it exists)
     if (defaultEntryAsString.contains(".")) {
@@ -1620,7 +1621,30 @@ void Controller::getNumericInput(
         },
         defaultEntryAsString,
         std::nullopt,
-        calc::Context { .memory = calculatorMemory(), .unit = std::move(unit) });
+        std::move(calculator));
+}
+
+std::string Controller::pHint(int axisNumber) const
+{
+    return "(In a sum, after =, p is where " + m_model->axisLabel(axisNumber) + " is now)";
+}
+
+calc::Context Controller::positionCalculator(int axisNumber) const
+{
+    // Where the axis is, as shown: axis 2's less any taper correction it's
+    // making, and a manual axis's only while it has a reading
+    std::optional<double> mm;
+    if (axisNumber == 1) {
+        mm = m_model->motorPosition(1);
+    } else if (axisNumber == 2) {
+        mm = m_model->getAxis2Position();
+    } else if (const ManualAxis* axis = m_model->manualAxis(axisNumber)) {
+        mm = axis->positionMm();
+    }
+    return calc::Context { .previous = mm ? std::optional(m_model->toDisplayUnits(axisNumber, *mm))
+                                          : std::nullopt,
+                           .previousFixed = true,
+                           .unit = m_model->axisUnitName(axisNumber) };
 }
 
 void Controller::listPicker(
@@ -1963,7 +1987,7 @@ void Controller::finishToolMeasurement()
                   fmt::format("Enter: store T{}, in use from now", number),
                   "Esc: discard the measurement" },
                 0.0,
-                "mm",
+                calc::Context { .unit = "mm" },
                 [this, description](const NumericInputReturn& radius) {
                     if (radius.cancelled) {
                         m_model->cancelToolMeasurement();
@@ -1995,7 +2019,7 @@ void Controller::describeCurrentTool()
                 fmt::format("T{}'s nose radius (mm)", tool.number),
                 { "0 for a sharp tool" },
                 tool.noseRadiusMm,
-                "mm",
+                calc::Context { .unit = "mm" },
                 [this, tool, description](const NumericInputReturn& radius) {
                     if (!radius.cancelled) {
                         m_model->editTool(tool.number, description, radius.value);

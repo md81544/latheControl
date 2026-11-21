@@ -38,10 +38,12 @@
     - No spaces, so Space can't end up typed into a sum.
     - lc.log records each sum and its value.
 - [ ] Try it at the machine.
-- [ ] Maybe: in the go-to and position set dialogs, `p` is 0 (their default
-      entry), so it isn't much use there. It could be the axis's current
-      position instead (e.g. `=p+1.5` in a go-to). Not done, as `p` was
-      agreed as "the value in the entry".
+- [x] In the go-to and position set dialogs, `p` was 0 (their default
+      entry), so it wasn't much use there. It's now where the axis is, as
+      shown (the user agreed, 21 Nov 2026). Not in the relative go-to (an
+      offset), nor the memory value entry. A manual axis without a reading
+      has no `p`, rather than `p` silently being 0.
+- [x] `"` is inches, as `in` is (the user's request, 21 Nov 2026).
 
 ### Re-base an axis from its scale by hand
 - [x] A command to line an axis's position up with its scale at any time

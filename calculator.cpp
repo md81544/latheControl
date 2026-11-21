@@ -18,7 +18,7 @@ namespace {
 //   product = signed [unit] { ("*" | "/") signed [unit] }
 //   signed  = ("-" | "+") signed | value
 //   value   = number | "(" sum ")" | name
-//   unit    = "in" | "mm"
+//   unit    = "in" | '"' | "mm"
 // A unit applies to the product so far, so 3/8in is three eighths of an inch
 // (not 3 divided by 8 inches), as it would be written
 class Parser {
@@ -80,6 +80,9 @@ private:
         }
         if (c == ')') {
             return "A ) has no ( before it";
+        }
+        if (c == '"') {
+            return "\" goes after a number";
         }
         if (isLetter(c) || isDigit(c) || c == '.' || c == '(') {
             // e.g. "2x3", "2(1+1)" or "p2": there's no implied multiply
@@ -184,7 +187,7 @@ private:
     {
         if (w == "p") {
             if (!m_context.previous) {
-                return std::unexpected("There's no previous value for p");
+                return std::unexpected("p has no value here");
             }
             return *m_context.previous;
         }
@@ -215,20 +218,25 @@ private:
         return std::unexpected(fmt::format("Unknown name: {}", w));
     }
 
-    // A product so far, followed by "in" or "mm" (or not)
+    // A product so far, followed by "in", '"' (also inches) or "mm" (or not)
     std::expected<double, std::string> withUnit(double v)
     {
-        if (!isLetter(peek())) {
-            return v;
-        }
-        const std::size_t start = m_pos;
-        const std::string w = word();
-        if (w != "in" && w != "mm") {
-            m_pos = start; // (e.g. "2x3": said in parse())
+        std::string w;
+        if (peek() == '"') {
+            ++m_pos;
+            w = "\"";
+        } else if (isLetter(peek())) {
+            const std::size_t start = m_pos;
+            w = word();
+            if (w != "in" && w != "mm") {
+                m_pos = start; // (e.g. "2x3": said in parse())
+                return v;
+            }
+        } else {
             return v;
         }
         if (m_context.unit == "mm") {
-            return w == "in" ? v * MM_PER_INCH : v;
+            return w == "mm" ? v : v * MM_PER_INCH;
         }
         if (m_context.unit == "in") {
             return w == "mm" ? v / MM_PER_INCH : v;

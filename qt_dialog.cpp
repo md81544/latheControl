@@ -90,7 +90,7 @@ public:
     State validate(QString& input, int& pos) const override
     {
         if (input.startsWith('=')) {
-            static const QRegularExpression sum(R"(^=[0-9A-Za-z.+\-*/()]*$)");
+            static const QRegularExpression sum(R"re(^=[0-9A-Za-z.+\-*/()"]*$)re");
             return sum.match(input).hasMatch() ? Intermediate : Invalid;
         }
         return m_number.validate(input, pos);
@@ -186,10 +186,10 @@ public:
     }
 
 private:
-    // The value in the entry before the sum, for p
+    // The value in the entry before the sum, for p (unless p is fixed)
     void notePrevious(const QString& text)
     {
-        if (calc::isExpression(text.toStdString())) {
+        if (m_context.previousFixed || calc::isExpression(text.toStdString())) {
             return;
         }
         bool ok = false;

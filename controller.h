@@ -98,14 +98,20 @@ private:
     // Wrappers for the view's dialogs, which don't wait: onDone is called
     // with the result when the user closes the dialog. (Until then, the
     // controller's ticks carry on.) All motors are stopped first
-    // unit is the value's, as typed (e.g. "mm", "in", "deg"): for the
-    // calculator's in and mm (see calculator.h)
+    // calculator is for sums typed in the entry (see calculator.h): at least
+    // its unit, the value's as typed (e.g. "mm", "in", "deg"), for in and mm.
+    // The memory slots are filled in here
     void getNumericInput(
         std::string_view prompt,
         std::vector<std::string> additionalText,
         double defaultEntry,
-        std::string unit,
+        calc::Context calculator,
         std::function<void(const NumericInputReturn&)> onDone);
+    // For a go-to or setting a position: in a sum, p is where the axis is
+    // now, as shown (rather than the entry's 0)
+    calc::Context positionCalculator(int axisNumber) const;
+    // A line for those dialogs, saying so
+    std::string pHint(int axisNumber) const;
     void listPicker(
         std::string_view prompt,
         std::vector<std::string> listItems,

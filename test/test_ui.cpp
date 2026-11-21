@@ -460,6 +460,18 @@ TEST_CASE("UI: numeric dialog, with a sum typed after =")
         REQUIRE(!rc.cancelled);
         REQUIRE(rc.number == Approx(9.525));
     }
+    SECTION("\" is inches, as in is")
+    {
+        whenDialogShows([](QWidget* dialog) {
+            QTest::keyClicks(inputWidget(dialog), "=1/8\"");
+            REQUIRE(lineEdit(dialog)->text() == "=1/8\"");
+            QTest::keyClick(inputWidget(dialog), Qt::Key_Return);
+            QTest::keyClick(inputWidget(dialog), Qt::Key_Return);
+        });
+        const auto rc = getInput(
+            view, mgo::Input::Type::Numeric, "Position", {}, "0", std::nullopt, calculator);
+        REQUIRE(rc.number == Approx(3.175));
+    }
     SECTION("p is the value shown before, which typing = replaced")
     {
         whenDialogShows([](QWidget* dialog) {
@@ -635,22 +647,34 @@ TEST_CASE("UI: Z go-to through the controller")
     REQUIRE(tm.model.motorPosition(1) == Approx(5.0).margin(0.001));
 }
 
-TEST_CASE("UI: a go-to with a sum using a memory slot, through the controller")
+TEST_CASE("UI: a go-to with a sum, through the controller")
 {
-    // Mem 1's Z is 3, so =m1z+2 goes to 5
+    // Mem 1's Z is 3, so =m1z+2 goes to 5. Or, with Z at 3, p is 3 (where Z
+    // is), not the entry's 0
     TestModel tm;
     mgo::Controller controller(&tm.model);
     tm.model.setMotorSpeed(1, 1'000.0);
-    tm.model.storePosition(1, 3.0);
+    std::string sum;
+    SECTION("A memory slot")
+    {
+        tm.model.storePosition(1, 3.0);
+        sum = "=M1Z+2";
+    }
+    SECTION("p, where the axis is")
+    {
+        tm.model.setPosition(1, 3.0);
+        sum = "=p+2";
+    }
     QWidget* w = mainWindow();
     REQUIRE(w);
 
     QTest::keyClick(w, Qt::Key_Z);
     controller.processKeyPress();
     bool dialogShown = false;
-    whenDialogShows([&dialogShown](QWidget* dialog) {
+    whenDialogShows([&dialogShown, sum](QWidget* dialog) {
         dialogShown = true;
-        QTest::keyClicks(inputWidget(dialog), "=M1Z+2");
+        REQUIRE(labelStartingWith(dialog, "(In a sum, after =, p is where Z is now)") != "");
+        QTest::keyClicks(inputWidget(dialog), QString::fromStdString(sum));
         QTest::keyClick(inputWidget(dialog), Qt::Key_Return);
         REQUIRE(lineEdit(dialog)->text() == "5");
         QTest::keyClick(inputWidget(dialog), Qt::Key_Return);
