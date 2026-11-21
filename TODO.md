@@ -1,22 +1,201 @@
 # TODO
 
-## Uncategorised
-    - Edge finding
-        - Given a suitably insulated block of known dimensions connected
-          to a limit switch pin, with the tool (or ground accurate bar of known
-          width) connected to GND, a function which creeps along an axis until
-          the limit switch is closed would act as an edge finder -  the program
-          could then determine the edge's location given the tool's (or bar's)
-          diameter and the known width of the block. 
+Two parts. **Outstanding** is what's still to do, one or two lines each,
+with a link (→) to its notes where there's history. **Notes** is the
+design log: what was tried on the machines, what was decided and why.
+When an item is done it leaves the list, and what was done goes in its
+notes.
 
-## User interface
+## Outstanding
 
-### Add a "go to end"
-    - If a feature is defined, and zEnd is present, maybe pressing Z,G,E
-      could go to the end?
+### To try on the machine
 
-### A calculator in numeric entries
-- [x] The user's idea (21 Nov 2026, reaching for a calculator at the lathe):
+#### Either machine
+- The calculator in numeric entries (`=` sums, `p`, `in`, `"`).
+  → [Calculator in numeric entries](#calculator-in-numeric-entries)
+- `F9` clearing a warning (and the menu open meanwhile).
+  → [An array of axes](#an-array-of-axes)
+- An axis locked in software refuses every move, saying "Unlock X first".
+  → [Internal threading and saddle rigidity](#internal-threading-and-saddle-rigidity)
+- Keys held back during a nudge (and Space stopping one); closing the
+  window with a dialog open. → [Controller on the event loop](#controller-on-the-event-loop)
+- At start-up each axis moves by its backlash, and the first move after
+  starting is right. → [Using the mill scales](#using-the-mill-scales)
+- A fresh lc.log each session (lc.log.previous kept).
+  → [A fresh log each session](#a-fresh-log-each-session)
+
+#### Lathe
+- Fit the Z scale (through the level shifter), then check its sign, 200
+  counts per mm and settle time, before turning on its re-base and checks.
+  → [The lathe Z scale](#the-lathe-z-scale)
+- The auto-retract toggle in the menu. → [Auto-retract from the menu](#auto-retract-from-the-menu)
+- Retracting only on the last 2 passes. → [Retracting only on the last passes](#retracting-only-on-the-last-passes)
+- A female thread from the thread dialog; and whether 0.25 mm of retract
+  clearance clears an internal thread's burr.
+  → [Thread pitches file](#thread-pitches-file), [Retracting by a safe amount](#retracting-by-a-safe-amount)
+- A taper's X backlash take-up direction, with a dial indicator (it may
+  explain `TaperCorrection`'s shortfall). → [Radius mode](#radius-mode)
+- Radius mode's full ball end. → [Radius mode](#radius-mode)
+- A filleted shoulder with a nose radius typed in (the last pass's move up
+  the face). → [Filleted shoulder](#filleted-shoulder)
+- Knurling: the spindle direction taken over a tenth of a second, and
+  starts cut in whichever order comes round first. → [Cut knurling](#cut-knurling)
+- The unknown tool (`T?`) and changing back to a tool in the library.
+  → [Tool library](#tool-library)
+
+#### Mill
+- `XB` (re-base by hand), at rest and with a multi-pass paused.
+  → [Re-basing an axis by hand](#re-basing-an-axis-by-hand)
+- Re-basing between passes in a run without pauses; the "waiting for X's
+  scale" box. → [Multi-pass drift on the mill](#multi-pass-drift-on-the-mill)
+- After a multi-pass finishes, X isn't re-based at rest until the mode is
+  left: check that's acceptable. → [Multi-pass drift on the mill](#multi-pass-drift-on-the-mill)
+- The 0.35 mm approach: no more "went past its target" warnings, and
+  whether the dwell before a real cut's end leaves a mark.
+  → [An array of axes](#an-array-of-axes)
+- `W` turns A the same way as Up. → [An array of axes](#an-array-of-axes)
+- Memory slots on Y and Z, and going to them by hand; halving (`YH`)
+  since the leader-key fix. → [An array of axes](#an-array-of-axes)
+- Gear cutting: the first tooth lands with the others (A's backlash and
+  the 1° back-off), indexing at full speed with the blank on, and whether
+  dragging the cutter back marks the slot.
+  → [Gear cutting and stepperControl](#gear-cutting-and-steppercontrol)
+- The scale's checks while moving: if they keep holding at 3 mm, bring
+  both limits down (to 2, say). → [X stalls near the ends of the table](#x-stalls-near-the-ends-of-the-table)
+- Keep watching for lock-ups on the Pi 4 over longer runs (a serial
+  console on GPIO 14/15 if one comes back). → [Using the mill scales](#using-the-mill-scales)
+- Creep at rest (2 counts every few minutes): real, or the scale? Watch
+  with a dial gauge. → [The lathe Z scale](#the-lathe-z-scale)
+- Optional: survey the lead screw's error along the table (a slow move end
+  to end, the scale's difference every 10 mm). → [An array of axes](#an-array-of-axes)
+
+### User interface
+- A tap on Meta opens the menu, as Tab does; F1 becomes a small help
+  pop-up for where you are (aides-memoire, not the manual).
+- Go to the feature's end (e.g. `ZGE`), once the feature has an end along
+  Z (see Work geometry below).
+- Proper menus and dialogs now Qt allows them; richer dialogs with several
+  inputs, like the taper dialog.
+- A more modular display: elements in definable boxes, so the layout is
+  easier to change.
+- Use the keys on the right (#, Home, PgUp, PgDn, End)? Home could go back
+  to the feature's end Z or diameter.
+- With a larger screen: touchscreen support, and dialogs that scale with
+  the main display.
+- Esc ends a multi-pass without asking (pressed by instinct on the mill to
+  clear a warning): ask first? → [An array of axes](#an-array-of-axes)
+- A sound when a manual axis's go-to arrives. → [An array of axes](#an-array-of-axes)
+- Rename the `f2*` key codes (e.g. `cmd::threading`), as no `F2` key leads
+  to them now. → [Dropping the F2 leader key](#dropping-the-f2-leader-key)
+
+### Multi-pass
+- **Slot and face/pocket modes for the mill**, then turn the generic
+  multi-pass off in lc_mill.cfg. Needs stage 3 of the array of axes (the
+  multi-pass dialog using the manual axes' slots).
+  → [Slot and face or pocket modes](#slot-and-face-or-pocket-modes)
+- Repeat a cut along a single line (Mem 1 and Mem 2 with the same X give
+  one pass now), e.g. for a slot, until cancelled.
+- `R` and `ThreadingAutoRetract` retract just clear of the feature's
+  surface when one is set. → [Retracting by a safe amount](#retracting-by-a-safe-amount)
+- Internal threads: cut the far wall with the spindle in reverse (DTI push
+  test on the saddle first). → [Internal threading and saddle rigidity](#internal-threading-and-saddle-rigidity)
+- Plain Z moves (not locked to the spindle) while paused between spring
+  passes. → [Threading passes](#threading-passes)
+- Multi-start threads in the threading passes dialog (the engine can do
+  them). → [Cut knurling](#cut-knurling)
+- Radii on the inside (a bore's mouth). → [Radius mode](#radius-mode)
+- On the mill, a Y feed per turn of A (e.g. a hexagon), as gear cutting
+  does for the depth. → [Generic multi-pass origins](#generic-multi-pass-origins)
+- Gear cutting: step back a tooth to re-cut it; a pause between teeth as a
+  dialog option. → [Gear cutting and stepperControl](#gear-cutting-and-steppercontrol)
+- Show how far X has moved since the first pass in other modes too, and
+  make the axis shown configurable (multi-pass mode does it already).
+
+### Motion and timing
+- X stalls near the mill table's ends: adjust the gibs; if that doesn't
+  cure it, a lower rapid speed for X.
+  → [X stalls near the ends of the table](#x-stalls-near-the-ends-of-the-table)
+- Rapids and returns use the maximum rpm as mm/min: fix it, trying it on
+  the mill first (A would go five times faster).
+  → [Rapid speed units](#rapid-speed-units)
+- **Ask before the start-up backlash take-up**, with a take-up direction
+  per axis in the config. → [Start-up backlash take-up](#start-up-backlash-take-up)
+- Drive the motors' enable pins; an empty setting means no pin, so a
+  config left at `0` can't drive GPIO0. → [Enable pins](#enable-pins)
+- Driver alarms: wire the HSS57's ALM, find its active level, recover by
+  toggling ENA then re-basing from the scale; a simulated alarm pin in the
+  mock GPIO. → [Driver alarms](#driver-alarms)
+- Limit switches: wire them on the mill (GPIO2) and test at rapid speed,
+  the dialog, and moving off a switch. → [Limit switches](#limit-switches)
+- Something to keep the carriage within set points (switches, or position
+  checks in software); a warning when the chuck runs in reverse (now only
+  the `n:` label turns red).
+- Sleep between steps at slow speeds rather than busy-waiting (measure the
+  Pi's wake-up latency first; idle motors must keep spinning on their
+  pinned cores).
+- A real-time priority below 99 (shared with critical kernel threads):
+  test on the machine. If a once-per-second stutter comes back, check
+  real-time throttling (see the README).
+- Low priority: a ramped start for knurling passes, so Z can follow a
+  longer lead. → [Cut knurling](#cut-knurling)
+
+### Sensors and scales
+- A scale on the lathe's X (waiting for the 5 V to 3.3 V boards and for Z's
+  scale to be proven); the code is ready. → [An array of axes](#an-array-of-axes)
+- The finishing moves' "the scale's reading didn't settle" (it flickers a
+  count). → [The lathe Z scale](#the-lathe-z-scale)
+- Show the position as unconfirmed while a scale has no reading.
+  → [Using the mill scales](#using-the-mill-scales)
+- Count and report a scale's two-phase jumps (missed edges).
+  → [The lathe Z scale](#the-lathe-z-scale)
+- The backlash measurement logs the scale's raw count and says where on
+  the table it measured (for a survey). → [Using the mill scales](#using-the-mill-scales)
+- Full quadrature decoding for the spindle encoder (only A's rising edges
+  are counted now; four times the pulses affects the rpm and angle sums).
+- Zeroing the chuck's angle (an offset in what's shown).
+- Probing and edge finding: an insulated block or bar of known size on a
+  pin, the tool to GND, and a creep until it touches. Also a way to touch
+  off.
+- (Low: the rpm read erratic past about 1200 rpm, not seen with the mocks;
+  not relevant since the spindle was geared down.)
+
+### Work geometry and tools (lathe)
+- The feature's other end along Z (e.g. a shoulder): set by a key or a
+  multi-pass, then gone to, offered as a multi-pass end, and shown.
+  → [Current feature](#current-feature)
+- Warn when the tool goes inside the feature's Ø with the spindle running.
+  → [Current feature](#current-feature)
+- Chamfers from the feature. → [Current feature](#current-feature)
+- Later: several features (a list of segments, a part profile).
+  → [Current feature](#current-feature)
+- Tool library: tip orientation, tool types, widths for parting and
+  grooving, invalidating offsets (toolpost moved, a tool adjusted),
+  deleting a tool, boring bars; the nose radius correcting tapers and
+  chamfers. → [Tool library](#tool-library)
+- Knurling: take the Ø from the feature rather than X; allow for a tool
+  other than 90° in the starts suggested. → [Cut knurling](#cut-knurling)
+
+### Structure and housekeeping
+- Try the latest Pi OS with libgpiod instead of pigpio, on a spare SD card,
+  the mill first. → [libgpiod and a newer Pi OS](#libgpiod-and-a-newer-pi-os)
+- General refactoring: much of it grew organically.
+- Check `femaleDepth` in threadpitches.cpp: the old table used 0.469 ×
+  pitch, now ISO's 0.541. → [Thread pitches file](#thread-pitches-file)
+- Fit the lathe's Pi with an active heatsink (the mill's has one).
+
+### Ideas, not yet planned
+- A "bump map" for an accurate finishing cut, from measured diameters along
+  the work. → [Bump map](#bump-map)
+- A "profile" mode: X follows a table of points as Z moves, like a
+  mechanical follower. → [Profile mode](#profile-mode)
+
+## Notes
+
+### User interface
+
+#### Calculator in numeric entries
+
+- The user's idea (21 Nov 2026, reaching for a calculator at the lathe):
       any numeric entry takes a sum typed after `=`, worked out when Enter
       is pressed. See README.md. Decided with the user:
     - Only `+ - * /`, brackets and a leading minus. No trig: the bolt hole
@@ -37,16 +216,17 @@
       wouldn't accept (e.g. negative) is refused with a reason.
     - No spaces, so Space can't end up typed into a sum.
     - lc.log records each sum and its value.
-- [ ] Try it at the machine.
-- [x] In the go-to and position set dialogs, `p` was 0 (their default
+- Try it at the machine.
+- In the go-to and position set dialogs, `p` was 0 (their default
       entry), so it wasn't much use there. It's now where the axis is, as
       shown (the user agreed, 21 Nov 2026). Not in the relative go-to (an
       offset), nor the memory value entry. A manual axis without a reading
       has no `p`, rather than `p` silently being 0.
-- [x] `"` is inches, as `in` is (the user's request, 21 Nov 2026).
+- `"` is inches, as `in` is (the user's request, 21 Nov 2026).
 
-### Re-base an axis from its scale by hand
-- [x] A command to line an axis's position up with its scale at any time
+#### Re-basing an axis by hand
+
+- A command to line an axis's position up with its scale at any time
       (the user's idea, 18 Nov 2026), rather than only when the mismatch
       check stops everything and its dialog offers it, or when a move
       re-bases at rest. The user suggested `x` then `s`, but on the mill
@@ -80,8 +260,9 @@
       session: the automatic re-bases (at rest and between passes) covered
       everything, including several stalls. So `XB` is still untried
 
-### Zero all the axes, including the manual ones
-- [x] `\` then `z` ("Zero X and A" on the mill) only zeroes the two
+#### Zeroing all the axes
+
+- `\` then `z` ("Zero X and A" on the mill) only zeroes the two
       motorised axes. The user would like it to zero every axis, including
       the manual ones (the mill's Y and Z, axes 3 and 4), as each can be
       zeroed on its own with its leader then `z` (18 Nov 2026). Its name in
@@ -96,8 +277,9 @@
       memory slots, which they don't have (zero, set and halve are all they
       have, and halving several axes at once wouldn't make sense)
 
-### Investigate Sound Output
-- [x] Still getting the first sound failing - maybe the monitor's audio is
+#### Sound
+
+- Still getting the first sound failing - maybe the monitor's audio is
       also in idle - maybe play the alert sound on program start to kick it
       into life?
     - **Tried on the lathe (2026-11-20)** with a test key (F12 plays the
@@ -114,7 +296,7 @@
       full shutdown and power-off (so the monitor was off too), the
       start-up sound wasn't heard, as expected, and the first F12 played
       both times
-- [x] Could be useful for warnings and prompts.
+- Could be useful for warnings and prompts.
     - **Done (2026-11-16), not yet tried on the machine:** `SoundAlert` and
       `SoundAlarm` in the config (sounds/alert.wav and sounds/alarm.wav, on
       for both machines). SoundCues (soundcues.*) decides from the model's
@@ -167,15 +349,9 @@
         - The same config is on the mill too (done by the user, noted
           2026-11-20)
 
-### Make the interface less cryptic
-- [ ] A modification to recent changes:
-        Keep Tab key as the menu key, but also use a tap on the meta key to do the 
-        same thing.
-        - F1 should be re-purposed to a proper "help" button which could bring up
-          a small pop-up dialog giving help in certain places. Not intended as a
-          full instruction manual, just some aides-memoire (e.g. setting up a
-          feature).
-- [x] A key that brings up all the options available *now*
+#### The menu and leader key hints
+
+- A key that brings up all the options available *now*
     - **Done:** `Tab` opens a menu of every command, with its shortcut, built
       from one table of commands (commands.cpp) so it can't drift out of date.
       Commands not available at the moment (e.g. threading passes outside
@@ -197,20 +373,15 @@
     - While the menu is open, memory slots 5 and 6 are hidden behind it
       (this is fine, I think, although maybe if that ever was a problem
       a dedicated button could perhaps move the menu to the left/right)
-- [x] It must be usable without a mouse, which is awkward at the machine.
+- It must be usable without a mouse, which is awkward at the machine.
       Everything works from the keyboard, and the menu from the gamepad too.
       The gamepad isn't read while a dialog is open; low priority, as it sits
       next to the keyboard and is for the basics of machine control.
       The mouse pointer is hidden in the full-screen (Pi) build
-- [ ] Proper menus and dialogs, now that Qt makes them possible. This replaces
-      the old "implement a proper menu/dialog (see level_designer)" and
-      "move all input to the new modal dialog system" items
-- [ ] Richer dialogs, with several inputs, like the taper dialog (presets,
-      angle, direction, and a diagram). The other dialogs are fine for now
-- [ ] Make the display more "modular": display elements in definable boxes,
-      perhaps a class which encapsulates a display element. This will make the
-      layout easier to change
-- [x] **Drop the `F2` leader key.** In practice the menu (e.g. `Tab` `M` `T`
+
+#### Dropping the F2 leader key
+
+- **Drop the `F2` leader key.** In practice the menu (e.g. `Tab` `M` `T`
       for threading) had taken over from `F2`, which was a second route to
       the same commands
     - **Done:** `F2` (and `:`) no longer lead to anything, so the modes
@@ -222,7 +393,10 @@
       `cmd::threading`, so they don't suggest a key that no longer exists
     - Frees the top-level letters, e.g. `T` for "choose tool" (see "Current
       tool and a tool database")
-- [x] **Turn `ThreadingAutoRetract` on and off from the menu** (2026-11-11).
+
+#### Auto-retract from the menu
+
+- **Turn `ThreadingAutoRetract` on and off from the menu** (2026-11-11).
       Testing threading with the cross-slide locked by hand meant editing
       lc.cfg between tests, as auto-retract is only read from the config.
       A menu-only toggle (no shortcut, as it's rarely changed), perhaps
@@ -243,15 +417,10 @@
       it) or a limit switch stop, as it moves nothing. The threading
       display's third line says "X retracts outwards; auto-retract on". Not
       yet tried on the machine
-- [ ] Make use of the keys on the right (#, Home, PgUp, PgDn, End)?
-        - Home could be used to return to the current feature's zEnd/diameter?
-- [ ] When there's a larger screen (the current one is small): touchscreen
-      support, and make dialogs scale with the main display (which is scaled
-      to fit the screen, whereas dialogs stay the same size, so would look
-      small)
 
-### Controller structure
-- [x] Move the controller onto Qt's event loop (e.g. a timer driving each
+#### Controller on the event loop
+
+- Move the controller onto Qt's event loop (e.g. a timer driving each
       update) instead of its own polling loop. At the moment the UI thread
       blocks in places: `wait()` on motors, `waitForAxisToStop()`, and
       `callbackAtZeroDegrees()`, which can spin for up to a spindle revolution
@@ -287,7 +456,7 @@
       a 45 degree chamfer (so a taper's backlash take-up as a sequence) all
       worked. Not specifically tried yet: holding keys back during a nudge
       (and Space stopping one), and closing the window with a dialog open
-- [x] Address the "Mode" concept, which provides pseudo-modal "dialogs"
+- Address the "Mode" concept, which provides pseudo-modal "dialogs"
       interleaved into program flow and is difficult to maintain. If all
       motors are stopped during a dialog, they can all go on a separate flow
     - **Done:** the dialogs are on a separate flow (above), and the mode is
@@ -299,12 +468,10 @@
       resets Z's speed in `changeMode()`, however it's left (was
       `processModeInputKeys()`, now removed)
 
-## Multi-pass (experimental)
-- [ ] **Slot and face/pocket modes for the mill.** Rather than the generic
-      multi-pass, the mill gets modes for what it's actually used for, built
-      on the multi-pass engine with extra options. Once they work, the
-      generic multi-pass mode is turned off in lc_mill.cfg (the lathe keeps
-      it, as it's really turning and boring between two memory slots).
+### Multi-pass
+
+#### Multi-pass drift on the mill
+
     - **Why (18 Nov 2026):** repeating a slot cut on the mill with a pause
       between passes, X drifted from its scale by up to several hundred
       microns over several passes. During a multi-pass, X is never re-based
@@ -427,6 +594,14 @@
       rather than as a dialog, so keys still go through and it goes by
       itself. Refused keys still do nothing, without saying so: the box
       should be explanation enough
+
+#### Slot and face or pocket modes
+
+- **Slot and face/pocket modes for the mill.** Rather than the generic
+      multi-pass, the mill gets modes for what it's actually used for, built
+      on the multi-pass engine with extra options. Once they work, the
+      generic multi-pass mode is turned off in lc_mill.cfg (the lathe keeps
+      it, as it's really turning and boring between two memory slots).
     - **Slot:** cut along X, pause (re-basing X), the user feeds Z down,
       cut back at cutting speed, pause again (re-basing X), and repeat until
       the full depth. Each end of the slot finishes on X's scale (backing
@@ -467,7 +642,10 @@
       feed axis is a manual axis", which can now show the distance to go
     - Depends on the array of axes with manual Y and Z (see "Structure and
       refactoring")
-- [x] Try the rewritten multi-pass on the machine.
+
+#### The multi-pass engine
+
+- Try the rewritten multi-pass on the machine.
     - **Done:** tried on aluminium, without pausing: it worked, finishing
       within a few hundredths of a mm of the target diameter (the machine's
       repeatability). Two things came of it:
@@ -528,7 +706,10 @@
     - The mill: its axis 2 (Y) has no motor yet, so a multi-pass there would
       need the engine's manual feed ("feed Y by n mm, then press Enter"),
       and the dialog and the move to the start would need to allow for it
-- [x] Retract only on the last passes (suggested 2026-11-10): the roughing
+
+#### Retracting only on the last passes
+
+- Retract only on the last passes (suggested 2026-11-10): the roughing
       passes needn't retract, as a faint spiral left by the fast return
       doesn't matter; only the finishing ones do. That's quicker, and still
       leaves a good finish
@@ -541,7 +722,10 @@
       pass, so every pass retracts. Ordinary multi-pass only: threading
       passes always retract. Tested in the unit and UI tests; not yet tried
       on the machine
-- [x] Retract by a safe amount, not an arbitrary one (noticed 2026-11-10,
+
+#### Retracting by a safe amount
+
+- Retract by a safe amount, not an arbitrary one (noticed 2026-11-10,
       testing a female thread in debug mode): X retracted a fixed 2 mm
       (hard-coded). In a bore only just big enough for the boring bar, an
       inward retract that size would move the back of the bar into the far
@@ -573,7 +757,10 @@
       diameter on the bore), falling back to the fixed distance otherwise.
       The program can't know the boring bar's width, but retracting only
       just clear of the surface is the least that can hit anything.
-- [ ] Internal threading and the carriage's rigidity (2026-11-10): with
+
+#### Internal threading and saddle rigidity
+
+- Internal threading and the carriage's rigidity (2026-11-10): with
       about 40 mm of stick-out (for a 30 mm long thread), the leverage
       visibly shifted the carriage on each cut. For now, internal threading
       probably isn't a good idea on this lathe.
@@ -592,7 +779,7 @@
       found above); X's gib is loose for the same reason. (A loose gib
       was also suspected in the M8 male thread's many spring passes,
       2026-11-09: the saddle's rocking may have been the cause there too.)
-    - [ ] Cut the far wall of the bore with the spindle in reverse
+    - Cut the far wall of the bore with the spindle in reverse
       (2026-11-11). The idea: the saddle seems to rock more when the
       infeed is towards +X. An ordinary internal thread is cut on the near
       wall with a rake-up tool, feeding in towards +X, so the radial
@@ -623,7 +810,7 @@
       With a blind bore each pass starts at the bottom and runs out at the
       mouth, so the relief groove has to be long enough for Z to
       accelerate in.
-    - [ ] ~~Lock the cross-slide physically during each cut~~ **Parked
+    - ~~Lock the cross-slide physically during each cut~~ **Parked
       (2026-11-11):** the DTI test showed it's the saddle rocking, which an
       X lock wouldn't help (and Z can't be locked, as it moves during the
       cut). Kept for reference, in case a stiffer saddle ever makes the
@@ -670,12 +857,10 @@
       - In the engine: two waiting states, and a `feedLocked()` query on
         `IMultiPassMachine`, which fit the non-blocking `update()` loop and
         can be tested with the fake machine.
-- [ ] Work on a single line rather than a plane, i.e. if mem0.x == mem1.x,
-      interpret it as (say) slot cutting and repeat until the user cancels.
-      Could also work if only one axis is defined in config (the engine's
-      manual feed, or a feed of zero, would do the sequencing). At the
-      moment Mem 1 and Mem 2 with the same X give a single pass
-- [x] Automation of a repeated cut: cut from Mem 1 to Mem 2, fast return,
+
+#### Repeated cuts
+
+- Automation of a repeated cut: cut from Mem 1 to Mem 2, fast return,
       wait for a key press, and repeat until cancelled (to make repeated cuts
       down to depth easier)
     - **Done:** multi-pass with a step-over of zero and "pause". While it's
@@ -684,7 +869,10 @@
       step-over, the next pass steps over from there. X is now unretracted
       before the pause (at the start of the cut, clear of the work), so it
       shows the position cut at, and can be nudged
-- [ ] The same for threading: at the moment the operator has to (a) move to
+
+#### Threading passes
+
+- The same for threading: at the moment the operator has to (a) move to
       a location, (b) fast return to a second location, (c) nudge in a
       little and repeat. This could be automated to simply (a) nudge and
       press a key, and it repeats the cut and return. Each pass starts at
@@ -814,7 +1002,10 @@
              a nudge in and a couple more before the nut went on. The
              flanks were clean enough not to need a needle file, which
              they always used to
-- [x] **Radius mode: a radius on the work's end, as passes of short tapers.**
+
+#### Radius mode
+
+- **Radius mode: a radius on the work's end, as passes of short tapers.**
       Replaces the old experimental radius mode, which synchronised X to
       Z's absolute position with Pythagoras, needed both axes zeroed on the
       radius's apex, and left the passes to the user (cut, return, nudge,
@@ -885,7 +1076,10 @@
       kept up, with no sign of it cutting deep near the end face. The
       full ball end hasn't been tried. Considered done; inside radii and
       concave fillets would be new items (fillets: see the next item)
-- [ ] **A filleted shoulder: a step turned down, with a concave radius in the
+
+#### Filleted shoulder
+
+- **A filleted shoulder: a step turned down, with a concave radius in the
       corner.** A fillet is material that's left, not taken off, so it can't
       be added to a shoulder already turned square: the mode turns the step
       with it. Arcs about a centre outside the work, cut as chains of tapers
@@ -936,8 +1130,11 @@
       radius, the last pass's move up the face (X alone) wasn't used, so
       that's still to try, with a tool whose nose radius is typed in
 
-## Motion and timing (mostly in steppermotor.cpp)
-- [x] Deceleration ramping. At the moment there's only acceleration, so
+### Motion and timing
+
+#### Deceleration ramping
+
+- Deceleration ramping. At the moment there's only acceleration, so
       stops (especially from rapids) are abrupt. Needs tuning on the machine,
       and changes where moves end. Also, the ramp rate is per loop, so depends
       on the step rate
@@ -994,7 +1191,10 @@
           (or a lower maximum X speed) is worth doing
     - Related idea, for sizing: after setting the measured diameter, type the
       target diameter and X moves straight to it
-- [ ] **X stalls on Alt+arrow rapids near the table's ends (mill, 19 Nov
+
+#### X stalls near the ends of the table
+
+- **X stalls on Alt+arrow rapids near the table's ends (mill, 19 Nov
       2026).** Several times in a session, after moving the head well away
       from the work (to get calipers on it), an Alt+Right rapid back towards
       the start stalled. The scale's re-base caught each one, so no
@@ -1055,7 +1255,10 @@
           rapid's arrow, still held, closed it at once (choosing "keep X's
           position", unseen). Fixed: "press any key" now ignores repeats,
           arrows, and anything with Alt
-- [ ] **Rapids use the maximum rpm as mm/min.** `axis1Rapid()` and
+
+#### Rapid speed units
+
+- **Rapids use the maximum rpm as mm/min.** `axis1Rapid()` and
       `axis2Rapid()` set the speed to `getMaxRpm()`, and multi-pass returns
       use `cutMaxSpeed()`, which is the same, but `setSpeed()` takes
       units/min. So on the mill's X (1.25 mm a motor turn), 800 rpm gives
@@ -1068,17 +1271,10 @@
       the motor's limit); the mill's X 1.25 times faster; and the mill's A
       five times faster (5° a turn: 640°/min now, which is only 128 rpm).
       So it wants trying on the mill first
-- [ ] Sleep between steps at slow speeds, rather than busy-waiting. Needs the
-      wake-up latency measuring on the Pi first, as thread pitch depends on
-      step timing. (Idle motors can sleep, but on the lathe they're set to
-      spin, each pinned to its own CPU core: `Axis1CpuCore`, `Axis2CpuCore`,
-      `MotorThreadsSpinWhenIdle`. Without that, a motor thread waking up
-      starved pigpio's callback thread, losing encoder pulses)
-- [ ] Consider a real-time priority below 99, which is shared with critical
-      kernel threads. Test on the machine
-- [ ] If a once-per-second stutter reappears, check real-time throttling
-      (see the README)
-- [x] **Electronic leadscrew: lock Z's *position* to the spindle, not its
+
+#### Electronic leadscrew
+
+- **Electronic leadscrew: lock Z's *position* to the spindle, not its
       speed.** At the moment, threading sets Z's speed from the spindle's RPM,
       averaged over the last revolution and applied every UI loop (~50ms).
       Anything that makes Z's speed differ from the spindle's, even briefly,
@@ -1135,12 +1331,18 @@
       the target on, rather than stepping evenly. Expected, and harmless
       (the thread is right); a lower limit, or setting the step rate from
       the target's speed, would smooth it if it's ever wanted
-- [x] I defined some constants for a slight Z infeed when cutting threads
+
+#### The INFEED and SIDEFEED constants
+
+- I defined some constants for a slight Z infeed when cutting threads
       (see INFEED and SIDEFEED) but never used them. Maybe implement to
       simulate the use of the topslide
     - **Done:** as the threading passes' compound infeed (see Multi-pass);
       the constants have gone
-- [ ] A setting for adding a tiny amount of X motion to counteract a lathe
+
+#### Taper correction
+
+- A setting for adding a tiny amount of X motion to counteract a lathe
       that cuts a slight taper (taper mode works brilliantly, but this should
       be a config item applied automatically). Idea: calculate the angle
       required from two measurements and a distance
@@ -1183,7 +1385,10 @@
       option, in case a straight taper ever needs correcting
     - (Stage 2, X following Z everywhere, isn't needed: see the "bump map"
       instead)
-- [ ] A "bump map" mode, for a finishing cut where a piece must be as
+
+#### Bump map
+
+- A "bump map" mode, for a finishing cut where a piece must be as
       accurate as possible: correcting a lathe whose cut isn't straight
       along its length (here, a slight bulge, about 0.02-0.03 mm on
       diameter, from the bed, not a simple taper; see above)
@@ -1203,7 +1408,10 @@
       made in sections
     - The corrections are about the size of the machine's repeatability,
       so only worth it for the odd piece which needs it
-- [ ] A "profile" mode: an electronic version of a mechanical follower, for
+
+#### Profile mode
+
+- A "profile" mode: an electronic version of a mechanical follower, for
       turning simple profiles (e.g. a chess piece) from a file. Idea only,
       for discussion, but it shares its machinery with the bump map above:
       X follows a function of Z's position, from a table of points
@@ -1256,7 +1464,10 @@
       whose X only moves one way (e.g. a cone with a radiused end), so
       backlash doesn't come into it yet. Lathe only, and off unless the
       config enables it
-- [ ] Support the enable pin for each motor
+
+#### Enable pins
+
+- Support the enable pin for each motor
     - **Not used yet:** `Axis1GpioEnablePin` and `Axis2GpioEnablePin` are
       read and passed to the GPIO layer, but nothing calls
       `setEnablePin()`, so the pins are never driven. Both configs set them
@@ -1274,7 +1485,10 @@
       machine. The Pi drives 3.3V: step and direction work at that level on
       these drivers, so ENA probably will too, but check it with a meter
       once it's driven
-- [ ] **Motor stalls: stop when the driver goes into its error mode.** At the
+
+#### Driver alarms
+
+- **Motor stalls: stop when the driver goes into its error mode.** At the
       moment, if a motor stalls and its driver goes into error mode, the
       driver ignores further step pulses but the program carries on counting
       them, so the position (and memories, and threading start points) end
@@ -1320,7 +1534,10 @@
       open-loop drivers, which lose steps silently
     - Add a simulated alarm pin to the mock GPIO, to test all this without
       stalling the lathe
-- [ ] Support limit switches. Could have multiple switches all on one pin,
+
+#### Limit switches
+
+- Support limit switches. Could have multiple switches all on one pin,
       and when triggered simply issue a "stop all"
     - **Done (2026-11-11), not yet tried on the machine:** `LimitSwitchPin`
       and `LimitSwitchActiveLevel` (off by default). The pin is watched in
@@ -1349,12 +1566,10 @@
       fixed 1.8kΩ pull-up to 3.3V on the board, which suits normally-closed
       switches to GND and helps on a long cable. I2C must stay disabled in
       raspi-config (the default)
-- [ ] Consider some form of switch or sensor to prevent carriage movement
-      outside specific points (or mandate position checks at start-up to do
-      this in software only?)
-    - Display a warning if the chuck is running in reverse (at the moment the
-      `n:` label turns red)
-- [ ] **Ask before the start-up backlash take-up.** Each axis moves by its
+
+#### Start-up backlash take-up
+
+- **Ask before the start-up backlash take-up.** Each axis moves by its
       backlash at start-up (since 14 Nov 2026, when the take-up was found
       never to have moved; see the mill scales item). A tool left against
       the work while everything was off could be pushed into it. The idea
@@ -1376,17 +1591,11 @@
       already taken up that way)
     - Related: the TODO comment at the take-up in `Model::initialise()`
 
-## Sensors
-- [ ] Rotary encoder: only rising edges on pin A are counted, so it relies on
-      ignoring repeated edges on the same pin to cope with dithering. Full
-      quadrature decoding would be more robust (but gives four times the
-      pulses per revolution, which affects the RPM and angle calculations)
-- [ ] RPM on real hardware seems erratic past about 1200 rpm. Cannot
-      reproduce using mocks, so maybe we're hitting a limitation of the rotary
-      encoder? (Not relevant currently now I've lowered the gearing on the
-      lathe's spindle)
-- [ ] Maybe allow zeroing of chuck angle? (use offset in reporting)
-- [ ] **Linear scale: detecting lost steps, and absolute position.** The
+### Sensors
+
+#### The lathe Z scale
+
+- **Linear scale: detecting lost steps, and absolute position.** The
       scale is read and displayed ("Z Scale"), but positions still come from
       "dead reckoning" (the motor's step count), which is wrong from the
       moment a step is lost. Should position come solely from the scale, or
@@ -1466,1270 +1675,10 @@
       settle" after their second correction (19 Nov 2026, on the mill), as
       the reading flickers. Harmless (it's within a count or two), but it
       wants looking at
-- [ ] Probing, which would also be useful as a way to touch off
-    - X probing: would need an insulated known-diameter bar held in the spindle
-    - Z probing: would need an insulated known-length bar, which could be
-      held on the end of a workpiece
-    - Will need a dedicated pin on the Pi for monitoring
-## Work geometry and tools (lathe)
-Background: "set diameter" currently means only that **X is measured from the
-spindle centreline** (`m_xDiameterSet`). The diameter shown is the *tool's*
-position (2 × |X|), so it changes whenever X moves. Knowing the centreline is
-the valuable part. Once we have it, remembering where the *work* is costs very
-little: we store numbers in axis coordinates, which moving the axes doesn't
-change.
 
-- [ ] **Current feature: a remembered diameter and end Z.**
-    - **Done (first slice):** `CurrentFeature` in the config turns it on.
-      The feature Ø (stored as X's position on its surface) and the work's
-      end Z, each set and cleared separately: set diameter (`x s`, D) also
-      records the Ø, `x d` records it again, `z e` marks the work's end, and
-      the menu's Feature category has these and Clear. Cleared as below
-      (re-zero, a fault, a position set unless adjusting, X no longer set as
-      a diameter); there's no tool change to clear it on yet. A "Current
-      feature" box (right of the mode's lines) shows them. The multi-pass
-      dialog has a Feature start (the default when set, unless at a memory
-      slot): X on the surface, Z `FeatureStartClearance` (0.5 mm) off the
-      work's end, away from the cut, with Z's distance from the work's end.
-      A multi-pass which cuts from the work's end sets the Ø to its end
-      diameter. Used on the machine (2026-11-09) and works well
-    - **Decided:** end Z is the work's *free* end (as faced), not any
-      feature's end. A Z clearance beyond a shoulder part way along would
-      put the tool into the larger diameter beyond it, and the program can't
-      know the profile. So a Feature start assumes the Ø runs from the
-      work's end; features part way along wait for "Single feature vs many".
-      For the same reason, a multi-pass only updates the Ø if its cut
-      started at (or off) the work's end
-    - **Done:** a re-zero or a position set which would clear any of the
-      feature asks first (an OK / Cancel dialog, listing what it would
-      clear). Not set as a diameter, as that replaces the Ø rather than
-      losing it, nor faults (nothing to ask) or the menu's Clear
-    - **Done:** going back to the feature, from the menu's Feature category
-      (e.g. after moving away without storing its start in a memory slot):
-      to its start (both axes, X retracting before Z moves, as a multi-pass
-      moves to its start: the shared `Model::moveToSafely()`), X alone to
-      the Ø, or Z alone to the work's end (refused if X is deeper than the
-      surface). Z's target is the work's end exactly, or clear of it by
-      `FeatureStartClearance`, away from the chuck (`Axis1TowardsChuck`).
-      Used on the machine (2026-11-09) and works well
-    - [ ] **The feature's other end.** Save where the feature ends along Z
-      (e.g. a shoulder), as well as the work's end: set from a key, or by a
-      multi-pass from the work's end (its cut's end). Then it could be gone
-      to as well, offered as a multi-pass's Z end, and shown in the box. A
-      step towards "Single feature vs many" (a list of segments)
-    - Still to do from below: the warning when the tool goes inside the Ø
-      with the spindle running, and
-      chamfers / radii from the feature Temporary: kept
-      for this session only, never saved across a restart. Its purpose is to
-      help the operator while they make one particular feature.
-    - **Values (each optional, set separately):**
-        - *Feature Ø*: the diameter of the surface being worked on. Once set,
-          it stays fixed however X is moved
-        - *End Z*: the Z position of the feature's end (e.g. after facing)
-        - Perhaps later: the original stock Ø as a second value, so it can be
-          kept after a shoulder has been turned (see "Single feature vs many")
-    - **Setting them:**
-        - "Set diameter" could do both jobs at once: set the centreline datum
-          *and* record the feature Ø, since the tool is on a surface the
-          user has just measured at that moment
-        - A "mark end" action after facing records the current Z as end Z
-        - Automations update the values themselves when they know the result,
-          e.g. a multi-pass "turn to Ø" sets the feature Ø to the target when
-          it finishes
-    - **Clearing them:**
-        - The user can clear the feature at any time (e.g. to move on to a
-          shoulder further along the work)
-        - Re-zeroing X clears the feature Ø, as it already clears the
-          centreline datum. Re-zeroing Z clears end Z
-        - A motor fault or lost position on an axis clears that axis's value.
-          This matters most for X, which is open-loop, so the remembered
-          surface is only as good as X not having lost steps
-        - A tool change clears both, unless the tools' offsets are known (see
-          "Tool database" below)
-    - **Keeping it up to date:** if the spindle is running and the tool moves
-      inside the remembered Ø, *warn* that the feature Ø may be out of date.
-      Don't try to work out the new value from tool movement, as that's easy
-      to get subtly wrong
-    - **Display:** a "Current feature" box on screen showing Ø, end Z and the
-      tool they were taken with, kept separate from the live tool Ø so the
-      two can't be confused. Empty or hidden when no feature is set
-    - **Single feature vs many:** start with one "current feature" that the
-      user resets. A list of features (`{Z start, Z end, Ø}` segments) amounts
-      to a part profile. Appealing, but much more work in the UI and in
-      keeping it consistent
-    - **Which side of end Z is material?** Usually towards the chuck, but this
-      should be explicit (from the config, or worked out from the facing
-      direction) so a chamfer or radius never cuts air or goes the wrong way
-    - **Lathe only:** only enable when the config has an X axis that can be
-      set as a diameter. Keep it optional like other per-axis features
-    - **Uses:**
-        - Pre-fill multi-pass start positions (Ø and Z) from the feature. A
-          cheap, low-risk first use
-        - Chamfer "on the end of the piece": from Ø, end Z and a size, the
-          program knows where every pass goes. A 45° chamfer is a linear X/Z
-          move, which taper mode's X-to-Z synchronisation can already do
-        - Radius/fillet (see "radiusing" under generic multi-pass): start near
-          Ø/2, step inwards, finish at a given end X (> 0 for a fillet). Arcs
-          aren't a fixed X:Z ratio, so this needs either a chain of short
-          tapers (`MotionSequence` could run them) or proper arc
-          synchronisation. Tool nose radius starts to matter here too.
-          **Done** for a radius on the end, as a chain of tapers in the
-          multi-pass engine: see "Radius mode" under Multi-pass. And for a
-          fillet at a shoulder: see "A filleted shoulder" there
-    - **Suggested first slice:** feature Ø and end Z with set and clear, their
-      own display box, cleared on re-zero, fault or tool change, and used to
-      pre-fill multi-pass
+#### Interfacing with the mill scales
 
-- [ ] **Current tool and a tool database.** The program has no idea when the
-      tool is changed, but the feature values above belong to the tool that
-      touched off. A different tool will be out by its offset.
-    - **Done (2026-11-16), in the mock build only:** a first slice, on with
-      `ToolLibrary = true` (lc.cfg), in `toollibrary.*`. A "Tool library"
-      menu category (`T` in the menu) and a "Tool" box at the top right.
-      `T` changes tool (a list of the tools), shifting Z and X by the
-      difference between the two tools' offsets. "Define a new tool"
-      measures one from the tool in use by scratch tests: the tool in use
-      touches the diameter and the end (`Enter` after each), then the new
-      tool does the same, and it asks for the description and nose radius.
-      Also "Measure a tool again" and "Describe the current tool". Kept in
-      `ToolLibraryFile` (tools.cfg, not in git), plain text, written
-      through a temporary file and a rename, keeping the one before as .bak.
-      The radius dialogs start with the current tool's nose radius.
-      **Tried on the lathe (2026-11-16):** two tools, measured by scratch
-      tests; changing between them was very repeatable
-        - **Decision: offsets, not datums, are stored.** A tool change is a
-          re-base (nothing moves): each motor's step count shifts by the
-          difference, in whole steps per tool, so going to a tool and back
-          always comes back to the same step. As memory slots, breadcrumbs,
-          the feature and multi-pass setups are all positions on the work,
-          they carry over to the new tool's tip, and nothing is cleared (so
-          "a tool change clears the feature", above, isn't needed)
-        - **Decision: scratch tests first, not a dial indicator.** Each
-          tool touches the same diameter and end, as the user already does
-          to set up a job. A dial indicator could be added later as another
-          way to measure
-        - **Decision: measured from the tool in use, not only tool 1.** The
-          offsets are still stored from tool 1, but any tool in the library
-          can be the one measured from. So tool 1 can be measured again
-          from another tool (e.g. after a new insert), which moves every
-          offset so they're from its new tip, rather than every tool having
-          to be measured again
-        - **Decision: external tools only, for now.** The touches are on the
-          outside diameter, which a boring bar can't reach: the dialog says
-          so, and measuring is refused with a boring retraction. Each
-          diameter touch must have X moving in, and each end touch Z
-          moving towards the chuck (the motor's last direction), or it's
-          refused, so the backlash is taken up the same way for every tool
-        - **Decision: measuring isn't a mode.** The axes move as usual
-          (keys, nudges, speeds, the gamepad), but nothing else: no leader
-          keys, zeros, position sets, memories or modes. `Enter` records
-          each touch and `Esc` cancels. A tool change is refused in modes
-          other than multi-pass and radius (whose passes are on the work,
-          so carry over), and during a multi-pass
-        - **Done (2026-11-16):** an unknown tool (`T?`, last in `T`'s list),
-          for one not in the library. **Decision:** each axis remembers whose
-          tip its positions read (the tool in use when it was last zeroed,
-          set or changed to). Changing to the unknown tool shifts nothing, so
-          they still read the last tool's ("positions: T1" in the box), and
-          changing back to a tool in the library shifts from that tool's
-          offsets: nothing set on the work is lost, e.g. on the way to a
-          knurling tool and back. Only an axis zeroed or set while the
-          unknown tool was in use can't be shifted: changing to a tool in
-          the library then clears what was set along it (the work's end, or
-          the diameter), asking first if it's part of the feature. Memory
-          slots are kept, as they were before there were tools
-        - Still to do: tip orientation, tool types, widths (parting and
-          grooving), invalidating offsets ("toolpost moved", a tool
-          adjusted), deleting a tool, and boring bars (touched on a bore's
-          diameter instead). Also, the nose radius could correct tapers and
-          chamfers
-    - **Current tool:** the user picks the tool in use (number and
-      description), and it's shown prominently on screen. Changing tool
-      must be very easy: a single keypress, not a trip through menus. `T`
-      might do (free at the top level now `F2` has gone). Selecting a
-      different tool counts as a tool change, so the current feature is
-      cleared (or shifted, once offsets are known, below)
-    - **Tool database:** a config file of predefined tools. Must be quick to
-      pick from without a mouse. Possible attributes:
-        - Number and description
-        - Type (turning, facing, chamfering, parting, grooving, threading,
-          boring, button, knurling...)
-        - **Tip orientation:** which corner or side of the tool is its
-          reference point, like CNC lathes' "tip direction" codes (Fanuc's
-          1-9). This one attribute covers left-hand and right-hand turning
-          tools, boring bars facing the other way in X, and which side of the
-          nose radius a button tool is measured from
-        - **Nose radius:** worth storing even before it's used, as radius and
-          chamfer accuracy will eventually depend on it (e.g. a button tool,
-          whose "point" is a circle of maybe 4 mm diameter)
-        - **Point angle**, e.g. 60° threading tool, 90° chamfering tool (see
-          "cut knurling")
-        - **Width and reference edge**, for parting and grooving tools: a
-          thickness rather than a radius, plus which edge is the reference.
-          Then a groove or cut-off can be placed relative to the feature's
-          end Z from either side
-        - **Not applicable:** some tools can't usefully have offsets (e.g. a
-          knurling tool, or anything in the tailstock such as a centre drill
-          or reamer, which isn't on the carriage at all). Operations that use
-          the feature Ø and end Z won't be allowed with these tools
-        - X and Z offsets, when each was last measured, and whether it has
-          been invalidated (see below)
-    - **Tool offsets (later):** if each tool's X and Z offsets relative to a
-      reference tool are known, a tool change can shift the datums instead
-      of clearing them, so the feature Ø and end Z stay valid across a swap.
-        - **Reference tool:** tool 1, the most-used tool (a right-hand turning
-          tool). All other offsets are measured relative to it
-        - **Calibrating with a dial indicator** (the planned first method),
-          once for Z and again for X:
-            1. With tool 1, approach a dial indicator fixed to the bed (e.g. on
-               a magnetic base) and press its plunger in about half-way. Zero
-               the indicator; the program records tool 1's position
-            2. Change to the new tool and nudge it up to within about 50 µm of
-               the indicator's zero
-            3. The program takes up backlash in the approach direction (X is
-               open-loop, so this matters most there), then either:
-                - feeds extremely slowly and the user presses a key when the
-                  needle reaches zero (at, say, 2 µm/s, a 0.2 s reaction time
-                  costs only about 0.4 µm), or
-                - steps 1 µm per keypress until the needle reads zero, which
-                  avoids reaction time completely, as the reading is taken
-                  with nothing moving
-            4. The difference from tool 1's position is stored as the offset
-        - **Notes on calibrating:**
-            - Every tool must approach the indicator from the same direction
-              as tool 1 did, so backlash doesn't creep in
-            - The indicator mustn't move between tool 1's reading and the
-              other tool's reading
-            - Some tools' points are hard to get an indicator square on, e.g.
-              a threading tool's small point, which faces along X. The
-              indicator can be set at an angle. Cosine error doesn't matter,
-              because we're only matching tool 1's position, not measuring a
-              distance
-        - **Other ways to measure offsets:** touching each tool off on the
-          same known surface (a turned diameter for X, a faced end for Z);
-          probing (see "Probing" above) could automate this later
-    - **Repeatability and invalidation:** offsets are only as good as the
-      toolpost's repeatability. A QCTP (always used) should be reasonably
-      good, but things can change:
-        - **The QCTP is moved or rotated on the carriage** (e.g. to fit a
-          longer tool): moving it without rotating would shift every tool
-          equally, but rotating it wouldn't, so the user needs a "toolpost
-          moved" action that invalidates *every* tool's offset (and the
-          current feature)
-        - **A single tool is adjusted in its holder** (e.g. a boring bar
-          extended for reach): the user marks that tool's offset invalid
-        - **Tool 1 itself is adjusted:** every other offset becomes invalid
-          at once, so this needs handling as a separate case
-        - An invalidated tool can't be used for operations that need the
-          feature Ø and end Z until it's calibrated against tool 1 again.
-          The UI shows when each tool's offset was last measured and whether
-          it's been invalidated
-
-## Structure and refactoring
-- [ ] Incorporate electronicRotaryTable repo
-    - Pull functionality of ERT into this repo. ERT is designed specifically
-      for cutting gears, so we could have a mode for gear cutting.
-    - The old ERT was a text/ncurses-based UI so will need updating to Qt.
-    - This would require a set-up screen to ensure the user has connected a
-      rotary table, replacing one axis.
-    - This would mean we could also incorporate the repo stepperControl as it
-      is only shared by latheControl and ERT (which would then be redundant)
-    - **Done (2026-11-13):** stepperControl's code (v1.5.1) is now in this
-      repo, flat in the root like everything else (`steppermotor.*`,
-      `igpio.h`, `gpio.*`, `mockgpio.h`), with no FetchContent and no
-      `STEPPERCONTROL_DIR`. A plain copy: its history stays in the
-      stepperControl repo. It's now built with this project's warnings
-      (`-Werror -Wpedantic`), which it wasn't before: clean with clang on
-      the Mac, and a clean release build with GCC on the workshop Pi
-      (2026-11-13)
-    - Gear cutting mode should be disabled by default, and only enabled by a
-      setting in lc_mill.cfg (the milling machine currently only has a stepper
-      on its X axis)
-    - lc_rt.cfg is redundant and should be removed.
-    - As part of this change, maybe the config file should have an "axis[n]Capabilities"
-      config item, to allow the program to determine which features are available for
-      an axis (e.g. retract, or, in the case of a rotary table, gear cutting and so on.
-    - **Done (2026-11-13), in the mock build only:** gear cutting mode (Modes,
-      "Gear cutting", `C`), on with `GearCutting = true` (lc_mill.cfg), and
-      only if axis 2 is in degrees. lc_rt.cfg is removed, and the mill's
-      rotary table is now labelled A (it stands vertically, turning about X;
-      its leader key is still `c`, as `a` is X's nudge). The dialog takes the
-      module and teeth (showing the blank Ø, the angle per tooth and the
-      cutter number), X's start and end, the depth (2.157 × module, as ERT
-      used, unless typed) and the depth per pass. It runs on the multi-pass
-      engine, which gained an index axis (`MultiPassPlan::indexPerStart`):
-      the teeth are its starts, and A turns on by a tooth before each.
-        - **Decision: every tooth at one depth, then feed in.** The depth
-          (Y or Z on the mill) has no motor, so it's fed by hand, once per
-          turn of the blank. Taking each tooth to full depth first would need
-          winding the depth in and back out for every tooth
-        - **Decision: automated only.** ERT's "take the cut by hand" (and
-          its `b` to step back a tooth) isn't offered: X has a motor. The
-          return is back through the slot at full speed, as the depth can't
-          retract
-        - **Decision: A only ever turns forwards.** Each pass carries on
-          round rather than going back, so the table's backlash stays taken
-          up the same way. For the first tooth, A backs off 1° and comes
-          forwards (as ERT took up the backlash at the start). At the end, A
-          turns on to the first tooth again, and its position is put back to
-          where it started (e.g. 0°); memory slots are left as they are, as
-          whole turns don't move them on the table
-        - **To check on the machine:** that A's backlash compensation
-          (`Axis2BacklashCompensationSteps`) and the 1° back-off land the
-          first tooth where the others are; whether A indexes well at
-          full speed (`Axis2MaxMotorRpm`, ramped), with the blank on; whether dragging the cutter back
-          through the slot marks it (if so, a "return at cutting speed"
-          option, or a pause to wind the depth out, may help)
-        - Stopped and started again (e.g. stopped while A turns), X goes
-          to the start first and only then A turns forwards to the next
-          tooth, so the teeth stay evenly spaced. They're kept until the
-          number of teeth changes, or A is zeroed or set
-        - Not done yet: stepping back a tooth (re-cutting one), a pause
-          between teeth as a dialog option (`Enter` during a pass does it
-          once)
-- [x] **Unit tests which fail now and then** (2026-11-11). On neutron
-      (Linux, 8 cores, a busy KDE desktop), 1 to 3 tests failed on every run
-      of `unit_test`, mostly "threading passes stop if a pass can't start"
-      (waiting 5 s for the encoder's speed to pass 1,000 rpm), and sometimes
-      "spring passes after the threading passes" and "stopping a multi-pass".
-      Unchanged main failed the same way. They pass on m4pro (macOS).
-    - **Why:** Linux's timing, in two ways. A sleep overshoots by its timer
-      slack (50 us by default): a 50 us sleep took 114 us on average, and
-      300 us took 397 us. And on a busy desktop a thread waking from a
-      sleep can wait about 3 ms (a scheduler time slice) before it runs.
-      The mock encoder slept between pulses and gave each pulse the time it
-      was sent as its tick, so its spindle ran up to half as fast as asked
-      (never reaching 1,000 rpm), and a late wake-up looked like a gap in
-      the pulses, i.e. lost pulses, which stopped threading passes
-    - **Fixed** in stepperControl's `MockGpio` (needs a release, v1.5.1):
-      each pulse is due a delay after the one before was due, and is given
-      that time as its tick, however late the thread sends it, as pigpio's
-      callbacks pass each edge's sampled time. A late pulse is followed at
-      once by any others due, so the average speed is the one asked for.
-      "Stopping a multi-pass" checked that X was still moving just after
-      starting a 0.01 mm feed, which a few ms' delay could miss: X is now
-      slow enough there for the feed to take 0.6 s (and X goes back to the
-      start with Z afterwards, as it's now stopped part way in)
-    - (Separately, the debug build on neutron had been configured with
-      FAKE=OFF, and the Makefile doesn't reconfigure an existing tree, so
-      `make test` wouldn't build until it was reconfigured by hand)
-- [x] **More unit tests which fail now and then, on slower machines**
-      (2026-11-14, on an M2 MacBook, while m4pro is away for repair; they
-      passed on m4pro, which is much faster). Each failed about one run in
-      three or four, and passed on re-running, with or without the change
-      being tested:
-    - "Threading: Z's backlash is taken up before a pass reverses"
-      (test.cpp, `pulsesFromWholeRev(started) <= 5`: a pass started more
-      than 5 encoder pulses from a whole revolution)
-    - The spring passes test (test.cpp, `getWarning() == "Stop the motors
-      first"` after `axis1GoToPosition(zStart - 0.5)`)
-    - Neither failed on the M2 when it wasn't busy (five runs of the whole
-      suite). With ten busy processes on its eight cores, the spring passes
-      test failed five runs in six, so that's the way to reproduce them
-    - **Spring passes: not a move finishing too soon, as first thought.** In
-      threading mode, a Z move is a threading pass: Z's backlash is taken
-      up by one step, then the pass starts on a later `checkStatus()`, and
-      waits for the spindle. The test polled for Z running (without calling
-      `checkStatus()`), which only worked if it caught the one step while
-      it was being made. On a busy machine, the step was over between
-      polls, so the pass never started (or, if the step was caught,
-      `multiPassGo()` could come once it was done). **Fixed:** the test runs
-      the updates until the pass has started, as `startPass()` does
-      (`waitForPassToStart()`). It passed eight runs in eight under the
-      same load
-    - **Pass starts:** `pulsesWhenZStarts()` read the encoder's count once
-      it saw Z move, polling every 0.1 ms. A wake-up 1.5 ms late is 5
-      pulses at the tests' spindle speed. **Changed:** it takes readings for
-      40 ms after Z starts, each working out the start from the count and
-      how far Z has gone, and keeps the earliest. Both of the errors (the
-      test's thread waking late, and Z lagging the spindle for a moment)
-      only make a start look later, and a pass can't start early. On an
-      idle machine they come out 0 or 1 pulses from a whole revolution
-    - Under that much load, the threading tests still fail now and then
-      (old and new versions alike, about one run in eight): the mock's
-      encoder and motor threads are starved too, and then Z really does
-      fall behind (e.g. 12 steps in "Z follows the spindle's position").
-      The tests can't allow for that, and the Pi's motor threads are
-      real-time and pinned to their own cores
-    - **Not starved after all (2026-11-15).** With a `yes` on each of the
-      M2's eight cores, the threading tests failed in 14 runs out of 15
-      (none in 15 when idle), always with the pass starting 6 to 8 pulses
-      *early*, which the motors can't cause. Z follows the spindle's
-      position, which runs on past the last pulse by up to 2 ms (5 pulses
-      at the tests' speed), and the tests measured it against the pulse
-      count. When the mock encoder's thread runs late, the count falls
-      behind and the position runs on ahead of it, so Z looked early.
-      **Fixed:** the tests measure against the position
-      (`Model::getSpindlePosition()`), which is what Z follows. The model
-      was right all along. The two multi-pass tests also keep the earliest
-      reading during a cut, rather than the first, as a reading can only
-      come out late
-    - Under that load, the suite still failed in 3 of 5 runs afterwards. Each
-      time the mock's threads really were starved: Z 11 and 40 steps behind
-      in "Z follows the spindle's position", and once the encoder's thread
-      held up for over 100 ms, so it lost pulses. Those can't happen on the
-      Pi (its threads are real-time). Eight `yes` processes plus the tests'
-      spinning motor threads is more than the M2 has cores, so it's a
-      harsher test than a busy desktop
-    - **`[timing]` tests are retried (2026-11-16).** A one-off failure in the
-      menu-only change's first `make test` run (the test wasn't noted) cost
-      several full re-runs. Ten runs of the whole suite with six `yes`
-      processes on the M2 all passed, so which tests fail now and then
-      can't be found by running them. Instead, the 13 tests whose results
-      depend on the mock spindle's and motors' threads keeping pace (the
-      ones that lock Z to the spindle, and the threading and knurling
-      passes) are tagged `[timing]`. Tests that only wait for a move to end
-      (with a generous deadline), or that use a fake clock, aren't.
-      `make test` runs the rest first, then each `[timing]` test on its own
-      (test/run_timing_tests.sh), retried up to three times, and lists any
-      that only passed on a retry as flaky. `make test-quick` leaves them
-      out. A test that isn't tagged and fails now and then should be noted
-      by name, then fixed or tagged
-- [ ] **Try the latest Raspberry Pi OS, with libgpiod instead of pigpio.**
-      Both Pis are held on Bookworm, as later releases are believed to have
-      dropped pigpio. That also holds the Pi builds to Bookworm's compiler
-      and Qt (GCC 12 and Qt 6.4, as far as is known), which is why the code
-      uses `fmt::format` rather than `std::format`, and must avoid newer
-      C++23 library features and Qt APIs even though they build on the Mac.
-    - **Plan:** on a spare SD card (so the working one is untouched),
-      install the latest Raspberry Pi OS, and try a branch using libgpiod
-    - **No hurry:** Bookworm (Debian 12) has long-term support until about
-      mid-2028, so this can be done carefully, a step at a time
-    - **The GPIO library first, then the OS.** libgpiod is in Bookworm too
-      (1.6, as far as is known; v2 came later), so a libgpiod `IGpio` can be
-      tried on the same SD card and hardware, chosen at build time, and
-      compared with pigpio directly. Once it works, the OS change is mostly a
-      rebuild. (Written against 1.6, it would need moving to v2's API for
-      the latest OS, but that's a small amount of code)
-    - **The mill first.** Its Pi only steps motors: it has no input pins
-      wired (2026-11-16), its scales come over serial, and it has no
-      spindle encoder. So it tries the stepping without the hard part (the
-      inputs with pull-ups are only tried on the lathe). If that's
-      good, the lathe's encoder is the only new risk left, and can be
-      measured on its own
-    - **What it has to replace:** only `gpio.cpp` uses pigpio, behind
-      `IGpio` (igpio.h), so nothing else should change. It uses pins as
-      outputs (`gpioSetMode`, `gpioWrite`: step, direction, enable), inputs
-      with pull-ups (`gpioSetPullUpDown`, `gpioRead`: alarm, limit
-      switches), microsecond delays and ticks (`gpioDelay`, `gpioTick`, for
-      the motor threads' step timing), and edge callbacks with timestamps
-      (`gpioSetAlertFuncEx`: the spindle encoder and the Z scale). libgpiod
-      (v2) covers each of these: bias settings for the pull-ups, and edge
-      events with kernel timestamps, read from a thread of our own
-    - **The risk is the edge events.** pigpio samples the pins by DMA (every
-      5 µs by default) and delivers callbacks in batches; libgpiod's events
-      come from interrupts, read by a thread, which must keep up with the
-      encoder at the highest spindle speed and not lose edges. It would
-      need its own core, or to share one carefully, as the motor threads
-      are pinned (see the motor-thread pinning notes under "Motion and
-      timing"). Measure lost pulses with threading at speed before
-      trusting it, as that's what showed up the pinning problem before
-    - **Also check:** stepping a motor with `gpiod` line writes is fast
-      enough (it goes through the kernel, unlike pigpio's direct register
-      writes), and the program no longer needs root (pigpio needs it;
-      libgpiod only needs access to /dev/gpiochip*), which would change how
-      it's started
-    - Would free the OS, the compiler (`std::format` and newer C++23) and Qt
-      to move on
-- [ ] Lots of refactoring still needed, as this grew a bit organically
-- [ ] **An array of axes, with manual axes (the mill's Y and Z).** Replace
-      the hard-coded "Axis1..." and "Axis2..." functions and members with an
-      array of axes, so the mill can have four: X (stepper), A (the rotary
-      table, stepper), and Y and Z (moved by hand, read from their scales).
-      Some behaviour only applies to some axes (e.g. retracting is only for
-      the lathe's X, not its Z), so each axis says what it can do, rather
-      than every axis having every feature.
-    - **Decided (18 Nov 2026), from planning the mill's slot and
-      face/pocket modes (see "Slot and face/pocket modes" under
-      Multi-pass):**
-        - Each axis has a kind: `stepper` or `manual`. A manual axis's
-          position is its scale's reading plus an offset, so it must have a
-          scale (refused at start-up without one). The mill's DRO sender
-          already sends Y and Z over the same FTDI stream as X; only X is
-          used so far
-        - A manual axis behaves like a DRO line: shown on the main display
-          all the time, with zero, set (type a value) and half (set it to
-          half its reading, for finding a centre between two edges; the
-          user uses this on TouchDRO all the time). Half is for the motor
-          axes too. Each axis has its own leader key (check for clashes:
-          `a` is already X's nudge on the mill)
-        - A go-to on a manual axis is a "distance to go" prompt, not a
-          motor move: e.g. "Move Y to 12.500: 0.340 to go", updated live as
-          the user winds the handle. It's done by itself once the scale has
-          settled within a count or two of the target, and says if it went
-          past. It's in the status line or panel, not a modal dialog, so
-          nothing blocks; Space (or Esc) cancels it. Moves and nudges on a
-          manual axis say why they can't, rather than doing nothing
-        - A go-to involving a motor axis and a manual axis runs both
-          together (e.g. X moves while the user winds Y), and is done once
-          both have arrived. This would make bolt-hole circles possible
-          later (a list of go-to targets), so TouchDRO would only be needed
-          rarely, if at all
-        - Memory slots store every axis. Going to a slot moves (or prompts
-          for) the cut-plane axes only: X, Y and A. Z is stored and shown,
-          but is never part of a slot's go-to (the user won't move Z while
-          X is moving). Z will never have a stepper: the user's CNC mill is
-          for anything that needs full automation
-        - The plan is to fit a stepper to Y later. That should then be a
-          config change (`manual` to `stepper`, plus its pins, conversion
-          and core). Mind the cores: X, A and Y would each have a pinned
-          core, leaving one for the UI and the OS on a Pi 4. A fourth motor
-          wouldn't fit without rethinking the pinning
-        - The lathe stays at two axes (no topslide scale: the user never
-          uses the topslide)
-        - A scale on the lathe's X (axis 2) may come later (the user,
-          19 Nov 2026). That should then be a config change too, so the
-          scale handling (lining up, the mismatch check and dialog,
-          re-basing at rest and by hand, finishing moves, backlash
-          measurement, the display) wants to belong to any axis, not
-          axis 1 alone as now. A quadrature scale on X would also need a
-          second pin callback in the GPIO layer (only
-          `setLinearScaleAxis1Callback()` exists) and two free pins
-    - **Plan, in stages, each tested and working before the next:**
-        1. The axis abstraction, with the new manual axes built on it from
-           the start: config, calibration (Y and Z probably need their own
-           counts per mm, as X did), the DRO lines, zero, set, half, the
-           go-to prompt, and memory slots for every axis
-        2. Move X and A (and the lathe's Z and X) onto it, one area at a
-           time (display, memory, nudges, go-tos, scale), with no change of
-           behaviour, so lc.cfg and lc_mill.cfg keep working with the same
-           keys
-        3. The slot and face/pocket modes on top of it (see Multi-pass)
-    - The `Axis1*` / `Axis2*` config keys stay as they are; the new axes
-      are `Axis3*` and `Axis4*` on the mill
-    - **Done (18 Nov 2026), the first part of stage 1, not yet tried on the
-      mill:** Y and Z as DRO lines, with zero, set and half. Not yet (see
-      below for those, done since) the go-to prompt, memory slots, or a
-      settled/steady reading (which the
-      go-to prompt and the modes will need)
-        - `Axis3Kind` / `Axis4Kind` = manual (none by default), with a label,
-          a leader key (none by default; y and z on the mill), and the same
-          scale keys as axis 1's (a manual axis without a scale is refused).
-          The scales share axis 1's DRO reader (`makeScale()`, split out of
-          `configureAxis1Scale()`)
-        - `ManualAxis` (manualaxis.*): the scale's reading plus an offset,
-          which zero, set and half change. It starts at zero (the user's
-          choice: they re-zero at each start anyway, as on TouchDRO, so
-          showing the scale's own reading first was no use). Its zero isn't
-          kept when lc stops, and if the readings are lost (the sender's
-          count may have started again), it starts at zero again when they
-          return
-        - The display: a line each below X and A, at 45 px rather than 60 so
-          two fit where the spindle speed would be, with "no reading" when
-          there isn't one. X's scale line moved up to X's row, after its
-          speed, shortened to e.g. "scale 12.345 (+0.010)" (the units are
-          X's); the mode's name, and the lathe's taper angle and RETRACTED
-          below it, moved down a line to make room
-        - Half for the motorised axes too (`XH`, etc.): as setting the
-          position, it clears that axis's memory slots and asks before
-          clearing the current feature. Not while the axis is moving
-        - **Tried on the mill (19 Nov 2026): halving did nothing on any
-          axis.** The controller checked the key against the mode before
-          adding the leader to it, so after `y` it saw a plain `h`, the
-          quick chamfer, which lc_mill.cfg's DisabledModes turns off. Fixed:
-          the key after a leader is checked as the leader's key (`a3_h`), as
-          the menu already did. The same fault meant `z b` (re-base) while
-          a multi-pass was paused never got through either (`z` on its own
-          wasn't allowed then), so axis 1's leader is now allowed then too.
-          Space after a leader is now plain Space (it was the leader's
-          Space, which stopped everything but didn't cancel a manual go-to),
-          and Esc after a leader just cancels it (it stopped everything)
-        - Not allowed during a multi-pass (nor are any other keys but a
-          few), though zeroing a manual axis moves nothing. The slot and
-          face/pocket modes may want Z zeroed at a pause
-    - **Seen on the mill (18 Nov 2026):** Z's scale counts up as the tool
-      goes down, so `Axis4ScaleReversed` is now true, following the usual
-      convention that Z goes negative towards the work
-      Y left as it was: it increases "towards the column", as wanted
-      (checked the same day)
-    - **To try on the mill:** each scale's counts per mm (the nominal 2560
-      per inch so far: calibrate against a known move, as for X), and that
-      the y and z leader keys don't clash with anything in use
-    - **Used on the mill (19 Nov 2026)** for a whole job (a mounting
-      bracket), without TouchDRO: Y and Z zero and set worked as expected
-      (half not needed yet). The user's workflow for Z: bring the tool down
-      to the work, set Z to the work's current thickness, then machine down
-      to the thickness wanted by Z's reading. The part came out within a
-      few tens of microns of the plan in each dimension, so the nominal
-      counts per mm look right, though they haven't been calibrated against
-      a known move yet. No clashes with the y and z leader keys seen
-    - **Done (19 Nov 2026), the rest of stage 1, not yet tried on the
-      mill:** memory slots for the manual axes, and going to them by hand.
-      `M` stores every axis; a manual axis's leader then `m`, `Enter` and
-      `Delete` store, go to and clear it alone. Going to a slot shows the
-      distance to wind on the axis's own line ("to 12.50: 0.34 to go", red
-      once past), and ends once the reading has settled within two counts
-      of the target (`ManualAxis::isSettled()`: within a count, as it
-      flickers, for `Axis3ScaleSettleMs`, 1500 on the mill). Nothing blocks:
-      `\` then `Enter` moves X and A while Y is wound, and Space or Esc
-      cancels. `Axis4InSlotGoTo = false` leaves the mill's Z out of `\`
-      then `Enter`, as decided (z then Enter still goes to Z's alone).
-      Zeroing, setting or halving a manual axis clears its slots, as for the
-      motorised axes (positions from the old zero would be somewhere else),
-      as does losing its readings. On the mill, the memory rows are a
-      little smaller, to fit Y's and Z's above the mode's lines. Plain
-      Enter still goes to axis 1's slot alone, as before. Not done: a sound
-      when a manual go-to arrives (the line just clears), and the multi-pass
-      dialog doesn't use the manual axes' slots yet (stage 3). Stage 2
-      (moving X and A onto the same abstraction) is next
-    - **Done (19 Nov 2026), the first part of stage 2:** memory slots,
-      zero, set and half, and the display, with no change of behaviour.
-      The Model has calls taking an axis number (1 to `Model::AXES`, 4)
-      which work the same for every axis: `hasAxis()`, `axisLabel()`
-      (which replaces the 75 `read("Axis1Label", "Z")`s), `getMemory()`,
-      `storePosition()`, `goToCurrentMemory()`, `clearCurrentMemorySlot()`,
-      `clearMemory()`, `inSlotGoTo()`, `zero()`, `setPosition()`,
-      `half()` and `formatPosition()`. The `axis1...`/`axis2...`/
-      `manualAxis...` versions of these are now private, behind them.
-      Every axis's slots are in one array, in mm (a motorised axis's are
-      whole steps, so going there and "already there" are exact), rather
-      than the motorised axes' in steps with a sentinel for "unset". The
-      controller's keys for these act on `key::axisOfKey()` rather than a
-      case per axis, and the view has one list of axis lines and one of
-      memory rows (the motorised and manual axes differ only in what they
-      show beside the position: speed, or "no reading" and the go-to)
-        - A bug fixed on the way: a memory value typed in (`i`) was
-          truncated to a step, not rounded, so 0.7 mm at 1/1000 mm a step
-          was stored as 699 steps (0.699 mm). Now it's the nearest step
-        - **Then (19 Nov 2026), the motorised axes' state:** the dozen
-          pairs of members (`m_axis1Status`/`m_axis2Status`, fast
-          returning, rapid in progress, previous speed, was running, the
-          motor log, the positions' tool, the last relative move, the
-          breadcrumbs, faulted) are one `MotorAxisState` per axis, in
-          `m_motorAxes`, through `axisState(n)`. The calls which differed
-          only by axis take its number: `isMotorRunning()`,
-          `motorSpeed()`, `setMotorSpeed()` (which also replaces
-          `axis1SetSpeed()`), `waitForMotor()`, `motorStep()`,
-          `motorPosition()`, `axisStatus()`, `goToPosition()`,
-          `goToOffset()`, `repeatLastRelativeMove()` and
-          `goToPreviousPosition()` (whose two copies are now one).
-          `enum class Axis` is gone (its last uses take a number), as is
-          `m_lastRelativeMoveAxis`, which was set but never read. The
-          motors themselves are still `m_axis1Motor`/`m_axis2Motor` (about
-          400 uses), with `motor(n)` for code taking a number: they can
-          move into the state with the moves
-        - **Then (20 Nov 2026), speed:** `speedIncrease()`,
-          `speedDecrease()` and `selectSpeedPreset()` take the axis number,
-          in place of the six `axisNSpeed...()`, and the controller's cases
-          for `=`, `-` and the presets are one each. Each axis keeps its own
-          steps (axis 1: 1 below 20, then 20; axis 2: 2 below 10, then 10),
-          in a table, and axis 1's is still left alone when threading
-          (where the presets are off for both). `Model::speedPreset()`
-          gives a preset's speed, so the menu no longer has its own copy of
-          the defaults. Two small differences, both deliberate: faster now
-          goes up to the maximum rather than stopping short of it on axis 1
-          (e.g. 990 went no further, with 1000 the maximum) or going past
-          it on axis 2 (391 went to 401, with 400 the maximum, on the
-          lathe's X); and a speed within 0.1 of a step's boundary (e.g.
-          20.0001, read back from the motor's rpm) counts as on it, as
-          axis 2's already did
-        - **Then (20 Nov 2026), stopping:** `stopAxis()` and
-          `stopAxisRamped()` take the axis number, in place of the four
-          `axisNStop...()`, which were the same but for the motor (and only
-          used inside the Model). `stopAllMotors()` (Space) is unchanged:
-          it signals both motors before waiting for either, so they stop
-          together. A new test presses "stop" twice on each axis with
-          deceleration ramping: the first slows down, the second stops at
-          once
-        - **Then (20 Nov 2026), moves, rapids, nudges and fast returns:**
-          `move()`, `rapid()`, `nudge()` and `fastReturn()` take the axis
-          number, in place of the eight `axisN...()`, with one direction
-          type for every motorised axis, `AxisDirection` (`Forward` is the
-          left and up arrows' way; `axisDirection()` turns a `ZDirection` or
-          `XDirection` into one). Axis 1's moves still go through the
-          motion sequence (for a taper or threading), and its fast return
-          in a taper is still at 100 mm/min. Nothing tested the directions,
-          and they turned out not to agree: a move's direction came from
-          `AxisNMotorFlipDirection`, but a nudge's from the conversion
-          factor's sign (and, on axis 2 only, the flip as well). Those
-          agreed on the lathe and the mill's X, but on the mill's rotary
-          table (a positive conversion, not flipped) `W`/`S` turned it the
-          opposite way to Up/Down. Decided (20 Nov 2026): the arrows' way,
-          so a nudge's direction now comes from the flip alone, as a
-          move's does, and only A's nudges change. A test now checks every
-          move, rapid and nudge's direction with both machines' settings
-          (and fails on the old rule, for the mill's A nudge alone). A
-          nudge's steps are now rounded, rather than truncated. **Tried on
-          the mill (20 Nov 2026):** nudges used a lot, as normal. **Still to
-          check on the mill:** that `W` turns A the same way as Up
-        - **Then (20 Nov 2026), locks:** the lock calls already took an
-          axis number; now the refusals do too. `axisMoveRefused()` is the
-          one check for a move of an axis (adding X for axis 1 in a taper,
-          as X follows Z), in place of `axis1MoveRefused()` and
-          `axis2MoveRefused()`, and `moveRefused()` takes the axes to check
-          (e.g. `{ 1, 2 }`) rather than a bool for each of two. Axis numbers
-          are `int` throughout, as elsewhere, rather than `unsigned` for
-          the locks. No change of behaviour
-        - **Then (20 Nov 2026), the motors:** `m_axis1Motor` and
-          `m_axis2Motor` are now each axis's `MotorAxisState::motor`, and
-          the Model's 265 uses go through `motor(n)`. (Its const version
-          returns a plain pointer, as the unique_ptr did, since const
-          functions call the motor's non-const ones.) That changed the
-          order they're destroyed in, after the scale rather than before,
-          and the fake scale's thread reads axis 1's motor: so the Model now
-          has a destructor which calls `resetMotorThreads()` (the scale,
-          then axis 2's motor, as it may follow axis 1's in a taper, then
-          axis 1's), rather than relying on the members' order. Only the
-          app's quit called it before; the tests didn't. No change of
-          behaviour. **Tried on the mill (20 Nov 2026):** quitting, with no
-          problems
-        - **The scale, decided (20 Nov 2026):** a scale on the lathe's X is
-          planned, once Z's (the trial: quadrature, straight to two GPIO
-          pins, as X's will be, not a DRO sender) is working and proven; it's
-          waiting for the 5 V to 3.3 V converter boards. X's is to do
-          everything the mill's X does: the checks at rest and the re-base,
-          the checks while moving, finishing moves, and re-basing between
-          passes (which, on the lathe, covers X's infeed as well as Z). If
-          two axes disagree with their scales at once, one dialog deals with
-          both: it waits until every scale has settled (the first mismatch
-          stops everything, and the axes settle at different moments), then
-          lists each axis's disagreement, and Y/Enter (the scales) or N/Esc
-          (the motors) applies to every axis listed. In three parts, each its
-          own commit:
-            - (a) the scale's state and calls by axis number, with only
-              axis 1 reading a scale: no change of behaviour
-            - (b) axis 2 reading `Axis2Scale...`: the checks at rest and
-              while moving, the combined dialog, the display on X's line,
-              and X's leader then `B`. Tried in the fake build only
-            - (c) finishing moves and re-basing between passes for axis 2,
-              with the retraction and the multi-pass X correction
-        - **Done (20 Nov 2026), part (a):** each motorised axis's
-          `MotorAxisState` has a `ScaleState` (the `AxisScale`, the at-rest
-          check's state, the mismatch and its asks, the stall stop, the
-          finish-on-scale setting and any finishing move under way, and the
-          fake scale), in place of `m_axis1Scale` and its dozen members. Its
-          17 public calls take the axis number (`hasScale()`,
-          `scalePositionMm()`, `scaleDifferenceMm()`, `scaleMismatchMm()`,
-          `acceptScalePosition()`, `keepMotorPosition()`,
-          `rebaseFromScaleByHand()`, `finishesOnScale()`, and so on), as do
-          the at-rest check, the re-bases, `configureScale()` (which reads
-          `AxisNScale...`) and `backlashCompensationMm()`. checkStatus()
-          updates and checks both axes' scales, but only `configureScale(1)`
-          is called, so only axis 1 has one. The scale is declared after the
-          motor in `MotorAxisState`, so destroyed first, and ~Model() stops
-          both scales before the motors anyway. Still axis 1's alone: the
-          finishing moves' logic (part c), `cutReady()` (axis 1 is the cut
-          axis), the backlash measurement, and the controller's dialog and
-          the view's scale text (part b)
-        - **Done (20 Nov 2026), part (b), not yet tried on a machine:**
-          `configureScale(2)` reads `Axis2Scale...`, so axis 2 can have a
-          scale, off unless set. It's lined up again wherever X's motor
-          position is set (zeroing, setting, halving, a diameter, and gear
-          cutting's renumbering by whole turns), and has the same checks at
-          rest and while moving as axis 1's, the re-base at rest
-          (`Axis2ScaleRebase`), and the re-base by hand (X's leader then
-          `b`, also in the menu). A quadrature scale on any axis but 1 must
-          have its pins set, as axis 1's default to 5 and 6; in the fake
-          build, it's simulated by following its motor (the mock GPIO only
-          simulates axis 1's). The scale's text is on each motorised axis's
-          line (X's less any multi-pass correction, as X's position is), and
-          with a scale on axis 2, the taper's angle and RETRACTED are drawn a
-          line lower, clear of it (checked on snapshots). One dialog asks
-          about every axis which disagrees: it waits until no other axis's
-          scale is still settling (`Model::scalesStillSettling()`, which
-          doesn't wait for an axis which already disagrees, as a misreading
-          scale may never settle), then lists each, and Y/N applies to every
-          one; an axis whose scale is misreading keeps its motor's position
-          either way. Keys wait while either axis disagrees, and the alarm
-          sounds for either. New tests: X's re-base at rest and by hand,
-          zeroing X lining its scale up, both disagreeing in one dialog, the
-          dialog waiting for the other scale to settle (which fails without
-          the wait), one misreading and the other disagreeing, and a
-          quadrature scale on axis 2 needing its pins. Still axis 1's alone
-          (part c): finishing moves, re-basing between passes, and the
-          re-base by hand while a multi-pass is paused
-        - **Done (20 Nov 2026), part (c), not yet tried on a machine:**
-          finishing moves for either axis (`startFinish()`,
-          `advanceFinish()`, `finishMove()` and `endFinish()` take the axis
-          number; X's go-to, relative move and memory return start one, as
-          Z's do), with X's own on and off in the menu
-          (`toggleAxis2FinishOnScale`, System, `G`; `Axis2ScaleFinishMoves`
-          to start on). Keys wait while either axis finishes, and Space ends
-          both. Re-basing between passes for X, the feed axis: the
-          multi-pass asks the new `IMultiPassMachine::feedReady()` after
-          each feed to a pass's depth (or before the pass, if it's there
-          already), in a new `FeedSettling` state, until it's true. The
-          Model's waits for X's scale to settle and re-bases X (with
-          `Axis2ScaleRebaseBetweenPasses`, in a plain multi-pass or gear
-          cutting, as for `cutReady()`). If the re-base leaves X short of or
-          past the depth, the multi-pass feeds again, at most
-          `MAX_FEED_CORRECTIONS` (3) times, then stops with a warning
-          rather than cut at the wrong depth. While paused, X is re-based
-          each time its reading settles, and by hand (`XB`), as Z is. A
-          re-base renumbers the motor's steps, so the retraction's stored
-          step (`m_xOldPosition`) is then the nominal position, which is
-          where the table really is: unretracting goes to the true depth.
-          The multi-pass X correction is only in the shown and feed
-          positions, not the motor's, so a re-base doesn't disturb it. The
-          settling overlay and the status line name X while it waits. New
-          tests: the engine waiting for the feed, feeding again, and giving
-          up after three; X finishing on its scale (short, past, a memory
-          return, Space); X's toggle in the menu; and a multi-pass with X
-          falling 0.03 mm short of its motor, paused and not, which (without
-          the feed's re-base) cuts the last pass 0.03 mm too deep. Not
-          done: a correction that reverses (X fed past the depth) relies on
-          the motor's backlash compensation, rather than backing off and
-          approaching again as a finishing move does; the re-base after it
-          catches what's left, within the three tries. **To try on the
-          lathe**, once X has its scale. This completes stage 2
-        - **Then (20 Nov 2026), approaching on the scale** (the user's
-          question: could an overshoot cut what it shouldn't? Yes, where the
-          tool is in the work, e.g. finishing at a pocket's end wall on the
-          mill; a correction afterwards can't undo it. The feed is normally
-          clear of the work, with Z off the end, but correcting an
-          overshoot by reversing leaves the slack the wrong way, so the cut
-          can push the tool out, and a pass starting inside the material
-          would plunge too deep). An overshoot comes from momentum at a stop
-          from speed, and from the backlash compensation on a reversal (a
-          fixed 820 steps on the mill's X, where the backlash is 0.31-0.45
-          mm). So, with `AxisNScaleApproachMm` (off unless set) and
-          `AxisNScaleApproachSpeed` (20 if not set): a move finished on the
-          scale stops that far short, waits for the scale, then creeps the
-          rest the same way (not counted as a correction; a move shorter
-          than the approach creeps all the way; backing off after going
-          past returns to the approach's start, then creeps). The creep's
-          speed is put back afterwards, as a stop from it would leave it
-          (`speedAfterStop()`, so a fast go-to still ends at
-          `AxisNSpeedResetTo`). The multi-pass feed (axis 2, with
-          `Axis2ScaleRebaseBetweenPasses`) does the same inside the Model
-          (`FeedApproach`: back off if past, move short, wait for the scale
-          and re-base, creep in), with `feedMoving()` true throughout, so
-          the multi-pass sees one feed; this also replaces the reversing
-          correction noted as not done above. Only the feed before a pass,
-          not a radius's path. On for the mill's X at 0.2 mm and 20 mm/min
-          (the user's choice). **Tried on the mill (20 Nov 2026):** go-tos
-          on X stop short and creep in as expected. Tests: with
-          the table running 0.05 mm ahead of the motor, a go-to's scale
-          never reads past the target with the approach, and does (by more
-          than 0.04) without; a short move creeps all the way; and a
-          multi-pass whose X table gets 0.03 mm ahead at the last feed never
-          goes deeper than the depth with it, and does (by more than 0.02)
-          without. Still to do, as a follow-up: a multi-pass cut's end in Z
-          (e.g. into a shoulder) isn't checked against the scale, and the
-          cut starts with a reversal from the return, so the backlash
-          compensation's error shifts where it ends; it would want to stop
-          short and creep in too
-        - **Then (20 Nov 2026), the cut axis's ends:** the user chose, of
-          stopping short and creeping (a dwell with the tool in the work,
-          which may leave a faint mark the approach's distance before the
-          end), or taking up the slack beyond the start and re-basing there
-          before the cut (no dwell in the work, but it needs room beyond the
-          start, which a pocket's wall on the mill hasn't), the first. So the
-          approach is now general (`AxisApproach`, by axis number, in
-          `m_approaches`): besides the feed, axis 1's multi-pass moves (the
-          cut, the cut back, the return, and the move to a pass's start)
-          stop short, wait for the scale and re-base, then creep in, with
-          `Axis1ScaleApproachMm` and `Axis1ScaleRebaseBetweenPasses`. Not a
-          radius's path, threading, or a cut with X following Z, as
-          re-basing Z part way would move X (the follower moves by the
-          leader's change in position: see `StepperMotor::synchronise()`).
-          When the return has just re-based at the start, `cutReady()`
-          doesn't wait for the scale again, so a pass waits twice (the cut's
-          end and the return's), not three times. A creep is never faster
-          than the axis was going (`creepSpeed()`; a fine cut on the lathe
-          may be slower than 20 mm/min), for the finishing moves too. The
-          simulated scale now gives `tableMm()`, where the table really is,
-          without the reading's lag, as the return starts before the reading
-          would catch up with a cut's end. Test: Z's table gets 0.05 mm
-          ahead as the second cut starts, and 0.05 the other way as its
-          return starts: with the approach, the table never goes past the
-          cut's end or back past the start; without, it ends 0.05 past the
-          end (and with the return left out of the approach, 0.05 past the
-          start). On the mill (0.2 mm), each pass now waits about 4 s
-          rather than 2. **Tried on the mill (20 Nov 2026):** a multi-pass
-          on X worked as expected, stopping short and creeping at both
-          ends, but not on a real cut: **still to see** whether the dwell
-          0.2 mm before a cut's end leaves a mark (a smaller approach, e.g.
-          0.1, would move it closer to the end). `XB` (re-basing by hand) not
-          tried since the scale's calls moved to axis numbers
-        - **Then (20 Nov 2026), in the fake build with lc_mill.cfg**, the
-          user saw a multi-pass from 0 to -5 stop at -4.80, jump to about
-          -5.08, then go back, rather than creep. The simulated table had
-          no backlash, so the mill's 820 steps (0.256 mm) of compensation
-          took it 0.256 further than the motor on each reversal into a cut:
-          past the stop-short point (0.2) and the end, and the re-base (the
-          "jump") then found it there, and the creep reversed onto the end.
-          Two fixes: the simulated table now has backlash
-          (`FakeDroScale`'s slack, `Axis1FakeBacklashSteps`, the
-          compensation unless set; the two tests which want a table with
-          none set it to 0), so the fake build behaves like a machine whose
-          compensation is right; and an approach which finds itself past its
-          target once re-based backs off past the backlash and approaches
-          again (once), with a warning that the approach is shorter than the
-          overshoot ("X went 0.056 mm past its target: make
-          Axis1ScaleApproachMm more than that"), as finishing moves now warn
-          too. Tests: the simulated slack both ways, and the user's case
-          (0.256 compensation, 0.2 approach): with the table's backlash as
-          compensated it stops short, creeps, and never passes the end, with
-          no warning; with none, it warns
-        - **Then (21 Nov 2026), on the mill:** a multi-pass along X from
-          about 0 to -97 mm (cuts at 140 mm/min, returns at 800) gave that
-          warning five times ("X went 0.010 mm past its target"). Each
-          97 mm move there ended 0.11-0.22 mm further than the motor by the
-          scale, whatever the speed (40 to 800 mm/min), and 0.25 mm on a fast
-          return to a slot. So it isn't momentum. Short moves end within
-          about 0.05 mm, and 97 mm moves between -62 and 35 mm only
-          0.04-0.09 mm further, so it looks like the lead screw's pitch
-          varying along its length (not the scale's counts per mm, which
-          would be the same everywhere), which the re-basing deals with. The
-          mill's approach is now 0.35 mm (0.1 more than any seen). The
-          warning's advice was misleading: it gave how far past the target
-          the axis went (0.01), when the approach (0.2) had to be more than
-          the overshoot from where it aimed (0.21). It now says both, and
-          suggests more than the overshoot. **To check on the mill:** no
-          more warnings with 0.35, and (if wanted) the lead screw's error
-          along the table, e.g. by a slow move end to end and the scale's
-          difference every 10 mm
-        - **Then (21 Nov 2026), clearing a warning:** on the mill, Esc was
-          pressed (by instinct) to clear that flashing warning, which left
-          multi-pass mode part way through. So `F9` now clears the warning
-          and does nothing else (allowed whatever is going on, and with the
-          menu open), and a warning which can be cleared ends with
-          "[F9 to clear]". Not the encoder's lost pulses in threading or
-          knurling, which is still true until the thread is chosen again.
-          A warning whose cause is still there comes back. Test: F9 clears
-          a lock refusal while Z keeps moving, with and without the menu
-          open. **Not yet tried on the machine.** Esc ending a multi-pass
-          without asking is still as it was
-- [x] `axis.cpp` / `axis.h` are compiled but unused, and their `mgo::Axis`
-      class clashes in name with `enum class mgo::Axis` in model.h
-    - **Done:** removed (they're in git's history, if the "array of axes"
-      idea below wants them)
-- [x] Set the initial X-axis retraction direction from the config file
-    - **Done:** `Axis2RetractionDirection` (outwards or inwards) in lc.cfg
-
-## Miscellaneous
-- [ ] **New mode: "cut knurling".** A cut (rather than pressed) knurl, made
-      with a single-point tool as two sets of multi-start "threads" of
-      opposite hand.
-    - **First set:** a series of thread-like cuts at evenly spaced starting
-      angles, giving several helical grooves along the piece. The helix
-      angle (the grooves' angle to the axis, on the work's surface) defaults
-      to 45°
-    - **Second set, opposite hand:** cut with the *same tool*, spindle still
-      running forwards, but with Z moving the other way (outwards from the
-      chuck, towards the tailstock). The electronic leadscrew makes this
-      easy. No tool change means no offsets to worry about, and both sets
-      line up with each other. These cuts start at the chuck end, so that
-      end needs a relief groove or runout to start in
-    - **Tool:** a 90° point (e.g. an HSS chamfering tool) gives the usual
-      90° knurl form; a 60° threading tool would also work, giving a slightly
-      different profile
-    - **Lead depends on diameter:** for a helix angle θ, the lead (Z travel
-      per spindle revolution, per start) is π × Ø / tan θ, which for 45° is
-      π × Ø. On a 10 mm bar that's about 31 mm per revolution, so Z has to
-      move very fast for the spindle speed. The spindle will need to run
-      very slowly to stay within Z's speed and acceleration limits; the mode
-      should work out and show the maximum spindle speed allowed. The Ø
-      comes straight from the current feature (see "Work geometry and
-      tools"), or the user enters it
-    - **Number of starts:** sets the diamond size (diamond pitch about
-      π × Ø ÷ N). The mode could ask for a target pitch (fine, medium,
-      coarse) and choose N to suit the diameter
-    - **Starting angles:** each start is the previous one plus 360° ÷ N of
-      spindle rotation, using the encoder, like a multi-start thread. Any
-      multi-start threading support would share this
-    - **Passes:** each start probably needs several passes in X to reach full
-      depth, so this fits the generic multi-pass engine: for each pass
-      depth, cut every start (or every start to full depth in turn)
-    - **Started (2026-11-12), in the mock build only:** knurling mode (Modes,
-      "Cut knurling", `K`). It uses the multi-pass dialog (start, Z end, X
-      infeed as the depth, infeed per pass, constant area), plus the number of
-      starts and the helix angle. The lead comes from the diameter at the
-      start, so X must have been set as a diameter. The cuts are threading
-      passes at the knurl's lead. The multi-pass engine gained two general
-      options: `starts` (each pass cuts every start, 1/N of a turn apart,
-      before feeding in) and `cutBack` (the return is a cut too).
-        - **Decision: each start there and back, rather than all of one hand
-          and then all of the other.** With the tool still in, the return to
-          the start cuts the opposite hand, so there's no retract and no
-          non-cutting return at all. Every cut back starts at the Z end, at
-          the same spindle angle each pass, so the passes line up. The cost
-          is that the Z end always needs a relief groove (or to run off the
-          work)
-        - **Decision: knurling's spindle counts as turning down to 5 rpm**
-          (threading's limit is 30), as on the lathe, Z's 1000 mm/min limits
-          a 45° knurl on a 10 mm bar to about 25 rpm. The dialog refuses a
-          lead Z couldn't follow even at 5 rpm. The rpm shown (in any mode)
-          isn't rounded down to a multiple of 10 below 50 rpm
-        - **To check on the machine:**
-            - Z starts each pass from rest straight to full speed (follow
-              mode doesn't ramp), and for a long lead that's far faster than
-              threading has ever asked for. The HSS57 may stall. If it does,
-              each cut may need a run-up (start further off the work, with
-              Z's speed ramped up to the spindle's before the tool reaches
-              it), which stepperControl's follow mode doesn't do yet
-            - Whether the spindle runs smoothly with useful torque at 5-25
-              rpm, and whether the encoder's rpm and lost-pulse checks behave
-              at those speeds
-            - How the tool's flanks cope with cutting both ways
-        - **Not done yet:** taking the Ø from the current feature rather
-          than X; multi-start threading (the engine supports it now, but the
-          threading passes dialog doesn't offer it); allowing for a tool
-          other than 90° in the starts suggested
-        - **First hurdle on the machine (2026-11-12): the spindle won't go
-          slow enough.** The VFD (Mitsubishi FR-D700-SC, set up by the
-          package's supplier, with an external pot box) won't go below about
-          70 rpm, so the mode refuses as "too fast". At 70 rpm, the lead can
-          be at most 800 ÷ 70 ≈ 11.4 mm, which needs a helix angle of at
-          least 70° on a 10 mm bar (80° on 20 mm): long thin diamonds, not a
-          normal knurl. The supplier had set Pr.2 (minimum frequency) and C2
-          (Pr.902, terminal 2 bias frequency) to 5 Hz; lowering Pr.2 to 2 Hz
-          as a test made no visible difference, and it was put back.
-        - **Solved the same day: both settings lowered to 1 Hz.** Each one
-          alone holds the floor at 5 Hz: C2 is the frequency the pot gives
-          fully down (0 V), and Pr.2 clamps the output to at least its
-          value. Lowering both to 1 Hz brought the floor right down (at the
-          old ratio of about 14 rpm per Hz, about 14 rpm: enough for 45° up
-          to about 18 mm). On the D700's panel, the C parameters are in a
-          "C" menu of their own, not in the numbered list. The supplier's
-          5 Hz may have been to protect the motor (little torque, and little
-          cooling, at a few Hz under V/F control), so the spindle shouldn't
-          be left running slowly under load. The two other ideas below were
-          considered first, and may still be useful (e.g. for bigger bars,
-          or more torque):
-            - **A "back gear" (hardware):** a second pair of pulleys on the
-              motor's toothed belt, giving a lower range. The floor drops in
-              proportion: 3:1 gives about 23 rpm (enough for 45° on 10 mm),
-              5:1 about 14 rpm (18 mm), 7:1 about 10 rpm (25 mm). The torque
-              goes up by the same ratio. The encoder is driven from the
-              spindle, so its gearing in the config doesn't change with the
-              belt. No code change needed
-            - **A hand-turned spindle (software):** passes already follow the
-              spindle's position, not its speed. In stepperControl's follow
-              mode, Z stops when the spindle stops, and goes back along the
-              groove if it's turned back (its target is clamped between the
-              cut's start and end). Starting from rest by hand would also
-              avoid Z having to jump to full speed. It would need, as a
-              knurling dialog option:
-                - no minimum spindle speed: a pass starts with the chuck
-                  still, and waits for it to be turned to the start angle
-                - Z's follow speed at its maximum (it's set from the
-                  measured speed now, which would be about zero)
-                - "forwards" fixed as the spindle's normal direction, rather
-                  than taken from the encoder as each pass starts (rocking
-                  the chuck back first would give that cut the wrong hand)
-                - no stop when the spindle stops (normal when hand-turning;
-                  Z only moves when the chuck does, and Space still stops)
-                - no lost-pulse check: a pause in turning, then carrying on
-                  at the same speed, looks exactly like lost pulses. Log
-                  them instead (core pinning fixed the original cause)
-                - a tighter limit on how far Z may lag (a quarter of a
-                  revolution is 8 mm of Z at 45° on 10 mm), with a "turn
-                  slower" warning as it gets near
-                - prompts: "Turn the chuck forwards", "waiting for start
-                  3's angle"
-                - On the machine: a crank on the spindle's outboard end, and
-                  the VFD off at the mains. At hand speeds, Z would move in
-                  bursts of one encoder pulse (about 0.04 mm at 45° on 10
-                  mm), which is probably fine but may sound rough
-            - **Either way, there's a lot of turning:** waiting for each
-              start's angle takes about as long as the cut. A whole knurl
-              (31 starts, there and back, about 6 passes) is very roughly 350
-              revolutions, 15-20 minutes at 20 rpm. Cutting whichever start's
-              angle comes round next, rather than in order, would save much
-              of the waiting, powered or by hand
-        - **First knurls on the machine (2026-11-12):** Ø 22.7, Z 14.8 mm,
-          at 70° (the spindle still wasn't slow enough for 45°), about 27-30
-          rpm (about 2 Hz). 22 cuts each time went well, then:
-            - **First run (71 starts): the VFD tripped mid-cut.** The
-              encoder's pulses stopped, so the passes were stopped. The
-              fault wasn't noted before it was reset; the D700 keeps its
-              last eight faults (MODE to the fault history, with the
-              frequency, current and voltage at the fault), so it can still
-              be looked up. Only "Stopped" was shown, with no reason.
-              **The fault history showed E.THM** (motor overload, shown as
-              "E.rHn" in seven segments): the drive's thermal model of the
-              motor, not a real fault. For a standard self-cooled motor
-              (Pr.71), the model allows less and less current as the
-              frequency drops, as the motor's fan barely turns. In V/F
-              control at about 2 Hz, the motor also draws a lot of
-              magnetising current even when idling (torque boost, Pr.0), and
-              much of a knurling run is waiting for start angles. About 20
-              minutes of low-speed testing came before that run. Things to
-              check: that Pr.9 matches the rated current on the motor's
-              plate. Not to do: set Pr.71 to a constant-torque motor (only
-              for a motor with a separately powered fan), or raise Pr.9
-              above the plate
-            - **Second run (40 starts): a pass waited for ever.** Its start
-              angle was set more than a revolution *behind* the spindle
-              ("from spindle pulse 1839425 (now 1840261)"), which only
-              happens if the spindle was taken to be turning backwards. The
-              direction came from the encoder's latest edge: a stray edge on
-              its B channel flips that for a few milliseconds, until the next
-              A edge, and the jerky spindle at 2 Hz (with the encoder belted
-              at 35:100) makes stray edges likely. One pass in 22 started
-              in such a window. (Threading passes had the same flaw, though
-              it's much less likely at their speeds.) The counting itself
-              isn't affected: each A edge sets the direction again first
-            - **Fixed:** a pass now takes the spindle's direction from how
-              far its count has moved over the last tenth of a second or so
-              (sampled on each update), and refuses to start if it can't
-              tell. Every pass of a run must turn the same way as the first
-              (or it would cut the other hand). A pass waiting for its start
-              angle is stopped, with a warning, if the spindle turns three
-              revolutions away from it, so nothing can hang silently. And
-              when the spindle stopping stops a multi-pass (or any motor),
-              the warning says so. Not yet tried on the machine
-        - **Where it stood (2026-11-12): undecided.** Running the motor
-          at 1-2 Hz trips its overload protection, so the user may set Pr.2
-          and C2 back to 5 Hz (about 70 rpm), which limits knurls to steep
-          helix angles (about 70° on 10 mm, more on bigger bars). The back
-          gear looks impractical for about 10 rpm: a single stage of about
-          7:1 needs a very large pulley on the spindle. (Two smaller stages
-          through a countershaft would avoid that, but it's more work
-          still.) Hand-turning the spindle (above) needs no motor at all,
-          so it has none of these problems. Cutting the starts in whichever
-          order their angles come round would shorten each run (so less
-          heat), but isn't worth doing until the way forward is chosen
-        - **A good knurl at the spindle's usual floor (2026-11-15):** with
-          the VFD set back as supplied (about 70 rpm), Ø 17.5, 80°, 16
-          starts, 0.2 mm deep (0.1 mm first pass), 4 passes. The "diamonds"
-          are very long and thin, which looks almost like a weave, but the
-          surface grips very well, which is what it's for. So steep angles
-          at 70 rpm are the way forward for now, with no motor or VFD
-          changes. Then, as the user asked:
-            - **The dialog suggests the angle and starts** (until typed in;
-              typed ones are kept, and clearing one has it suggested again).
-              The angle is the smallest whose lead Z can follow at
-              `KnurlingSpindleRpm` (new in lc.cfg, 70; 45° if not set): 79°
-              for Ø 17.5. The starts space the grooves twice the depth apart
-              across them, for sharp diamonds with a 90° tool: 26 for Ø 17.5
-              at 79° and 0.2 mm deep. (The 16 used left flats: 0.6 mm apart
-              across against a 0.4 mm groove.) The dialog now shows the
-              spacing across the grooves, not round the work, as at 80° the
-              two differ six-fold, and the old figure hid that too many
-              starts would just turn the work down
-            - **Starts in whichever order comes round first.** The engine
-              offers the model every start still to cut (that way, this
-              pass), and the model starts the one whose angle comes round
-              first after the backlash take-up. Each pass still cuts every
-              start once each way. A cut used to wait for the next whole
-              turn and then the start's offset (up to two turns); now it's
-              at most just over one, and usually much less. (Gear cutting's
-              indexed starts are still in order.) Not yet tried on the
-              machine
-        - **A faster Z for knurling doesn't work as it is (2026-11-16).** At
-          70 rpm, Z's speed limits the angle: 45° on Ø 17.5 would need Z at
-          3,850 mm/min, beyond even the motor thread's ceiling of 3,000 rpm
-          (a 20 µs step), and Ø 10 about 2,750 rpm. Raising
-          `Axis1MaxMotorRpm` from 1000 to 1400 only brought the angle
-          suggested for that bar down from 79° to 77°, and Z stalled into
-          alarm on the passes, though fast moves at 1400 (which ramp) were
-          fine. So it's a pass's start from rest straight to full speed
-          that Z can't do, not the speed itself. Set back to 1000
-            - **Idea (low priority): a ramped start for knurling passes.**
-              Each cut starts a few millimetres further off the work, and Z
-              ramps up while following the spindle (stepperControl's follow
-              mode allows ramping): it falls behind at first, then catches
-              up before the tool reaches the work. That needs Z's top speed
-              well above the speed the lead needs (to catch up), so it would
-              want a knurling-only Z limit (e.g. `KnurlingMaxZSpeed`), so
-              rapids and other moves stay as they are. The lag check, a
-              quarter of a turn, would need to allow for the run-up. The
-              cut back would need a run-up at the chuck end too
-- [x] Add ability to add new thread pitches without recompilation. Move the
-      definitions in threadpitches.h into separate config file (threadpitches.cfg)
-      which is loaded at program start.
-      - The thread pitches dialog should be multi-tier: the user
-        initially selects, e.g. "metric coarse", "metric fine", "BSW", "BSF", "UNC"
-        etc, then is presented with the relevant pitches for that category.
-      - The dialog could present a diagram showing the salient thread data
-      - The dialog should allow the user to select male or female (the diagram should
-        change to reflect this)
-      - Expand the new config file with all common thread pitch data up to, say, 25mm/1"
-      - **Done:** threadpitches.cfg, read at start-up (`ThreadsFile` in lc.cfg),
-        with metric coarse and fine, BSW, BSF, BSP, UNC, UNF and BA up to 25mm / 1".
-        Each line is name, major diameter, pitch (mm or inches; mm or tpi); the
-        thread form (ISO, UN, Whitworth, BA) gives the depths and the bore. The
-        dialog has two levels (type, then size), M for male / female, the figures,
-        and a diagram of the profile. Choosing female sets X to retract inwards.
-        Used on the machine (2026-11-07) for an external M14 thread; a female
-        thread hasn't been tried yet
-      - To fit a commercial M14 nut, a few passes beyond the 0.613 x pitch depth
-        were needed: commercial bolts are made a little under nominal (about
-        13.8 - 13.97mm for M14), and the bar was turned to 14.00. Treat the depth
-        as where to start trying the nut
-      - NB internal metric/UN threads now use the ISO depth of 0.541 x pitch; the old
-        table had 0.469 x pitch (and M18 had 1.072 where M20 had 1.172). Change
-        femaleDepth in threadpitches.cpp's FORMS if 0.469 was deliberate
-- [x] Start a fresh log each session: at start-up, before `INIT_MGOLOG("lc.log")`
-      in main.cpp, rename any existing lc.log to lc.log.previous (replacing an
-      older one), so there's always this session's log and the last one's. The
-      log grows without limit now that threading passes, retracts, spindle
-      readings and lost pulses are all logged, and the session in question
-      after a workshop test is hard to find in it. (`std::filesystem::rename`;
-      ignore a failure, e.g. no log yet, rather than refusing to start)
-    - **Done:** as described. Not yet tried on the Pi
-- [ ] Add some form of generic multi-pass functionality (defining a start position,
-      a required end position, and how axes should change per pass -- e.g. for a lathe
-      operation, we'd define a z start, a z end, and an x infeed per pass).
-      To allow the user to "visually" set parameters, it could offer the ability to read
-      stored memory slots, for example for threading a user might define z start and z end
-      by lining the tool up to where they want the thread to end and storing the z value
-      in a memory slot, then moving z out to just past the end of the workpiece and storing
-      that z value in a separate memory slot.
-      - **Done:** the engine (`MultiPass`, see "Multi-pass" above): a plan of cut start
-        and end, feed start and end, feed per pass, retract, pause, and manual feed.
-        Multi-pass mode builds one from Mem 1 and Mem 2. New modes (e.g. threading,
-        or facing on the mill) need a plan built from their own inputs, and the
-        mode's display
-- [ ] It should not require the user to reset an axis value
-      to keep track of (for example) the current thread depth being cut - instead maybe it
-      displays a box showing how much the X axis has changed since the first "scratch pass"
-      was taken in the current mode. The axis being displayed should be configurable.
-      - **Partly done:** multi-pass mode shows how far X has stepped over since the
-        first pass (and of how far in all). Not configurable yet, and not in other modes
-- [ ] Once this "generic multi-pass" functionality is available, it could be used for:
-        - threading on the lathe
-        - turning down to a workpiece to a set diameter (lathe)
-        - radiusing (lathe). **Done** as radius mode (see "Radius mode" above),
-          from the current feature as suggested here; the end X became the
-          radius itself (up to half the diameter for a full ball end)
-            - Maybe radius should rely on diameter being set and the the work faced off;
-              if a diameter is set after turning down bar stock to a known diameter, then facing
-              the end, the program would know where (a) the centre line of the stock is, and
-              (b) that the tool is at the end of the piece (z current value), then doing a
-              radius operation from that point doesn't need to rely on the operator for anything
-              else. The radiusing operation could move X to near the diameter of the stock, take
-              a small radius cut, and repeat, gradually moving z in/down until the cut's start
-              position (in x) reaches zero. (That's assuming a full ball end is required -
-              will need to specify x end point so if the user requires just a "fillet" on the
-              stock's end they could specify an end x value of greater than zero).
-                - This prompts an interesting idea - maybe diameter, once set, should be
-                  a constant value, i.e. the current diameter of the stock, and moving x in or out
-                  manually shouldn't change that. This might be useful for the program to
-                  remember; although it would of course go out of date if the user made further
-                  manual turning down operations (e.g. a shoulder - what would the diameter
-                  refer to? Maybe the current "feature"? To consider further.)
-                  **See "Work geometry and tools" for this worked out further.**
-        - chamfering (lathe)
-        - facing an entire workpiece (mill) i.e. the X axis does a pass, and each pass
-          the user is prompted to feed the Y (manual) axis a set amount. When the process reaches
-          the target Y value, the cutter could return to the beginning, and the user might be
-          prompted to feed down on the Z (again, currently manual on the mill) and repeat.
-        - using the rotary table (mill) to turn a set amount, then take a cut along the x axis, 
-          and repeat. The user could be prompted to feed the Y axis a set amount per full
-          revolution of the C axis. This would allow, for example, a hexagonal shape to be cut.
-          **Partly done** as gear cutting mode (the table turns 360° ÷ teeth
-          between cuts, and the depth is fed by hand once per turn); the Y
-          feed per revolution, e.g. for a hexagon, isn't
-        - etc
-       It should also have functionality to allow calling functions to:
-        - Pause between each pass (with a message, e.g. "move y n units" - the mill, for
-          example, doesn't have a stepper on Y or Z currently so would require manual moves)
-        - Or perform each pass automatically (e.g. on the lathe where both Z and X have
-          steppers)
-        It should also have an attribute to determine whether a retract is required
-        between each pass. For example on the lathe in threading mode the sequence would be:
-            - cut from z start to z end
-            - retract (could be retract out, for male threads, or in for female)
-            - return to z start
-            - unretract
-            - feed in/out x by the specified change per pass
-            - optional pause message
-            - repeat until x delta equals thread pitch cut depth
-- [x] Investigate how to interface with the mill's linear scales
+- Investigate how to interface with the mill's linear scales
     - **Done (13 Nov 2026):** a USB-serial adapter is now wired in for good,
       listening to the Arduino's TX, and `watch_scales.py` reads the stream
       from `/dev/ttyUSB0`, with TouchDRO still working. The box's X and Y
@@ -2798,7 +1747,10 @@ change.
         - Reading the scales directly from the Pi: only one device can drive
           the scales' clock, and bit-banging the 21-bit protocol would load
           a Pi whose cores are reserved for the motor threads
-- [ ] **Use the mill's scales in latheControl.** To start with, X (the
+
+#### Using the mill scales
+
+- **Use the mill's scales in latheControl.** To start with, X (the
       table, axis 1), which has a stepper; perhaps later Y and Z as
       read-only axes, which are moved by hand (now planned as manual axes:
       see "An array of axes" under "Structure and refactoring")
@@ -3364,3 +2316,1287 @@ change.
     - Later: Y and Z as read-only (display-only) axes from the same reader,
       each with its own zero. Z's depth would help gear cutting, where the
       depth is fed by hand
+
+### Work geometry and tools (lathe)
+
+#### Current feature
+
+Background: "set diameter" currently means only that **X is measured from the
+spindle centreline** (`m_xDiameterSet`). The diameter shown is the *tool's*
+position (2 × |X|), so it changes whenever X moves. Knowing the centreline is
+the valuable part. Once we have it, remembering where the *work* is costs very
+little: we store numbers in axis coordinates, which moving the axes doesn't
+change.
+
+- **Current feature: a remembered diameter and end Z.**
+    - **Done (first slice):** `CurrentFeature` in the config turns it on.
+      The feature Ø (stored as X's position on its surface) and the work's
+      end Z, each set and cleared separately: set diameter (`x s`, D) also
+      records the Ø, `x d` records it again, `z e` marks the work's end, and
+      the menu's Feature category has these and Clear. Cleared as below
+      (re-zero, a fault, a position set unless adjusting, X no longer set as
+      a diameter); there's no tool change to clear it on yet. A "Current
+      feature" box (right of the mode's lines) shows them. The multi-pass
+      dialog has a Feature start (the default when set, unless at a memory
+      slot): X on the surface, Z `FeatureStartClearance` (0.5 mm) off the
+      work's end, away from the cut, with Z's distance from the work's end.
+      A multi-pass which cuts from the work's end sets the Ø to its end
+      diameter. Used on the machine (2026-11-09) and works well
+    - **Decided:** end Z is the work's *free* end (as faced), not any
+      feature's end. A Z clearance beyond a shoulder part way along would
+      put the tool into the larger diameter beyond it, and the program can't
+      know the profile. So a Feature start assumes the Ø runs from the
+      work's end; features part way along wait for "Single feature vs many".
+      For the same reason, a multi-pass only updates the Ø if its cut
+      started at (or off) the work's end
+    - **Done:** a re-zero or a position set which would clear any of the
+      feature asks first (an OK / Cancel dialog, listing what it would
+      clear). Not set as a diameter, as that replaces the Ø rather than
+      losing it, nor faults (nothing to ask) or the menu's Clear
+    - **Done:** going back to the feature, from the menu's Feature category
+      (e.g. after moving away without storing its start in a memory slot):
+      to its start (both axes, X retracting before Z moves, as a multi-pass
+      moves to its start: the shared `Model::moveToSafely()`), X alone to
+      the Ø, or Z alone to the work's end (refused if X is deeper than the
+      surface). Z's target is the work's end exactly, or clear of it by
+      `FeatureStartClearance`, away from the chuck (`Axis1TowardsChuck`).
+      Used on the machine (2026-11-09) and works well
+    - **The feature's other end.** Save where the feature ends along Z
+      (e.g. a shoulder), as well as the work's end: set from a key, or by a
+      multi-pass from the work's end (its cut's end). Then it could be gone
+      to as well, offered as a multi-pass's Z end, and shown in the box. A
+      step towards "Single feature vs many" (a list of segments)
+    - Still to do from below: the warning when the tool goes inside the Ø
+      with the spindle running, and
+      chamfers / radii from the feature Temporary: kept
+      for this session only, never saved across a restart. Its purpose is to
+      help the operator while they make one particular feature.
+    - **Values (each optional, set separately):**
+        - *Feature Ø*: the diameter of the surface being worked on. Once set,
+          it stays fixed however X is moved
+        - *End Z*: the Z position of the feature's end (e.g. after facing)
+        - Perhaps later: the original stock Ø as a second value, so it can be
+          kept after a shoulder has been turned (see "Single feature vs many")
+    - **Setting them:**
+        - "Set diameter" could do both jobs at once: set the centreline datum
+          *and* record the feature Ø, since the tool is on a surface the
+          user has just measured at that moment
+        - A "mark end" action after facing records the current Z as end Z
+        - Automations update the values themselves when they know the result,
+          e.g. a multi-pass "turn to Ø" sets the feature Ø to the target when
+          it finishes
+    - **Clearing them:**
+        - The user can clear the feature at any time (e.g. to move on to a
+          shoulder further along the work)
+        - Re-zeroing X clears the feature Ø, as it already clears the
+          centreline datum. Re-zeroing Z clears end Z
+        - A motor fault or lost position on an axis clears that axis's value.
+          This matters most for X, which is open-loop, so the remembered
+          surface is only as good as X not having lost steps
+        - A tool change clears both, unless the tools' offsets are known (see
+          "Tool database" below)
+    - **Keeping it up to date:** if the spindle is running and the tool moves
+      inside the remembered Ø, *warn* that the feature Ø may be out of date.
+      Don't try to work out the new value from tool movement, as that's easy
+      to get subtly wrong
+    - **Display:** a "Current feature" box on screen showing Ø, end Z and the
+      tool they were taken with, kept separate from the live tool Ø so the
+      two can't be confused. Empty or hidden when no feature is set
+    - **Single feature vs many:** start with one "current feature" that the
+      user resets. A list of features (`{Z start, Z end, Ø}` segments) amounts
+      to a part profile. Appealing, but much more work in the UI and in
+      keeping it consistent
+    - **Which side of end Z is material?** Usually towards the chuck, but this
+      should be explicit (from the config, or worked out from the facing
+      direction) so a chamfer or radius never cuts air or goes the wrong way
+    - **Lathe only:** only enable when the config has an X axis that can be
+      set as a diameter. Keep it optional like other per-axis features
+    - **Uses:**
+        - Pre-fill multi-pass start positions (Ø and Z) from the feature. A
+          cheap, low-risk first use
+        - Chamfer "on the end of the piece": from Ø, end Z and a size, the
+          program knows where every pass goes. A 45° chamfer is a linear X/Z
+          move, which taper mode's X-to-Z synchronisation can already do
+        - Radius/fillet (see "radiusing" under generic multi-pass): start near
+          Ø/2, step inwards, finish at a given end X (> 0 for a fillet). Arcs
+          aren't a fixed X:Z ratio, so this needs either a chain of short
+          tapers (`MotionSequence` could run them) or proper arc
+          synchronisation. Tool nose radius starts to matter here too.
+          **Done** for a radius on the end, as a chain of tapers in the
+          multi-pass engine: see "Radius mode" under Multi-pass. And for a
+          fillet at a shoulder: see "A filleted shoulder" there
+    - **Suggested first slice:** feature Ø and end Z with set and clear, their
+      own display box, cleared on re-zero, fault or tool change, and used to
+      pre-fill multi-pass
+
+#### Tool library
+
+- **Current tool and a tool database.** The program has no idea when the
+      tool is changed, but the feature values above belong to the tool that
+      touched off. A different tool will be out by its offset.
+    - **Done (2026-11-16), in the mock build only:** a first slice, on with
+      `ToolLibrary = true` (lc.cfg), in `toollibrary.*`. A "Tool library"
+      menu category (`T` in the menu) and a "Tool" box at the top right.
+      `T` changes tool (a list of the tools), shifting Z and X by the
+      difference between the two tools' offsets. "Define a new tool"
+      measures one from the tool in use by scratch tests: the tool in use
+      touches the diameter and the end (`Enter` after each), then the new
+      tool does the same, and it asks for the description and nose radius.
+      Also "Measure a tool again" and "Describe the current tool". Kept in
+      `ToolLibraryFile` (tools.cfg, not in git), plain text, written
+      through a temporary file and a rename, keeping the one before as .bak.
+      The radius dialogs start with the current tool's nose radius.
+      **Tried on the lathe (2026-11-16):** two tools, measured by scratch
+      tests; changing between them was very repeatable
+        - **Decision: offsets, not datums, are stored.** A tool change is a
+          re-base (nothing moves): each motor's step count shifts by the
+          difference, in whole steps per tool, so going to a tool and back
+          always comes back to the same step. As memory slots, breadcrumbs,
+          the feature and multi-pass setups are all positions on the work,
+          they carry over to the new tool's tip, and nothing is cleared (so
+          "a tool change clears the feature", above, isn't needed)
+        - **Decision: scratch tests first, not a dial indicator.** Each
+          tool touches the same diameter and end, as the user already does
+          to set up a job. A dial indicator could be added later as another
+          way to measure
+        - **Decision: measured from the tool in use, not only tool 1.** The
+          offsets are still stored from tool 1, but any tool in the library
+          can be the one measured from. So tool 1 can be measured again
+          from another tool (e.g. after a new insert), which moves every
+          offset so they're from its new tip, rather than every tool having
+          to be measured again
+        - **Decision: external tools only, for now.** The touches are on the
+          outside diameter, which a boring bar can't reach: the dialog says
+          so, and measuring is refused with a boring retraction. Each
+          diameter touch must have X moving in, and each end touch Z
+          moving towards the chuck (the motor's last direction), or it's
+          refused, so the backlash is taken up the same way for every tool
+        - **Decision: measuring isn't a mode.** The axes move as usual
+          (keys, nudges, speeds, the gamepad), but nothing else: no leader
+          keys, zeros, position sets, memories or modes. `Enter` records
+          each touch and `Esc` cancels. A tool change is refused in modes
+          other than multi-pass and radius (whose passes are on the work,
+          so carry over), and during a multi-pass
+        - **Done (2026-11-16):** an unknown tool (`T?`, last in `T`'s list),
+          for one not in the library. **Decision:** each axis remembers whose
+          tip its positions read (the tool in use when it was last zeroed,
+          set or changed to). Changing to the unknown tool shifts nothing, so
+          they still read the last tool's ("positions: T1" in the box), and
+          changing back to a tool in the library shifts from that tool's
+          offsets: nothing set on the work is lost, e.g. on the way to a
+          knurling tool and back. Only an axis zeroed or set while the
+          unknown tool was in use can't be shifted: changing to a tool in
+          the library then clears what was set along it (the work's end, or
+          the diameter), asking first if it's part of the feature. Memory
+          slots are kept, as they were before there were tools
+        - Still to do: tip orientation, tool types, widths (parting and
+          grooving), invalidating offsets ("toolpost moved", a tool
+          adjusted), deleting a tool, and boring bars (touched on a bore's
+          diameter instead). Also, the nose radius could correct tapers and
+          chamfers
+    - **Current tool:** the user picks the tool in use (number and
+      description), and it's shown prominently on screen. Changing tool
+      must be very easy: a single keypress, not a trip through menus. `T`
+      might do (free at the top level now `F2` has gone). Selecting a
+      different tool counts as a tool change, so the current feature is
+      cleared (or shifted, once offsets are known, below)
+    - **Tool database:** a config file of predefined tools. Must be quick to
+      pick from without a mouse. Possible attributes:
+        - Number and description
+        - Type (turning, facing, chamfering, parting, grooving, threading,
+          boring, button, knurling...)
+        - **Tip orientation:** which corner or side of the tool is its
+          reference point, like CNC lathes' "tip direction" codes (Fanuc's
+          1-9). This one attribute covers left-hand and right-hand turning
+          tools, boring bars facing the other way in X, and which side of the
+          nose radius a button tool is measured from
+        - **Nose radius:** worth storing even before it's used, as radius and
+          chamfer accuracy will eventually depend on it (e.g. a button tool,
+          whose "point" is a circle of maybe 4 mm diameter)
+        - **Point angle**, e.g. 60° threading tool, 90° chamfering tool (see
+          "cut knurling")
+        - **Width and reference edge**, for parting and grooving tools: a
+          thickness rather than a radius, plus which edge is the reference.
+          Then a groove or cut-off can be placed relative to the feature's
+          end Z from either side
+        - **Not applicable:** some tools can't usefully have offsets (e.g. a
+          knurling tool, or anything in the tailstock such as a centre drill
+          or reamer, which isn't on the carriage at all). Operations that use
+          the feature Ø and end Z won't be allowed with these tools
+        - X and Z offsets, when each was last measured, and whether it has
+          been invalidated (see below)
+    - **Tool offsets (later):** if each tool's X and Z offsets relative to a
+      reference tool are known, a tool change can shift the datums instead
+      of clearing them, so the feature Ø and end Z stay valid across a swap.
+        - **Reference tool:** tool 1, the most-used tool (a right-hand turning
+          tool). All other offsets are measured relative to it
+        - **Calibrating with a dial indicator** (the planned first method),
+          once for Z and again for X:
+            1. With tool 1, approach a dial indicator fixed to the bed (e.g. on
+               a magnetic base) and press its plunger in about half-way. Zero
+               the indicator; the program records tool 1's position
+            2. Change to the new tool and nudge it up to within about 50 µm of
+               the indicator's zero
+            3. The program takes up backlash in the approach direction (X is
+               open-loop, so this matters most there), then either:
+                - feeds extremely slowly and the user presses a key when the
+                  needle reaches zero (at, say, 2 µm/s, a 0.2 s reaction time
+                  costs only about 0.4 µm), or
+                - steps 1 µm per keypress until the needle reads zero, which
+                  avoids reaction time completely, as the reading is taken
+                  with nothing moving
+            4. The difference from tool 1's position is stored as the offset
+        - **Notes on calibrating:**
+            - Every tool must approach the indicator from the same direction
+              as tool 1 did, so backlash doesn't creep in
+            - The indicator mustn't move between tool 1's reading and the
+              other tool's reading
+            - Some tools' points are hard to get an indicator square on, e.g.
+              a threading tool's small point, which faces along X. The
+              indicator can be set at an angle. Cosine error doesn't matter,
+              because we're only matching tool 1's position, not measuring a
+              distance
+        - **Other ways to measure offsets:** touching each tool off on the
+          same known surface (a turned diameter for X, a faced end for Z);
+          probing (see "Probing" above) could automate this later
+    - **Repeatability and invalidation:** offsets are only as good as the
+      toolpost's repeatability. A QCTP (always used) should be reasonably
+      good, but things can change:
+        - **The QCTP is moved or rotated on the carriage** (e.g. to fit a
+          longer tool): moving it without rotating would shift every tool
+          equally, but rotating it wouldn't, so the user needs a "toolpost
+          moved" action that invalidates *every* tool's offset (and the
+          current feature)
+        - **A single tool is adjusted in its holder** (e.g. a boring bar
+          extended for reach): the user marks that tool's offset invalid
+        - **Tool 1 itself is adjusted:** every other offset becomes invalid
+          at once, so this needs handling as a separate case
+        - An invalidated tool can't be used for operations that need the
+          feature Ø and end Z until it's calibrated against tool 1 again.
+          The UI shows when each tool's offset was last measured and whether
+          it's been invalidated
+
+### Structure and refactoring
+
+#### Gear cutting and stepperControl
+
+- Incorporate electronicRotaryTable repo
+    - Pull functionality of ERT into this repo. ERT is designed specifically
+      for cutting gears, so we could have a mode for gear cutting.
+    - The old ERT was a text/ncurses-based UI so will need updating to Qt.
+    - This would require a set-up screen to ensure the user has connected a
+      rotary table, replacing one axis.
+    - This would mean we could also incorporate the repo stepperControl as it
+      is only shared by latheControl and ERT (which would then be redundant)
+    - **Done (2026-11-13):** stepperControl's code (v1.5.1) is now in this
+      repo, flat in the root like everything else (`steppermotor.*`,
+      `igpio.h`, `gpio.*`, `mockgpio.h`), with no FetchContent and no
+      `STEPPERCONTROL_DIR`. A plain copy: its history stays in the
+      stepperControl repo. It's now built with this project's warnings
+      (`-Werror -Wpedantic`), which it wasn't before: clean with clang on
+      the Mac, and a clean release build with GCC on the workshop Pi
+      (2026-11-13)
+    - Gear cutting mode should be disabled by default, and only enabled by a
+      setting in lc_mill.cfg (the milling machine currently only has a stepper
+      on its X axis)
+    - lc_rt.cfg is redundant and should be removed.
+    - As part of this change, maybe the config file should have an "axis[n]Capabilities"
+      config item, to allow the program to determine which features are available for
+      an axis (e.g. retract, or, in the case of a rotary table, gear cutting and so on.
+    - **Done (2026-11-13), in the mock build only:** gear cutting mode (Modes,
+      "Gear cutting", `C`), on with `GearCutting = true` (lc_mill.cfg), and
+      only if axis 2 is in degrees. lc_rt.cfg is removed, and the mill's
+      rotary table is now labelled A (it stands vertically, turning about X;
+      its leader key is still `c`, as `a` is X's nudge). The dialog takes the
+      module and teeth (showing the blank Ø, the angle per tooth and the
+      cutter number), X's start and end, the depth (2.157 × module, as ERT
+      used, unless typed) and the depth per pass. It runs on the multi-pass
+      engine, which gained an index axis (`MultiPassPlan::indexPerStart`):
+      the teeth are its starts, and A turns on by a tooth before each.
+        - **Decision: every tooth at one depth, then feed in.** The depth
+          (Y or Z on the mill) has no motor, so it's fed by hand, once per
+          turn of the blank. Taking each tooth to full depth first would need
+          winding the depth in and back out for every tooth
+        - **Decision: automated only.** ERT's "take the cut by hand" (and
+          its `b` to step back a tooth) isn't offered: X has a motor. The
+          return is back through the slot at full speed, as the depth can't
+          retract
+        - **Decision: A only ever turns forwards.** Each pass carries on
+          round rather than going back, so the table's backlash stays taken
+          up the same way. For the first tooth, A backs off 1° and comes
+          forwards (as ERT took up the backlash at the start). At the end, A
+          turns on to the first tooth again, and its position is put back to
+          where it started (e.g. 0°); memory slots are left as they are, as
+          whole turns don't move them on the table
+        - **To check on the machine:** that A's backlash compensation
+          (`Axis2BacklashCompensationSteps`) and the 1° back-off land the
+          first tooth where the others are; whether A indexes well at
+          full speed (`Axis2MaxMotorRpm`, ramped), with the blank on; whether dragging the cutter back
+          through the slot marks it (if so, a "return at cutting speed"
+          option, or a pause to wind the depth out, may help)
+        - Stopped and started again (e.g. stopped while A turns), X goes
+          to the start first and only then A turns forwards to the next
+          tooth, so the teeth stay evenly spaced. They're kept until the
+          number of teeth changes, or A is zeroed or set
+        - Not done yet: stepping back a tooth (re-cutting one), a pause
+          between teeth as a dialog option (`Enter` during a pass does it
+          once)
+
+#### Flaky unit tests
+
+- **Unit tests which fail now and then** (2026-11-11). On neutron
+      (Linux, 8 cores, a busy KDE desktop), 1 to 3 tests failed on every run
+      of `unit_test`, mostly "threading passes stop if a pass can't start"
+      (waiting 5 s for the encoder's speed to pass 1,000 rpm), and sometimes
+      "spring passes after the threading passes" and "stopping a multi-pass".
+      Unchanged main failed the same way. They pass on m4pro (macOS).
+    - **Why:** Linux's timing, in two ways. A sleep overshoots by its timer
+      slack (50 us by default): a 50 us sleep took 114 us on average, and
+      300 us took 397 us. And on a busy desktop a thread waking from a
+      sleep can wait about 3 ms (a scheduler time slice) before it runs.
+      The mock encoder slept between pulses and gave each pulse the time it
+      was sent as its tick, so its spindle ran up to half as fast as asked
+      (never reaching 1,000 rpm), and a late wake-up looked like a gap in
+      the pulses, i.e. lost pulses, which stopped threading passes
+    - **Fixed** in stepperControl's `MockGpio` (needs a release, v1.5.1):
+      each pulse is due a delay after the one before was due, and is given
+      that time as its tick, however late the thread sends it, as pigpio's
+      callbacks pass each edge's sampled time. A late pulse is followed at
+      once by any others due, so the average speed is the one asked for.
+      "Stopping a multi-pass" checked that X was still moving just after
+      starting a 0.01 mm feed, which a few ms' delay could miss: X is now
+      slow enough there for the feed to take 0.6 s (and X goes back to the
+      start with Z afterwards, as it's now stopped part way in)
+    - (Separately, the debug build on neutron had been configured with
+      FAKE=OFF, and the Makefile doesn't reconfigure an existing tree, so
+      `make test` wouldn't build until it was reconfigured by hand)
+- **More unit tests which fail now and then, on slower machines**
+      (2026-11-14, on an M2 MacBook, while m4pro is away for repair; they
+      passed on m4pro, which is much faster). Each failed about one run in
+      three or four, and passed on re-running, with or without the change
+      being tested:
+    - "Threading: Z's backlash is taken up before a pass reverses"
+      (test.cpp, `pulsesFromWholeRev(started) <= 5`: a pass started more
+      than 5 encoder pulses from a whole revolution)
+    - The spring passes test (test.cpp, `getWarning() == "Stop the motors
+      first"` after `axis1GoToPosition(zStart - 0.5)`)
+    - Neither failed on the M2 when it wasn't busy (five runs of the whole
+      suite). With ten busy processes on its eight cores, the spring passes
+      test failed five runs in six, so that's the way to reproduce them
+    - **Spring passes: not a move finishing too soon, as first thought.** In
+      threading mode, a Z move is a threading pass: Z's backlash is taken
+      up by one step, then the pass starts on a later `checkStatus()`, and
+      waits for the spindle. The test polled for Z running (without calling
+      `checkStatus()`), which only worked if it caught the one step while
+      it was being made. On a busy machine, the step was over between
+      polls, so the pass never started (or, if the step was caught,
+      `multiPassGo()` could come once it was done). **Fixed:** the test runs
+      the updates until the pass has started, as `startPass()` does
+      (`waitForPassToStart()`). It passed eight runs in eight under the
+      same load
+    - **Pass starts:** `pulsesWhenZStarts()` read the encoder's count once
+      it saw Z move, polling every 0.1 ms. A wake-up 1.5 ms late is 5
+      pulses at the tests' spindle speed. **Changed:** it takes readings for
+      40 ms after Z starts, each working out the start from the count and
+      how far Z has gone, and keeps the earliest. Both of the errors (the
+      test's thread waking late, and Z lagging the spindle for a moment)
+      only make a start look later, and a pass can't start early. On an
+      idle machine they come out 0 or 1 pulses from a whole revolution
+    - Under that much load, the threading tests still fail now and then
+      (old and new versions alike, about one run in eight): the mock's
+      encoder and motor threads are starved too, and then Z really does
+      fall behind (e.g. 12 steps in "Z follows the spindle's position").
+      The tests can't allow for that, and the Pi's motor threads are
+      real-time and pinned to their own cores
+    - **Not starved after all (2026-11-15).** With a `yes` on each of the
+      M2's eight cores, the threading tests failed in 14 runs out of 15
+      (none in 15 when idle), always with the pass starting 6 to 8 pulses
+      *early*, which the motors can't cause. Z follows the spindle's
+      position, which runs on past the last pulse by up to 2 ms (5 pulses
+      at the tests' speed), and the tests measured it against the pulse
+      count. When the mock encoder's thread runs late, the count falls
+      behind and the position runs on ahead of it, so Z looked early.
+      **Fixed:** the tests measure against the position
+      (`Model::getSpindlePosition()`), which is what Z follows. The model
+      was right all along. The two multi-pass tests also keep the earliest
+      reading during a cut, rather than the first, as a reading can only
+      come out late
+    - Under that load, the suite still failed in 3 of 5 runs afterwards. Each
+      time the mock's threads really were starved: Z 11 and 40 steps behind
+      in "Z follows the spindle's position", and once the encoder's thread
+      held up for over 100 ms, so it lost pulses. Those can't happen on the
+      Pi (its threads are real-time). Eight `yes` processes plus the tests'
+      spinning motor threads is more than the M2 has cores, so it's a
+      harsher test than a busy desktop
+    - **`[timing]` tests are retried (2026-11-16).** A one-off failure in the
+      menu-only change's first `make test` run (the test wasn't noted) cost
+      several full re-runs. Ten runs of the whole suite with six `yes`
+      processes on the M2 all passed, so which tests fail now and then
+      can't be found by running them. Instead, the 13 tests whose results
+      depend on the mock spindle's and motors' threads keeping pace (the
+      ones that lock Z to the spindle, and the threading and knurling
+      passes) are tagged `[timing]`. Tests that only wait for a move to end
+      (with a generous deadline), or that use a fake clock, aren't.
+      `make test` runs the rest first, then each `[timing]` test on its own
+      (test/run_timing_tests.sh), retried up to three times, and lists any
+      that only passed on a retry as flaky. `make test-quick` leaves them
+      out. A test that isn't tagged and fails now and then should be noted
+      by name, then fixed or tagged
+
+#### libgpiod and a newer Pi OS
+
+- **Try the latest Raspberry Pi OS, with libgpiod instead of pigpio.**
+      Both Pis are held on Bookworm, as later releases are believed to have
+      dropped pigpio. That also holds the Pi builds to Bookworm's compiler
+      and Qt (GCC 12 and Qt 6.4, as far as is known), which is why the code
+      uses `fmt::format` rather than `std::format`, and must avoid newer
+      C++23 library features and Qt APIs even though they build on the Mac.
+    - **Plan:** on a spare SD card (so the working one is untouched),
+      install the latest Raspberry Pi OS, and try a branch using libgpiod
+    - **No hurry:** Bookworm (Debian 12) has long-term support until about
+      mid-2028, so this can be done carefully, a step at a time
+    - **The GPIO library first, then the OS.** libgpiod is in Bookworm too
+      (1.6, as far as is known; v2 came later), so a libgpiod `IGpio` can be
+      tried on the same SD card and hardware, chosen at build time, and
+      compared with pigpio directly. Once it works, the OS change is mostly a
+      rebuild. (Written against 1.6, it would need moving to v2's API for
+      the latest OS, but that's a small amount of code)
+    - **The mill first.** Its Pi only steps motors: it has no input pins
+      wired (2026-11-16), its scales come over serial, and it has no
+      spindle encoder. So it tries the stepping without the hard part (the
+      inputs with pull-ups are only tried on the lathe). If that's
+      good, the lathe's encoder is the only new risk left, and can be
+      measured on its own
+    - **What it has to replace:** only `gpio.cpp` uses pigpio, behind
+      `IGpio` (igpio.h), so nothing else should change. It uses pins as
+      outputs (`gpioSetMode`, `gpioWrite`: step, direction, enable), inputs
+      with pull-ups (`gpioSetPullUpDown`, `gpioRead`: alarm, limit
+      switches), microsecond delays and ticks (`gpioDelay`, `gpioTick`, for
+      the motor threads' step timing), and edge callbacks with timestamps
+      (`gpioSetAlertFuncEx`: the spindle encoder and the Z scale). libgpiod
+      (v2) covers each of these: bias settings for the pull-ups, and edge
+      events with kernel timestamps, read from a thread of our own
+    - **The risk is the edge events.** pigpio samples the pins by DMA (every
+      5 µs by default) and delivers callbacks in batches; libgpiod's events
+      come from interrupts, read by a thread, which must keep up with the
+      encoder at the highest spindle speed and not lose edges. It would
+      need its own core, or to share one carefully, as the motor threads
+      are pinned (see the motor-thread pinning notes under "Motion and
+      timing"). Measure lost pulses with threading at speed before
+      trusting it, as that's what showed up the pinning problem before
+    - **Also check:** stepping a motor with `gpiod` line writes is fast
+      enough (it goes through the kernel, unlike pigpio's direct register
+      writes), and the program no longer needs root (pigpio needs it;
+      libgpiod only needs access to /dev/gpiochip*), which would change how
+      it's started
+    - Would free the OS, the compiler (`std::format` and newer C++23) and Qt
+      to move on
+
+#### An array of axes
+
+- **An array of axes, with manual axes (the mill's Y and Z).** Replace
+      the hard-coded "Axis1..." and "Axis2..." functions and members with an
+      array of axes, so the mill can have four: X (stepper), A (the rotary
+      table, stepper), and Y and Z (moved by hand, read from their scales).
+      Some behaviour only applies to some axes (e.g. retracting is only for
+      the lathe's X, not its Z), so each axis says what it can do, rather
+      than every axis having every feature.
+    - **Decided (18 Nov 2026), from planning the mill's slot and
+      face/pocket modes (see "Slot and face/pocket modes" under
+      Multi-pass):**
+        - Each axis has a kind: `stepper` or `manual`. A manual axis's
+          position is its scale's reading plus an offset, so it must have a
+          scale (refused at start-up without one). The mill's DRO sender
+          already sends Y and Z over the same FTDI stream as X; only X is
+          used so far
+        - A manual axis behaves like a DRO line: shown on the main display
+          all the time, with zero, set (type a value) and half (set it to
+          half its reading, for finding a centre between two edges; the
+          user uses this on TouchDRO all the time). Half is for the motor
+          axes too. Each axis has its own leader key (check for clashes:
+          `a` is already X's nudge on the mill)
+        - A go-to on a manual axis is a "distance to go" prompt, not a
+          motor move: e.g. "Move Y to 12.500: 0.340 to go", updated live as
+          the user winds the handle. It's done by itself once the scale has
+          settled within a count or two of the target, and says if it went
+          past. It's in the status line or panel, not a modal dialog, so
+          nothing blocks; Space (or Esc) cancels it. Moves and nudges on a
+          manual axis say why they can't, rather than doing nothing
+        - A go-to involving a motor axis and a manual axis runs both
+          together (e.g. X moves while the user winds Y), and is done once
+          both have arrived. This would make bolt-hole circles possible
+          later (a list of go-to targets), so TouchDRO would only be needed
+          rarely, if at all
+        - Memory slots store every axis. Going to a slot moves (or prompts
+          for) the cut-plane axes only: X, Y and A. Z is stored and shown,
+          but is never part of a slot's go-to (the user won't move Z while
+          X is moving). Z will never have a stepper: the user's CNC mill is
+          for anything that needs full automation
+        - The plan is to fit a stepper to Y later. That should then be a
+          config change (`manual` to `stepper`, plus its pins, conversion
+          and core). Mind the cores: X, A and Y would each have a pinned
+          core, leaving one for the UI and the OS on a Pi 4. A fourth motor
+          wouldn't fit without rethinking the pinning
+        - The lathe stays at two axes (no topslide scale: the user never
+          uses the topslide)
+        - A scale on the lathe's X (axis 2) may come later (the user,
+          19 Nov 2026). That should then be a config change too, so the
+          scale handling (lining up, the mismatch check and dialog,
+          re-basing at rest and by hand, finishing moves, backlash
+          measurement, the display) wants to belong to any axis, not
+          axis 1 alone as now. A quadrature scale on X would also need a
+          second pin callback in the GPIO layer (only
+          `setLinearScaleAxis1Callback()` exists) and two free pins
+    - **Plan, in stages, each tested and working before the next:**
+        1. The axis abstraction, with the new manual axes built on it from
+           the start: config, calibration (Y and Z probably need their own
+           counts per mm, as X did), the DRO lines, zero, set, half, the
+           go-to prompt, and memory slots for every axis
+        2. Move X and A (and the lathe's Z and X) onto it, one area at a
+           time (display, memory, nudges, go-tos, scale), with no change of
+           behaviour, so lc.cfg and lc_mill.cfg keep working with the same
+           keys
+        3. The slot and face/pocket modes on top of it (see Multi-pass)
+    - The `Axis1*` / `Axis2*` config keys stay as they are; the new axes
+      are `Axis3*` and `Axis4*` on the mill
+    - **Done (18 Nov 2026), the first part of stage 1, not yet tried on the
+      mill:** Y and Z as DRO lines, with zero, set and half. Not yet (see
+      below for those, done since) the go-to prompt, memory slots, or a
+      settled/steady reading (which the
+      go-to prompt and the modes will need)
+        - `Axis3Kind` / `Axis4Kind` = manual (none by default), with a label,
+          a leader key (none by default; y and z on the mill), and the same
+          scale keys as axis 1's (a manual axis without a scale is refused).
+          The scales share axis 1's DRO reader (`makeScale()`, split out of
+          `configureAxis1Scale()`)
+        - `ManualAxis` (manualaxis.*): the scale's reading plus an offset,
+          which zero, set and half change. It starts at zero (the user's
+          choice: they re-zero at each start anyway, as on TouchDRO, so
+          showing the scale's own reading first was no use). Its zero isn't
+          kept when lc stops, and if the readings are lost (the sender's
+          count may have started again), it starts at zero again when they
+          return
+        - The display: a line each below X and A, at 45 px rather than 60 so
+          two fit where the spindle speed would be, with "no reading" when
+          there isn't one. X's scale line moved up to X's row, after its
+          speed, shortened to e.g. "scale 12.345 (+0.010)" (the units are
+          X's); the mode's name, and the lathe's taper angle and RETRACTED
+          below it, moved down a line to make room
+        - Half for the motorised axes too (`XH`, etc.): as setting the
+          position, it clears that axis's memory slots and asks before
+          clearing the current feature. Not while the axis is moving
+        - **Tried on the mill (19 Nov 2026): halving did nothing on any
+          axis.** The controller checked the key against the mode before
+          adding the leader to it, so after `y` it saw a plain `h`, the
+          quick chamfer, which lc_mill.cfg's DisabledModes turns off. Fixed:
+          the key after a leader is checked as the leader's key (`a3_h`), as
+          the menu already did. The same fault meant `z b` (re-base) while
+          a multi-pass was paused never got through either (`z` on its own
+          wasn't allowed then), so axis 1's leader is now allowed then too.
+          Space after a leader is now plain Space (it was the leader's
+          Space, which stopped everything but didn't cancel a manual go-to),
+          and Esc after a leader just cancels it (it stopped everything)
+        - Not allowed during a multi-pass (nor are any other keys but a
+          few), though zeroing a manual axis moves nothing. The slot and
+          face/pocket modes may want Z zeroed at a pause
+    - **Seen on the mill (18 Nov 2026):** Z's scale counts up as the tool
+      goes down, so `Axis4ScaleReversed` is now true, following the usual
+      convention that Z goes negative towards the work
+      Y left as it was: it increases "towards the column", as wanted
+      (checked the same day)
+    - **To try on the mill:** each scale's counts per mm (the nominal 2560
+      per inch so far: calibrate against a known move, as for X), and that
+      the y and z leader keys don't clash with anything in use
+    - **Used on the mill (19 Nov 2026)** for a whole job (a mounting
+      bracket), without TouchDRO: Y and Z zero and set worked as expected
+      (half not needed yet). The user's workflow for Z: bring the tool down
+      to the work, set Z to the work's current thickness, then machine down
+      to the thickness wanted by Z's reading. The part came out within a
+      few tens of microns of the plan in each dimension, so the nominal
+      counts per mm look right, though they haven't been calibrated against
+      a known move yet. No clashes with the y and z leader keys seen
+    - **Done (19 Nov 2026), the rest of stage 1, not yet tried on the
+      mill:** memory slots for the manual axes, and going to them by hand.
+      `M` stores every axis; a manual axis's leader then `m`, `Enter` and
+      `Delete` store, go to and clear it alone. Going to a slot shows the
+      distance to wind on the axis's own line ("to 12.50: 0.34 to go", red
+      once past), and ends once the reading has settled within two counts
+      of the target (`ManualAxis::isSettled()`: within a count, as it
+      flickers, for `Axis3ScaleSettleMs`, 1500 on the mill). Nothing blocks:
+      `\` then `Enter` moves X and A while Y is wound, and Space or Esc
+      cancels. `Axis4InSlotGoTo = false` leaves the mill's Z out of `\`
+      then `Enter`, as decided (z then Enter still goes to Z's alone).
+      Zeroing, setting or halving a manual axis clears its slots, as for the
+      motorised axes (positions from the old zero would be somewhere else),
+      as does losing its readings. On the mill, the memory rows are a
+      little smaller, to fit Y's and Z's above the mode's lines. Plain
+      Enter still goes to axis 1's slot alone, as before. Not done: a sound
+      when a manual go-to arrives (the line just clears), and the multi-pass
+      dialog doesn't use the manual axes' slots yet (stage 3). Stage 2
+      (moving X and A onto the same abstraction) is next
+    - **Done (19 Nov 2026), the first part of stage 2:** memory slots,
+      zero, set and half, and the display, with no change of behaviour.
+      The Model has calls taking an axis number (1 to `Model::AXES`, 4)
+      which work the same for every axis: `hasAxis()`, `axisLabel()`
+      (which replaces the 75 `read("Axis1Label", "Z")`s), `getMemory()`,
+      `storePosition()`, `goToCurrentMemory()`, `clearCurrentMemorySlot()`,
+      `clearMemory()`, `inSlotGoTo()`, `zero()`, `setPosition()`,
+      `half()` and `formatPosition()`. The `axis1...`/`axis2...`/
+      `manualAxis...` versions of these are now private, behind them.
+      Every axis's slots are in one array, in mm (a motorised axis's are
+      whole steps, so going there and "already there" are exact), rather
+      than the motorised axes' in steps with a sentinel for "unset". The
+      controller's keys for these act on `key::axisOfKey()` rather than a
+      case per axis, and the view has one list of axis lines and one of
+      memory rows (the motorised and manual axes differ only in what they
+      show beside the position: speed, or "no reading" and the go-to)
+        - A bug fixed on the way: a memory value typed in (`i`) was
+          truncated to a step, not rounded, so 0.7 mm at 1/1000 mm a step
+          was stored as 699 steps (0.699 mm). Now it's the nearest step
+        - **Then (19 Nov 2026), the motorised axes' state:** the dozen
+          pairs of members (`m_axis1Status`/`m_axis2Status`, fast
+          returning, rapid in progress, previous speed, was running, the
+          motor log, the positions' tool, the last relative move, the
+          breadcrumbs, faulted) are one `MotorAxisState` per axis, in
+          `m_motorAxes`, through `axisState(n)`. The calls which differed
+          only by axis take its number: `isMotorRunning()`,
+          `motorSpeed()`, `setMotorSpeed()` (which also replaces
+          `axis1SetSpeed()`), `waitForMotor()`, `motorStep()`,
+          `motorPosition()`, `axisStatus()`, `goToPosition()`,
+          `goToOffset()`, `repeatLastRelativeMove()` and
+          `goToPreviousPosition()` (whose two copies are now one).
+          `enum class Axis` is gone (its last uses take a number), as is
+          `m_lastRelativeMoveAxis`, which was set but never read. The
+          motors themselves are still `m_axis1Motor`/`m_axis2Motor` (about
+          400 uses), with `motor(n)` for code taking a number: they can
+          move into the state with the moves
+        - **Then (20 Nov 2026), speed:** `speedIncrease()`,
+          `speedDecrease()` and `selectSpeedPreset()` take the axis number,
+          in place of the six `axisNSpeed...()`, and the controller's cases
+          for `=`, `-` and the presets are one each. Each axis keeps its own
+          steps (axis 1: 1 below 20, then 20; axis 2: 2 below 10, then 10),
+          in a table, and axis 1's is still left alone when threading
+          (where the presets are off for both). `Model::speedPreset()`
+          gives a preset's speed, so the menu no longer has its own copy of
+          the defaults. Two small differences, both deliberate: faster now
+          goes up to the maximum rather than stopping short of it on axis 1
+          (e.g. 990 went no further, with 1000 the maximum) or going past
+          it on axis 2 (391 went to 401, with 400 the maximum, on the
+          lathe's X); and a speed within 0.1 of a step's boundary (e.g.
+          20.0001, read back from the motor's rpm) counts as on it, as
+          axis 2's already did
+        - **Then (20 Nov 2026), stopping:** `stopAxis()` and
+          `stopAxisRamped()` take the axis number, in place of the four
+          `axisNStop...()`, which were the same but for the motor (and only
+          used inside the Model). `stopAllMotors()` (Space) is unchanged:
+          it signals both motors before waiting for either, so they stop
+          together. A new test presses "stop" twice on each axis with
+          deceleration ramping: the first slows down, the second stops at
+          once
+        - **Then (20 Nov 2026), moves, rapids, nudges and fast returns:**
+          `move()`, `rapid()`, `nudge()` and `fastReturn()` take the axis
+          number, in place of the eight `axisN...()`, with one direction
+          type for every motorised axis, `AxisDirection` (`Forward` is the
+          left and up arrows' way; `axisDirection()` turns a `ZDirection` or
+          `XDirection` into one). Axis 1's moves still go through the
+          motion sequence (for a taper or threading), and its fast return
+          in a taper is still at 100 mm/min. Nothing tested the directions,
+          and they turned out not to agree: a move's direction came from
+          `AxisNMotorFlipDirection`, but a nudge's from the conversion
+          factor's sign (and, on axis 2 only, the flip as well). Those
+          agreed on the lathe and the mill's X, but on the mill's rotary
+          table (a positive conversion, not flipped) `W`/`S` turned it the
+          opposite way to Up/Down. Decided (20 Nov 2026): the arrows' way,
+          so a nudge's direction now comes from the flip alone, as a
+          move's does, and only A's nudges change. A test now checks every
+          move, rapid and nudge's direction with both machines' settings
+          (and fails on the old rule, for the mill's A nudge alone). A
+          nudge's steps are now rounded, rather than truncated. **Tried on
+          the mill (20 Nov 2026):** nudges used a lot, as normal. **Still to
+          check on the mill:** that `W` turns A the same way as Up
+        - **Then (20 Nov 2026), locks:** the lock calls already took an
+          axis number; now the refusals do too. `axisMoveRefused()` is the
+          one check for a move of an axis (adding X for axis 1 in a taper,
+          as X follows Z), in place of `axis1MoveRefused()` and
+          `axis2MoveRefused()`, and `moveRefused()` takes the axes to check
+          (e.g. `{ 1, 2 }`) rather than a bool for each of two. Axis numbers
+          are `int` throughout, as elsewhere, rather than `unsigned` for
+          the locks. No change of behaviour
+        - **Then (20 Nov 2026), the motors:** `m_axis1Motor` and
+          `m_axis2Motor` are now each axis's `MotorAxisState::motor`, and
+          the Model's 265 uses go through `motor(n)`. (Its const version
+          returns a plain pointer, as the unique_ptr did, since const
+          functions call the motor's non-const ones.) That changed the
+          order they're destroyed in, after the scale rather than before,
+          and the fake scale's thread reads axis 1's motor: so the Model now
+          has a destructor which calls `resetMotorThreads()` (the scale,
+          then axis 2's motor, as it may follow axis 1's in a taper, then
+          axis 1's), rather than relying on the members' order. Only the
+          app's quit called it before; the tests didn't. No change of
+          behaviour. **Tried on the mill (20 Nov 2026):** quitting, with no
+          problems
+        - **The scale, decided (20 Nov 2026):** a scale on the lathe's X is
+          planned, once Z's (the trial: quadrature, straight to two GPIO
+          pins, as X's will be, not a DRO sender) is working and proven; it's
+          waiting for the 5 V to 3.3 V converter boards. X's is to do
+          everything the mill's X does: the checks at rest and the re-base,
+          the checks while moving, finishing moves, and re-basing between
+          passes (which, on the lathe, covers X's infeed as well as Z). If
+          two axes disagree with their scales at once, one dialog deals with
+          both: it waits until every scale has settled (the first mismatch
+          stops everything, and the axes settle at different moments), then
+          lists each axis's disagreement, and Y/Enter (the scales) or N/Esc
+          (the motors) applies to every axis listed. In three parts, each its
+          own commit:
+            - (a) the scale's state and calls by axis number, with only
+              axis 1 reading a scale: no change of behaviour
+            - (b) axis 2 reading `Axis2Scale...`: the checks at rest and
+              while moving, the combined dialog, the display on X's line,
+              and X's leader then `B`. Tried in the fake build only
+            - (c) finishing moves and re-basing between passes for axis 2,
+              with the retraction and the multi-pass X correction
+        - **Done (20 Nov 2026), part (a):** each motorised axis's
+          `MotorAxisState` has a `ScaleState` (the `AxisScale`, the at-rest
+          check's state, the mismatch and its asks, the stall stop, the
+          finish-on-scale setting and any finishing move under way, and the
+          fake scale), in place of `m_axis1Scale` and its dozen members. Its
+          17 public calls take the axis number (`hasScale()`,
+          `scalePositionMm()`, `scaleDifferenceMm()`, `scaleMismatchMm()`,
+          `acceptScalePosition()`, `keepMotorPosition()`,
+          `rebaseFromScaleByHand()`, `finishesOnScale()`, and so on), as do
+          the at-rest check, the re-bases, `configureScale()` (which reads
+          `AxisNScale...`) and `backlashCompensationMm()`. checkStatus()
+          updates and checks both axes' scales, but only `configureScale(1)`
+          is called, so only axis 1 has one. The scale is declared after the
+          motor in `MotorAxisState`, so destroyed first, and ~Model() stops
+          both scales before the motors anyway. Still axis 1's alone: the
+          finishing moves' logic (part c), `cutReady()` (axis 1 is the cut
+          axis), the backlash measurement, and the controller's dialog and
+          the view's scale text (part b)
+        - **Done (20 Nov 2026), part (b), not yet tried on a machine:**
+          `configureScale(2)` reads `Axis2Scale...`, so axis 2 can have a
+          scale, off unless set. It's lined up again wherever X's motor
+          position is set (zeroing, setting, halving, a diameter, and gear
+          cutting's renumbering by whole turns), and has the same checks at
+          rest and while moving as axis 1's, the re-base at rest
+          (`Axis2ScaleRebase`), and the re-base by hand (X's leader then
+          `b`, also in the menu). A quadrature scale on any axis but 1 must
+          have its pins set, as axis 1's default to 5 and 6; in the fake
+          build, it's simulated by following its motor (the mock GPIO only
+          simulates axis 1's). The scale's text is on each motorised axis's
+          line (X's less any multi-pass correction, as X's position is), and
+          with a scale on axis 2, the taper's angle and RETRACTED are drawn a
+          line lower, clear of it (checked on snapshots). One dialog asks
+          about every axis which disagrees: it waits until no other axis's
+          scale is still settling (`Model::scalesStillSettling()`, which
+          doesn't wait for an axis which already disagrees, as a misreading
+          scale may never settle), then lists each, and Y/N applies to every
+          one; an axis whose scale is misreading keeps its motor's position
+          either way. Keys wait while either axis disagrees, and the alarm
+          sounds for either. New tests: X's re-base at rest and by hand,
+          zeroing X lining its scale up, both disagreeing in one dialog, the
+          dialog waiting for the other scale to settle (which fails without
+          the wait), one misreading and the other disagreeing, and a
+          quadrature scale on axis 2 needing its pins. Still axis 1's alone
+          (part c): finishing moves, re-basing between passes, and the
+          re-base by hand while a multi-pass is paused
+        - **Done (20 Nov 2026), part (c), not yet tried on a machine:**
+          finishing moves for either axis (`startFinish()`,
+          `advanceFinish()`, `finishMove()` and `endFinish()` take the axis
+          number; X's go-to, relative move and memory return start one, as
+          Z's do), with X's own on and off in the menu
+          (`toggleAxis2FinishOnScale`, System, `G`; `Axis2ScaleFinishMoves`
+          to start on). Keys wait while either axis finishes, and Space ends
+          both. Re-basing between passes for X, the feed axis: the
+          multi-pass asks the new `IMultiPassMachine::feedReady()` after
+          each feed to a pass's depth (or before the pass, if it's there
+          already), in a new `FeedSettling` state, until it's true. The
+          Model's waits for X's scale to settle and re-bases X (with
+          `Axis2ScaleRebaseBetweenPasses`, in a plain multi-pass or gear
+          cutting, as for `cutReady()`). If the re-base leaves X short of or
+          past the depth, the multi-pass feeds again, at most
+          `MAX_FEED_CORRECTIONS` (3) times, then stops with a warning
+          rather than cut at the wrong depth. While paused, X is re-based
+          each time its reading settles, and by hand (`XB`), as Z is. A
+          re-base renumbers the motor's steps, so the retraction's stored
+          step (`m_xOldPosition`) is then the nominal position, which is
+          where the table really is: unretracting goes to the true depth.
+          The multi-pass X correction is only in the shown and feed
+          positions, not the motor's, so a re-base doesn't disturb it. The
+          settling overlay and the status line name X while it waits. New
+          tests: the engine waiting for the feed, feeding again, and giving
+          up after three; X finishing on its scale (short, past, a memory
+          return, Space); X's toggle in the menu; and a multi-pass with X
+          falling 0.03 mm short of its motor, paused and not, which (without
+          the feed's re-base) cuts the last pass 0.03 mm too deep. Not
+          done: a correction that reverses (X fed past the depth) relies on
+          the motor's backlash compensation, rather than backing off and
+          approaching again as a finishing move does; the re-base after it
+          catches what's left, within the three tries. **To try on the
+          lathe**, once X has its scale. This completes stage 2
+        - **Then (20 Nov 2026), approaching on the scale** (the user's
+          question: could an overshoot cut what it shouldn't? Yes, where the
+          tool is in the work, e.g. finishing at a pocket's end wall on the
+          mill; a correction afterwards can't undo it. The feed is normally
+          clear of the work, with Z off the end, but correcting an
+          overshoot by reversing leaves the slack the wrong way, so the cut
+          can push the tool out, and a pass starting inside the material
+          would plunge too deep). An overshoot comes from momentum at a stop
+          from speed, and from the backlash compensation on a reversal (a
+          fixed 820 steps on the mill's X, where the backlash is 0.31-0.45
+          mm). So, with `AxisNScaleApproachMm` (off unless set) and
+          `AxisNScaleApproachSpeed` (20 if not set): a move finished on the
+          scale stops that far short, waits for the scale, then creeps the
+          rest the same way (not counted as a correction; a move shorter
+          than the approach creeps all the way; backing off after going
+          past returns to the approach's start, then creeps). The creep's
+          speed is put back afterwards, as a stop from it would leave it
+          (`speedAfterStop()`, so a fast go-to still ends at
+          `AxisNSpeedResetTo`). The multi-pass feed (axis 2, with
+          `Axis2ScaleRebaseBetweenPasses`) does the same inside the Model
+          (`FeedApproach`: back off if past, move short, wait for the scale
+          and re-base, creep in), with `feedMoving()` true throughout, so
+          the multi-pass sees one feed; this also replaces the reversing
+          correction noted as not done above. Only the feed before a pass,
+          not a radius's path. On for the mill's X at 0.2 mm and 20 mm/min
+          (the user's choice). **Tried on the mill (20 Nov 2026):** go-tos
+          on X stop short and creep in as expected. Tests: with
+          the table running 0.05 mm ahead of the motor, a go-to's scale
+          never reads past the target with the approach, and does (by more
+          than 0.04) without; a short move creeps all the way; and a
+          multi-pass whose X table gets 0.03 mm ahead at the last feed never
+          goes deeper than the depth with it, and does (by more than 0.02)
+          without. Still to do, as a follow-up: a multi-pass cut's end in Z
+          (e.g. into a shoulder) isn't checked against the scale, and the
+          cut starts with a reversal from the return, so the backlash
+          compensation's error shifts where it ends; it would want to stop
+          short and creep in too
+        - **Then (20 Nov 2026), the cut axis's ends:** the user chose, of
+          stopping short and creeping (a dwell with the tool in the work,
+          which may leave a faint mark the approach's distance before the
+          end), or taking up the slack beyond the start and re-basing there
+          before the cut (no dwell in the work, but it needs room beyond the
+          start, which a pocket's wall on the mill hasn't), the first. So the
+          approach is now general (`AxisApproach`, by axis number, in
+          `m_approaches`): besides the feed, axis 1's multi-pass moves (the
+          cut, the cut back, the return, and the move to a pass's start)
+          stop short, wait for the scale and re-base, then creep in, with
+          `Axis1ScaleApproachMm` and `Axis1ScaleRebaseBetweenPasses`. Not a
+          radius's path, threading, or a cut with X following Z, as
+          re-basing Z part way would move X (the follower moves by the
+          leader's change in position: see `StepperMotor::synchronise()`).
+          When the return has just re-based at the start, `cutReady()`
+          doesn't wait for the scale again, so a pass waits twice (the cut's
+          end and the return's), not three times. A creep is never faster
+          than the axis was going (`creepSpeed()`; a fine cut on the lathe
+          may be slower than 20 mm/min), for the finishing moves too. The
+          simulated scale now gives `tableMm()`, where the table really is,
+          without the reading's lag, as the return starts before the reading
+          would catch up with a cut's end. Test: Z's table gets 0.05 mm
+          ahead as the second cut starts, and 0.05 the other way as its
+          return starts: with the approach, the table never goes past the
+          cut's end or back past the start; without, it ends 0.05 past the
+          end (and with the return left out of the approach, 0.05 past the
+          start). On the mill (0.2 mm), each pass now waits about 4 s
+          rather than 2. **Tried on the mill (20 Nov 2026):** a multi-pass
+          on X worked as expected, stopping short and creeping at both
+          ends, but not on a real cut: **still to see** whether the dwell
+          0.2 mm before a cut's end leaves a mark (a smaller approach, e.g.
+          0.1, would move it closer to the end). `XB` (re-basing by hand) not
+          tried since the scale's calls moved to axis numbers
+        - **Then (20 Nov 2026), in the fake build with lc_mill.cfg**, the
+          user saw a multi-pass from 0 to -5 stop at -4.80, jump to about
+          -5.08, then go back, rather than creep. The simulated table had
+          no backlash, so the mill's 820 steps (0.256 mm) of compensation
+          took it 0.256 further than the motor on each reversal into a cut:
+          past the stop-short point (0.2) and the end, and the re-base (the
+          "jump") then found it there, and the creep reversed onto the end.
+          Two fixes: the simulated table now has backlash
+          (`FakeDroScale`'s slack, `Axis1FakeBacklashSteps`, the
+          compensation unless set; the two tests which want a table with
+          none set it to 0), so the fake build behaves like a machine whose
+          compensation is right; and an approach which finds itself past its
+          target once re-based backs off past the backlash and approaches
+          again (once), with a warning that the approach is shorter than the
+          overshoot ("X went 0.056 mm past its target: make
+          Axis1ScaleApproachMm more than that"), as finishing moves now warn
+          too. Tests: the simulated slack both ways, and the user's case
+          (0.256 compensation, 0.2 approach): with the table's backlash as
+          compensated it stops short, creeps, and never passes the end, with
+          no warning; with none, it warns
+        - **Then (21 Nov 2026), on the mill:** a multi-pass along X from
+          about 0 to -97 mm (cuts at 140 mm/min, returns at 800) gave that
+          warning five times ("X went 0.010 mm past its target"). Each
+          97 mm move there ended 0.11-0.22 mm further than the motor by the
+          scale, whatever the speed (40 to 800 mm/min), and 0.25 mm on a fast
+          return to a slot. So it isn't momentum. Short moves end within
+          about 0.05 mm, and 97 mm moves between -62 and 35 mm only
+          0.04-0.09 mm further, so it looks like the lead screw's pitch
+          varying along its length (not the scale's counts per mm, which
+          would be the same everywhere), which the re-basing deals with. The
+          mill's approach is now 0.35 mm (0.1 more than any seen). The
+          warning's advice was misleading: it gave how far past the target
+          the axis went (0.01), when the approach (0.2) had to be more than
+          the overshoot from where it aimed (0.21). It now says both, and
+          suggests more than the overshoot. **To check on the mill:** no
+          more warnings with 0.35, and (if wanted) the lead screw's error
+          along the table, e.g. by a slow move end to end and the scale's
+          difference every 10 mm
+        - **Then (21 Nov 2026), clearing a warning:** on the mill, Esc was
+          pressed (by instinct) to clear that flashing warning, which left
+          multi-pass mode part way through. So `F9` now clears the warning
+          and does nothing else (allowed whatever is going on, and with the
+          menu open), and a warning which can be cleared ends with
+          "[F9 to clear]". Not the encoder's lost pulses in threading or
+          knurling, which is still true until the thread is chosen again.
+          A warning whose cause is still there comes back. Test: F9 clears
+          a lock refusal while Z keeps moving, with and without the menu
+          open. **Not yet tried on the machine.** Esc ending a multi-pass
+          without asking is still as it was
+
+#### Smaller tidy-ups
+
+- `axis.cpp` / `axis.h` are compiled but unused, and their `mgo::Axis`
+      class clashes in name with `enum class mgo::Axis` in model.h
+    - **Done:** removed (they're in git's history, if the "array of axes"
+      idea below wants them)
+- Set the initial X-axis retraction direction from the config file
+    - **Done:** `Axis2RetractionDirection` (outwards or inwards) in lc.cfg
+
+### Other modes and features
+
+#### Cut knurling
+
+- **New mode: "cut knurling".** A cut (rather than pressed) knurl, made
+      with a single-point tool as two sets of multi-start "threads" of
+      opposite hand.
+    - **First set:** a series of thread-like cuts at evenly spaced starting
+      angles, giving several helical grooves along the piece. The helix
+      angle (the grooves' angle to the axis, on the work's surface) defaults
+      to 45°
+    - **Second set, opposite hand:** cut with the *same tool*, spindle still
+      running forwards, but with Z moving the other way (outwards from the
+      chuck, towards the tailstock). The electronic leadscrew makes this
+      easy. No tool change means no offsets to worry about, and both sets
+      line up with each other. These cuts start at the chuck end, so that
+      end needs a relief groove or runout to start in
+    - **Tool:** a 90° point (e.g. an HSS chamfering tool) gives the usual
+      90° knurl form; a 60° threading tool would also work, giving a slightly
+      different profile
+    - **Lead depends on diameter:** for a helix angle θ, the lead (Z travel
+      per spindle revolution, per start) is π × Ø / tan θ, which for 45° is
+      π × Ø. On a 10 mm bar that's about 31 mm per revolution, so Z has to
+      move very fast for the spindle speed. The spindle will need to run
+      very slowly to stay within Z's speed and acceleration limits; the mode
+      should work out and show the maximum spindle speed allowed. The Ø
+      comes straight from the current feature (see "Work geometry and
+      tools"), or the user enters it
+    - **Number of starts:** sets the diamond size (diamond pitch about
+      π × Ø ÷ N). The mode could ask for a target pitch (fine, medium,
+      coarse) and choose N to suit the diameter
+    - **Starting angles:** each start is the previous one plus 360° ÷ N of
+      spindle rotation, using the encoder, like a multi-start thread. Any
+      multi-start threading support would share this
+    - **Passes:** each start probably needs several passes in X to reach full
+      depth, so this fits the generic multi-pass engine: for each pass
+      depth, cut every start (or every start to full depth in turn)
+    - **Started (2026-11-12), in the mock build only:** knurling mode (Modes,
+      "Cut knurling", `K`). It uses the multi-pass dialog (start, Z end, X
+      infeed as the depth, infeed per pass, constant area), plus the number of
+      starts and the helix angle. The lead comes from the diameter at the
+      start, so X must have been set as a diameter. The cuts are threading
+      passes at the knurl's lead. The multi-pass engine gained two general
+      options: `starts` (each pass cuts every start, 1/N of a turn apart,
+      before feeding in) and `cutBack` (the return is a cut too).
+        - **Decision: each start there and back, rather than all of one hand
+          and then all of the other.** With the tool still in, the return to
+          the start cuts the opposite hand, so there's no retract and no
+          non-cutting return at all. Every cut back starts at the Z end, at
+          the same spindle angle each pass, so the passes line up. The cost
+          is that the Z end always needs a relief groove (or to run off the
+          work)
+        - **Decision: knurling's spindle counts as turning down to 5 rpm**
+          (threading's limit is 30), as on the lathe, Z's 1000 mm/min limits
+          a 45° knurl on a 10 mm bar to about 25 rpm. The dialog refuses a
+          lead Z couldn't follow even at 5 rpm. The rpm shown (in any mode)
+          isn't rounded down to a multiple of 10 below 50 rpm
+        - **To check on the machine:**
+            - Z starts each pass from rest straight to full speed (follow
+              mode doesn't ramp), and for a long lead that's far faster than
+              threading has ever asked for. The HSS57 may stall. If it does,
+              each cut may need a run-up (start further off the work, with
+              Z's speed ramped up to the spindle's before the tool reaches
+              it), which stepperControl's follow mode doesn't do yet
+            - Whether the spindle runs smoothly with useful torque at 5-25
+              rpm, and whether the encoder's rpm and lost-pulse checks behave
+              at those speeds
+            - How the tool's flanks cope with cutting both ways
+        - **Not done yet:** taking the Ø from the current feature rather
+          than X; multi-start threading (the engine supports it now, but the
+          threading passes dialog doesn't offer it); allowing for a tool
+          other than 90° in the starts suggested
+        - **First hurdle on the machine (2026-11-12): the spindle won't go
+          slow enough.** The VFD (Mitsubishi FR-D700-SC, set up by the
+          package's supplier, with an external pot box) won't go below about
+          70 rpm, so the mode refuses as "too fast". At 70 rpm, the lead can
+          be at most 800 ÷ 70 ≈ 11.4 mm, which needs a helix angle of at
+          least 70° on a 10 mm bar (80° on 20 mm): long thin diamonds, not a
+          normal knurl. The supplier had set Pr.2 (minimum frequency) and C2
+          (Pr.902, terminal 2 bias frequency) to 5 Hz; lowering Pr.2 to 2 Hz
+          as a test made no visible difference, and it was put back.
+        - **Solved the same day: both settings lowered to 1 Hz.** Each one
+          alone holds the floor at 5 Hz: C2 is the frequency the pot gives
+          fully down (0 V), and Pr.2 clamps the output to at least its
+          value. Lowering both to 1 Hz brought the floor right down (at the
+          old ratio of about 14 rpm per Hz, about 14 rpm: enough for 45° up
+          to about 18 mm). On the D700's panel, the C parameters are in a
+          "C" menu of their own, not in the numbered list. The supplier's
+          5 Hz may have been to protect the motor (little torque, and little
+          cooling, at a few Hz under V/F control), so the spindle shouldn't
+          be left running slowly under load. The two other ideas below were
+          considered first, and may still be useful (e.g. for bigger bars,
+          or more torque):
+            - **A "back gear" (hardware):** a second pair of pulleys on the
+              motor's toothed belt, giving a lower range. The floor drops in
+              proportion: 3:1 gives about 23 rpm (enough for 45° on 10 mm),
+              5:1 about 14 rpm (18 mm), 7:1 about 10 rpm (25 mm). The torque
+              goes up by the same ratio. The encoder is driven from the
+              spindle, so its gearing in the config doesn't change with the
+              belt. No code change needed
+            - **A hand-turned spindle (software):** passes already follow the
+              spindle's position, not its speed. In stepperControl's follow
+              mode, Z stops when the spindle stops, and goes back along the
+              groove if it's turned back (its target is clamped between the
+              cut's start and end). Starting from rest by hand would also
+              avoid Z having to jump to full speed. It would need, as a
+              knurling dialog option:
+                - no minimum spindle speed: a pass starts with the chuck
+                  still, and waits for it to be turned to the start angle
+                - Z's follow speed at its maximum (it's set from the
+                  measured speed now, which would be about zero)
+                - "forwards" fixed as the spindle's normal direction, rather
+                  than taken from the encoder as each pass starts (rocking
+                  the chuck back first would give that cut the wrong hand)
+                - no stop when the spindle stops (normal when hand-turning;
+                  Z only moves when the chuck does, and Space still stops)
+                - no lost-pulse check: a pause in turning, then carrying on
+                  at the same speed, looks exactly like lost pulses. Log
+                  them instead (core pinning fixed the original cause)
+                - a tighter limit on how far Z may lag (a quarter of a
+                  revolution is 8 mm of Z at 45° on 10 mm), with a "turn
+                  slower" warning as it gets near
+                - prompts: "Turn the chuck forwards", "waiting for start
+                  3's angle"
+                - On the machine: a crank on the spindle's outboard end, and
+                  the VFD off at the mains. At hand speeds, Z would move in
+                  bursts of one encoder pulse (about 0.04 mm at 45° on 10
+                  mm), which is probably fine but may sound rough
+            - **Either way, there's a lot of turning:** waiting for each
+              start's angle takes about as long as the cut. A whole knurl
+              (31 starts, there and back, about 6 passes) is very roughly 350
+              revolutions, 15-20 minutes at 20 rpm. Cutting whichever start's
+              angle comes round next, rather than in order, would save much
+              of the waiting, powered or by hand
+        - **First knurls on the machine (2026-11-12):** Ø 22.7, Z 14.8 mm,
+          at 70° (the spindle still wasn't slow enough for 45°), about 27-30
+          rpm (about 2 Hz). 22 cuts each time went well, then:
+            - **First run (71 starts): the VFD tripped mid-cut.** The
+              encoder's pulses stopped, so the passes were stopped. The
+              fault wasn't noted before it was reset; the D700 keeps its
+              last eight faults (MODE to the fault history, with the
+              frequency, current and voltage at the fault), so it can still
+              be looked up. Only "Stopped" was shown, with no reason.
+              **The fault history showed E.THM** (motor overload, shown as
+              "E.rHn" in seven segments): the drive's thermal model of the
+              motor, not a real fault. For a standard self-cooled motor
+              (Pr.71), the model allows less and less current as the
+              frequency drops, as the motor's fan barely turns. In V/F
+              control at about 2 Hz, the motor also draws a lot of
+              magnetising current even when idling (torque boost, Pr.0), and
+              much of a knurling run is waiting for start angles. About 20
+              minutes of low-speed testing came before that run. Things to
+              check: that Pr.9 matches the rated current on the motor's
+              plate. Not to do: set Pr.71 to a constant-torque motor (only
+              for a motor with a separately powered fan), or raise Pr.9
+              above the plate
+            - **Second run (40 starts): a pass waited for ever.** Its start
+              angle was set more than a revolution *behind* the spindle
+              ("from spindle pulse 1839425 (now 1840261)"), which only
+              happens if the spindle was taken to be turning backwards. The
+              direction came from the encoder's latest edge: a stray edge on
+              its B channel flips that for a few milliseconds, until the next
+              A edge, and the jerky spindle at 2 Hz (with the encoder belted
+              at 35:100) makes stray edges likely. One pass in 22 started
+              in such a window. (Threading passes had the same flaw, though
+              it's much less likely at their speeds.) The counting itself
+              isn't affected: each A edge sets the direction again first
+            - **Fixed:** a pass now takes the spindle's direction from how
+              far its count has moved over the last tenth of a second or so
+              (sampled on each update), and refuses to start if it can't
+              tell. Every pass of a run must turn the same way as the first
+              (or it would cut the other hand). A pass waiting for its start
+              angle is stopped, with a warning, if the spindle turns three
+              revolutions away from it, so nothing can hang silently. And
+              when the spindle stopping stops a multi-pass (or any motor),
+              the warning says so. Not yet tried on the machine
+        - **Where it stood (2026-11-12): undecided.** Running the motor
+          at 1-2 Hz trips its overload protection, so the user may set Pr.2
+          and C2 back to 5 Hz (about 70 rpm), which limits knurls to steep
+          helix angles (about 70° on 10 mm, more on bigger bars). The back
+          gear looks impractical for about 10 rpm: a single stage of about
+          7:1 needs a very large pulley on the spindle. (Two smaller stages
+          through a countershaft would avoid that, but it's more work
+          still.) Hand-turning the spindle (above) needs no motor at all,
+          so it has none of these problems. Cutting the starts in whichever
+          order their angles come round would shorten each run (so less
+          heat), but isn't worth doing until the way forward is chosen
+        - **A good knurl at the spindle's usual floor (2026-11-15):** with
+          the VFD set back as supplied (about 70 rpm), Ø 17.5, 80°, 16
+          starts, 0.2 mm deep (0.1 mm first pass), 4 passes. The "diamonds"
+          are very long and thin, which looks almost like a weave, but the
+          surface grips very well, which is what it's for. So steep angles
+          at 70 rpm are the way forward for now, with no motor or VFD
+          changes. Then, as the user asked:
+            - **The dialog suggests the angle and starts** (until typed in;
+              typed ones are kept, and clearing one has it suggested again).
+              The angle is the smallest whose lead Z can follow at
+              `KnurlingSpindleRpm` (new in lc.cfg, 70; 45° if not set): 79°
+              for Ø 17.5. The starts space the grooves twice the depth apart
+              across them, for sharp diamonds with a 90° tool: 26 for Ø 17.5
+              at 79° and 0.2 mm deep. (The 16 used left flats: 0.6 mm apart
+              across against a 0.4 mm groove.) The dialog now shows the
+              spacing across the grooves, not round the work, as at 80° the
+              two differ six-fold, and the old figure hid that too many
+              starts would just turn the work down
+            - **Starts in whichever order comes round first.** The engine
+              offers the model every start still to cut (that way, this
+              pass), and the model starts the one whose angle comes round
+              first after the backlash take-up. Each pass still cuts every
+              start once each way. A cut used to wait for the next whole
+              turn and then the start's offset (up to two turns); now it's
+              at most just over one, and usually much less. (Gear cutting's
+              indexed starts are still in order.) Not yet tried on the
+              machine
+        - **A faster Z for knurling doesn't work as it is (2026-11-16).** At
+          70 rpm, Z's speed limits the angle: 45° on Ø 17.5 would need Z at
+          3,850 mm/min, beyond even the motor thread's ceiling of 3,000 rpm
+          (a 20 µs step), and Ø 10 about 2,750 rpm. Raising
+          `Axis1MaxMotorRpm` from 1000 to 1400 only brought the angle
+          suggested for that bar down from 79° to 77°, and Z stalled into
+          alarm on the passes, though fast moves at 1400 (which ramp) were
+          fine. So it's a pass's start from rest straight to full speed
+          that Z can't do, not the speed itself. Set back to 1000
+            - **Idea (low priority): a ramped start for knurling passes.**
+              Each cut starts a few millimetres further off the work, and Z
+              ramps up while following the spindle (stepperControl's follow
+              mode allows ramping): it falls behind at first, then catches
+              up before the tool reaches the work. That needs Z's top speed
+              well above the speed the lead needs (to catch up), so it would
+              want a knurling-only Z limit (e.g. `KnurlingMaxZSpeed`), so
+              rapids and other moves stay as they are. The lag check, a
+              quarter of a turn, would need to allow for the run-up. The
+              cut back would need a run-up at the chuck end too
+
+#### Thread pitches file
+
+- Add ability to add new thread pitches without recompilation. Move the
+      definitions in threadpitches.h into separate config file (threadpitches.cfg)
+      which is loaded at program start.
+      - The thread pitches dialog should be multi-tier: the user
+        initially selects, e.g. "metric coarse", "metric fine", "BSW", "BSF", "UNC"
+        etc, then is presented with the relevant pitches for that category.
+      - The dialog could present a diagram showing the salient thread data
+      - The dialog should allow the user to select male or female (the diagram should
+        change to reflect this)
+      - Expand the new config file with all common thread pitch data up to, say, 25mm/1"
+      - **Done:** threadpitches.cfg, read at start-up (`ThreadsFile` in lc.cfg),
+        with metric coarse and fine, BSW, BSF, BSP, UNC, UNF and BA up to 25mm / 1".
+        Each line is name, major diameter, pitch (mm or inches; mm or tpi); the
+        thread form (ISO, UN, Whitworth, BA) gives the depths and the bore. The
+        dialog has two levels (type, then size), M for male / female, the figures,
+        and a diagram of the profile. Choosing female sets X to retract inwards.
+        Used on the machine (2026-11-07) for an external M14 thread; a female
+        thread hasn't been tried yet
+      - To fit a commercial M14 nut, a few passes beyond the 0.613 x pitch depth
+        were needed: commercial bolts are made a little under nominal (about
+        13.8 - 13.97mm for M14), and the bar was turned to 14.00. Treat the depth
+        as where to start trying the nut
+      - NB internal metric/UN threads now use the ISO depth of 0.541 x pitch; the old
+        table had 0.469 x pitch (and M18 had 1.072 where M20 had 1.172). Change
+        femaleDepth in threadpitches.cpp's FORMS if 0.469 was deliberate
+
+#### A fresh log each session
+
+- Start a fresh log each session: at start-up, before `INIT_MGOLOG("lc.log")`
+      in main.cpp, rename any existing lc.log to lc.log.previous (replacing an
+      older one), so there's always this session's log and the last one's. The
+      log grows without limit now that threading passes, retracts, spindle
+      readings and lost pulses are all logged, and the session in question
+      after a workshop test is hard to find in it. (`std::filesystem::rename`;
+      ignore a failure, e.g. no log yet, rather than refusing to start)
+    - **Done:** as described. Not yet tried on the Pi
+
+#### Generic multi-pass origins
+
+- Add some form of generic multi-pass functionality (defining a start position,
+      a required end position, and how axes should change per pass -- e.g. for a lathe
+      operation, we'd define a z start, a z end, and an x infeed per pass).
+      To allow the user to "visually" set parameters, it could offer the ability to read
+      stored memory slots, for example for threading a user might define z start and z end
+      by lining the tool up to where they want the thread to end and storing the z value
+      in a memory slot, then moving z out to just past the end of the workpiece and storing
+      that z value in a separate memory slot.
+      - **Done:** the engine (`MultiPass`, see "Multi-pass" above): a plan of cut start
+        and end, feed start and end, feed per pass, retract, pause, and manual feed.
+        Multi-pass mode builds one from Mem 1 and Mem 2. New modes (e.g. threading,
+        or facing on the mill) need a plan built from their own inputs, and the
+        mode's display
+- Once this "generic multi-pass" functionality is available, it could be used for:
+        - threading on the lathe
+        - turning down to a workpiece to a set diameter (lathe)
+        - radiusing (lathe). **Done** as radius mode (see "Radius mode" above),
+          from the current feature as suggested here; the end X became the
+          radius itself (up to half the diameter for a full ball end)
+            - Maybe radius should rely on diameter being set and the the work faced off;
+              if a diameter is set after turning down bar stock to a known diameter, then facing
+              the end, the program would know where (a) the centre line of the stock is, and
+              (b) that the tool is at the end of the piece (z current value), then doing a
+              radius operation from that point doesn't need to rely on the operator for anything
+              else. The radiusing operation could move X to near the diameter of the stock, take
+              a small radius cut, and repeat, gradually moving z in/down until the cut's start
+              position (in x) reaches zero. (That's assuming a full ball end is required -
+              will need to specify x end point so if the user requires just a "fillet" on the
+              stock's end they could specify an end x value of greater than zero).
+                - This prompts an interesting idea - maybe diameter, once set, should be
+                  a constant value, i.e. the current diameter of the stock, and moving x in or out
+                  manually shouldn't change that. This might be useful for the program to
+                  remember; although it would of course go out of date if the user made further
+                  manual turning down operations (e.g. a shoulder - what would the diameter
+                  refer to? Maybe the current "feature"? To consider further.)
+                  **See "Work geometry and tools" for this worked out further.**
+        - chamfering (lathe)
+        - facing an entire workpiece (mill) i.e. the X axis does a pass, and each pass
+          the user is prompted to feed the Y (manual) axis a set amount. When the process reaches
+          the target Y value, the cutter could return to the beginning, and the user might be
+          prompted to feed down on the Z (again, currently manual on the mill) and repeat.
+        - using the rotary table (mill) to turn a set amount, then take a cut along the x axis, 
+          and repeat. The user could be prompted to feed the Y axis a set amount per full
+          revolution of the C axis. This would allow, for example, a hexagonal shape to be cut.
+          **Partly done** as gear cutting mode (the table turns 360° ÷ teeth
+          between cuts, and the depth is fed by hand once per turn); the Y
+          feed per revolution, e.g. for a hexagon, isn't
+        - etc
+       It should also have functionality to allow calling functions to:
+        - Pause between each pass (with a message, e.g. "move y n units" - the mill, for
+          example, doesn't have a stepper on Y or Z currently so would require manual moves)
+        - Or perform each pass automatically (e.g. on the lathe where both Z and X have
+          steppers)
+        It should also have an attribute to determine whether a retract is required
+        between each pass. For example on the lathe in threading mode the sequence would be:
+            - cut from z start to z end
+            - retract (could be retract out, for male threads, or in for female)
+            - return to z start
+            - unretract
+            - feed in/out x by the specified change per pass
+            - optional pause message
+            - repeat until x delta equals thread pitch cut depth
