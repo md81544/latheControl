@@ -1,5 +1,14 @@
 # TODO
 
+## Uncategorised
+    - Edge finding
+        - Given a suitably insulated block of known dimensions connected
+          to a limit switch pin, with the tool (or ground accurate bar of known
+          width) connected to GND, a function which creeps along an axis until
+          the limit switch is closed would act as an edge finder -  the program
+          could then determine the edge's location given the tool's (or bar's)
+          diameter and the known width of the block. 
+
 ## User interface
 
 ### Add a "go to end"
