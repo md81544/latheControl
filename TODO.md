@@ -25,8 +25,9 @@ notes.
   → [A fresh log each session](#a-fresh-log-each-session)
 
 #### Lathe
-- Fit the Z scale (through the level shifter), then check its sign, 200
-  counts per mm and settle time, before turning on its re-base and checks.
+- The Z scale is fitted (22 Nov 2026); wire it through the level shifter,
+  then check its sign, 200 counts per mm and settle time, before turning on
+  its re-base and checks.
   → [The lathe Z scale](#the-lathe-z-scale)
 - The auto-retract toggle in the menu. → [Auto-retract from the menu](#auto-retract-from-the-menu)
 - Retracting only on the last 2 passes. → [Retracting only on the last passes](#retracting-only-on-the-last-passes)
