@@ -56,9 +56,6 @@ notes.
 - `W` turns A the same way as Up. → [An array of axes](#an-array-of-axes)
 - Memory slots on Y and Z, and going to them by hand; halving (`YH`)
   since the leader-key fix. → [An array of axes](#an-array-of-axes)
-- Ticks winding Y or Z to a memory slot (`SoundTick`): even from lc
-  itself, starting early enough when winding fast, and the alert at 0.2 mm.
-  → [Ticks nearing a target](#ticks-nearing-a-target)
 - `YG` and `ZG` (go to a position, wound by hand). Find which way
   clockwise moves Y and Z, and set `Axis3ClockwiseIncreases` and
   `Axis4ClockwiseIncreases` in lc_mill.cfg. → [An array of axes](#an-array-of-axes)
@@ -467,6 +464,9 @@ notes.
       test loop's (it starts each player while redrawing the display), and
       whether the DRO sender's averaging makes the speed lag, so the ticks
       from the time start late
+- **Tried on the mill (22 Nov 2026):** all working well. The only change:
+      the alert was too far out at 0.2 mm, so `SoundTickNearMm`'s default
+      is now 0.1 mm
 - **Sound files:** WAV only (aplay can't decode FLAC or Ogg), mono, 16-bit,
       48 kHz (PipeWire runs at 48 kHz, so it doesn't resample them), with no
       silence at the start, as that adds to the delay. The user is

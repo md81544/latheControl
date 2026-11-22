@@ -8383,7 +8383,7 @@ TEST_CASE("Approach ticks: faster nearing a manual axis's target, then the alert
     using mgo::Sound;
     using namespace std::chrono_literals;
     // The defaults: ticks from 2 mm or 1 s to go, every 500 ms there, and the
-    // alert within 0.2 mm
+    // alert within 0.1 mm
     ApproachTicks ticks;
     ApproachTicks::Clock::time_point t {};
     double target = 0.0;
@@ -8429,7 +8429,7 @@ TEST_CASE("Approach ticks: faster nearing a manual axis's target, then the alert
             REQUIRE(!ticks.update(std::nullopt, t));
         }
     }
-    SECTION("Creeping: ticks from 2 mm, then the alert at 0.2 mm, once")
+    SECTION("Creeping: ticks from 2 mm, then the alert at 0.1 mm, once")
     {
         const auto events = wind(3.0, -0.5, 0.5);
         REQUIRE(events.size() > 2);
@@ -8437,8 +8437,8 @@ TEST_CASE("Approach ticks: faster nearing a manual axis's target, then the alert
         REQUIRE(events.front().toGo <= 2.0);
         REQUIRE(events.front().toGo > 1.97);
         REQUIRE(events.back().sound == Sound::Alert);
-        REQUIRE(events.back().toGo <= 0.2);
-        REQUIRE(events.back().toGo > 0.17);
+        REQUIRE(events.back().toGo <= 0.1);
+        REQUIRE(events.back().toGo > 0.07);
         REQUIRE(
             std::count_if(
                 events.begin(),
@@ -8497,9 +8497,9 @@ TEST_CASE("Approach ticks: faster nearing a manual axis's target, then the alert
         REQUIRE(step(-0.1) == Sound::Alert);
         REQUIRE(wind(-0.1, -1.0, 1.0).empty());
     }
-    SECTION("A go-to which starts within 0.2 mm has no sound at all")
+    SECTION("A go-to which starts within 0.1 mm has no sound at all")
     {
-        REQUIRE(wind(0.15, -0.5, 0.5).empty());
+        REQUIRE(wind(0.08, -0.5, 0.5).empty());
     }
     SECTION("A new go-to starts again")
     {

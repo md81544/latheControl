@@ -36,7 +36,7 @@ public:
         // or this long from it, at the speed it's being wound (s)
         double startSeconds { 1.0 };
         // The alert plays within this distance (mm), and the ticks stop
-        double nearMm { 0.2 };
+        double nearMm { 0.1 };
         // The time between ticks at the start distance or time
         std::chrono::milliseconds slowestInterval { 500 };
     };
