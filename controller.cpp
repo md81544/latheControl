@@ -989,6 +989,32 @@ void Controller::processKey(int t)
                         });
                     break;
                 }
+            case key::a3_g:
+            case key::a4_g:
+                {
+                    // (Nothing moves: the user winds it there, with the
+                    // distance to go, and which way, on its line)
+                    const int axisNumber = key::axisOfKey(kp);
+                    if (!m_model->hasAxis(axisNumber)) {
+                        break;
+                    }
+                    const std::string axisName = m_model->axisLabel(axisNumber);
+                    getNumericInput(
+                        "Go to " + axisName + " absolute position" + unitsSuffix(axisNumber),
+                        { axisName
+                              + " is moved by hand: wind its handle there once you've "
+                                "entered the position",
+                          pHint(axisNumber) },
+                        0.0,
+                        positionCalculator(axisNumber),
+                        [this, axisNumber](const NumericInputReturn& rc) {
+                            if (!rc.cancelled) {
+                                m_model->goToPosition(
+                                    axisNumber, m_model->fromDisplayUnits(axisNumber, rc.value));
+                            }
+                        });
+                    break;
+                }
             case key::a1_r:
                 {
                     // Relative motion

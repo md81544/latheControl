@@ -708,9 +708,11 @@ std::vector<Command> buildCommands(
     // The manual axes (e.g. the mill's Y and Z), which are moved by hand
     b.add(c, fmt::format("Zero {}", a3), key::a3_z, AXIS3);
     b.add(c, fmt::format("Set {} position...", a3), key::a3_s, AXIS3);
+    b.add(c, fmt::format("Go to {} position by hand...", a3), key::a3_g, AXIS3);
     b.add(c, fmt::format("Halve {} (to find a centre)", a3), key::a3_h, AXIS3);
     b.add(c, fmt::format("Zero {}", a4), key::a4_z, AXIS4);
     b.add(c, fmt::format("Set {} position...", a4), key::a4_s, AXIS4);
+    b.add(c, fmt::format("Go to {} position by hand...", a4), key::a4_g, AXIS4);
     b.add(c, fmt::format("Halve {} (to find a centre)", a4), key::a4_h, AXIS4);
     b.add(c, fmt::format("Previous position: {}", a1), key::a1_l, AXIS1);
     b.add(c, fmt::format("Previous position: {}", a2), key::a2_l, AXIS2);

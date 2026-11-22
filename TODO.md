@@ -59,6 +59,9 @@ notes.
 - Ticks winding Y or Z to a memory slot (`SoundTick`): even from lc
   itself, starting early enough when winding fast, and the alert at 0.2 mm.
   → [Ticks nearing a target](#ticks-nearing-a-target)
+- `YG` and `ZG` (go to a position, wound by hand). Find which way
+  clockwise moves Y and Z, and set `Axis3ClockwiseIncreases` and
+  `Axis4ClockwiseIncreases` in lc_mill.cfg. → [An array of axes](#an-array-of-axes)
 - Gear cutting: the first tooth lands with the others (A's backlash and
   the 1° back-off), indexing at full speed with the blank on, and whether
   dragging the cutter back marks the slot.
@@ -3373,6 +3376,16 @@ change.
           a lock refusal while Z keeps moving, with and without the menu
           open. **Not yet tried on the machine.** Esc ending a multi-pass
           without asking is still as it was
+    - **Done (22 Nov 2026), not yet tried on the mill:** a manual axis's
+      leader then `G` (`YG`, `ZG`) goes to a typed position, wound by hand,
+      as for its memory slots (the same line, and the ticks). Found missing
+      in the fake build: there was no `a3_g`/`a4_g`, so it did nothing. The
+      dialog says the axis is moved by hand. It can't say which way to
+      wind, as the target isn't known until it's typed, so the go-to's line
+      says it instead ("..., clockwise" or "..., anticlockwise", and the
+      other way once past), from `Axis3ClockwiseIncreases` (and Axis4).
+      Unset, nothing is said: the mill's are in lc_mill.cfg, commented out
+      until checked on the machine
 
 #### Smaller tidy-ups
 

@@ -201,7 +201,9 @@ public:
     std::string axisStatus(int axisNumber) const;
     // Moves to a position, or by an offset from where it is (which
     // repeatLastRelativeMove() repeats). Axis 1's moves follow the taper or
-    // the thread, in those modes, and finish on its scale, if it has one
+    // the thread, in those modes, and finish on its scale, if it has one. A
+    // manual axis's go-to position is wound there by hand (as for its memory
+    // slots: see manualAxisGoTo()); it has no offset moves
     void goToPosition(int axisNumber, double mm);
     void goToOffset(int axisNumber, double mm);
     void repeatLastRelativeMove(int axisNumber);
@@ -617,6 +619,9 @@ public:
         bool past { false };
         // Within two counts of it, waiting for the reading to settle
         bool there { false };
+        // Which way to wind the handle towards the target from here
+        // (clockwise if true), if known (Axis3ClockwiseIncreases)
+        std::optional<bool> clockwise;
     };
     std::optional<ManualAxisGoTo> manualAxisGoTo(int axisNumber) const;
     void cancelManualAxisGoTos();
@@ -858,6 +863,9 @@ private:
     void axis1GoToCurrentMemory();
     void axis2GoToCurrentMemory();
     void manualAxisGoToCurrentMemory(int axisNumber);
+    // Starts a manual axis's go-to (see manualAxisGoTo()), or warns if
+    // there's no reading
+    void manualAxisGoToPosition(int axisNumber, double mm);
     // What logMotorMovement() last saw of a motor
     struct MotorLog {
         bool running { false };

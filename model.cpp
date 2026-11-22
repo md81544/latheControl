@@ -2271,8 +2271,11 @@ void Model::goToPosition(int axisNumber, double mm)
 {
     if (axisNumber == 1) {
         axis1GoToPosition(mm);
-    } else {
+    } else if (axisNumber == 2) {
         axis2GoToPosition(mm);
+    } else {
+        // (Wound there by hand)
+        manualAxisGoToPosition(axisNumber, mm);
     }
 }
 
@@ -3803,6 +3806,12 @@ void Model::configureManualAxes()
             .reversed = m_config.readBool(fmt::format("Axis{}ScaleReversed", n), false),
             .settleTime = std::chrono::milliseconds(
                 m_config.readLong(fmt::format("Axis{}ScaleSettleMs", n), 500)),
+            // (Not known unless set)
+            .clockwiseIncreases
+            = m_config.read(fmt::format("Axis{}ClockwiseIncreases", n), "").empty()
+                ? std::nullopt
+                : std::optional(
+                      m_config.readBool(fmt::format("Axis{}ClockwiseIncreases", n), true)),
         };
         // (A manual axis is only known from its scale, so it must have one)
         const std::string type = m_config.read(fmt::format("Axis{}Scale", n), "none");
@@ -3960,12 +3969,20 @@ void Model::manualAxisGoToCurrentMemory(int axisNumber)
         m_warning = fmt::format("{} isn't set in this slot", axis->label());
         return;
     }
+    manualAxisGoToPosition(axisNumber, *target);
+}
+
+void Model::manualAxisGoToPosition(int axisNumber, double mm)
+{
+    ManualAxis* axis = manualAxisOrWarn(axisNumber);
+    if (!axis) {
+        return;
+    }
     const double from = *axis->positionMm();
     const std::size_t index = static_cast<std::size_t>(axisNumber - FIRST_MANUAL_AXIS);
     m_manualGoTos.at(index)
-        = ManualGoToTarget { .targetMm = *target, .direction = *target >= from ? 1.0 : -1.0 };
-    MGOLOG(
-        fmt::format("{}: go to {:.4f} (from {:.4f}), wound by hand", axis->label(), *target, from));
+        = ManualGoToTarget { .targetMm = mm, .direction = mm >= from ? 1.0 : -1.0 };
+    MGOLOG(fmt::format("{}: go to {:.4f} (from {:.4f}), wound by hand", axis->label(), mm, from));
 }
 
 std::optional<Model::ManualAxisGoTo> Model::manualAxisGoTo(int axisNumber) const
@@ -3981,10 +3998,15 @@ std::optional<Model::ManualAxisGoTo> Model::manualAxisGoTo(int axisNumber) const
     }
     const double toGo = goTo->targetMm - *position;
     const double tolerance = 2.0 * axis->countMm();
+    std::optional<bool> clockwise;
+    if (const auto increases = axis->clockwiseIncreases()) {
+        clockwise = (toGo > 0) == *increases;
+    }
     return ManualAxisGoTo { .targetMm = goTo->targetMm,
                             .toGoMm = toGo,
                             .past = toGo * goTo->direction < -tolerance,
-                            .there = std::abs(toGo) <= tolerance };
+                            .there = std::abs(toGo) <= tolerance,
+                            .clockwise = clockwise };
 }
 
 void Model::cancelManualAxisGoTos()

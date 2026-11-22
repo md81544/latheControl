@@ -1625,16 +1625,20 @@ void ViewQt::Impl::updateTextFromModel(const Model& model)
                     model.toDisplayUnits(line.axisNumber, mm),
                     model.axisDecimals(line.axisNumber));
             };
+            // Which way to wind the handle, if known (back again, if it's
+            // gone past)
+            const std::string way
+                = goTo->clockwise ? (*goTo->clockwise ? ", clockwise" : ", anticlockwise") : "";
             if (goTo->there) {
                 line.goTo.text = fmt::format("at {}: settling", value(goTo->targetMm));
                 line.goTo.colour = GREEN;
             } else if (goTo->past) {
                 line.goTo.text = fmt::format(
-                    "to {}: {} past", value(goTo->targetMm), value(std::abs(goTo->toGoMm)));
+                    "to {}: {} past{}", value(goTo->targetMm), value(std::abs(goTo->toGoMm)), way);
                 line.goTo.colour = RED;
             } else {
                 line.goTo.text = fmt::format(
-                    "to {}: {} to go", value(goTo->targetMm), value(std::abs(goTo->toGoMm)));
+                    "to {}: {} to go{}", value(goTo->targetMm), value(std::abs(goTo->toGoMm)), way);
                 line.goTo.colour = YELLOW;
             }
         }

@@ -2315,6 +2315,61 @@ TEST_CASE("UI: a manual axis (Y) is zeroed, set and halved with its leader key")
     snapshot(w, "manual-axis");
 }
 
+TEST_CASE("UI: a manual axis's go-to position (Y G) is wound there by hand")
+{
+    MapConfigReader config { { { "Axis3Kind", "manual" },
+                               { "Axis3Label", "Y" },
+                               { "Axis3Leader", "121" },
+                               { "Axis3Scale", "serial" },
+                               { "Axis3ScaleSerialLetter", "Y" },
+                               { "Axis3ScaleCountsPerMm", "100" },
+                               { "Axis3ClockwiseIncreases", "false" },
+                               { "DisableRpm", "true" } } };
+    mgo::MockGpio gpio { false };
+    mgo::Model model { gpio, config };
+    mgo::Controller controller(&model);
+    QWidget* w = mainWindow();
+    REQUIRE(w);
+    REQUIRE(model.manualAxis(3));
+
+    // The dialog says it's wound by hand, and starts the go-to: nothing
+    // moves, and its line shows the distance to go and which way to wind
+    std::string text;
+    whenDialogShows([&text](QWidget* dialog) {
+        for (const QLabel* label : dialog->findChildren<QLabel*>()) {
+            text += label->text().toStdString() + "\n";
+        }
+        QTest::keyClicks(inputWidget(dialog), "12");
+        QTest::keyClick(inputWidget(dialog), Qt::Key_Return);
+    });
+    press(w, controller, Qt::Key_Y);
+    press(w, controller, Qt::Key_G);
+    REQUIRE(waitForDialogToClose());
+    REQUIRE(text.find("Y is moved by hand") != std::string::npos);
+    const auto goTo = model.manualAxisGoTo(3);
+    REQUIRE(goTo);
+    REQUIRE(goTo->targetMm == Approx(12.0));
+    REQUIRE(goTo->toGoMm == Approx(12.0).margin(0.005));
+    // (Clockwise winds this Y down, so up is anticlockwise)
+    REQUIRE(goTo->clockwise == false);
+    controller.tick();
+    snapshot(w, "manual-axis-go-to-position");
+
+    // Space cancels it
+    press(w, controller, Qt::Key_Space);
+    REQUIRE(!model.manualAxisGoTo(3));
+
+    // Down from where it is is clockwise
+    whenDialogShows([](QWidget* dialog) {
+        QTest::keyClicks(inputWidget(dialog), "-3");
+        QTest::keyClick(inputWidget(dialog), Qt::Key_Return);
+    });
+    press(w, controller, Qt::Key_Y);
+    press(w, controller, Qt::Key_G);
+    REQUIRE(waitForDialogToClose());
+    REQUIRE(model.manualAxisGoTo(3)->clockwise == true);
+}
+
 TEST_CASE("UI: \\ z zeroes every axis, including the manual ones")
 {
     MapConfigReader config { { { "Axis3Kind", "manual" },
@@ -2374,6 +2429,25 @@ MapConfigReader millLikeConfig(const std::map<std::string, std::string>& extra =
         values[key] = value;
     }
     return MapConfigReader { values };
+}
+
+TEST_CASE("UI: a manual axis's go-to doesn't say which way to wind, unless it's set")
+{
+    MapConfigReader config = millLikeConfig();
+    mgo::MockGpio gpio { false };
+    mgo::Model model { gpio, config };
+    mgo::Controller controller(&model);
+    QWidget* w = mainWindow();
+    REQUIRE(w);
+    whenDialogShows([](QWidget* dialog) {
+        QTest::keyClicks(inputWidget(dialog), "5");
+        QTest::keyClick(inputWidget(dialog), Qt::Key_Return);
+    });
+    press(w, controller, Qt::Key_Z);
+    press(w, controller, Qt::Key_G);
+    REQUIRE(waitForDialogToClose());
+    REQUIRE(model.manualAxisGoTo(4));
+    REQUIRE(!model.manualAxisGoTo(4)->clockwise);
 }
 
 } // namespace

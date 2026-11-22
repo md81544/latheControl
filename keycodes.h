@@ -176,6 +176,8 @@ constexpr int a3_m = m + 0x8000; // store axis 3 in the memory slot
 constexpr int a4_m = m + 0x20000; // store axis 4 in the memory slot
 constexpr int a3_ENTER = ENTER + 0x8000; // go to axis 3's memory slot (by hand)
 constexpr int a4_ENTER = ENTER + 0x20000; // go to axis 4's memory slot (by hand)
+constexpr int a3_g = g + 0x8000; // go to a position on axis 3 (by hand)
+constexpr int a4_g = g + 0x20000; // go to a position on axis 4 (by hand)
 constexpr int a3_DELETE = key::DELETE + 0x8000; // clear axis 3's memory slot
 constexpr int a4_DELETE = key::DELETE + 0x20000; // clear axis 4's memory slot
 

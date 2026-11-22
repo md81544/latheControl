@@ -35,6 +35,9 @@ public:
         // sender's smoothing caught up) once it has stayed within a count of
         // where it was for this long
         std::chrono::milliseconds settleTime { 500 };
+        // Whether winding its handle clockwise makes the position go up, or
+        // nothing if not known (so a go-to can't say which way to wind)
+        std::optional<bool> clockwiseIncreases;
     };
 
     using Clock = std::chrono::steady_clock;
@@ -47,6 +50,8 @@ public:
     void update(Clock::time_point now = Clock::now());
 
     const std::string& label() const;
+    // See Settings::clockwiseIncreases
+    std::optional<bool> clockwiseIncreases() const;
     bool hasReading() const;
     // The position (in mm), or nothing without a reading
     std::optional<double> positionMm() const;
