@@ -11,18 +11,12 @@ notes.
 ### To try on the machine
 
 #### Either machine
-- The calculator in numeric entries (`=` sums, `p`, `in`, `"`).
-  → [Calculator in numeric entries](#calculator-in-numeric-entries)
-- `F9` clearing a warning (and the menu open meanwhile).
-  → [An array of axes](#an-array-of-axes)
 - An axis locked in software refuses every move, saying "Unlock X first".
   → [Internal threading and saddle rigidity](#internal-threading-and-saddle-rigidity)
 - Keys held back during a nudge (and Space stopping one); closing the
   window with a dialog open. → [Controller on the event loop](#controller-on-the-event-loop)
 - At start-up each axis moves by its backlash, and the first move after
   starting is right. → [Using the mill scales](#using-the-mill-scales)
-- A fresh lc.log each session (lc.log.previous kept).
-  → [A fresh log each session](#a-fresh-log-each-session)
 
 #### Lathe
 - The Z scale is fitted (22 Nov 2026); wire it through the level shifter,
@@ -216,7 +210,7 @@ notes.
       wouldn't accept (e.g. negative) is refused with a reason.
     - No spaces, so Space can't end up typed into a sum.
     - lc.log records each sum and its value.
-- Try it at the machine.
+- Tried on the mill (22 Nov 2026), and used for real there.
 - In the go-to and position set dialogs, `p` was 0 (their default
       entry), so it wasn't much use there. It's now where the axis is, as
       shown (the user agreed, 21 Nov 2026). Not in the relative go-to (an
@@ -3377,8 +3371,8 @@ change.
           knurling, which is still true until the thread is chosen again.
           A warning whose cause is still there comes back. Test: F9 clears
           a lock refusal while Z keeps moving, with and without the menu
-          open. **Not yet tried on the machine.** Esc ending a multi-pass
-          without asking is still as it was
+          open. Tried on the mill (22 Nov 2026): F9 cleared a warning.
+          Esc ending a multi-pass without asking is still as it was
     - **Done (22 Nov 2026), not yet tried on the mill:** a manual axis's
       leader then `G` (`YG`, `ZG`) goes to a typed position, wound by hand,
       as for its memory slots (the same line, and the ticks). Found missing
@@ -3670,7 +3664,8 @@ change.
       readings and lost pulses are all logged, and the session in question
       after a workshop test is hard to find in it. (`std::filesystem::rename`;
       ignore a failure, e.g. no log yet, rather than refusing to start)
-    - **Done:** as described. Not yet tried on the Pi
+    - **Done:** as described. Tried on the mill (22 Nov 2026): lc.log is
+      fresh each session, and lc.log.previous is kept
 
 #### Generic multi-pass origins
 
