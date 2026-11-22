@@ -1632,7 +1632,7 @@ TEST_CASE("UI: Esc asks before leaving a mode")
         text.clear();
         whenDialogShows([&, k](QWidget* dialog) {
             text = dialogText(dialog);
-            running = tm.model.isMotorRunning(2);
+            running = tm.model.isMotorRunning(1);
             key(dialog, k);
         });
     };
@@ -1646,14 +1646,22 @@ TEST_CASE("UI: Esc asks before leaving a mode")
     press(w, controller, Qt::Key_Escape);
     REQUIRE(tm.model.getMode() == mgo::Mode::Taper);
 
-    // The dialog doesn't stop anything (X: a Z move in the taper stopped by
-    // itself here, before Esc, for a reason not yet looked into)
-    tm.model.goToPosition(2, 50.0);
-    REQUIRE(waitUntil([&] { return tm.model.isMotorRunning(2); }));
+    // The dialog doesn't stop anything: a taper cut carries on. (In a taper,
+    // a Z move is a sequence, taking up the backlash first, which only moves
+    // on as the controller ticks: nothing here ticks unless told to)
+    tm.model.goToPosition(1, -20.0);
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    while ((tm.model.isMotionSequenceRunning() || !tm.model.isMotorRunning(1))
+           && std::chrono::steady_clock::now() < deadline) {
+        controller.tick();
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    }
+    REQUIRE(tm.model.isMotorRunning(1));
     answer(Qt::Key_Escape);
     press(w, controller, Qt::Key_Escape);
     REQUIRE(running);
-    REQUIRE(tm.model.isMotorRunning(2));
+    REQUIRE(tm.model.isMotorRunning(1));
+    REQUIRE(tm.model.getMode() == mgo::Mode::Taper);
     press(w, controller, Qt::Key_Space);
 
     // Enter (or Y) leaves it

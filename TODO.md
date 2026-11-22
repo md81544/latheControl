@@ -3383,9 +3383,13 @@ change.
           everything. With no mode it doesn't ask, and a go-to wound by
           hand is cancelled at once either way, as it's only a guide. (While
           defining a tool, Esc still just cancels that, without asking.)
-          Tests: Esc then Esc or N stays, Y leaves, X keeps moving while
-          it asks, no dialog with no mode, and gear cutting's paused pass
-          carries on after Esc then Esc
+          Tests: Esc then Esc or N stays, Y leaves, a taper cut keeps
+          moving while it asks, no dialog with no mode, and gear cutting's
+          paused pass carries on after Esc then Esc. (A Z move in a taper
+          first seemed to stop by itself in the test: it's a sequence,
+          backlash take-up then the cut, which moves on only as the
+          controller ticks, and the UI tests don't tick unless told to. On
+          the machine, run() ticks, and the cut runs; not a fault)
     - **Done (22 Nov 2026), not yet tried on the mill:** a manual axis's
       leader then `G` (`YG`, `ZG`) goes to a typed position, wound by hand,
       as for its memory slots (the same line, and the ticks). Found missing
