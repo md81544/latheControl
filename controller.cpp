@@ -1066,7 +1066,7 @@ void Controller::processKey(int t)
                     m_menu.open();
                     break;
                 }
-            case key::f2t: // threading mode
+            case key::threadingMode:
                 {
                     if (m_model->config().readBool("DisableAxis2", false)) {
                         break;
@@ -1095,7 +1095,7 @@ void Controller::processKey(int t)
                         });
                     break;
                 }
-            case key::f2m: // multi-pass mode
+            case key::multiPassMode:
                 {
                     if (m_model->config().readBool("DisableAxis2", false)) {
                         break;
@@ -1155,7 +1155,7 @@ void Controller::processKey(int t)
                     });
                     break;
                 }
-            case key::f2k: // cut knurling mode
+            case key::knurlingMode:
                 {
                     if (m_model->config().readBool("DisableAxis2", false)) {
                         break;
@@ -1198,7 +1198,7 @@ void Controller::processKey(int t)
                     });
                     break;
                 }
-            case key::f2g: // gear cutting mode
+            case key::gearCuttingMode:
                 {
                     // As with all dialogs, stop all motors first
                     m_model->stopAllMotors();
@@ -1228,7 +1228,7 @@ void Controller::processKey(int t)
                     });
                     break;
                 }
-            case key::f2p: // taper mode
+            case key::taperMode:
                 {
                     if (m_model->config().readBool("DisableAxis2", false)) {
                         break;
@@ -1244,7 +1244,7 @@ void Controller::processKey(int t)
                         });
                     break;
                 }
-            case key::f2r: // X retraction setup
+            case key::retractionSetup:
                 {
                     if (m_model->config().readBool("DisableAxis2", false)) {
                         break;
@@ -1260,8 +1260,8 @@ void Controller::processKey(int t)
                         });
                     break;
                 }
-            case key::f2o: // radius mode: a radius on the work's end
-            case key::f2f: // radius mode: a shoulder with a fillet
+            case key::radiusEndMode:
+            case key::radiusShoulderMode:
                 {
                     if (m_model->config().readBool("DisableAxis2", false)) {
                         break;
@@ -1280,7 +1280,8 @@ void Controller::processKey(int t)
                                             .calculatorMemory = mp.calculatorMemory };
                     // (The radius, depth and nose radius carry over from the
                     // other kind, if that was used last)
-                    info.setup.kind = kp == key::f2f ? RadiusKind::Shoulder : RadiusKind::End;
+                    info.setup.kind
+                        = kp == key::radiusShoulderMode ? RadiusKind::Shoulder : RadiusKind::End;
                     // With the tool library, the nose radius is the current tool's
                     if (m_model->toolLibraryEnabled() && m_model->toolLibrary().currentIsKnown()) {
                         info.setup.noseRadius = m_model->toolLibrary().current().noseRadiusMm;

@@ -203,13 +203,13 @@ constexpr int axisOfKey(int keyCode)
     return 0;
 }
 
-// Commands with no shortcut of their own, chosen from the menu. The f2 names
-// are from the F2 leader key they used to follow
-constexpr int f2t = 7002; // threading
-constexpr int f2p = 7003; // taPer
-constexpr int f2r = 7004; // X retraction mode
-constexpr int f2o = 7005; // radius mode (a radius on the work's end)
-constexpr int f2m = 7007; // multipass
+// Commands with no shortcut of their own, chosen from the menu (the modes
+// were once reached with the F2 leader key, which has gone)
+constexpr int threadingMode = 7002; // threading mode
+constexpr int taperMode = 7003; // taper mode
+constexpr int retractionSetup = 7004; // axis 2 (X) retraction direction
+constexpr int radiusEndMode = 7005; // radius mode (a radius on the work's end)
+constexpr int multiPassMode = 7007; // multi-pass mode
 constexpr int clearFeature = 7008; // clear the current feature
 constexpr int featureStart = 7009; // go to the feature's start, clear of the end
 constexpr int featureStartExact = 7010; // go to the feature's start, at the end exactly
@@ -219,11 +219,11 @@ constexpr int featureEndExact = 7013; // Z to the work's end exactly
 constexpr int threadingPasses = 7014; // threading passes (a multi-pass, in threading mode)
 constexpr int clearLimitTrip = 7015; // clear a limit switch's stop
 constexpr int toggleThreadingAutoRetract = 7016; // threading: auto-retract on / off
-constexpr int f2k = 7017; // cut knurling mode
-constexpr int f2g = 7018; // gear cutting mode
+constexpr int knurlingMode = 7017; // cut knurling mode
+constexpr int gearCuttingMode = 7018; // gear cutting mode
 constexpr int measureAxis1Backlash = 7019; // measure axis 1's backlash with its scale
 constexpr int toggleAxis1FinishOnScale = 7020; // finish axis 1's moves on its scale: on / off
-constexpr int f2f = 7021; // radius mode (a shoulder with a fillet)
+constexpr int radiusShoulderMode = 7021; // radius mode (a shoulder with a fillet)
 constexpr int toolNew = 7022; // tool library: define a new tool (measuring it)
 constexpr int toolMeasureAgain = 7023; // tool library: measure a tool again
 constexpr int toolTouch = 7024; // tool library: record a touch, while measuring (Enter)

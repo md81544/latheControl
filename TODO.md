@@ -87,8 +87,6 @@ notes.
 - With a larger screen: dialogs that scale with the main display.
 - Esc ends a multi-pass without asking (pressed by instinct on the mill to
   clear a warning): ask first? → [An array of axes](#an-array-of-axes)
-- Rename the `f2*` key codes (e.g. `cmd::threading`), as no `F2` key leads
-  to them now. → [Dropping the F2 leader key](#dropping-the-f2-leader-key)
 
 ### Multi-pass
 - **Slot and face/pocket modes for the mill**, then turn the generic
@@ -515,6 +513,10 @@ notes.
       The `f2*` key codes stay as the internal command IDs the menu
       dispatches; later, perhaps rename them to something like
       `cmd::threading`, so they don't suggest a key that no longer exists
+    - **Done** (2026-11-22): renamed to `key::threadingMode`, `taperMode`,
+      `multiPassMode`, `knurlingMode`, `gearCuttingMode`, `radiusEndMode`,
+      `radiusShoulderMode` and `retractionSetup`, kept in `key::` with the
+      other menu-only commands (e.g. `clearFeature`), and with the same values
     - Frees the top-level letters, e.g. `T` for "choose tool" (see "Current
       tool and a tool database")
 

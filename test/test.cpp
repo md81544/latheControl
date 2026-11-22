@@ -2242,7 +2242,7 @@ TEST_CASE("Commands: shortcut text")
     REQUIRE(mgo::shortcutText(mgo::key::AltW, lathe) == "Alt+w");
     REQUIRE(mgo::shortcutText(mgo::key::CtrlQ, lathe) == "Ctrl+q");
     REQUIRE(mgo::shortcutText(mgo::key::A, lathe) == "Shift+a");
-    REQUIRE(mgo::shortcutText(mgo::key::f2t, lathe).empty()); // menu only
+    REQUIRE(mgo::shortcutText(mgo::key::threadingMode, lathe).empty()); // menu only
     REQUIRE(mgo::shortcutText(mgo::key::LBRACKET, lathe) == "[");
     REQUIRE(mgo::shortcutText(mgo::key::SIX, lathe) == "6");
     REQUIRE(mgo::shortcutText(mgo::key::F1, lathe) == "F1");
@@ -2273,7 +2273,7 @@ TEST_CASE("Commands: commands for a disabled axis are left out")
     const auto commands = mgo::buildCommands(config);
     for (const auto& c : commands) {
         REQUIRE((c.key & 0x2000) == 0); // no axis 2 leader commands
-        REQUIRE(c.key != mgo::key::f2t); // modes need axis 2
+        REQUIRE(c.key != mgo::key::threadingMode); // modes need axis 2
         REQUIRE(c.key != mgo::key::UP);
     }
     // But axis 1's commands are there, using its name
@@ -2412,7 +2412,7 @@ TEST_CASE("Commands: keys allowed in the current mode")
     mgo::Model model(gpio, config);
     model.initialise();
     REQUIRE(mgo::keyAllowedInCurrentMode(mgo::key::a1_g, model));
-    REQUIRE(mgo::keyAllowedInCurrentMode(mgo::key::f2t, model));
+    REQUIRE(mgo::keyAllowedInCurrentMode(mgo::key::threadingMode, model));
     // No X motion while X is retracted
     model.setIsAxis2Retracted(true);
     REQUIRE(!mgo::keyAllowedInCurrentMode(mgo::key::UP, model));
@@ -2436,16 +2436,16 @@ TEST_CASE("Commands: modes disabled in the config")
     const auto inMenu = [&](int key) {
         return std::ranges::any_of(commands, [key](const mgo::Command& c) { return c.key == key; });
     };
-    for (const int key : { mgo::key::f2t,
+    for (const int key : { mgo::key::threadingMode,
                            mgo::key::threadingPasses,
                            mgo::key::toggleThreadingAutoRetract,
-                           mgo::key::f2p,
+                           mgo::key::taperMode,
                            mgo::key::h,
-                           mgo::key::f2k }) {
+                           mgo::key::knurlingMode }) {
         REQUIRE(!inMenu(key));
     }
-    REQUIRE(inMenu(mgo::key::f2m));
-    REQUIRE(inMenu(mgo::key::f2r));
+    REQUIRE(inMenu(mgo::key::multiPassMode));
+    REQUIRE(inMenu(mgo::key::retractionSetup));
 
     // And their keys do nothing (e.g. h, the quick chamfer's shortcut)
     mgo::MockGpio gpio(false);
@@ -2453,9 +2453,9 @@ TEST_CASE("Commands: modes disabled in the config")
     model.initialise();
     REQUIRE(!mgo::keyAllowedInCurrentMode(mgo::key::h, model));
     REQUIRE(!mgo::keyAllowedInCurrentMode(mgo::key::H, model));
-    REQUIRE(!mgo::keyAllowedInCurrentMode(mgo::key::f2t, model));
+    REQUIRE(!mgo::keyAllowedInCurrentMode(mgo::key::threadingMode, model));
     REQUIRE(!mgo::keyAllowedInCurrentMode(mgo::key::toggleThreadingAutoRetract, model));
-    REQUIRE(mgo::keyAllowedInCurrentMode(mgo::key::f2m, model));
+    REQUIRE(mgo::keyAllowedInCurrentMode(mgo::key::multiPassMode, model));
     REQUIRE(mgo::keyAllowedInCurrentMode(mgo::key::LEFT, model));
 }
 
@@ -2520,7 +2520,7 @@ TEST_CASE("Menu: hotkeys")
     REQUIRE(menu.categories().at(*menu.openCategory()) == "Modes");
     auto action = menu.handleKey(mgo::key::t, model);
     REQUIRE(action.type == Type::Command);
-    REQUIRE(action.key == mgo::key::f2t);
+    REQUIRE(action.key == mgo::key::threadingMode);
     REQUIRE(!menu.isOpen());
 
     // Upper case works too
@@ -2609,7 +2609,7 @@ TEST_CASE("Commands: hints after a leader key")
     REQUIRE(axis1.contains(mgo::key::a1_z));
     REQUIRE(!axis1.contains(mgo::key::a2_g));
     // The menu-only codes look as if they have the axis 1 leader's bit set
-    REQUIRE(!axis1.contains(mgo::key::f2t));
+    REQUIRE(!axis1.contains(mgo::key::threadingMode));
 
     const auto axis2 = keysFor(mgo::KeyMode::Axis2);
     REQUIRE(axis2.contains(mgo::key::a2_s));

@@ -73,18 +73,18 @@ std::string keyName(int k)
 std::string_view modeNameForKey(int k)
 {
     switch (k) {
-        case key::f2t:
+        case key::threadingMode:
         case key::threadingPasses:
         case key::toggleThreadingAutoRetract:
             return "threading";
-        case key::f2p:
+        case key::taperMode:
             return "taper";
         case key::h:
         case key::H:
             return "chamfer";
-        case key::f2m:
+        case key::multiPassMode:
             return "multipass";
-        case key::f2k:
+        case key::knurlingMode:
             return "knurling";
         default:
             return {};
@@ -216,14 +216,14 @@ namespace {
 bool menuOnly(int k)
 {
     switch (k) {
-        case key::f2t:
-        case key::f2p:
-        case key::f2r:
-        case key::f2o:
-        case key::f2f:
-        case key::f2m:
-        case key::f2k:
-        case key::f2g:
+        case key::threadingMode:
+        case key::taperMode:
+        case key::retractionSetup:
+        case key::radiusEndMode:
+        case key::radiusShoulderMode:
+        case key::multiPassMode:
+        case key::knurlingMode:
+        case key::gearCuttingMode:
         case key::measureAxis1Backlash:
         case key::toggleAxis1FinishOnScale:
         case key::toggleAxis2FinishOnScale:
@@ -722,15 +722,16 @@ std::vector<Command> buildCommands(
     // (The controller requires axis 2 for these modes)
     // (Most have no shortcut, so are chosen here, by their hotkeys)
     c = "Modes";
-    b.add(c, "Threading...", key::f2t, BOTH, nullptr, 't');
-    b.add(c, "Taper...", key::f2p, BOTH, nullptr, 'p');
+    b.add(c, "Threading...", key::threadingMode, BOTH, nullptr, 't');
+    b.add(c, "Taper...", key::taperMode, BOTH, nullptr, 'p');
     b.add(c, "Quick chamfer (45 deg taper)", key::h, BOTH, nullptr, 'h');
     // (Only with the current feature, from which they're cut)
     if (config.readBool("CurrentFeature", false)) {
-        b.add(c, "Radius on the end...", key::f2o, BOTH, nullptr, 'o');
-        b.add(c, "Filleted shoulder (experimental)...", key::f2f, BOTH, nullptr, 'f');
+        b.add(c, "Radius on the end...", key::radiusEndMode, BOTH, nullptr, 'o');
+        b.add(
+            c, "Filleted shoulder (experimental)...", key::radiusShoulderMode, BOTH, nullptr, 'f');
     }
-    b.add(c, "Multi-pass (experimental)...", key::f2m, BOTH, nullptr, 'm');
+    b.add(c, "Multi-pass (experimental)...", key::multiPassMode, BOTH, nullptr, 'm');
     b.add(
         c,
         "Threading passes...",
@@ -738,10 +739,10 @@ std::vector<Command> buildCommands(
         BOTH,
         [](const Model& m) { return m.getMode() == Mode::Threading; },
         'n');
-    b.add(c, "Cut knurling (experimental)...", key::f2k, BOTH, nullptr, 'k');
+    b.add(c, "Cut knurling (experimental)...", key::knurlingMode, BOTH, nullptr, 'k');
     // (Only on a machine with a rotary table as axis 2, e.g. the mill)
     if (config.readBool("GearCutting", false)) {
-        b.add(c, "Gear cutting...", key::f2g, BOTH, nullptr, 'c');
+        b.add(c, "Gear cutting...", key::gearCuttingMode, BOTH, nullptr, 'c');
     }
     // (Rarely changed, so no shortcut. It moves nothing, so can be changed
     // at any time.) Worded as a statement of how it's set now ("is ON"),
@@ -768,7 +769,8 @@ std::vector<Command> buildCommands(
                 || m.getMode() == Mode::Knurling || m.gearCuttingSet() || m.radiusSet();
         },
         'g');
-    b.add(c, fmt::format("{} retraction direction...", a2), key::f2r, BOTH, nullptr, 'r');
+    b.add(
+        c, fmt::format("{} retraction direction...", a2), key::retractionSetup, BOTH, nullptr, 'r');
     b.add(c, "Exit mode", key::ESC, NONE, nullptr, 'x');
 
     // The hotkeys are the axes' names (e.g. z and x on the lathe)
