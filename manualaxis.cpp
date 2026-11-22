@@ -68,6 +68,11 @@ std::optional<bool> ManualAxis::clockwiseIncreases() const
     return m_settings.clockwiseIncreases;
 }
 
+const std::string& ManualAxis::handleName() const
+{
+    return m_settings.handleName;
+}
+
 bool ManualAxis::hasReading() const
 {
     return m_scale->readCounts().has_value();

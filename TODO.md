@@ -54,12 +54,8 @@ notes.
   → [An array of axes](#an-array-of-axes)
 - `Esc` asks before leaving a mode, and a multi-pass carries on while
   it asks. → [An array of axes](#an-array-of-axes)
-- `YG` and `ZG` (go to a position, wound by hand). Y's direction is set
-  (`Axis3ClockwiseIncreases = false`, 22 Nov 2026). Z's main handle
-  lowers it anticlockwise (pulled down), so clockwise increases; check
-  the fine feed knob (thought to lower it clockwise: the opposite way),
-  then set `Axis4ClockwiseIncreases` in lc_mill.cfg. If they do turn
-  opposite ways, the go-to line should name the knob.
+- `YG` and `ZG` (go to a position, wound by hand), and the go-to line's
+  "fine feed CW" on Z.
   → [An array of axes](#an-array-of-axes)
 - Gear cutting: the first tooth lands with the others (A's backlash and
   the 1° back-off), indexing at full speed with the blank on, and whether
@@ -3407,16 +3403,18 @@ change.
       other way once past), from `Axis3ClockwiseIncreases` (and Axis4).
       Unset, nothing is said. Tried on the mill (22 Nov 2026): winding Y's
       handle anticlockwise makes its position go up, so lc_mill.cfg has
-      `Axis3ClockwiseIncreases = false`. Z's (`Axis4ClockwiseIncreases`)
-      is still commented out: its main handle lowers it anticlockwise
-      (pulled down), so that would be true, but the fine feed knob is
-      still to check: the user thinks it lowers Z clockwise, the opposite
-      way. If so, one key can't describe both. Decided (22 Nov 2026): the
-      go-to line will name the knob it means (e.g. "..., fine feed
-      clockwise"), rather than the key quietly describing only one of
-      them. To do once the knob's direction is confirmed. If the longer
-      line doesn't fit, "CW" and "CCW" are fine in place of "clockwise" and "anticlockwise" (user, 22 Nov
-      2026)
+      `Axis3ClockwiseIncreases = false`. Z's main handle lowers it
+      anticlockwise (pulled down), but its fine feed knob lowers it
+      clockwise, the opposite way, so one key can't describe both.
+    - **Done (22 Nov 2026), not yet tried on the mill:** the go-to's line
+      names the handle the direction is for, from `Axis3HandleName` (or
+      Axis4; empty, the default, names none). The mill has
+      `Axis4ClockwiseIncreases = false` and `Axis4HandleName = fine feed`,
+      as it's the fine feed that's wound near a target. The line now says
+      "CW" and "CCW" rather than "clockwise" and "anticlockwise", on every
+      axis (the user was happy with that): the view is drawn 1280 wide and
+      scaled, so the go-to's text has room for about 40 characters, and
+      "to -125.00: 125.00 to go, fine feed anticlockwise" is 49
 
 #### Smaller tidy-ups
 

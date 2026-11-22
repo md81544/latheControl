@@ -1626,9 +1626,17 @@ void ViewQt::Impl::updateTextFromModel(const Model& model)
                     model.axisDecimals(line.axisNumber));
             };
             // Which way to wind the handle, if known (back again, if it's
-            // gone past)
-            const std::string way
-                = goTo->clockwise ? (*goTo->clockwise ? ", clockwise" : ", anticlockwise") : "";
+            // gone past), naming the handle if the axis has more than one
+            // (e.g. the mill's Z: its fine feed knob turns the other way to
+            // its main handle). CW and CCW, as the full words don't fit
+            // (e.g. "to -125.00: 125.00 to go, fine feed anticlockwise")
+            std::string way;
+            if (goTo->clockwise) {
+                way = fmt::format(
+                    ", {}{}",
+                    goTo->handle.empty() ? "" : goTo->handle + " ",
+                    *goTo->clockwise ? "CW" : "CCW");
+            }
             if (goTo->there) {
                 line.goTo.text = fmt::format("at {}: settling", value(goTo->targetMm));
                 line.goTo.colour = GREEN;

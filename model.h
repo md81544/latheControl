@@ -622,6 +622,9 @@ public:
         // Which way to wind the handle towards the target from here
         // (clockwise if true), if known (Axis3ClockwiseIncreases)
         std::optional<bool> clockwise;
+        // Which handle that's for (e.g. "fine feed"), or empty if the axis
+        // has only one (Axis3HandleName)
+        std::string handle;
     };
     std::optional<ManualAxisGoTo> manualAxisGoTo(int axisNumber) const;
     void cancelManualAxisGoTos();

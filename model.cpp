@@ -3812,6 +3812,7 @@ void Model::configureManualAxes()
                 ? std::nullopt
                 : std::optional(
                       m_config.readBool(fmt::format("Axis{}ClockwiseIncreases", n), true)),
+            .handleName = m_config.read(fmt::format("Axis{}HandleName", n), ""),
         };
         // (A manual axis is only known from its scale, so it must have one)
         const std::string type = m_config.read(fmt::format("Axis{}Scale", n), "none");
@@ -4006,7 +4007,8 @@ std::optional<Model::ManualAxisGoTo> Model::manualAxisGoTo(int axisNumber) const
                             .toGoMm = toGo,
                             .past = toGo * goTo->direction < -tolerance,
                             .there = std::abs(toGo) <= tolerance,
-                            .clockwise = clockwise };
+                            .clockwise = clockwise,
+                            .handle = axis->handleName() };
 }
 
 void Model::cancelManualAxisGoTos()

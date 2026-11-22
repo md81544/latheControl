@@ -38,6 +38,10 @@ public:
         // Whether winding its handle clockwise makes the position go up, or
         // nothing if not known (so a go-to can't say which way to wind)
         std::optional<bool> clockwiseIncreases;
+        // Which handle clockwiseIncreases is for (e.g. "fine feed"), if the
+        // axis has more than one and they turn opposite ways, so a go-to
+        // can name it. Empty if there's only the one
+        std::string handleName;
     };
 
     using Clock = std::chrono::steady_clock;
@@ -52,6 +56,8 @@ public:
     const std::string& label() const;
     // See Settings::clockwiseIncreases
     std::optional<bool> clockwiseIncreases() const;
+    // See Settings::handleName
+    const std::string& handleName() const;
     bool hasReading() const;
     // The position (in mm), or nothing without a reading
     std::optional<double> positionMm() const;

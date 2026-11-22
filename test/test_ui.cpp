@@ -2437,6 +2437,44 @@ TEST_CASE("UI: a manual axis's go-to position (Y G) is wound there by hand")
     press(w, controller, Qt::Key_G);
     REQUIRE(waitForDialogToClose());
     REQUIRE(model.manualAxisGoTo(3)->clockwise == true);
+    // (Y has only the one handle, so it isn't named)
+    REQUIRE(model.manualAxisGoTo(3)->handle.empty());
+}
+
+TEST_CASE("UI: a manual axis's go-to names its handle, if set (Axis3HandleName)")
+{
+    // As the mill's Z (here on axis 3, whose leader doesn't clash with
+    // the default Z's): its fine feed knob lowers it clockwise
+    MapConfigReader config { { { "Axis3Kind", "manual" },
+                               { "Axis3Label", "Y" },
+                               { "Axis3Leader", "121" },
+                               { "Axis3Scale", "serial" },
+                               { "Axis3ScaleSerialLetter", "Y" },
+                               { "Axis3ScaleCountsPerMm", "100" },
+                               { "Axis3ClockwiseIncreases", "false" },
+                               { "Axis3HandleName", "fine feed" },
+                               { "DisableRpm", "true" } } };
+    mgo::MockGpio gpio { false };
+    mgo::Model model { gpio, config };
+    mgo::Controller controller(&model);
+    QWidget* w = mainWindow();
+    REQUIRE(w);
+    REQUIRE(model.manualAxis(3));
+
+    whenDialogShows([](QWidget* dialog) {
+        QTest::keyClicks(inputWidget(dialog), "-5");
+        QTest::keyClick(inputWidget(dialog), Qt::Key_Return);
+    });
+    press(w, controller, Qt::Key_Y);
+    press(w, controller, Qt::Key_G);
+    REQUIRE(waitForDialogToClose());
+    const auto goTo = model.manualAxisGoTo(3);
+    REQUIRE(goTo);
+    REQUIRE(goTo->clockwise == true);
+    REQUIRE(goTo->handle == "fine feed");
+    controller.tick();
+    snapshot(w, "manual-axis-go-to-handle-name");
+    press(w, controller, Qt::Key_Space);
 }
 
 TEST_CASE("UI: \\ z zeroes every axis, including the manual ones")
