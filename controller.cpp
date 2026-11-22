@@ -1444,36 +1444,30 @@ void Controller::processKey(int t)
                         });
                     break;
                 }
-            case key::i: // Input axis 1 memory value directly
+            case key::i: // Input a memory slot's value directly (i alone is axis 1)
             case key::I:
             case key::a1_i:
+            case key::a2_i:
+            case key::a3_i:
+            case key::a4_i:
                 {
-                    // Note all motors will be stopped when a dialog is displayed
-                    const std::string axisName = m_model->axisLabel(1);
+                    // (A manual axis's value is where it's to be wound to,
+                    // as for one stored from its reading; it needn't have a
+                    // reading now)
+                    const int axisNumber = (kp == key::i || kp == key::I) ? 1 : key::axisOfKey(kp);
+                    if (!m_model->hasAxis(axisNumber)) {
+                        break;
+                    }
+                    const std::string axisName = m_model->axisLabel(axisNumber);
                     getNumericInput(
-                        "Enter " + axisName + " memory value" + unitsSuffix(1),
+                        "Enter " + axisName + " memory value" + unitsSuffix(axisNumber),
                         {},
                         0.0,
-                        calc::Context { .unit = m_model->axisUnitName(1) },
-                        [this](const NumericInputReturn& rc) {
+                        calc::Context { .unit = m_model->axisUnitName(axisNumber) },
+                        [this, axisNumber](const NumericInputReturn& rc) {
                             if (!rc.cancelled) {
-                                m_model->storePosition(1, m_model->fromDisplayUnits(1, rc.value));
-                            }
-                        });
-                    break;
-                }
-            case key::a2_i: // Input axis 2 memory value directly
-                {
-                    // Note all motors will be stopped when a dialog is displayed
-                    const std::string axisName = m_model->axisLabel(2);
-                    getNumericInput(
-                        "Enter " + axisName + " memory value" + unitsSuffix(2),
-                        {},
-                        0.0,
-                        calc::Context { .unit = m_model->axisUnitName(2) },
-                        [this](const NumericInputReturn& rc) {
-                            if (!rc.cancelled) {
-                                m_model->storePosition(2, m_model->fromDisplayUnits(2, rc.value));
+                                m_model->storePosition(
+                                    axisNumber, m_model->fromDisplayUnits(axisNumber, rc.value));
                             }
                         });
                     break;

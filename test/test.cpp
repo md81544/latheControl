@@ -2672,7 +2672,8 @@ TEST_CASE("Commands: the manual axes (e.g. the mill's Y and Z)")
         }
         return keys;
     };
-    // (Zero, set, go to and halve, and its memory slot: store, go to and clear)
+    // (Zero, set, go to and halve, and its memory slot: store, go to, enter a
+    // value and clear)
     REQUIRE(
         keysFor(mgo::KeyMode::Axis3)
         == std::set<int> { mgo::key::a3_z,
@@ -2681,6 +2682,7 @@ TEST_CASE("Commands: the manual axes (e.g. the mill's Y and Z)")
                            mgo::key::a3_h,
                            mgo::key::a3_m,
                            mgo::key::a3_ENTER,
+                           mgo::key::a3_i,
                            mgo::key::a3_DELETE });
     REQUIRE(
         keysFor(mgo::KeyMode::Axis4)
@@ -2690,6 +2692,7 @@ TEST_CASE("Commands: the manual axes (e.g. the mill's Y and Z)")
                            mgo::key::a4_h,
                            mgo::key::a4_m,
                            mgo::key::a4_ENTER,
+                           mgo::key::a4_i,
                            mgo::key::a4_DELETE });
 
     REQUIRE(!keysFor(mgo::KeyMode::Axis1).contains(mgo::key::a3_z));
@@ -2704,6 +2707,7 @@ TEST_CASE("Commands: the manual axes (e.g. the mill's Y and Z)")
     REQUIRE(described(mgo::key::a3_h) == "Halve Y (to find a centre)");
     REQUIRE(described(mgo::key::a4_z) == "Zero Z");
     REQUIRE(described(mgo::key::a3_g) == "Go to Y position by hand...");
+    REQUIRE(described(mgo::key::a4_i) == "Enter a Z value for slot...");
     REQUIRE(mgo::followUpKeyName(mgo::key::a3_ENTER) == mgo::followUpKeyName(mgo::key::a1_ENTER));
     // (Z isn't left out of going to a slot by this config)
     REQUIRE(described(mgo::key::aAll_ENTER) == "Go to slot: X, A, Y and Z");

@@ -668,9 +668,11 @@ std::vector<Command> buildCommands(
     // to wind it)
     b.add(c, fmt::format("Store {} in slot", a3), key::a3_m, AXIS3);
     b.add(c, fmt::format("Go to slot: {} (wind it there)", a3), key::a3_ENTER, AXIS3, slotSet(3));
+    b.add(c, fmt::format("Enter a {} value for slot...", a3), key::a3_i, AXIS3);
     b.add(c, fmt::format("Clear slot: {}", a3), key::a3_DELETE, AXIS3, slotSet(3));
     b.add(c, fmt::format("Store {} in slot", a4), key::a4_m, AXIS4);
     b.add(c, fmt::format("Go to slot: {} (wind it there)", a4), key::a4_ENTER, AXIS4, slotSet(4));
+    b.add(c, fmt::format("Enter a {} value for slot...", a4), key::a4_i, AXIS4);
     b.add(c, fmt::format("Clear slot: {}", a4), key::a4_DELETE, AXIS4, slotSet(4));
 
     c = "Position";

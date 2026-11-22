@@ -2688,6 +2688,46 @@ TEST_CASE("UI: memory slots for the manual axes, and going to them by hand", "[t
     REQUIRE(model.getWarning() == "Y isn't set in this slot");
 }
 
+TEST_CASE("UI: a manual axis's leader then I enters a value for its memory slot")
+{
+    MapConfigReader config = millLikeConfig();
+    mgo::MockGpio gpio { false };
+    mgo::Model model { gpio, config };
+    mgo::Controller controller(&model);
+    QWidget* w = mainWindow();
+    REQUIRE(w);
+    const auto enterValue = [&](Qt::Key leader, const char* value) {
+        press(w, controller, leader);
+        bool dialogShown = false;
+        whenDialogShows([&dialogShown, value](QWidget* dialog) {
+            dialogShown = true;
+            QTest::keyClicks(inputWidget(dialog), value);
+            QTest::keyClick(inputWidget(dialog), Qt::Key_Return);
+        });
+        QTest::keyClick(w, Qt::Key_I);
+        controller.processKeyPress(); // opens the dialog
+        REQUIRE(waitForDialogToClose());
+        REQUIRE(dialogShown);
+    };
+
+    // Y I sets Y's slot alone (no reading is needed, as nothing's read)
+    enterValue(Qt::Key_Y, "12.5");
+    REQUIRE(*model.getMemory(3, 0) == Approx(12.5));
+    REQUIRE(!model.getMemory(4, 0));
+    REQUIRE(!model.getMemory(1, 0));
+    // And Z I sets Z's, in the current slot
+    model.selectNextMemorySlot();
+    REQUIRE(model.getCurrentMemorySlot() == 1);
+    enterValue(Qt::Key_Z, "-3");
+    REQUIRE(*model.getMemory(4, 1) == Approx(-3.0));
+    REQUIRE(!model.getMemory(4, 0));
+    REQUIRE(*model.getMemory(3, 0) == Approx(12.5));
+    // In inches, it's stored in mm
+    press(w, controller, Qt::Key_U);
+    enterValue(Qt::Key_Y, "1");
+    REQUIRE(*model.getMemory(3, 1) == Approx(25.4));
+}
+
 TEST_CASE("UI: start-up sets the motors' speeds before taking up the backlash")
 {
     // (A motor at zero speed cancels any move, so the backlash was never

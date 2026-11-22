@@ -180,6 +180,8 @@ constexpr int a3_g = g + 0x8000; // go to a position on axis 3 (by hand)
 constexpr int a4_g = g + 0x20000; // go to a position on axis 4 (by hand)
 constexpr int a3_DELETE = key::DELETE + 0x8000; // clear axis 3's memory slot
 constexpr int a4_DELETE = key::DELETE + 0x20000; // clear axis 4's memory slot
+constexpr int a3_i = i + 0x8000; // input a value for axis 3's memory slot
+constexpr int a4_i = i + 0x20000; // input a value for axis 4's memory slot
 
 // The axis a leader-prefixed key is for (1 to 4), or 0 if it isn't one (or
 // it's for every axis)

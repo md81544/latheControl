@@ -50,7 +50,8 @@ notes.
   → [An array of axes](#an-array-of-axes)
 - `W` turns A the same way as Up. → [An array of axes](#an-array-of-axes)
 - Memory slots on Y and Z, and going to them by hand; halving (`YH`)
-  since the leader-key fix. → [An array of axes](#an-array-of-axes)
+  since the leader-key fix; typing a slot's value in (`YI`, `ZI`).
+  → [An array of axes](#an-array-of-axes)
 - `Esc` asks before leaving a mode, and a multi-pass carries on while
   it asks. → [An array of axes](#an-array-of-axes)
 - `YG` and `ZG` (go to a position, wound by hand). Find which way
@@ -3050,7 +3051,9 @@ change.
       motorised axes (positions from the old zero would be somewhere else),
       as does losing its readings. On the mill, the memory rows are a
       little smaller, to fit Y's and Z's above the mode's lines. Plain
-      Enter still goes to axis 1's slot alone, as before. Not done: a sound
+      Enter still goes to axis 1's slot alone, as before. A manual axis's
+      leader then `i` types a value into its slot, as `zi` and `xi` do
+      (the user's request, 22 Nov 2026); it needn't have a reading. Not done: a sound
       when a manual go-to arrives (the line just clears), and the multi-pass
       dialog doesn't use the manual axes' slots yet (stage 3). Stage 2
       (moving X and A onto the same abstraction) is next
