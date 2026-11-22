@@ -11,8 +11,10 @@ namespace mgo {
 class Model;
 
 // The sounds that can be played (each a WAV file set in the config: see
-// SoundAlert and SoundAlarm in lc.cfg)
+// SoundAlert, SoundAlarm and SoundTick in lc.cfg), least important first:
+// when more than one is due at once, the last of them plays
 enum class Sound {
+    Tick, // A manual axis nearing its go-to's target (see ApproachTicks)
     Alert, // The program is waiting for the user, e.g. Enter between passes
     Alarm // Something has gone wrong, e.g. a fault or a warning
 };

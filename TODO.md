@@ -56,6 +56,9 @@ notes.
 - `W` turns A the same way as Up. → [An array of axes](#an-array-of-axes)
 - Memory slots on Y and Z, and going to them by hand; halving (`YH`)
   since the leader-key fix. → [An array of axes](#an-array-of-axes)
+- Ticks winding Y or Z to a memory slot (`SoundTick`): even from lc
+  itself, starting early enough when winding fast, and the alert at 0.2 mm.
+  → [Ticks nearing a target](#ticks-nearing-a-target)
 - Gear cutting: the first tooth lands with the others (A's backlash and
   the 1° back-off), indexing at full speed with the blank on, and whether
   dragging the cutter back marks the slot.
@@ -83,11 +86,6 @@ notes.
 - With a larger screen: dialogs that scale with the main display.
 - Esc ends a multi-pass without asking (pressed by instinct on the mill to
   clear a warning): ask first? → [An array of axes](#an-array-of-axes)
-- A sound when a manual axis's go-to arrives. TouchDRO has a feature where a
-  short "tick" sounds get faster (i.e closer together) as the manual axis nears
-  the target. Decided: aplay as now, up to 20 ticks a second, then the
-  alert once close. The rate is the faster of the time to go and the distance.
-  → [An array of axes](#an-array-of-axes), [Ticks nearing a target](#ticks-nearing-a-target)
 - Rename the `f2*` key codes (e.g. `cmd::threading`), as no `F2` key leads
   to them now. → [Dropping the F2 leader key](#dropping-the-f2-leader-key)
 
@@ -441,6 +439,31 @@ notes.
       stutter
     - The time and distance stages and the alert's distance go in the
       config
+- **Done (22 Nov 2026), not yet tried on the mill:** ApproachTicks
+      (approachticks.*), one for each manual axis, run by the controller
+      each tick alongside SoundCues; the alarm, then the alert, then a tick
+      wins when more than one is due. `SoundTick` (sounds/tick.wav, on in
+      lc_mill.cfg; only commented in lc.cfg, as the lathe has no manual
+      axes), `SoundTickStartMm` (2), `SoundTickStartSeconds` (1),
+      `SoundTickNearMm` (0.2) and `SoundTickSlowestMs` (500)
+    - The interval is in proportion rather than in stages: the slowest
+      interval at the start distance (or time), times the fraction of it
+      left, so it still halves each time the distance halves, but speeds up
+      smoothly rather than in steps. The shorter of the two (distance and
+      time) is used, and never under 50 ms (one run loop tick)
+    - The speed is the change in the distance to go over the last 400 ms,
+      and only counts once there's at least 200 ms of readings, so a
+      go-to's first moments don't give a wild one. Moving away gives no
+      ticks from the time, but the distance still gives them within 2 mm
+    - Within the near distance, or once past the target (even if it went
+      past within one tick), the alert plays once, and that go-to has no
+      more sounds. A go-to which starts that close has none, as the user is
+      already there. The go-to itself still ends as before, once the
+      reading settles within two counts
+    - Still to see on the mill: whether ticks from lc are as even as the
+      test loop's (it starts each player while redrawing the display), and
+      whether the DRO sender's averaging makes the speed lag, so the ticks
+      from the time start late
 - **Sound files:** WAV only (aplay can't decode FLAC or Ogg), mono, 16-bit,
       48 kHz (PipeWire runs at 48 kHz, so it doesn't resample them), with no
       silence at the start, as that adds to the delay. The user is

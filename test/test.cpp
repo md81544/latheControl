@@ -1,3 +1,4 @@
+#include "approachticks.h"
 #include "backlash.h"
 #include "calculator.h"
 #include "commands.h"
@@ -8370,6 +8371,152 @@ TEST_CASE("Sound cues: the alarm and the alert")
         const SoundState stopped { .warning = "Multi-pass stopped: X stalled",
                                    .multiPassState = State::Finished };
         REQUIRE(tick(cutting, stopped) == Sound::Alarm);
+    }
+}
+
+TEST_CASE("Approach ticks: faster nearing a manual axis's target, then the alert")
+{
+    using mgo::ApproachTicks;
+    using mgo::Sound;
+    using namespace std::chrono_literals;
+    // The defaults: ticks from 2 mm or 1 s to go, every 500 ms there, and the
+    // alert within 0.2 mm
+    ApproachTicks ticks;
+    ApproachTicks::Clock::time_point t {};
+    double target = 0.0;
+    // One tick of the run loop, with the axis toGo from the target (wound
+    // towards it from above, so it's past below it)
+    const auto step = [&](double toGo) {
+        t += 50ms;
+        return ticks.update(
+            ApproachTicks::Approach { .targetMm = target, .toGoMm = toGo, .past = toGo < -0.02 },
+            t);
+    };
+    struct Event {
+        ApproachTicks::Clock::time_point time;
+        double toGo;
+        Sound sound;
+    };
+    // Winds at a steady speed (mm/s, towards the target if positive) from
+    // one distance to go to another, a tick of the run loop at a time
+    const auto wind = [&](double from, double to, double speed) {
+        std::vector<Event> events;
+        const double perStep = speed * 0.05;
+        for (double toGo = from; perStep > 0 ? toGo >= to : toGo <= to; toGo -= perStep) {
+            if (const auto sound = step(toGo)) {
+                events.push_back({ t, toGo, *sound });
+            }
+        }
+        return events;
+    };
+    const auto gaps = [](const std::vector<Event>& events) {
+        std::vector<ApproachTicks::Clock::duration> result;
+        for (std::size_t i = 1; i < events.size(); ++i) {
+            if (events[i].sound == Sound::Tick && events[i - 1].sound == Sound::Tick) {
+                result.push_back(events[i].time - events[i - 1].time);
+            }
+        }
+        return result;
+    };
+
+    SECTION("No go-to, no sound")
+    {
+        for (int i = 0; i < 20; ++i) {
+            t += 50ms;
+            REQUIRE(!ticks.update(std::nullopt, t));
+        }
+    }
+    SECTION("Creeping: ticks from 2 mm, then the alert at 0.2 mm, once")
+    {
+        const auto events = wind(3.0, -0.5, 0.5);
+        REQUIRE(events.size() > 2);
+        REQUIRE(events.front().sound == Sound::Tick);
+        REQUIRE(events.front().toGo <= 2.0);
+        REQUIRE(events.front().toGo > 1.97);
+        REQUIRE(events.back().sound == Sound::Alert);
+        REQUIRE(events.back().toGo <= 0.2);
+        REQUIRE(events.back().toGo > 0.17);
+        REQUIRE(
+            std::count_if(
+                events.begin(),
+                events.end(),
+                [](const Event& e) { return e.sound == Sound::Alert; })
+            == 1);
+        // (Faster as it gets closer)
+        const auto g = gaps(events);
+        REQUIRE(std::is_sorted(g.rbegin(), g.rend()));
+        REQUIRE(g.front() > g.back());
+    }
+    SECTION("Winding fast: the ticks start at a second to go, well before 2 mm")
+    {
+        const auto events = wind(30.0, 0.5, 10.0);
+        REQUIRE(!events.empty());
+        REQUIRE(events.front().sound == Sound::Tick);
+        REQUIRE(events.front().toGo <= 10.0);
+        REQUIRE(events.front().toGo > 9.4);
+        const auto g = gaps(events);
+        REQUIRE(std::is_sorted(g.rbegin(), g.rend()));
+        // (Never faster than once per run loop tick)
+        REQUIRE(g.back() >= ApproachTicks::FASTEST_INTERVAL);
+    }
+    SECTION("Stopped short of the target, the ticks carry on, from the distance")
+    {
+        wind(3.0, 1.0, 2.0);
+        // (Once the winding has left the speed's window)
+        for (int i = 0; i < 10; ++i) {
+            step(1.0);
+        }
+        std::vector<Event> stopped;
+        for (int i = 0; i < 40; ++i) {
+            if (const auto sound = step(1.0)) {
+                stopped.push_back({ t, 1.0, *sound });
+            }
+        }
+        // Halfway from 2 mm, so half the slowest interval
+        const auto g = gaps(stopped);
+        REQUIRE(g.size() >= 6);
+        for (const auto gap : g) {
+            REQUIRE(gap == 250ms);
+        }
+    }
+    SECTION("Moving away gives no ticks from the time, and none beyond 2 mm")
+    {
+        wind(1.5, 1.5, 1.0);
+        const auto events = wind(1.5, 4.0, -2.0);
+        for (const auto& e : events) {
+            REQUIRE(e.sound == Sound::Tick);
+            REQUIRE(e.toGo <= 2.0);
+        }
+    }
+    SECTION("Going past within one tick still sounds the alert")
+    {
+        wind(1.0, 0.5, 1.0);
+        REQUIRE(step(-0.1) == Sound::Alert);
+        REQUIRE(wind(-0.1, -1.0, 1.0).empty());
+    }
+    SECTION("A go-to which starts within 0.2 mm has no sound at all")
+    {
+        REQUIRE(wind(0.15, -0.5, 0.5).empty());
+    }
+    SECTION("A new go-to starts again")
+    {
+        REQUIRE(wind(1.0, 0.0, 1.0).back().sound == Sound::Alert);
+        target = 5.0;
+        REQUIRE(step(1.0) == Sound::Tick);
+        t += 50ms;
+        REQUIRE(!ticks.update(std::nullopt, t));
+        REQUIRE(step(1.0) == Sound::Tick);
+    }
+    SECTION("Other settings")
+    {
+        ticks = ApproachTicks(
+            ApproachTicks::Settings {
+                .startMm = 1.0, .startSeconds = 0.0, .nearMm = 0.05, .slowestInterval = 1000ms });
+        const auto events = wind(20.0, 0.0, 10.0);
+        REQUIRE(events.front().toGo <= 1.0);
+        REQUIRE(events.front().toGo > 0.45);
+        REQUIRE(events.back().sound == Sound::Alert);
+        REQUIRE(events.back().toGo <= 0.05);
     }
 }
 

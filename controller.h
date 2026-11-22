@@ -1,10 +1,12 @@
 #pragma once
 
+#include "approachticks.h"
 #include "iview.h"
 #include "menu.h"
 #include "model.h"
 #include "soundcues.h"
 
+#include <array>
 #include <chrono>
 #include <deque>
 #include <exception>
@@ -51,8 +53,16 @@ private:
     SoundCues m_soundCues;
     std::string m_alertSound;
     std::string m_alarmSound;
+    std::string m_tickSound;
     std::string m_soundPlayer;
     bool m_soundPlayerFailed { false };
+    // The ticks as each manual axis nears its go-to's target (only with
+    // m_tickSound set)
+    std::array<ApproachTicks, Model::LAST_MANUAL_AXIS - Model::FIRST_MANUAL_AXIS + 1>
+        m_approachTicks;
+    // The most important sound due from the ticks, given the one SoundCues
+    // chose (if any)
+    std::optional<Sound> approachTickSound(std::optional<Sound> sound);
     // Plays a sound in the background, without waiting for it
     void playSound(Sound sound);
     // Thrown by a tick, to be rethrown from run()

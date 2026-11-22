@@ -69,6 +69,7 @@ add_library(shared_with_test OBJECT
 	multipass.cpp
 	radius.cpp
 	soundcues.cpp
+	approachticks.cpp
 	steppermotor.cpp
 	threadpitches.cpp
 	toollibrary.cpp

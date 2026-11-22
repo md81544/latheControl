@@ -33,6 +33,25 @@ Controller::Controller(Model* model)
     // (Sounds are off unless their files are set)
     m_alertSound = model->config().read("SoundAlert", "");
     m_alarmSound = model->config().read("SoundAlarm", "");
+    m_tickSound = model->config().read("SoundTick", "");
+    if (!m_tickSound.empty()) {
+        const auto& config = model->config();
+        const ApproachTicks::Settings defaults;
+        const ApproachTicks::Settings settings {
+            .startMm = config.readDouble("SoundTickStartMm", defaults.startMm),
+            .startSeconds = config.readDouble("SoundTickStartSeconds", defaults.startSeconds),
+            .nearMm = config.readDouble("SoundTickNearMm", defaults.nearMm),
+            .slowestInterval = std::chrono::milliseconds(config.readLong(
+                "SoundTickSlowestMs",
+                static_cast<unsigned long>(defaults.slowestInterval.count()))),
+        };
+        if (settings.nearMm >= settings.startMm) {
+            MGOLOG(
+                "SoundTickNearMm isn't less than SoundTickStartMm, so the ticks only start "
+                "from the time to go");
+        }
+        m_approachTicks.fill(ApproachTicks(settings));
+    }
 #ifdef __APPLE__
     m_soundPlayer = model->config().read("SoundPlayer", "afplay");
 #else
@@ -48,7 +67,7 @@ Controller::Controller(Model* model)
         m_soundPlayer = fmt::format(
             "sudo -u {} env XDG_RUNTIME_DIR=/run/user/{} {}", sudoUser, sudoUid, m_soundPlayer);
     }
-    for (const std::string* file : { &m_alertSound, &m_alarmSound }) {
+    for (const std::string* file : { &m_alertSound, &m_alarmSound, &m_tickSound }) {
         if (!file->empty() && !std::filesystem::exists(*file)) {
             MGOLOG("Sound file not found: " << *file);
         }
@@ -134,16 +153,44 @@ void Controller::tickBody()
     checkLimitSwitch();
     checkScaleMismatch();
     showBacklashReport();
-    if (const auto sound
-        = m_soundCues.update(afterKeys, soundStateOf(*m_model), SoundCues::Clock::now())) {
+    const auto sound = approachTickSound(
+        m_soundCues.update(afterKeys, soundStateOf(*m_model), SoundCues::Clock::now()));
+    if (sound) {
         playSound(*sound);
     }
     m_view->updateDisplay(*m_model);
 }
 
+std::optional<Sound> Controller::approachTickSound(std::optional<Sound> sound)
+{
+    if (m_tickSound.empty()) {
+        return sound;
+    }
+    const auto now = ApproachTicks::Clock::now();
+    for (int axis = Model::FIRST_MANUAL_AXIS; axis <= Model::LAST_MANUAL_AXIS; ++axis) {
+        std::optional<ApproachTicks::Approach> approach;
+        if (const auto goTo = m_model->manualAxisGoTo(axis)) {
+            approach = ApproachTicks::Approach { .targetMm = goTo->targetMm,
+                                                 .toGoMm = goTo->toGoMm,
+                                                 .past = goTo->past };
+        }
+        // (Every axis is updated each tick, even if a sound is already due,
+        // so each follows its own go-to)
+        const auto tick
+            = m_approachTicks.at(static_cast<std::size_t>(axis - Model::FIRST_MANUAL_AXIS))
+                  .update(approach, now);
+        if (tick && (!sound || *tick > *sound)) {
+            sound = tick;
+        }
+    }
+    return sound;
+}
+
 void Controller::playSound(Sound sound)
 {
-    const std::string& file = sound == Sound::Alert ? m_alertSound : m_alarmSound;
+    const std::string& file = sound == Sound::Tick ? m_tickSound
+        : sound == Sound::Alert                    ? m_alertSound
+                                                   : m_alarmSound;
     if (file.empty() || m_soundPlayerFailed) {
         return;
     }
