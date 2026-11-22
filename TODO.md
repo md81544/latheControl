@@ -85,7 +85,8 @@ notes.
   clear a warning): ask first? → [An array of axes](#an-array-of-axes)
 - A sound when a manual axis's go-to arrives. TouchDRO has a feature where a
   short "tick" sounds get faster (i.e closer together) as the manual axis nears
-  the target → [An array of axes](#an-array-of-axes)
+  the target. Test aplay's speed on the Pi first.
+  → [An array of axes](#an-array-of-axes), [Ticks nearing a target](#ticks-nearing-a-target)
 - Rename the `f2*` key codes (e.g. `cmd::threading`), as no `F2` key leads
   to them now. → [Dropping the F2 leader key](#dropping-the-f2-leader-key)
 
@@ -349,6 +350,57 @@ notes.
           held open
         - The same config is on the mill too (done by the user, noted
           2026-11-20)
+
+#### Ticks nearing a target
+
+- **The idea (from TouchDRO):** while the user winds a manual axis towards
+      a go-to's target, a short tick plays, faster as the axis gets closer.
+      For example, the rate doubles each time the distance halves: 1 a
+      second at 10 mm, 2 at 5 mm, 4 at 2.5 mm, 8 at 1.25 mm, 16 at 0.625 mm.
+      Closer than that, a steady tone, then silence (or an "arrived" sound)
+      within the go-to's tolerance. Config-driven and off by default
+- **Can the current player keep up? (22 Nov 2026, from the code; not yet
+      measured on the Pi):** each sound is a new process, `sudo -u <user> env
+      XDG_RUNTIME_DIR=... aplay -q file.wav`, and each one starts sudo, then
+      aplay, which opens a new stream through ALSA to PipeWire. That's
+      perhaps tens of milliseconds, maybe over 100, and it varies
+    - A few ticks a second (the outer stages) should be fine, as each tick
+      is late by about the same amount, so the rhythm stays even
+    - At 10-20 ticks a second the start-up time is about as long as the gap
+      between ticks, so they'd bunch up and the rhythm would wobble, and
+      players could overlap. The speed-up is the whole point, so that
+      defeats it. It would also be about 20 sudo and aplay start-ups a
+      second while the user is winding, and every sudo run goes in the auth
+      log
+    - The run loop ticks every 50 ms (`Controller::TICK_INTERVAL`), so ticks
+      timed from there top out at 20 a second anyway: another reason for a
+      steady tone in the last stage
+- **The alternative: one stream held open.** Start one player for the
+      session, through the same sudo wrapper, with QProcess (not detached):
+      `aplay -q -t raw -f S16_LE -r 48000 -c 1 -`, with a small
+      `--buffer-time`
+    - A small sound thread writes blocks of a few milliseconds to its stdin:
+      silence, or a click when a tick is due. The pipe holds the thread to
+      the playback rate, so it uses almost no CPU, and the ticks land where
+      they're written. The delay is only aplay's buffer
+    - The tick rate is one number, set by the UI thread from the distance to
+      go and read by the sound thread as an atomic, with no locks. The thread
+      inherits the UI thread's cores, so it stays off the motor cores
+    - The click can be generated in code (a decaying sine burst of a few
+      milliseconds), so there's no WAV file. The alert and alarm could be
+      played down the same stream
+    - With the stream open all the time, the output never sleeps, so the
+      first sound after a reboot would be the only one lost, as now
+- **To test on the Pi before deciding** (from a root shell; `tick.wav` is
+      any short click):
+
+            time sudo -u mcd env XDG_RUNTIME_DIR=/run/user/1000 aplay -q sounds/alert.wav
+            for i in $(seq 20); do sudo -u mcd env XDG_RUNTIME_DIR=/run/user/1000 aplay -q tick.wav & sleep 0.08; done
+
+    - The first times one start-up. The second plays about 12 ticks a
+      second, the way lc plays sounds now: if they sound uneven, hold a
+      stream open. If they're steady, the current player could do, at least
+      for the slower stages
 
 #### The menu and leader key hints
 
