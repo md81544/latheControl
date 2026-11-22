@@ -1271,6 +1271,17 @@ TEST_CASE("UI: gear cutting through the controller")
     REQUIRE(model.multiPass().totalPasses() == 3);
     controller.tick();
     snapshot(w, "gear_cutting_mode");
+    // Esc asks first, saying the passes would end, and Esc again carries on
+    QString text;
+    whenDialogShows([&text](QWidget* dialog) {
+        text = dialogText(dialog);
+        key(dialog, Qt::Key_Escape);
+    });
+    press(w, controller, Qt::Key_Escape);
+    REQUIRE(text.contains("Leave gear cutting mode?"));
+    REQUIRE(text.contains("part way through"));
+    REQUIRE(model.getMode() == mgo::Mode::GearCutting);
+    REQUIRE(model.multiPass().state() == mgo::MultiPass::State::Paused);
     // Space stops it
     press(w, controller, Qt::Key_Space);
     REQUIRE(!model.multiPass().inProgress());
@@ -1600,9 +1611,59 @@ TEST_CASE("UI: quick chamfer")
     REQUIRE(tm.model.getMode() == mgo::Mode::Taper);
     REQUIRE(tm.model.getTaperAngle() == Approx(-45.0));
     tm.model.setMotorSpeed(2, 100.0);
+    whenDialogShows([](QWidget* dialog) { key(dialog, Qt::Key_Return); });
     press(w, controller, Qt::Key_Escape);
     REQUIRE(tm.model.getMode() == mgo::Mode::None);
     REQUIRE(tm.model.motorSpeed(2) == Approx(37.0));
+}
+
+TEST_CASE("UI: Esc asks before leaving a mode")
+{
+    // (Esc is easily pressed by instinct, e.g. to clear a warning)
+    TestModel tm;
+    mgo::Controller controller(&tm.model);
+    QWidget* w = mainWindow();
+    REQUIRE(w);
+    press(w, controller, Qt::Key_H);
+    REQUIRE(tm.model.getMode() == mgo::Mode::Taper);
+    QString text;
+    bool running = false;
+    const auto answer = [&](Qt::Key k) {
+        text.clear();
+        whenDialogShows([&, k](QWidget* dialog) {
+            text = dialogText(dialog);
+            running = tm.model.isMotorRunning(2);
+            key(dialog, k);
+        });
+    };
+
+    // Esc (or N) in the dialog stays in the mode
+    answer(Qt::Key_Escape);
+    press(w, controller, Qt::Key_Escape);
+    REQUIRE(text.contains("Leave taper mode?"));
+    REQUIRE(tm.model.getMode() == mgo::Mode::Taper);
+    answer(Qt::Key_N);
+    press(w, controller, Qt::Key_Escape);
+    REQUIRE(tm.model.getMode() == mgo::Mode::Taper);
+
+    // The dialog doesn't stop anything (X: a Z move in the taper stopped by
+    // itself here, before Esc, for a reason not yet looked into)
+    tm.model.goToPosition(2, 50.0);
+    REQUIRE(waitUntil([&] { return tm.model.isMotorRunning(2); }));
+    answer(Qt::Key_Escape);
+    press(w, controller, Qt::Key_Escape);
+    REQUIRE(running);
+    REQUIRE(tm.model.isMotorRunning(2));
+    press(w, controller, Qt::Key_Space);
+
+    // Enter (or Y) leaves it
+    answer(Qt::Key_Y);
+    press(w, controller, Qt::Key_Escape);
+    REQUIRE(tm.model.getMode() == mgo::Mode::None);
+
+    // With no mode, Esc doesn't ask (press() would fail if a dialog stayed open)
+    press(w, controller, Qt::Key_Escape);
+    REQUIRE(tm.model.getMode() == mgo::Mode::None);
 }
 
 TEST_CASE("UI: thread dialog")

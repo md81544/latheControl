@@ -149,6 +149,8 @@ private:
         bool diameter,
         bool workEnd,
         std::function<void()> action);
+    // Esc: leaves the mode, asking first if there is one
+    void exitMode();
 };
 
 } // end namespace

@@ -1508,10 +1508,7 @@ void Controller::processKey(int t)
                         m_model->cancelToolMeasurement();
                         break;
                     }
-                    // Cancel any retract as well
-                    m_model->setIsAxis2Retracted(false);
-                    m_model->changeMode(Mode::None);
-                    m_model->cancelManualAxisGoTos();
+                    exitMode();
                     break;
                 }
             case key::h:
@@ -1932,6 +1929,64 @@ void Controller::chooseTool()
                 diameter,
                 workEnd,
                 [this, number] { m_model->selectTool(number); });
+        });
+}
+
+void Controller::exitMode()
+{
+    // A go-to wound by hand is only a guide, so it's cancelled at once, as
+    // Space would
+    m_model->cancelManualAxisGoTos();
+    const auto leave = [this] {
+        // Cancel any retract as well
+        m_model->setIsAxis2Retracted(false);
+        m_model->changeMode(Mode::None);
+    };
+    std::string name;
+    switch (m_model->getMode()) {
+        case Mode::Threading:
+            name = "threading";
+            break;
+        case Mode::Taper:
+            name = "taper";
+            break;
+        case Mode::Radius:
+            name = "radius";
+            break;
+        case Mode::MultiPass:
+            name = "multi-pass";
+            break;
+        case Mode::Knurling:
+            name = "knurling";
+            break;
+        case Mode::GearCutting:
+            name = "gear cutting";
+            break;
+        default:
+            break;
+    }
+    if (name.empty()) {
+        leave();
+        return;
+    }
+    // Esc is easily pressed by instinct (e.g. on the mill, to clear a warning,
+    // which ended a multi-pass part way through), so it asks first. Not
+    // through okCancel(), which stops the motors: a pass carries on while the
+    // dialog is open, and Space still stops everything
+    std::vector<std::string> lines;
+    if (m_model->multiPass().inProgress()) {
+        lines.push_back("This ends the passes part way through.");
+        lines.push_back("");
+    }
+    lines.push_back("Enter (or Y): leave   Esc (or N): stay");
+    m_view->openInput(
+        Input::Type::OkCancel,
+        fmt::format("Leave {} mode?", name),
+        std::move(lines),
+        [leave](const Input::Return& rc) {
+            if (!rc.cancelled) {
+                leave();
+            }
         });
 }
 

@@ -51,6 +51,8 @@ notes.
 - `W` turns A the same way as Up. → [An array of axes](#an-array-of-axes)
 - Memory slots on Y and Z, and going to them by hand; halving (`YH`)
   since the leader-key fix. → [An array of axes](#an-array-of-axes)
+- `Esc` asks before leaving a mode, and a multi-pass carries on while
+  it asks. → [An array of axes](#an-array-of-axes)
 - `YG` and `ZG` (go to a position, wound by hand). Find which way
   clockwise moves Y and Z, and set `Axis3ClockwiseIncreases` and
   `Axis4ClockwiseIncreases` in lc_mill.cfg. → [An array of axes](#an-array-of-axes)
@@ -79,8 +81,6 @@ notes.
 - Use the keys on the right (#, Home, PgUp, PgDn, End)? Home could go back
   to the feature's end Z or diameter.
 - With a larger screen: dialogs that scale with the main display.
-- Esc ends a multi-pass without asking (pressed by instinct on the mill to
-  clear a warning): ask first? → [An array of axes](#an-array-of-axes)
 
 ### Multi-pass
 - **Slot and face/pocket modes for the mill**, then turn the generic
@@ -3373,6 +3373,19 @@ change.
           a lock refusal while Z keeps moving, with and without the menu
           open. Tried on the mill (22 Nov 2026): F9 cleared a warning.
           Esc ending a multi-pass without asking is still as it was
+        - **Then (22 Nov 2026), not yet tried on the mill:** `Esc` in any
+          mode now asks first ("Leave multi-pass mode?", `Enter` or `Y` to
+          leave, `Esc` or `N` to stay), so an Esc by instinct then another
+          keeps the mode. During a multi-pass (or threading passes, or gear
+          cutting) the dialog says the passes would end part way through.
+          It doesn't go through `okCancel()`, which stops the motors first:
+          a pass carries on while it's open, and Space still stops
+          everything. With no mode it doesn't ask, and a go-to wound by
+          hand is cancelled at once either way, as it's only a guide. (While
+          defining a tool, Esc still just cancels that, without asking.)
+          Tests: Esc then Esc or N stays, Y leaves, X keeps moving while
+          it asks, no dialog with no mode, and gear cutting's paused pass
+          carries on after Esc then Esc
     - **Done (22 Nov 2026), not yet tried on the mill:** a manual axis's
       leader then `G` (`YG`, `ZG`) goes to a typed position, wound by hand,
       as for its memory slots (the same line, and the ticks). Found missing
