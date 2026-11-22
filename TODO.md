@@ -54,9 +54,10 @@ notes.
   → [An array of axes](#an-array-of-axes)
 - `Esc` asks before leaving a mode, and a multi-pass carries on while
   it asks. → [An array of axes](#an-array-of-axes)
-- `YG` and `ZG` (go to a position, wound by hand). Find which way
-  clockwise moves Y and Z, and set `Axis3ClockwiseIncreases` and
-  `Axis4ClockwiseIncreases` in lc_mill.cfg. → [An array of axes](#an-array-of-axes)
+- `YG` and `ZG` (go to a position, wound by hand). Y's direction is set
+  (`Axis3ClockwiseIncreases = false`, 22 Nov 2026); find which way
+  clockwise moves Z, and set `Axis4ClockwiseIncreases` in lc_mill.cfg.
+  → [An array of axes](#an-array-of-axes)
 - Gear cutting: the first tooth lands with the others (A's backlash and
   the 1° back-off), indexing at full speed with the blank on, and whether
   dragging the cutter back marks the slot.
@@ -3401,8 +3402,10 @@ change.
       wind, as the target isn't known until it's typed, so the go-to's line
       says it instead ("..., clockwise" or "..., anticlockwise", and the
       other way once past), from `Axis3ClockwiseIncreases` (and Axis4).
-      Unset, nothing is said: the mill's are in lc_mill.cfg, commented out
-      until checked on the machine
+      Unset, nothing is said. Tried on the mill (22 Nov 2026): winding Y's
+      handle anticlockwise makes its position go up, so lc_mill.cfg has
+      `Axis3ClockwiseIncreases = false`. Z's (`Axis4ClockwiseIncreases`)
+      is still commented out until checked on the machine
 
 #### Smaller tidy-ups
 
