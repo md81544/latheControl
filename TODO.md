@@ -70,7 +70,7 @@ notes.
   to end, the scale's difference every 10 mm). → [An array of axes](#an-array-of-axes)
 
 ### User interface
-- A tap on Meta opens the menu, as Tab does; F1 becomes a small help
+- Tab only for menu: F1 becomes a small help
   pop-up for where you are (aides-memoire, not the manual).
 - Go to the feature's end (e.g. `ZGE`), once the feature has an end along
   Z (see Work geometry below).
@@ -80,11 +80,12 @@ notes.
   easier to change.
 - Use the keys on the right (#, Home, PgUp, PgDn, End)? Home could go back
   to the feature's end Z or diameter.
-- With a larger screen: touchscreen support, and dialogs that scale with
-  the main display.
+- With a larger screen: dialogs that scale with the main display.
 - Esc ends a multi-pass without asking (pressed by instinct on the mill to
   clear a warning): ask first? → [An array of axes](#an-array-of-axes)
-- A sound when a manual axis's go-to arrives. → [An array of axes](#an-array-of-axes)
+- A sound when a manual axis's go-to arrives. TouchDRO has a feature where a
+  short "tick" sounds get faster (i.e closer together) as the manual axis nears
+  the target → [An array of axes](#an-array-of-axes)
 - Rename the `f2*` key codes (e.g. `cmd::threading`), as no `F2` key leads
   to them now. → [Dropping the F2 leader key](#dropping-the-f2-leader-key)
 
