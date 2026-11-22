@@ -85,7 +85,8 @@ notes.
   clear a warning): ask first? → [An array of axes](#an-array-of-axes)
 - A sound when a manual axis's go-to arrives. TouchDRO has a feature where a
   short "tick" sounds get faster (i.e closer together) as the manual axis nears
-  the target. Test aplay's speed on the Pi first.
+  the target. Decided: aplay as now, up to 20 ticks a second, then the
+  alert once close. The rate is the faster of the time to go and the distance.
   → [An array of axes](#an-array-of-axes), [Ticks nearing a target](#ticks-nearing-a-target)
 - Rename the `f2*` key codes (e.g. `cmd::threading`), as no `F2` key leads
   to them now. → [Dropping the F2 leader key](#dropping-the-f2-leader-key)
@@ -401,6 +402,49 @@ notes.
       second, the way lc plays sounds now: if they sound uneven, hold a
       stream open. If they're steady, the current player could do, at least
       for the slower stages
+    - **Tried on the Pi (22 Nov 2026):** with a 45 ms mono 48 kHz tick at
+      1200 Hz, the loop at about 12 a second sounded even. So the current
+      player (a new aplay for each tick) looks good enough, and the stream
+      can wait unless ticks from lc itself sound uneven (it starts the
+      players while it's also redrawing the display). At 20 a second
+      (`sleep 0.05`) it sounded fine too
+- **Decided (22 Nov 2026):** the first version uses aplay as it is now, with
+      a new process for each tick, at up to 20 ticks a second (the run
+      loop's limit). Once the axis is close, the ticks stop and the alert
+      plays (alert.wav). The ticks are only there to tell the user that they
+      ARE close: from then on they watch the scale's figures for the
+      accuracy, so ticks closer together than that would be overkill. The
+      stream held open is only needed if ticks from lc itself turn out
+      uneven
+- **Ticks from the time to go, as well as the distance (22 Nov 2026, not
+      yet decided in detail):** winding the handle fast should start the
+      ticks earlier, and creeping should start them later. So a projected
+      time to go (the distance over the approach speed) decides when they
+      start, e.g. at one second to go, doubling at half a second, a quarter
+      and so on
+    - Time alone isn't enough: the user slows down near the target, so
+      ticks from the time to go would slow down just as the axis gets
+      close, which sounds like it's getting further away. Stopping to check
+      the figures makes the time to go infinite, and the ticks would stop
+      even 0.1 mm away
+    - So the rate is whichever is faster: from the time to go, or from the
+      distance. Winding fast, the time starts them early. Creeping or
+      stopped, the distance takes over, so the ticks never slow down while
+      getting closer. The distance stages can start nearer than 10 mm, as
+      the time gives the early warning (e.g. 2, 1, 0.5 mm)
+    - The alert still plays at a fixed distance, whatever the speed: it's
+      the signal to read the figures. Moving away, or going past, gives no
+      ticks from the time (going past could have its own sound later)
+    - The speed comes from the scale's readings, which arrive in counts at
+      the DRO sender's rate, and winding by hand is jerky, so it needs
+      smoothing over about a quarter to half a second, or the ticks will
+      stutter
+    - The time and distance stages and the alert's distance go in the
+      config
+- **Sound files:** WAV only (aplay can't decode FLAC or Ogg), mono, 16-bit,
+      48 kHz (PipeWire runs at 48 kHz, so it doesn't resample them), with no
+      silence at the start, as that adds to the delay. The user is
+      converting alert.wav and alarm.wav to match
 
 #### The menu and leader key hints
 
