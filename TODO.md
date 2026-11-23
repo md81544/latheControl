@@ -19,9 +19,11 @@ notes.
   starting is right. → [Using the mill scales](#using-the-mill-scales)
 
 #### Lathe
-- The Z scale is solid with the spindle running (glitch filter, 23 Nov
-  2026); check its 200 counts per mm and settle time, before turning on
-  its re-base and checks. → [The lathe Z scale](#the-lathe-z-scale)
+- The Z scale is solid with the spindle running (glitch filter), and its
+  200 counts per mm and settle time are checked (23 Nov 2026): turn on its
+  checks (`Axis1ScaleWarnMm` 0.2, `Axis1ScaleFaultMm` 5), then
+  `Axis1ScaleRebase`, then the multi-pass and finishing ones.
+  → [The lathe Z scale](#the-lathe-z-scale)
 - The auto-retract toggle in the menu. → [Auto-retract from the menu](#auto-retract-from-the-menu)
 - Retracting only on the last 2 passes. → [Retracting only on the last passes](#retracting-only-on-the-last-passes)
 - A female thread from the thread dialog; and whether 0.25 mm of retract
@@ -1830,6 +1832,17 @@ notes.
           edge-to-edge spacing that short never comes from the carriage
           moving (about 600 µs at 1000 mm/min). A fast rapid with the
           filter on lost no counts: the scale and motor still agreed.
+    - **Counts per mm and settle time (23 Nov 2026).** 200 counts per mm
+      is right (a 100 mm move read 100.025 mm on the scale, after a
+      reversal with the backlash at 500 steps). The reading settles at
+      once: every settle took 0.50-0.55 s, which is just the 500 ms
+      `Axis1ScaleSettleMs` plus a run-loop tick, so it could come down
+      (to 200, say) if the waits between passes ever seem long. After a
+      rapid at 1000 mm/min, the carriage was 0.05 mm further than the
+      motor, the way it was going: running on into the slack as it
+      stopped (as on the mill), not lost counts. Differences at rest
+      were 0.012-0.05 mm, so `Axis1ScaleWarnMm = 0.2` (the mill's) should
+      suit the lathe too
         - **If that isn't enough:** the VFD's carrier frequency (Pr. 72 on
           the FR-D700, to be checked; if the drift rate follows it, that
           confirms it); a shielded motor cable earthed at both ends, and
