@@ -19,10 +19,11 @@ notes.
   starting is right. → [Using the mill scales](#using-the-mill-scales)
 
 #### Lathe
-- The Z scale is solid with the spindle running (glitch filter), and its
-  200 counts per mm and settle time are checked (23 Nov 2026): turn on its
-  checks (`Axis1ScaleWarnMm` 0.2, `Axis1ScaleFaultMm` 5), then
-  `Axis1ScaleRebase`, then the multi-pass and finishing ones.
+- The Z scale's checks are on (23 Nov 2026): at rest, `Axis1ScaleWarnMm`
+  0.2 and `Axis1ScaleFaultMm` 5; moving, `Axis1ScaleStallMm` and
+  `Axis1ScaleMovingFaultMm` 1 (the mill's 3 allows for its sender's lag).
+  Watch for false stops, especially threading and rapids with the spindle
+  on; then `Axis1ScaleRebase`, then the multi-pass and finishing ones.
   → [The lathe Z scale](#the-lathe-z-scale)
 - The auto-retract toggle in the menu. → [Auto-retract from the menu](#auto-retract-from-the-menu)
 - Retracting only on the last 2 passes. → [Retracting only on the last passes](#retracting-only-on-the-last-passes)
