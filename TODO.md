@@ -154,7 +154,8 @@ notes.
 - Zeroing the chuck's angle (an offset in what's shown).
 - Probing and edge finding: an insulated block or bar of known size on a
   pin, the tool to GND, and a creep until it touches. Also a way to touch
-  off.
+  off. Keep the Pi's GND off the machine's frame (an isolated sense
+  circuit). → [Probing and edge finding](#probing-and-edge-finding)
 - (Low: the rpm read erratic past about 1200 rpm, not seen with the mocks;
   not relevant since the spindle was geared down.)
 
@@ -1691,6 +1692,55 @@ notes.
       fixed 1.8kΩ pull-up to 3.3V on the board, which suits normally-closed
       switches to GND and helps on a long cable. I2C must stay disabled in
       raspi-config (the default)
+    - **Microswitches, not contact leads (decided 23 Nov 2026, not yet
+      wired):** the other idea was one banana socket to the machine's body
+      as GND and another to bare leads, insulated from the body, which the
+      carriage touches. That needs only one wire per switch, but it's
+      normally open: a broken lead, or a contact fouled by oil, coolant or
+      oxide, never trips, where normally-closed switches in series fail
+      safe. It also ties the Pi's GND to the frame, which carries the
+      motors' leakage and switching noise to earth. With any other path
+      from the Pi to earth (a monitor's HDMI shield, a supply's negative, a
+      scale's cable shield), that makes a ground loop through the same
+      grounds as the scales and encoders. Running the lathe already upsets
+      the mill's scale readings, so noise is getting in somewhere. The
+      microswitches go to the Pi's GND with their own wires, not via the
+      frame. Before bonding anything to the frame, check with a meter
+      whether the Pi's GND is already tied to it (e.g. through a scale's
+      shield), and measure the AC and DC volts between them with the lathe
+      idle and running
+
+#### Probing and edge finding
+
+- Touching a tool or probe off the work by electrical contact (the idea
+  is in Outstanding: Sensors and scales). Not started; notes from 23 Nov
+  2026:
+    - **Keep the Pi off the frame.** Edge finding does need the machine as
+      one side of the circuit, so isolate the sense circuit rather than
+      bonding the Pi's GND to it (see the ground-loop note under
+      [Limit switches](#limit-switches)). A small isolated DC-DC module
+      (e.g. 5 V in, 12 V out) or a separate 12-24 V supply, with its
+      negative to the frame, and the sense lead through a resistor to an
+      optocoupler's LED. The Pi sees only the opto's transistor, so no
+      ground loop, and a spike on the lead can't reach a GPIO
+    - **Wetting current.** A light touch through cutting fluid and oxide
+      won't conduct reliably at 3.3 V through a pull-up; 12-24 V at about
+      5-10 mA does (why industrial inputs are 24 V). If a GPIO were ever
+      driven directly: a series resistor (about 1 kΩ), an RC filter and a
+      clamp or TVS diode at the Pi, and a strong pull-up, not the internal
+      one of about 50 kΩ
+    - **The path through the spindle is unreliable.** Through a tool in
+      the spindle, the circuit runs through the bearings, whose grease film
+      conducts on and off (worse while turning). Clip the sense lead to the
+      tool or probe instead, with the frame or the work as the other side,
+      or insulate the work (paper or plastic underneath) and clip to it
+    - **Latch, don't stop.** What matters is the axis's position at the
+      moment of contact, not stopping within the limit switch's 2 ms
+      filter. A pigpio alert callback gives a microsecond timestamp, so
+      the position at contact can be recorded from it, then the axis backs
+      off and touches again more slowly for accuracy (the usual two-touch
+      probe). That's separate from the limit switch path, so give it its
+      own pin, off by default per machine like the other hardware features
 
 #### Start-up backlash take-up
 
