@@ -921,6 +921,9 @@ private:
         bool stallStopped { false };
         // See finishesOnScale()
         bool finishOnScale { false };
+        // See logScaleNoise()
+        uint32_t noiseEventsLogged { 0 };
+        std::chrono::steady_clock::time_point noiseLoggedAt;
         std::optional<ScaleFinish> finish;
 #ifdef FAKE
         FakeDroScale* fake { nullptr };
@@ -1134,6 +1137,8 @@ private:
     // low speeds, a stray edge can flip it for a few milliseconds)
     std::optional<int> spindleTurningSign() const;
     void checkEncoderLostPulses();
+    // Logs any interference the axis's scale has seen (see IScale::noiseEvents())
+    void logScaleNoise(int axisNumber);
     // Creates an axis's scale, if the config gives it one
     void configureScale(int axisNumber);
     // Makes the scale described by an axis's Axis<n>Scale... config keys, or

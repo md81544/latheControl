@@ -21,6 +21,12 @@ public:
     // The latest reading, or nothing if there isn't a recent one (e.g. the
     // sender is switched off or unplugged)
     virtual std::optional<int32_t> readCounts() const = 0;
+    // How many times so far the reading has shown signs of interference (for
+    // a quadrature scale, both pins changing at once), for lc.log
+    virtual uint32_t noiseEvents() const
+    {
+        return 0;
+    }
 };
 
 // A scale fitted to an axis with a motor. The scale's counts and the motor's
@@ -95,6 +101,12 @@ public:
     };
 
     AxisScale(std::unique_ptr<IScale> scale, Settings settings);
+
+    // See IScale::noiseEvents()
+    uint32_t noiseEvents() const
+    {
+        return m_scale->noiseEvents();
+    }
 
     // Watches for the motor stopping and the reading settling, lines the
     // scale up if it needs to be, and logs the difference each time it

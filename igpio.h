@@ -38,6 +38,11 @@ public:
     // so that existing implementations don't have to provide them.)
     virtual void clearRotaryEncoderCallback() { }
     virtual void clearLinearScaleAxis1Callback() { }
+    // Ignore a level change on the pin unless the new level lasts this long,
+    // to reject interference spikes (0 turns it off). Changes are then
+    // reported this much later, with the tick of the change itself. (No-op by
+    // default, for the mocks)
+    virtual void setGlitchFilter(int /*pin*/, unsigned /*microseconds*/) { }
     // General-purpose inputs (e.g. a motor driver's alarm output). Must be
     // called for a pin before reading it. pullUp enables the internal pull-up
     // resistor (e.g. for an open-collector or opto-isolated output)

@@ -384,6 +384,7 @@ void Model::checkStatus()
         if (AxisScale* sc = scale(n)) {
             StepperMotor* m = motor(n);
             sc->update(m->getPosition(), m->isRunning(), m->getSpeed());
+            logScaleNoise(n);
         }
     }
     for (auto& axis : m_manualAxes) {
@@ -565,6 +566,26 @@ void Model::checkEncoderLostPulses()
         // spindle's rotation from the passes before, i.e. cut a new thread
         m_threadingPositionLost = true;
     }
+}
+
+void Model::logScaleNoise(int axisNumber)
+{
+    // At most every 10 seconds, so that a noisy scale doesn't flood lc.log
+    ScaleState& state = scaleState(axisNumber);
+    const uint32_t events = state.scale->noiseEvents();
+    const auto now = std::chrono::steady_clock::now();
+    if (events == state.noiseEventsLogged || now - state.noiseLoggedAt < std::chrono::seconds(10)) {
+        return;
+    }
+    MGOLOG(
+        fmt::format(
+            "{} scale: {} interference spikes (both pins changing at once) ignored since the "
+            "last report, {} in all",
+            axisLabel(axisNumber),
+            events - state.noiseEventsLogged,
+            events));
+    state.noiseEventsLogged = events;
+    state.noiseLoggedAt = now;
 }
 
 void Model::recordSpindleSample()
@@ -3732,7 +3753,16 @@ std::unique_ptr<IScale> Model::makeScale(
             return simulated;
         }
 #endif
-        return std::make_unique<LinearScale>(m_gpio, pinA, pinB, std::lround(countsPerMm));
+        const long glitchUs = m_config.readLong(key("GlitchUs"), 0);
+        if (glitchUs > 0) {
+            source += fmt::format(", ignoring spikes under {} us", glitchUs);
+        }
+        return std::make_unique<LinearScale>(
+            m_gpio,
+            pinA,
+            pinB,
+            std::lround(countsPerMm),
+            static_cast<unsigned>(std::max(glitchUs, 0L)));
     }
     if (type == "serial") {
         const std::string letter = m_config.read(key("SerialLetter"), "X");

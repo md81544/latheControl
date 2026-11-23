@@ -37,6 +37,7 @@ public:
         void* userData) override;
     void clearRotaryEncoderCallback() override;
     void clearLinearScaleAxis1Callback() override;
+    void setGlitchFilter(int pin, unsigned microseconds) override;
     void setInputPin(int pin, bool pullUp) override;
     PinState readPin(int pin) override;
     void delayMicroSeconds(long usecs) override;

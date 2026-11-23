@@ -103,6 +103,12 @@ void Gpio::setCallback(
     gpioSetAlertFuncEx(pinB, callback, user);
 }
 
+void Gpio::setGlitchFilter(int pin, unsigned microseconds)
+{
+    // (pigpio allows up to 300 ms)
+    gpioGlitchFilter(static_cast<unsigned>(pin), microseconds);
+}
+
 void Gpio::setInputPin(int pin, bool pullUp)
 {
     gpioSetMode(pin, PI_INPUT);

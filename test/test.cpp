@@ -813,19 +813,60 @@ TEST_CASE("Scale:   Full cycle forwards then backwards")
 {
     FakeTickGpio gpio(0);
     mgo::LinearScale scale(gpio, 1, 2, 200);
+    // (Each edge has its own tick: a real scale never changes both pins in
+    // the same sample)
     scale.callback(2, 1, 0); // establish phase (A low, B high)
     // One full quadrature cycle in one direction: four steps
-    scale.callback(1, 1, 0);
-    scale.callback(2, 0, 0);
-    scale.callback(1, 0, 0);
-    scale.callback(2, 1, 0);
+    scale.callback(1, 1, 10);
+    scale.callback(2, 0, 20);
+    scale.callback(1, 0, 30);
+    scale.callback(2, 1, 40);
     REQUIRE(scale.getPositionInMm() == -4.f / 200.f);
     // The same cycle in the opposite direction brings us back to zero
-    scale.callback(2, 0, 0);
-    scale.callback(1, 1, 0);
-    scale.callback(2, 1, 0);
-    scale.callback(1, 0, 0);
+    scale.callback(2, 0, 50);
+    scale.callback(1, 1, 60);
+    scale.callback(2, 1, 70);
+    scale.callback(1, 0, 80);
     REQUIRE(scale.getPositionInMm() == 0.f);
+    REQUIRE(scale.noiseEvents() == 0);
+}
+
+TEST_CASE("Scale:   A spike on both pins at once doesn't drift")
+{
+    // Interference on the lathe made the reading drift steadily with the
+    // carriage still: pigpio reports both pins changing in one sample as two
+    // callbacks with the same tick, which were counted as steps the same way
+    // when the spike began and again when it ended
+    for (const int a : { 0, 1 }) {
+        for (const int b : { 0, 1 }) {
+            CAPTURE(a, b);
+            FakeTickGpio gpio(0);
+            mgo::LinearScale scale(gpio, 1, 2, 200);
+            uint32_t tick = 0;
+            // Establish the phase (the first edge only does that), then come
+            // to rest at A = a, B = b with real steps (a callback which
+            // doesn't change its pin's level is ignored)
+            scale.callback(1, 1, tick += 10);
+            scale.callback(1, 0, tick += 10);
+            scale.callback(1, a, tick += 10);
+            scale.callback(2, b, tick += 10);
+            const float atRest = scale.getPositionInMm();
+            for (int i = 0; i < 10; ++i) {
+                tick += 1000;
+                scale.callback(1, 1 - a, tick);
+                scale.callback(2, 1 - b, tick);
+                tick += 3;
+                scale.callback(1, a, tick);
+                scale.callback(2, b, tick);
+                REQUIRE(scale.getPositionInMm() == atRest);
+            }
+            REQUIRE(scale.noiseEvents() == 20);
+            // A real step afterwards still counts
+            scale.callback(1, 1 - a, tick += 1000);
+            REQUIRE(scale.getPositionInMm() != atRest);
+            REQUIRE(scale.noiseEvents() == 20);
+        }
+    }
 }
 
 TEST_CASE("Scale:   DRO stream parsing")

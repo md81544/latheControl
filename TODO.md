@@ -19,10 +19,10 @@ notes.
   starting is right. → [Using the mill scales](#using-the-mill-scales)
 
 #### Lathe
-- The Z scale is fitted (22 Nov 2026); wire it through the level shifter,
-  then check its sign, 200 counts per mm and settle time, before turning on
-  its re-base and checks.
-  → [The lathe Z scale](#the-lathe-z-scale)
+- The Z scale drifts with the spindle running: try the simultaneous-change
+  fix (and lc.log's counts), then `Axis1ScaleGlitchUs = 10`; then check its
+  200 counts per mm and settle time, before turning on its re-base and
+  checks. → [The lathe Z scale](#the-lathe-z-scale)
 - The auto-retract toggle in the menu. → [Auto-retract from the menu](#auto-retract-from-the-menu)
 - Retracting only on the last 2 passes. → [Retracting only on the last passes](#retracting-only-on-the-last-passes)
 - A female thread from the thread dialog; and whether 0.25 mm of retract
@@ -145,7 +145,9 @@ notes.
   count). → [The lathe Z scale](#the-lathe-z-scale)
 - Show the position as unconfirmed while a scale has no reading.
   → [Using the mill scales](#using-the-mill-scales)
-- Count and report a scale's two-phase jumps (missed edges).
+- Two quadrature scales share `Gpio`'s one set of scale pins, so the first
+  scale destroyed clears the other's callbacks and leaves its own (the
+  mock only simulates axis 1's). Needed before the lathe's X scale.
   → [The lathe Z scale](#the-lathe-z-scale)
 - The backlash measurement logs the scale's raw count and says where on
   the table it measured (for a survey). → [Using the mill scales](#using-the-mill-scales)
@@ -1787,6 +1789,44 @@ notes.
       side to the scale, 3.3V side to GPIO 5 and 6). (The proof of concept
       fed them in directly, but only on an old, now spare, Pi 3.) Then
       check the sign, the counts per mm (200, as set) and the settle time
+    - **Wired up (23 Nov 2026)** through a BSS138 level shifter board (HV
+      to the Pi's 5 V, LV to its 3.3 V). It read well, and updated quickly
+      on the display. `Axis1ScaleReversed` had to be true, and a backlash
+      test showed `Axis1BacklashCompensationSteps` was a little low, so it
+      was raised. **But with the spindle running, the reading drifted**,
+      as the mill's scales do while the lathe runs:
+        - With the carriage still, it drifted steadily one way, at much the
+          same rate whatever the spindle's speed (the VFD's carrier
+          frequency doesn't change with it). Moving the carriage a little
+          and stopping again, once it drifted the other way.
+        - With the scale unplugged at the DB9, the reading didn't change,
+          so the noise comes in with the scale, not on the board or the
+          Pi's wiring.
+        - No continuity between the Pi's GND and the DB9's shell, the
+          motor, the lathe's body or the scale's body: no direct ground
+          loop, so it's coupled in some other way (capacitively, perhaps
+          through the read head on the frame).
+        - **The cause, it seems:** a spike on the scale's ground or supply
+          changes both pins at once. pigpio reports the two in one sample
+          as two callbacks with the same tick, A first, and the decoder
+          counted them as two steps the same way, and again when the spike
+          ended: four counts (20 µm) a spike, which way depending on the
+          phase the carriage rests at (A = B: one way, A ≠ B: the other).
+          That fits both the steady drift and its reversal. (With each
+          pin's level tracked separately, a "two-phase jump" can't happen,
+          so counting those, as once planned, wouldn't have shown it.)
+        - **Done:** both pins changing in the same tick are now taken as a
+          spike, the first undone and neither counted, and lc.log reports
+          how many (at most every 10 s). `Axis1ScaleGlitchUs` sets pigpio's
+          glitch filter, for spikes whose two edges fall in different
+          samples. Not yet tried on the lathe.
+        - **If that isn't enough:** the VFD's carrier frequency (Pr. 72 on
+          the FR-D700, to be checked; if the drift rate follows it, that
+          confirms it); a shielded motor cable earthed at both ends, and
+          ferrites; a Schmitt buffer (e.g. 74LVC14 at 3.3 V, which inverts,
+          so flip `Axis1ScaleReversed`) or 6N137 opto-isolators in place of
+          the BSS138 board, whose 10 kΩ pull-ups are easily disturbed. A fix
+          at the VFD might help the mill's scales too
     - **Things that shape the answer** (figures from lc.cfg):
         - The scale (200 counts/mm, so 5µm) is *coarser* than the motor
           (1µm per step on Z). So the scale can't control the motor step by
