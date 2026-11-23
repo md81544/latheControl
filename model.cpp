@@ -3018,11 +3018,12 @@ void Model::advanceBacklashMeasurement()
     std::vector<std::string> report {
         fmt::format("{}'s backlash is {:.3f} mm, which is {} steps.", label, r.backlashMm(), steps),
         fmt::format(
-            "Axis1BacklashCompensationSteps is {} now: to use this, change it in the config file.",
+            "Axis1BacklashCompensationSteps is {} now.",
             m_config.readLong("Axis1BacklashCompensationSteps", 0)),
+        "To use the new value, change it in the config file.",
         "",
         fmt::format(
-            "After reversing, {} fell short by {:+.3f} mm moving right, and {:+.3f} mm moving left",
+            "After reversing, {} differed by {:+.3f} mm moving right, and {:+.3f} mm moving left",
             label,
             r.positiveShortfallMm,
             r.negativeShortfallMm),
