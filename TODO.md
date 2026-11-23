@@ -39,6 +39,10 @@ notes.
   → [Tool library](#tool-library)
 
 #### Mill
+- New Mode: Bolt Hole. Give option for using A axis (in which case it's a simple
+  rotation of the rotary table per bolt hole) or Y axis, in which a series of
+  coordinates should be calculated. The rest of the mode would consist of a go to
+  next hole / previous hole with an optional manual go-to depth on the Z.
 - `XB` (re-base by hand), at rest and with a multi-pass paused.
   → [Re-basing an axis by hand](#re-basing-an-axis-by-hand)
 - Re-basing between passes in a run without pauses; the "waiting for X's
@@ -190,7 +194,7 @@ notes.
 
 #### Calculator in numeric entries
 
-- The user's idea (21 Nov 2026, reaching for a calculator at the lathe):
+- The idea (21 Nov 2026, reaching for a calculator at the lathe):
       any numeric entry takes a sum typed after `=`, worked out when Enter
       is pressed. See README.md. Decided with the user:
     - Only `+ - * /`, brackets and a leading minus. No trig: the bolt hole
@@ -217,12 +221,12 @@ notes.
       shown (the user agreed, 21 Nov 2026). Not in the relative go-to (an
       offset), nor the memory value entry. A manual axis without a reading
       has no `p`, rather than `p` silently being 0.
-- `"` is inches, as `in` is (the user's request, 21 Nov 2026).
+- `"` is inches, as `in` is (21 Nov 2026).
 
 #### Re-basing an axis by hand
 
 - A command to line an axis's position up with its scale at any time
-      (the user's idea, 18 Nov 2026), rather than only when the mismatch
+      (the idea, 18 Nov 2026), rather than only when the mismatch
       check stops everything and its dialog offers it, or when a move
       re-bases at rest. The user suggested `x` then `s`, but on the mill
       that's "Set X position..." (`x` is axis 1's leader there). The letters
@@ -233,7 +237,7 @@ notes.
       in the menu (Position, or System beside "Finishing on the scale").
       Only for axes with a scale
     - **Done (19 Nov 2026), not yet tried on the mill:** axis 1's leader
-      then `b` (the user's choice; `XB` on the mill), and Position in the
+      then `b` (the choice; `XB` on the mill), and Position in the
       menu, only with `Axis1Scale` set. Axis 1 is the only axis that can
       have a scale for its motor; a manual axis's position is its scale
       already. Allowed when the re-bases at rest are (no multi-pass, motion
@@ -303,7 +307,7 @@ notes.
       for a thread) can flicker on and off. The controller runs the player
       (`aplay -q` by default) detached, with QProcess, so nothing waits
     - lc runs as root (sudo, for pigpio), and root's processes can't find
-      the user's PipeWire session, so the player runs as `sudo -u
+      the PipeWire session, so the player runs as `sudo -u
       $SUDO_USER env XDG_RUNTIME_DIR=/run/user/$SUDO_UID aplay -q <file>`.
       Untested on the Pi: if no sound plays, try that command by hand from
       a root shell, and check lc.log for "Couldn't run the sound player"
@@ -1282,7 +1286,7 @@ notes.
       it can slow down by. On the mill's X that's about 2.5 mm from
       800 mm/min (about 3.3 mm from letting go, with the 60 ms
       `RAPID_RELEASE_MS`), or about 1 mm (1.8 mm) with the rate at 100. The
-      user's view: when rapiding up to work, they stop well short (say
+      view: when rapiding up to work, they stop well short (say
       10 mm) and approach slowly from there. Pressing the key again while
       it slows stops it at once. A rapid's release is its own key code
       (`key::RAPID_RELEASED`); the controller treats it as Space unless a
@@ -1694,7 +1698,7 @@ notes.
       backlash at start-up (since 14 Nov 2026, when the take-up was found
       never to have moved; see the mill scales item). A tool left against
       the work while everything was off could be pushed into it. The idea
-      (the user's, 14 Nov 2026), with additions from discussing it:
+      (14 Nov 2026), with additions from discussing it:
     - Before the take-up, a dialog says the backlash is about to be taken
       up, and asks the user to make sure the tool is clear of the work by at
       least each axis's backlash, which way and how far (e.g. "X +0.39 mm").
@@ -1724,7 +1728,7 @@ notes.
     - **The lathe's scale, being fitted (19 Nov 2026):** a "Garosa Linear
       Scale 250mm" from Amazon (a generic 5µm, 5V TTL quadrature scale; no
       manual). Its DB9 is **not** the common Sino pinout (2 = 0V, 6 = A,
-      7 = +5V, 8 = B): the user's proof-of-concept socket has **1 = +5V,
+      7 = +5V, 8 = B): the proof-of-concept socket has **1 = +5V,
       2 = GND, 3 = A, 4 = B**. A and B are 5V signals, and the Pi's GPIOs
       aren't 5V tolerant, so they go through a 2-channel level shifter (5V
       side to the scale, 3.3V side to GPIO 5 and 6). (The proof of concept
@@ -2951,7 +2955,7 @@ change.
         - Memory slots store every axis. Going to a slot moves (or prompts
           for) the cut-plane axes only: X, Y and A. Z is stored and shown,
           but is never part of a slot's go-to (the user won't move Z while
-          X is moving). Z will never have a stepper: the user's CNC mill is
+          X is moving). Z will never have a stepper: the CNC mill is
           for anything that needs full automation
         - The plan is to fit a stepper to Y later. That should then be a
           config change (`manual` to `stepper`, plus its pins, conversion
@@ -2991,8 +2995,8 @@ change.
           The scales share axis 1's DRO reader (`makeScale()`, split out of
           `configureAxis1Scale()`)
         - `ManualAxis` (manualaxis.*): the scale's reading plus an offset,
-          which zero, set and half change. It starts at zero (the user's
-          choice: they re-zero at each start anyway, as on TouchDRO, so
+          which zero, set and half change. It starts at zero (the 
+          choice: re-zero happens at each start anyway, as on TouchDRO, so
           showing the scale's own reading first was no use). Its zero isn't
           kept when lc stops, and if the readings are lost (the sender's
           count may have started again), it starts at zero again when they
@@ -3030,7 +3034,7 @@ change.
       the y and z leader keys don't clash with anything in use
     - **Used on the mill (19 Nov 2026)** for a whole job (a mounting
       bracket), without TouchDRO: Y and Z zero and set worked as expected
-      (half not needed yet). The user's workflow for Z: bring the tool down
+      (half not needed yet). The workflow for Z: bring the tool down
       to the work, set Z to the work's current thickness, then machine down
       to the thickness wanted by Z's reading. The part came out within a
       few tens of microns of the plan in each dimension, so the nominal
@@ -3053,7 +3057,7 @@ change.
       little smaller, to fit Y's and Z's above the mode's lines. Plain
       Enter still goes to axis 1's slot alone, as before. A manual axis's
       leader then `i` types a value into its slot, as `zi` and `xi` do
-      (the user's request, 22 Nov 2026); it needn't have a reading. Not done: a sound
+      (22 Nov 2026); it needn't have a reading. Not done: a sound
       when a manual go-to arrives (the line just clears), and the multi-pass
       dialog doesn't use the manual axes' slots yet (stage 3). Stage 2
       (moving X and A onto the same abstraction) is next
@@ -3257,8 +3261,8 @@ change.
           approaching again as a finishing move does; the re-base after it
           catches what's left, within the three tries. **To try on the
           lathe**, once X has its scale. This completes stage 2
-        - **Then (20 Nov 2026), approaching on the scale** (the user's
-          question: could an overshoot cut what it shouldn't? Yes, where the
+        - **Then (20 Nov 2026), approaching on the scale** 
+          (Question: could an overshoot cut what it shouldn't? Yes, where the
           tool is in the work, e.g. finishing at a pocket's end wall on the
           mill; a correction afterwards can't undo it. The feed is normally
           clear of the work, with Z off the end, but correcting an
@@ -3282,7 +3286,7 @@ change.
           the multi-pass sees one feed; this also replaces the reversing
           correction noted as not done above. Only the feed before a pass,
           not a radius's path. On for the mill's X at 0.2 mm and 20 mm/min
-          (the user's choice). **Tried on the mill (20 Nov 2026):** go-tos
+          **Tried on the mill (20 Nov 2026):** go-tos
           on X stop short and creep in as expected. Tests: with
           the table running 0.05 mm ahead of the motor, a go-to's scale
           never reads past the target with the approach, and does (by more
@@ -3343,7 +3347,7 @@ change.
           again (once), with a warning that the approach is shorter than the
           overshoot ("X went 0.056 mm past its target: make
           Axis1ScaleApproachMm more than that"), as finishing moves now warn
-          too. Tests: the simulated slack both ways, and the user's case
+          too. Tests: the simulated slack both ways, and the use case
           (0.256 compensation, 0.2 approach): with the table's backlash as
           compensated it stops short, creeps, and never passes the end, with
           no warning; with none, it warns
