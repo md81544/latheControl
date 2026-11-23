@@ -35,16 +35,20 @@ What was found on opening the box (10 November 2026):
   schematic shows D3, D4 and D5 instead. The sockets' X and Y labels were
   swapped compared with the sketch; the readings showed each letter is the
   right axis, so the labels were corrected on 13 November 2026.
-- The crystal is marked "08", which suggests the 3.3 V/8 MHz kind of Pro
-  Mini. The sketch works with either kind, as long as the right board was
-  chosen when compiling it.
+- The crystal is marked "08", so it's the 8 MHz kind of Pro Mini, which is
+  the 3.3 V one (taken as settled on 23 November 2026). The schematic's
+  dividers only make sense at 5 V, so the box differs from it there too.
+  When compiling, choose "Arduino Pro or Pro Mini" with "ATmega328P (3.3V,
+  8 MHz)".
 
 Not yet checked:
 
 - Which pin carries the clock. The sketch says D9; the schematic says D2.
   This only matters if the sketch is changed.
-- The supply voltage: a multimeter between VCC and GND with the box on will
-  confirm 3.3 V. The schematic's dividers only make sense at 5 V.
+- The supply voltage with a meter. The crystal is good evidence, but before
+  wiring the Arduino's TX straight to a Pi's GPIO, a few seconds with a
+  multimeter between VCC and GND (expecting 3.3 V) makes sure: 5 V would
+  damage the Pi's pin.
 
 From the schematic and the original builder's notes, which may also differ
 from the box:
@@ -109,3 +113,46 @@ the axis and the change in counts and mm. It needs pyserial
 (`pip install pyserial`):
 
     python3 watch_scales.py /dev/ttyUSB0
+
+## Backing up and restoring the firmware
+
+It isn't certain that the sketch here is exactly what's on the Arduino (see
+Files). Before flashing anything new, read what's there now into a file, so
+it can be put back. The Arduino's bootloader can do that over the same FTDI
+connection that programmes it, with avrdude (`brew install avrdude` on the
+Mac, or the copy that comes with the Arduino IDE). Not yet done.
+
+The connection: plug the FTDI adapter onto the whole 6-pin header, not the
+two-wire tap that goes to the Pi, and unplug the Pi's adapter first. avrdude
+needs the adapter's TX to the Arduino's RX, and DTR, which resets the Arduino
+into its bootloader. Leave the box on its own supply and the adapter's VCC
+unconnected, as above. If the adapter has no DTR, press the Pro Mini's reset
+button just as avrdude starts; it may take a few tries.
+
+To read the program (flash) and the EEPROM into two files:
+
+    avrdude -p m328p -c arduino -P /dev/cu.usbserial-XXXX -b 57600 \
+            -U flash:r:sender_flash.hex:i \
+            -U eeprom:r:sender_eeprom.hex:i
+
+- 57600 baud is the bootloader's speed on the 3.3 V/8 MHz Pro Mini. If
+  avrdude reports "not in sync", the bootloader may have been changed to
+  Optiboot: try `-b 115200`.
+- The sketch probably doesn't use the EEPROM, and some bootloaders can't read
+  it. If that part fails, leave out its `-U` and keep the flash.
+- Read it twice and compare the two files (`cmp`), to be sure the read was
+  good. Keep the copies here, next to the sketch.
+
+To put it back:
+
+    avrdude -p m328p -c arduino -P /dev/cu.usbserial-XXXX -b 57600 \
+            -U flash:w:sender_flash.hex:i
+
+That restores the program exactly. The bootloader isn't in the dump, but
+it's never overwritten either, so it doesn't need to be.
+
+The dump can't show whether the board runs the sketch here: the same source
+built by a different compiler or Arduino version gives a different binary,
+so comparing hex files proves nothing. Its behaviour is the better guide, and
+so far it matches (the format, about 24 readings a second, and the smoothing
+described above). With the backup, it doesn't matter either way.

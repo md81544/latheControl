@@ -188,6 +188,9 @@ notes.
   the work. → [Bump map](#bump-map)
 - A "profile" mode: X follows a table of points as Z moves, like a
   mechanical follower. → [Profile mode](#profile-mode)
+- (Very low: reflash the mill's DRO sender for lc alone if TouchDRO goes,
+  with its smoothing off and a faster rate, to shorten the settle; back it up
+  first.) → [Interfacing with the mill scales](#interfacing-with-the-mill-scales)
 
 ## Notes
 
@@ -1891,10 +1894,11 @@ notes.
       Notes, and things still to check:
         - Don't connect the adapter's VCC (the box has its own supply) or DTR
           (DTR resets the Arduino whenever the port is opened)
-        - Logic levels: the crystal is marked "08", which suggests the
-          3.3 V/8 MHz Pro Mini, though the schematic's dividers suggest 5 V.
-          Confirm with a multimeter between VCC and GND with the box on. At
-          3.3 V, an adapter set to 3.3 V is right and the Pi is safe either way
+        - Logic levels: the crystal is marked "08", so it's the 3.3 V/8 MHz
+          Pro Mini (taken as settled, 23 Nov 2026), though the schematic's
+          dividers suggest 5 V. An adapter set to 3.3 V is right, and the Pi
+          is safe either way. A meter check is still worth doing before
+          wiring TX straight to a Pi's GPIO
         - The adapter only listens, so it can't upset the HC-06
         - The box stays on its own adapter. Everything at the mill draws power
           from one mains socket, switched by a Zigbee button, so it all comes
@@ -1922,6 +1926,33 @@ notes.
         - Reading the scales directly from the Pi: only one device can drive
           the scales' clock, and bit-banging the 21-bit protocol would load
           a Pi whose cores are reserved for the motor threads
+    - **Possible later (23 Nov 2026), very low priority: reflash the sender
+      for lc alone.** TouchDRO wasn't even switched on in the last couple
+      of big milling sessions, so it may be dropped. Wiring the scales
+      straight to the Pi's GPIO was considered and isn't worth it. The
+      scales are iGaging's clocked 21-bit serial, not A/B quadrature, so
+      the Pi would have to bit-bang the protocol (see Rejected). Their
+      cables, where the lathe's noise most likely gets in, would still be
+      there, just running to the Pi, along with the ground-loop risk (see
+      [Limit switches](#limit-switches)). Instead, if the settle time
+      (about 2 s a pass) ever seems worth cutting:
+        - Back up what's on the Arduino first (avrdude, through its
+          bootloader; the steps are in `hardware/touchdro-sender/README.md`)
+        - Turn the sketch's smoothing off (`SCALE_*_AVERAGE_ENABLED 0`):
+          that's the one-second creep after a stop. Raise
+          `UPDATE_FREQUENCY` (up to 64) and the baud rate with it (9600
+          tops out near 38 readings a second). Then re-tune
+          `Axis*ScaleLagMs` and the settle times. The scales' own update
+          rate caps how fast this can get
+        - Perhaps read each scale twice per reading and drop it if the two
+          differ, against the garbage jumps while the lathe runs. First
+          watch the raw stream with the lathe running, to find which axes
+          jump and when
+        - Perhaps wire TX to a Pi 4 UART instead of the FTDI adapter, to
+          drop USB. GPIO 14/15 may be wanted for a serial console, but the
+          Pi 4 has spare UARTs (uart2-5, by dtoverlay); check for pin
+          clashes first. The current settle time is bearable, so none of
+          this is pressing
 
 #### Using the mill scales
 
