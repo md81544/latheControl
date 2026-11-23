@@ -138,6 +138,9 @@ notes.
   longer lead. → [Cut knurling](#cut-knurling)
 
 ### Sensors and scales
+- Low priority: quieten the lathe's VFD for the mill's scales, measured
+  with the lathe's Z scale (glitch filter off).
+  → [The lathe Z scale](#the-lathe-z-scale)
 - A scale on the lathe's X (waiting for the 5 V to 3.3 V boards and for Z's
   scale to be proven); the code is ready. → [An array of axes](#an-array-of-axes)
 - The finishing moves' "the scale's reading didn't settle" (it flickers a
@@ -1834,6 +1837,28 @@ notes.
           so flip `Axis1ScaleReversed`) or 6N137 opto-isolators in place of
           the BSS138 board, whose 10 kΩ pull-ups are easily disturbed. A fix
           at the VFD might help the mill's scales too
+    - **The lathe's Z scale as a noise meter, to quieten the VFD for the
+      mill (23 Nov 2026; low priority, as both machines are rarely run at
+      once).** The mill's scales read garbage while the lathe runs (see
+      [Using the mill scales](#using-the-mill-scales)); lc guards against
+      it (`Axis1ScaleFaultMm`, and only a settled reading is used), so
+      it's lived with for now. To measure the lathe's noise: set
+      `Axis1ScaleGlitchUs = 0` for a while, run the spindle with the
+      carriage still, and time the drift (and note lc.log's spike counts).
+      Change one thing at a time and compare. Put the filter back after.
+      It won't say exactly how the mill would fare (its iGaging scales
+      pick up noise differently), but anything that cuts the drift is
+      cutting the same source. Likely candidates, best first:
+        - A mains filter on the VFD's input: the noise most likely
+          reaches the mill through the shared mains wiring and earth
+        - A shielded motor cable, its shield earthed at the VFD and the
+          motor, and ferrites on it, to keep the noise in that loop rather
+          than in the lathe's frame
+        - The carrier frequency (Pr. 72 on the FR-D700, to be checked).
+          Lower means fewer spikes, but each is as big, so it would only
+          make the mill's jumps rarer, at the cost of more motor whine
+        - Routing the mill's scale cables away from the VFD and its motor
+          cable
     - **Things that shape the answer** (figures from lc.cfg):
         - The scale (200 counts/mm, so 5µm) is *coarser* than the motor
           (1µm per step on Z). So the scale can't control the motor step by
