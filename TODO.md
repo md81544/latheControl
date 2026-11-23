@@ -19,10 +19,9 @@ notes.
   starting is right. → [Using the mill scales](#using-the-mill-scales)
 
 #### Lathe
-- The Z scale drifts with the spindle running: try the simultaneous-change
-  fix (and lc.log's counts), then `Axis1ScaleGlitchUs = 10`; then check its
-  200 counts per mm and settle time, before turning on its re-base and
-  checks. → [The lathe Z scale](#the-lathe-z-scale)
+- The Z scale is solid with the spindle running (glitch filter, 23 Nov
+  2026); check its 200 counts per mm and settle time, before turning on
+  its re-base and checks. → [The lathe Z scale](#the-lathe-z-scale)
 - The auto-retract toggle in the menu. → [Auto-retract from the menu](#auto-retract-from-the-menu)
 - Retracting only on the last 2 passes. → [Retracting only on the last passes](#retracting-only-on-the-last-passes)
 - A female thread from the thread dialog; and whether 0.25 mm of retract
@@ -1819,7 +1818,15 @@ notes.
           spike, the first undone and neither counted, and lc.log reports
           how many (at most every 10 s). `Axis1ScaleGlitchUs` sets pigpio's
           glitch filter, for spikes whose two edges fall in different
-          samples. Not yet tried on the lathe.
+          samples.
+        - **Tried on the lathe (23 Nov 2026):** with the simultaneous-change
+          fix alone, it still drifted with the spindle running, so most
+          spikes' edges on the two pins don't fall in the same 5 µs sample.
+          With `Axis1ScaleGlitchUs = 10` too, the reading was rock solid with
+          the spindle on. The spikes must be shorter than 10 µs, so an
+          edge-to-edge spacing that short never comes from the carriage
+          moving (about 600 µs at 1000 mm/min). A fast rapid with the
+          filter on lost no counts: the scale and motor still agreed.
         - **If that isn't enough:** the VFD's carrier frequency (Pr. 72 on
           the FR-D700, to be checked; if the drift rate follows it, that
           confirms it); a shielded motor cable earthed at both ends, and
