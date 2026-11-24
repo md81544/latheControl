@@ -57,6 +57,7 @@ add_library(shared_with_test OBJECT
 	manualaxis.cpp
 	scale.cpp
 	backlash.cpp
+	boltholes.cpp
 	calculator.cpp
 	droserial.cpp
 	joystick.cpp
@@ -92,6 +93,7 @@ endif()
 add_executable(${APP_NAME}
 	view_qt.cpp
 	qt_dialog.cpp
+	boltholediagram.cpp
 	controller.cpp
 	main.cpp
 	configreader.cpp

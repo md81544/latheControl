@@ -50,6 +50,9 @@ public:
     void openRadiusDialog(
         const RadiusDialogInfo& info,
         std::function<void(std::optional<RadiusSetup>)> onDone) override;
+    void openBoltHoleDialog(
+        const BoltHoleDialogInfo& info,
+        std::function<void(std::optional<BoltHoleSetup>)> onDone) override;
     bool isDialogOpen() const override;
     void cancelDialog() override;
     void updateDisplay(const Model&) override;

@@ -45,10 +45,11 @@ notes.
   → [Tool library](#tool-library)
 
 #### Mill
-- New Mode: Bolt Hole. Give option for using A axis (in which case it's a simple
-  rotation of the rotary table per bolt hole) or Y axis, in which a series of
-  coordinates should be calculated. The rest of the mode would consist of a go to
-  next hole / previous hole with an optional manual go-to depth on the Z.
+- Bolt hole mode (Modes, `B`): a circle of holes about where X and Y are,
+  `n` and `p` round them, X moving and Y wound (with the ticks). Check which
+  way clockwise comes out, and that X's go-tos finish on its scale there.
+  With a depth: Z's go-to once X and Y are there, and `n`/`p` refused until
+  Z is back up. → [Bolt hole mode](#bolt-hole-mode)
 - `XB` (re-base by hand), at rest and with a multi-pass paused.
   → [Re-basing an axis by hand](#re-basing-an-axis-by-hand)
 - Re-basing between passes in a run without pauses; the "waiting for X's
@@ -3601,6 +3602,71 @@ change.
     - **Done:** `Axis2RetractionDirection` (outwards or inwards) in lc.cfg
 
 ### Other modes and features
+
+#### Bolt hole mode
+
+- **Done (24 Nov 2026), not yet tried on the mill.** First asked for in the
+      Mill list as: "Give option for using A axis (in which case it's a
+      simple rotation of the rotary table per bolt hole) or Y axis, in which
+      a series of coordinates should be calculated. The rest of the mode
+      would consist of a go to next hole / previous hole with an optional
+      manual go-to depth on the Z." The X and Y version came first, as asked
+      for on 24 Nov 2026.
+    - On with `BoltHoles = true` (lc_mill.cfg only). Needs axis 1 in mm and
+      a manual axis 3 (Y). X and Y are axes 1 and 3, not configurable, as
+      the mill is the only machine with them.
+    - The dialog: how many holes, the PCD, the first hole's angle, which way
+      they're numbered, and the centre (here, 0, 0, or a memory slot with
+      both X and Y set). A diagram shows the circle, the first hole's angle
+      from +Y, and an arrow from hole 1 the way they're numbered. It shows
+      hole 1's position, and the distance between neighbouring holes (a
+      chord), to check with calipers.
+    - Angles are from +Y (0° is the hole with the highest Y, as asked),
+      clockwise seen from above, from +Y towards +X. That assumes X goes up
+      to the right and Y away from you, as on a DRO: to check on the mill.
+      The numbering can be anticlockwise instead. -30 is taken as 330.
+    - The centre was asked about: a DRO's bolt hole function usually takes a
+      typed centre, but here the usual way is to find the centre first, so
+      "Here" is the default, with 0, 0 and the memory slots as the others.
+      The holes are worked out once, when the dialog is accepted: zeroing
+      or setting X or Y afterwards doesn't move them.
+    - In the mode, nothing moves until Enter (to hole 1), `n` or `p`. Each
+      goes to the hole: X moves (stopping any move first, as a memory slot
+      go-to does), and Y gets a go-to wound by hand, so the ticks and the
+      distance to wind come with it. `n` after the last goes to the first,
+      and `p` before the first to the last. Before any hole has been gone
+      to, `n` goes to hole 1 and `p` to the last.
+    - X's go-tos finish on its scale, and X is re-based at rest, as with no
+      mode: both are allowed in the mode (as for gear cutting).
+    - The display: the circle on the right (where the lathe's current
+      feature goes), with the hole being gone to bright and a red cross
+      where X and Y are now; and on the left, the hole's number, angle and
+      position, and either "At hole N" or what's still to do ("X moving",
+      "wind Y", or how far off an axis is).
+    - **Dropped (24 Nov 2026): a rotary table (A) version.** With the
+      calculator, a move of A by `=360/5` does the same, so it isn't worth a
+      mode of its own.
+    - A UI test for it turned up a fault in an older test ("closing the
+      window while a dialog is open"): its 5 s safety timer had no context
+      object, so it outlived the test, and fired during a later one,
+      quitting a destroyed model and corrupting the heap. Its timers now go
+      with the test.
+- **Done (24 Nov 2026), not yet tried on the mill: a depth on Z, and Z
+      guarding n and p.** Asked for the same day.
+    - The dialog's last line, "Z depth", only with a manual axis 4 (the
+      mill's Z, on the quill): a Z position, or empty for none. It's carried
+      over to the next time.
+    - Once X has stopped at the hole and Y's go-to has finished, Z gets a
+      go-to to the depth, wound by hand with the ticks, as a depth stop.
+      Going on to another hole cancels it; so does Space or Esc.
+    - Where Z is when the dialog is accepted is taken as clear of the work
+      (the dialog says so, and refuses a depth there). `n`, `p` and Enter
+      then refuse to move X and Y while Z is more than 0.1 mm below that,
+      with a warning saying how far down it is, or if Z has no reading.
+    - Which way is down comes from the depth (towards it from the start),
+      so no config setting was needed for Z's direction. Without a depth, Z
+      isn't watched at all.
+    - The display adds a line: the depth, and whether Z is clear or down.
 
 #### Cut knurling
 

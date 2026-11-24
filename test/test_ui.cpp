@@ -2066,11 +2066,16 @@ TEST_CASE("UI: closing the window while a dialog is open cancels it, and quits")
         dialogShown = true;
         w->close();
     });
-    QTimer::singleShot(150, [w] { QTest::keyClick(w, Qt::Key_Z); });
-    QTimer::singleShot(300, [w] { QTest::keyClick(w, Qt::Key_G); });
+    // (The timers go with this when the test ends, so none can fire in a
+    // later test. The 5 s one did once, when a later test ran Qt's event loop
+    // for long enough: it set timedOut, and quit the model, both long gone,
+    // which corrupted the heap, and the test after that aborted)
+    QObject context;
+    QTimer::singleShot(150, &context, [w] { QTest::keyClick(w, Qt::Key_Z); });
+    QTimer::singleShot(300, &context, [w] { QTest::keyClick(w, Qt::Key_G); });
     // (In case it doesn't quit)
     bool timedOut = false;
-    QTimer::singleShot(5'000, [&] {
+    QTimer::singleShot(5'000, &context, [&] {
         timedOut = true;
         tm.model.quit();
     });
@@ -4153,4 +4158,149 @@ TEST_CASE("UI: defining a new tool, then changing tool")
 
     std::filesystem::remove(path, ec);
     std::filesystem::remove(path + ".bak", ec);
+}
+
+TEST_CASE("UI: bolt holes through the controller")
+{
+    // The mill: X, and Y as a manual axis
+    MapConfigReader config { { { "BoltHoles", "true" },
+                               { "Axis1Label", "X" },
+                               { "Axis2Label", "A" },
+                               { "Axis2DisplayUnits", "deg" },
+                               { "Axis3Kind", "manual" },
+                               { "Axis3Label", "Y" },
+                               { "Axis3Leader", "121" },
+                               { "Axis3Scale", "serial" },
+                               { "Axis3ScaleSerialLetter", "Y" },
+                               { "Axis3ScaleCountsPerMm", "100" },
+                               { "Axis3ClockwiseIncreases", "false" },
+                               { "DisableRpm", "true" } } };
+    mgo::MockGpio gpio { false };
+    mgo::Model model { gpio, config };
+    mgo::Controller controller(&model);
+    QWidget* w = mainWindow();
+    REQUIRE(w);
+    REQUIRE(model.manualAxis(3));
+
+    // Six holes on a 50 mm PCD about here (0, 0), the first at 30°
+    QString text;
+    whenDialogShows([&text](QWidget* dialog) {
+        // (Not without the holes and the PCD)
+        key(dialog, Qt::Key_Return);
+        REQUIRE(dialog->isVisible());
+        typeInto(dialog, "6");
+        key(dialog, Qt::Key_Down);
+        typeInto(dialog, "50");
+        key(dialog, Qt::Key_Down);
+        typeInto(dialog, "30");
+        // (Left and Right on the direction swap it, and back)
+        key(dialog, Qt::Key_Down);
+        key(dialog, Qt::Key_Right);
+        key(dialog, Qt::Key_Left);
+        text = dialogText(dialog);
+        snapshot(dialog, "bolt_holes");
+        key(dialog, Qt::Key_Return);
+    });
+    press(w, controller, Qt::Key_Tab);
+    press(w, controller, Qt::Key_M);
+    press(w, controller, Qt::Key_B);
+    REQUIRE(waitForDialogToClose());
+    REQUIRE(text.contains("Hole 1: X 12.50, Y 21.65"));
+    REQUIRE(text.contains("Holes 25.00 mm apart"));
+    REQUIRE(model.getMode() == mgo::Mode::BoltHoles);
+    REQUIRE(model.boltHolesSet());
+    const mgo::BoltHoleSetup& setup = model.getBoltHoleSetup();
+    REQUIRE(setup.holes == 6);
+    REQUIRE(setup.pcd == Approx(50.0));
+    REQUIRE(setup.firstAngleDeg == Approx(30.0));
+    REQUIRE(setup.clockwise);
+
+    // Enter goes to hole 1: X moves, and Y is wound there by hand
+    press(w, controller, Qt::Key_Return);
+    REQUIRE(model.currentBoltHole() == 0);
+    REQUIRE(model.manualAxisGoTo(3)->targetMm == Approx(21.650635));
+    // n goes on to hole 2 (90°: X 25, Y 0)
+    press(w, controller, Qt::Key_N);
+    REQUIRE(model.currentBoltHole() == 1);
+    REQUIRE(model.manualAxisGoTo(3)->targetMm == Approx(0.0).margin(1e-9));
+    controller.tick();
+    snapshot(w, "bolt_holes_mode");
+    // p comes back to hole 1
+    press(w, controller, Qt::Key_P);
+    REQUIRE(model.currentBoltHole() == 0);
+    // Space stops X, and the go-to
+    press(w, controller, Qt::Key_Space);
+    REQUIRE(!model.manualAxisGoTo(3));
+    // Esc asks first
+    whenDialogShows([&text](QWidget* dialog) {
+        text = dialogText(dialog);
+        key(dialog, Qt::Key_Return);
+    });
+    press(w, controller, Qt::Key_Escape);
+    REQUIRE(text.contains("Leave bolt hole mode?"));
+    REQUIRE(model.getMode() == mgo::Mode::None);
+}
+
+TEST_CASE("UI: bolt holes aren't in the menu unless the config has it")
+{
+    TestModel tm;
+    mgo::Controller controller(&tm.model);
+    QWidget* w = mainWindow();
+    REQUIRE(w);
+    press(w, controller, Qt::Key_Tab);
+    press(w, controller, Qt::Key_M);
+    press(w, controller, Qt::Key_B);
+    press(w, controller, Qt::Key_Escape);
+    REQUIRE(tm.model.getMode() == mgo::Mode::None);
+}
+
+TEST_CASE("UI: bolt holes with a depth on Z")
+{
+    MapConfigReader config { { { "BoltHoles", "true" },
+                               { "Axis1Label", "X" },
+                               { "Axis2Label", "A" },
+                               { "Axis2DisplayUnits", "deg" },
+                               { "Axis3Kind", "manual" },
+                               { "Axis3Label", "Y" },
+                               { "Axis3Scale", "serial" },
+                               { "Axis3ScaleSerialLetter", "Y" },
+                               { "Axis3ScaleCountsPerMm", "100" },
+                               { "Axis4Kind", "manual" },
+                               { "Axis4Label", "Z" },
+                               { "Axis4Scale", "serial" },
+                               { "Axis4ScaleSerialLetter", "Z" },
+                               { "Axis4ScaleCountsPerMm", "100" },
+                               { "DisableRpm", "true" } } };
+    mgo::MockGpio gpio { false };
+    mgo::Model model { gpio, config };
+    mgo::Controller controller(&model);
+    QWidget* w = mainWindow();
+    REQUIRE(w);
+    REQUIRE(model.manualAxis(4));
+
+    // Five on a 40 mm PCD, to Z -6 (the depth is the last line)
+    QString text;
+    whenDialogShows([&text](QWidget* dialog) {
+        typeInto(dialog, "5");
+        key(dialog, Qt::Key_Down);
+        typeInto(dialog, "40");
+        key(dialog, Qt::Key_Down, 4);
+        typeInto(dialog, "-6");
+        text = dialogText(dialog);
+        snapshot(dialog, "bolt_holes_depth");
+        key(dialog, Qt::Key_Return);
+    });
+    press(w, controller, Qt::Key_Tab);
+    press(w, controller, Qt::Key_M);
+    press(w, controller, Qt::Key_B);
+    REQUIRE(waitForDialogToClose());
+    REQUIRE(text.contains("Z depth"));
+    REQUIRE(text.contains("is back up to where it is now"));
+    REQUIRE(model.boltHolesSet());
+    REQUIRE(model.getBoltHoleSetup().depth == Approx(-6.0));
+    REQUIRE(model.boltHolePlan().zStart);
+    press(w, controller, Qt::Key_Return);
+    controller.tick();
+    snapshot(w, "bolt_holes_depth_mode");
+    press(w, controller, Qt::Key_Space);
 }

@@ -105,5 +105,17 @@ QDialog* openRadiusDialog(
     const RadiusDialogInfo& info,
     std::function<void(std::optional<RadiusSetup>)> onDone);
 
+// The bolt hole dialog: how many holes, the pitch circle's diameter (PCD),
+// the first hole's angle from +Y, which way they're numbered, and the centre
+// (where X and Y are now, 0, 0, or a memory slot with both set), with a
+// diagram of the circle, where the first hole is, and the distance between
+// holes. Gives onDone the setup chosen, or nullopt if cancelled. It can only
+// be accepted with a setup which planBoltHoles() accepts
+QDialog* openBoltHoleDialog(
+    QWidget* parent,
+    const QString& fontFamily,
+    const BoltHoleDialogInfo& info,
+    std::function<void(std::optional<BoltHoleSetup>)> onDone);
+
 } // end namespace dialog
 } // end namespace mgo

@@ -112,6 +112,10 @@ std::string translate_mode(mgo::Mode mode)
             return "MultiPass";
         case mgo::Mode::Knurling:
             return "Knurling";
+        case mgo::Mode::GearCutting:
+            return "GearCutting";
+        case mgo::Mode::BoltHoles:
+            return "BoltHoles";
         default:
             // As this function is just used for debugging there's
             // no need for an assert here.
@@ -394,6 +398,7 @@ void Model::checkStatus()
         }
     }
     checkManualAxes();
+    checkBoltHoleDepth();
     advanceBacklashMeasurement();
     checkScaleAtRest(1);
     checkScaleAtRest(2);
@@ -793,6 +798,8 @@ void Model::changeMode(Mode mode)
     m_knurlLeadMm = 0.0;
     m_gearSet = false;
     m_radiusSet = false;
+    m_boltHolesSet = false;
+    m_boltHoleDepthPending = false;
     setThreadingWarning("", false);
     m_mode = mode;
     m_input = "";
@@ -3343,7 +3350,7 @@ void Model::checkScaleAtRest(int axisNumber)
     // Not part way through something which works from the motor's position,
     // e.g. while a multi-pass's pass is under way, nor in the lathe's modes
     // (threading, tapers, etc.), which haven't been tried with it
-    if ((m_mode != Mode::None && m_mode != Mode::GearCutting) || m_multiPass.inProgress()) {
+    if (!scaleAtRestMode() || m_multiPass.inProgress()) {
         return;
     }
     rebaseIfApart(axisNumber, "re-based");
@@ -3465,8 +3472,7 @@ bool Model::isFinishingOnScale(int axisNumber) const
 bool Model::finishApplies(int axisNumber) const
 {
     return scaleState(axisNumber).finishOnScale && scale(axisNumber)
-        && scale(axisNumber)->isAligned() && (m_mode == Mode::None || m_mode == Mode::GearCutting)
-        && !m_multiPass.inProgress();
+        && scale(axisNumber)->isAligned() && scaleAtRestMode() && !m_multiPass.inProgress();
 }
 
 double Model::scaleApproachMm(int axisNumber) const
@@ -3763,8 +3769,7 @@ bool Model::scalesStillSettling() const
 
 bool Model::canRebaseFromScale(int axisNumber) const
 {
-    const bool atRest
-        = (m_mode == Mode::None || m_mode == Mode::GearCutting) && !m_multiPass.inProgress();
+    const bool atRest = scaleAtRestMode() && !m_multiPass.inProgress();
     return scale(axisNumber) && !motor(axisNumber)->isRunning() && scalePositionMm(axisNumber)
         && scale(axisNumber)->isSteady() && (atRest || multiPassPausedForRebase())
         && !isMotionSequenceRunning() && !scaleState(axisNumber).finish && !m_backlashMeasurement;
@@ -4222,6 +4227,8 @@ std::optional<Model::ManualAxisGoTo> Model::manualAxisGoTo(int axisNumber) const
 
 void Model::cancelManualAxisGoTos()
 {
+    // (Including the depth's, which would otherwise start later)
+    m_boltHoleDepthPending = false;
     for (std::size_t index = 0; index < MANUAL_AXES; ++index) {
         if (m_manualGoTos.at(index)) {
             MGOLOG(fmt::format("{}: go to cancelled", m_manualAxes.at(index)->label()));
@@ -4691,6 +4698,238 @@ bool Model::gearAOnTooth() const
 GearSetup Model::gearDialogSetup() const
 {
     return defaultGearSetup(m_gearSetup, multiPassPositions());
+}
+
+bool Model::scaleAtRestMode() const
+{
+    // (Bolt holes' moves are go-tos, as with no mode, so finish on the scale
+    // as those do)
+    return m_mode == Mode::None || m_mode == Mode::GearCutting || m_mode == Mode::BoltHoles;
+}
+
+std::string Model::boltHolesUnavailable() const
+{
+    if (!m_config.readBool("BoltHoles", false)) {
+        return "Bolt holes aren't turned on (BoltHoles in the config file)";
+    }
+    if (m_config.readBool("DisableAxis1", false)) {
+        return "Bolt holes need " + axisLabel(1);
+    }
+    if (m_config.read("Axis1DisplayUnits", "mm") != "mm") {
+        return "Bolt holes need " + axisLabel(1) + " to be a length (Axis1DisplayUnits = mm)";
+    }
+    if (!manualAxis(3)) {
+        return "Bolt holes need a manual axis 3 (e.g. Y: Axis3Kind = manual)";
+    }
+    return {};
+}
+
+BoltHolePositions Model::boltHolePositions() const
+{
+    BoltHolePositions p;
+    p.xHere = motor(1)->getPosition();
+    if (const ManualAxis* y = manualAxis(3)) {
+        p.yHere = y->positionMm();
+    }
+    for (std::size_t slot = 0; slot < MEMORY_SLOTS; ++slot) {
+        p.xMemory.push_back(getMemory(1, slot));
+        p.yMemory.push_back(getMemory(3, slot));
+    }
+    if (const ManualAxis* z = manualAxis(4)) {
+        p.hasZ = true;
+        p.zHere = z->positionMm();
+    }
+    return p;
+}
+
+BoltHoleSetup Model::boltHoleDialogSetup() const
+{
+    return defaultBoltHoleSetup(m_boltHoleSetup, boltHolePositions());
+}
+
+std::string Model::setBoltHoleSetup(const BoltHoleSetup& setup)
+{
+    if (m_mode != Mode::BoltHoles) {
+        return "Bolt holes are only in bolt hole mode";
+    }
+    if (const std::string error = boltHolesUnavailable(); !error.empty()) {
+        return error;
+    }
+    BoltHolePlan plan = planBoltHoles(
+        setup, boltHolePositions(), axisLabel(1), axisLabel(3), manualAxis(4) ? axisLabel(4) : "Z");
+    if (!plan.error.empty()) {
+        return plan.error;
+    }
+    m_boltHoleSetup = setup;
+    m_boltHolePlan = std::move(plan);
+    m_boltHolesSet = true;
+    m_boltHole = 0;
+    m_boltHoleGoneTo = false;
+    m_boltHoleDepthPending = false;
+    MGOLOG(
+        fmt::format(
+            "Bolt holes set up: {} on PCD {}, the first at {} deg, {}, centre {} {}, {} {}",
+            setup.holes,
+            setup.pcd,
+            setup.firstAngleDeg,
+            setup.clockwise ? "clockwise" : "anticlockwise",
+            axisLabel(1),
+            m_boltHolePlan.centreX,
+            axisLabel(3),
+            m_boltHolePlan.centreY));
+    if (setup.depth) {
+        MGOLOG(
+            fmt::format(
+                "Bolt holes: depth {} {}, starting from {}",
+                axisLabel(4),
+                *setup.depth,
+                *m_boltHolePlan.zStart));
+    }
+    return {};
+}
+
+const BoltHoleSetup& Model::getBoltHoleSetup() const
+{
+    return m_boltHoleSetup;
+}
+
+bool Model::boltHolesSet() const
+{
+    return m_mode == Mode::BoltHoles && m_boltHolesSet;
+}
+
+const BoltHolePlan& Model::boltHolePlan() const
+{
+    return m_boltHolePlan;
+}
+
+int Model::currentBoltHole() const
+{
+    return m_boltHole;
+}
+
+bool Model::boltHoleGoneTo() const
+{
+    return m_boltHoleGoneTo;
+}
+
+void Model::goToBoltHole()
+{
+    goToBoltHole(m_boltHole);
+}
+
+void Model::nextBoltHole()
+{
+    // (Before any hole has been gone to, the first is next)
+    goToBoltHole(m_boltHoleGoneTo ? m_boltHole + 1 : m_boltHole);
+}
+
+void Model::previousBoltHole()
+{
+    // (Before any hole has been gone to, the last is previous)
+    goToBoltHole(m_boltHoleGoneTo ? m_boltHole - 1 : -1);
+}
+
+void Model::goToBoltHole(int index)
+{
+    if (!boltHolesSet() || m_boltHolePlan.holes.empty()) {
+        return;
+    }
+    // With a depth, not while the drill may be in the work
+    if (m_boltHoleSetup.depth) {
+        const std::string z = axisLabel(4);
+        const auto below = boltHoleZBelowStartMm();
+        if (!below) {
+            m_warning = z + " has no reading: can't tell the drill is clear of the work";
+            return;
+        }
+        if (*below > BOLT_HOLE_Z_CLEAR_MM) {
+            m_warning = fmt::format(
+                "Raise {} first: it's {:.{}f} below where it started ({:.{}f})",
+                z,
+                toDisplayUnits(4, *below),
+                axisDecimals(4),
+                toDisplayUnits(4, *m_boltHolePlan.zStart),
+                axisDecimals(4));
+            return;
+        }
+    }
+    // X first, as it can refuse (e.g. locked): then nothing moves
+    if (axisMoveRefused(1)) {
+        return;
+    }
+    const int n = static_cast<int>(m_boltHolePlan.holes.size());
+    m_boltHole = ((index % n) + n) % n;
+    m_boltHoleGoneTo = true;
+    const BoltHole& hole = m_boltHolePlan.holes.at(static_cast<std::size_t>(m_boltHole));
+    MGOLOG(
+        fmt::format(
+            "Bolt hole {} of {} ({} deg): {} {:.4f}, {} {:.4f}",
+            m_boltHole + 1,
+            n,
+            hole.angleDeg,
+            axisLabel(1),
+            hole.x,
+            axisLabel(3),
+            hole.y));
+    // (A move already under way is stopped first, as for a memory slot)
+    stopAxis(1);
+    if (std::lround(hole.x / motor(1)->getConversionFactor()) != motorStep(1)) {
+        axis1GoToPosition(hole.x);
+    }
+    manualAxisGoToPosition(3, hole.y);
+    // (Z's go-to to the depth, from the last hole, is done with: the next
+    // starts once X and Y are at this one)
+    if (m_boltHoleSetup.depth) {
+        m_manualGoTos.at(4 - FIRST_MANUAL_AXIS).reset();
+        m_boltHoleDepthPending = true;
+    }
+}
+
+// (Two of the mill scale's counts: a re-base at rest can leave X a count
+// from where the move was going)
+constexpr double BOLT_HOLE_X_TOLERANCE_MM = 0.02;
+
+bool Model::boltHoleXThere() const
+{
+    if (!boltHolesSet() || isMotorRunning(1) || isMotionSequenceRunning()
+        || isFinishingOnScale(1)) {
+        return false;
+    }
+    const BoltHole& hole = m_boltHolePlan.holes.at(static_cast<std::size_t>(m_boltHole));
+    return std::abs(motorPosition(1) - hole.x) <= BOLT_HOLE_X_TOLERANCE_MM;
+}
+
+bool Model::boltHoleYThere() const
+{
+    const ManualAxis* y = manualAxis(3);
+    if (!boltHolesSet() || !y || manualAxisGoTo(3)) {
+        return false;
+    }
+    const auto position = y->positionMm();
+    const BoltHole& hole = m_boltHolePlan.holes.at(static_cast<std::size_t>(m_boltHole));
+    return position && std::abs(*position - hole.y) <= 2.0 * y->countMm();
+}
+
+std::optional<double> Model::boltHoleZBelowStartMm() const
+{
+    const ManualAxis* z = manualAxis(4);
+    const auto position = z ? z->positionMm() : std::nullopt;
+    if (!m_boltHoleSetup.depth || !position) {
+        return std::nullopt;
+    }
+    return mgo::boltHoleZBelowStartMm(m_boltHoleSetup, m_boltHolePlan, *position);
+}
+
+void Model::checkBoltHoleDepth()
+{
+    if (!m_boltHoleDepthPending || !boltHolesSet() || !m_boltHoleSetup.depth) {
+        return;
+    }
+    if (boltHoleXThere() && boltHoleYThere()) {
+        m_boltHoleDepthPending = false;
+        manualAxisGoToPosition(4, *m_boltHoleSetup.depth);
+    }
 }
 
 std::string Model::radiusUnavailable() const

@@ -128,6 +128,8 @@ private:
         std::function<void(std::optional<std::size_t>)> onDone);
     // The multi-pass dialog's axes, positions and directions (not its setup)
     MultiPassDialogInfo multiPassDialogInfo() const;
+    // An axis's label, units and decimals, as the dialogs show them
+    MultiPassDialogInfo::Axis axisInfo(int axisNumber) const;
     // Each memory slot's value on each axis, as displayed, for the calculator
     // in numeric entries (see calculator.h)
     calc::Memory calculatorMemory() const;

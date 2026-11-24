@@ -1,6 +1,7 @@
 #pragma once
 
 #include "backlash.h"
+#include "boltholes.h"
 #include "configreader.h"
 #include "droserial.h"
 #include "gearcutting.h"
@@ -54,7 +55,8 @@ enum class Mode {
     Radius, // Radius cutting (see Model::setRadiusSetup())
     MultiPass,
     Knurling, // Cut knurling (see Model::setKnurlingSetup())
-    GearCutting // (See Model::setGearSetup())
+    GearCutting, // (See Model::setGearSetup())
+    BoltHoles // (See Model::setBoltHoleSetup())
 };
 
 // "Key Modes" allow for two-key actions, a bit like vim.
@@ -779,6 +781,48 @@ public:
     // Whether axis 2 is where gear cutting would start (on a tooth, if
     // they've been started before: see setGearSetup())
     bool gearAOnTooth() const;
+    // Bolt holes (bolt hole mode; see boltholes.h): holes spaced evenly round
+    // a circle, gone to one at a time. Axis 1 (X on the mill) moves to each
+    // hole, and axis 3 (Y, moved by hand) is wound there, as for any manual
+    // go-to. Set up on entering the mode: the holes' positions are fixed
+    // then (the centre is where it was, or in a slot, at the time), and
+    // nothing moves until Enter (or n or p). Needs BoltHoles in the config,
+    // axis 1 in mm, and axis 3 to be a manual axis. With a depth (on axis 4,
+    // e.g. the mill's quill), Z gets a go-to to it once X and Y are at a
+    // hole, and X and Y won't move while Z is below where it started (see
+    // boltholes.h)
+    std::string setBoltHoleSetup(const BoltHoleSetup& setup);
+    const BoltHoleSetup& getBoltHoleSetup() const;
+    // Whether bolt holes have been set up (in bolt hole mode)
+    bool boltHolesSet() const;
+    // The holes (and the centre), once set up
+    const BoltHolePlan& boltHolePlan() const;
+    // Where X and Y are, and their memory slots, for the dialog
+    BoltHolePositions boltHolePositions() const;
+    // The setup the bolt hole dialog starts with (see defaultBoltHoleSetup())
+    BoltHoleSetup boltHoleDialogSetup() const;
+    // Why bolt holes can't be used with this config (empty if they can)
+    std::string boltHolesUnavailable() const;
+    // The hole gone to (or to be gone to by Enter), from 0, and whether it
+    // has been gone to yet (it hasn't, on entering the mode)
+    int currentBoltHole() const;
+    bool boltHoleGoneTo() const;
+    // Goes to the current hole (Enter), or the next or previous one (n and
+    // p), round the circle from the last to the first and back. X moves
+    // there, and Y is wound there by hand (its go-to shows the distance, and
+    // ticks). With a depth, nothing moves (and the warning says why) while Z
+    // is below where it started, or has no reading
+    void goToBoltHole();
+    void nextBoltHole();
+    void previousBoltHole();
+    // Whether X has stopped at the current hole (within two of the mill
+    // scale's counts, as a re-base can leave it a count off), and whether Y
+    // is there (its go-to finished, within two of its counts)
+    bool boltHoleXThere() const;
+    bool boltHoleYThere() const;
+    // How far Z is below where it started (see boltHoleZBelowStartMm()), if
+    // there's a depth and Z has a reading
+    std::optional<double> boltHoleZBelowStartMm() const;
     // The fastest Z may need to move at the start of a pass locked to the
     // spindle (threading or knurling), in mm/min, leaving a margin for the
     // spindle speeding up. The spindle may turn at up to this divided by the
@@ -1123,6 +1167,21 @@ private:
     std::optional<double> m_gearToothOrigin;
     // Where axis 2 goes for the first tooth of the next run of passes
     double gearStartTooth() const;
+    BoltHoleSetup m_boltHoleSetup;
+    bool m_boltHolesSet { false };
+    BoltHolePlan m_boltHolePlan;
+    int m_boltHole { 0 };
+    bool m_boltHoleGoneTo { false };
+    // Z's go-to to the depth starts once X and Y are at the hole (see
+    // checkBoltHoleDepth())
+    bool m_boltHoleDepthPending { false };
+    void checkBoltHoleDepth();
+    // Starts the go-to to hole index (from 0)
+    void goToBoltHole(int index);
+    // Whether a mode is one in which the axes are at rest between moves made
+    // by hand (no mode, gear cutting between its passes, or bolt holes), so a
+    // scale may re-base the axis and finish its moves
+    bool scaleAtRestMode() const;
     RadiusSetup m_radiusSetup;
     bool m_radiusSet { false };
     // The radius's passes, and its multi-pass setup (see

@@ -232,6 +232,7 @@ constexpr int toolTouch = 7024; // tool library: record a touch, while measuring
 constexpr int toolCancelMeasuring = 7025; // tool library: cancel measuring (Esc)
 constexpr int toggleAxis2FinishOnScale = 7027; // finish axis 2's moves on its scale: on / off
 constexpr int toolEdit = 7026; // tool library: the current tool's description and nose radius
+constexpr int boltHoleMode = 7028; // bolt hole mode (mill)
 
 // Joystick specific "keys"
 // Note some joystick commands just return regular keycodes.

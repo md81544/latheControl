@@ -750,6 +750,11 @@ void Controller::processKey(int t)
                     recordToolTouch();
                     break;
                 }
+                // (In bolt hole mode, Enter goes to the hole)
+                if (m_model->boltHolesSet()) {
+                    m_model->goToBoltHole();
+                    break;
+                }
                 if (m_model->getMode() == Mode::MultiPass
                     || (m_model->getMode() == Mode::Threading && m_model->threadingPassesSet())
                     || m_model->getMode() == Mode::Knurling || m_model->gearCuttingSet()
@@ -1260,6 +1265,51 @@ void Controller::processKey(int t)
                     });
                     break;
                 }
+            case key::boltHoleMode:
+                {
+                    // As with all dialogs, stop all motors first
+                    m_model->stopAllMotors();
+                    if (const std::string error = m_model->boltHolesUnavailable(); !error.empty()) {
+                        pressAnyKey("Bolt holes", { error, "", "Press a key", "" }, [] { });
+                        break;
+                    }
+                    const MultiPassDialogInfo mp = multiPassDialogInfo();
+                    BoltHoleDialogInfo info { .x = mp.cut,
+                                              .y = axisInfo(3),
+                                              .z = m_model->manualAxis(4)
+                                                  ? std::optional(axisInfo(4))
+                                                  : std::nullopt,
+                                              .positions = m_model->boltHolePositions(),
+                                              .setup = m_model->boltHoleDialogSetup(),
+                                              .calculatorMemory = mp.calculatorMemory };
+                    m_view->openBoltHoleDialog(info, [this](std::optional<BoltHoleSetup> setup) {
+                        if (!setup) {
+                            return;
+                        }
+                        // (A go-to wound by hand from before would be
+                        // mistaken for one to a hole)
+                        m_model->cancelManualAxisGoTos();
+                        m_model->changeMode(Mode::BoltHoles);
+                        // (The dialog only accepts a setup which can be
+                        // used, and nothing has moved since)
+                        if (const std::string error = m_model->setBoltHoleSetup(*setup);
+                            !error.empty()) {
+                            m_model->changeMode(Mode::None);
+                            pressAnyKey("Bolt holes", { error, "", "Press a key", "" }, [] { });
+                        }
+                    });
+                    break;
+                }
+            case key::n:
+                {
+                    m_model->nextBoltHole();
+                    break;
+                }
+            case key::p:
+                {
+                    m_model->previousBoltHole();
+                    break;
+                }
             case key::taperMode:
                 {
                     if (m_model->config().readBool("DisableAxis2", false)) {
@@ -1757,18 +1807,19 @@ void Controller::listPicker(
         std::move(listItems));
 }
 
+MultiPassDialogInfo::Axis Controller::axisInfo(int axisNumber) const
+{
+    return MultiPassDialogInfo::Axis { .label = m_model->axisLabel(axisNumber),
+                                       .unit = m_model->axisUnitName(axisNumber),
+                                       .decimals = m_model->axisDecimals(axisNumber),
+                                       .displayPerMm = m_model->toDisplayUnits(axisNumber, 1.0) };
+}
+
 MultiPassDialogInfo Controller::multiPassDialogInfo() const
 {
-    const auto axis = [this](int n, const char* defaultLabel) {
-        return MultiPassDialogInfo::Axis { .label = m_model->config().read(
-                                               fmt::format("Axis{}Label", n), defaultLabel),
-                                           .unit = m_model->axisUnitName(n),
-                                           .decimals = m_model->axisDecimals(n),
-                                           .displayPerMm = m_model->toDisplayUnits(n, 1.0) };
-    };
     MultiPassDialogInfo info;
-    info.cut = axis(1, "Z");
-    info.feed = axis(2, "X");
+    info.cut = axisInfo(1);
+    info.feed = axisInfo(2);
     info.positions = m_model->multiPassPositions();
     info.diameterKnown = m_model->getDiameterMm().has_value();
     info.feedRetractsOutwards = m_model->getRetractionDirection() == XDirection::Outwards;
@@ -1985,6 +2036,9 @@ void Controller::exitMode()
             break;
         case Mode::GearCutting:
             name = "gear cutting";
+            break;
+        case Mode::BoltHoles:
+            name = "bolt hole";
             break;
         default:
             break;

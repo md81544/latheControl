@@ -15,6 +15,7 @@ add_executable(ui_test
 	test_ui.cpp
 	../view_qt.cpp
 	../qt_dialog.cpp
+	../boltholediagram.cpp
 	../controller.cpp
 	../configreader.cpp
 )

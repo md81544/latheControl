@@ -1,5 +1,6 @@
 #include "approachticks.h"
 #include "backlash.h"
+#include "boltholes.h"
 #include "calculator.h"
 #include "commands.h"
 #include "configreader.h"
@@ -8818,4 +8819,306 @@ TEST_CASE("Calculator: sums typed after = in a numeric entry")
         REQUIRE(formatResult(-0.0000001) == "0");
         REQUIRE(formatResult(0.0) == "0");
     }
+}
+
+TEST_CASE("Bolt holes: positions round the circle")
+{
+    mgo::BoltHolePositions here { .xHere = 10.0, .yHere = -5.0 };
+    // Four holes on a 50 mm PCD about here, the first at the top, clockwise
+    mgo::BoltHoleSetup setup { .holes = 4, .pcd = 50.0 };
+    mgo::BoltHolePlan plan = mgo::planBoltHoles(setup, here);
+    REQUIRE(plan.error.empty());
+    REQUIRE(plan.centreX == Approx(10.0));
+    REQUIRE(plan.centreY == Approx(-5.0));
+    REQUIRE(plan.holes.size() == 4);
+    // (+Y, then +X, -Y and -X)
+    REQUIRE(plan.holes[0].x == Approx(10.0));
+    REQUIRE(plan.holes[0].y == Approx(20.0));
+    REQUIRE(plan.holes[1].x == Approx(35.0));
+    REQUIRE(plan.holes[1].y == Approx(-5.0));
+    REQUIRE(plan.holes[2].x == Approx(10.0));
+    REQUIRE(plan.holes[2].y == Approx(-30.0));
+    REQUIRE(plan.holes[3].x == Approx(-15.0));
+    REQUIRE(plan.holes[3].y == Approx(-5.0));
+    REQUIRE(plan.holes[1].angleDeg == Approx(90.0));
+
+    // Anticlockwise, the second is at -X
+    setup.clockwise = false;
+    plan = mgo::planBoltHoles(setup, here);
+    REQUIRE(plan.holes[1].x == Approx(-15.0));
+    REQUIRE(plan.holes[1].angleDeg == Approx(270.0));
+
+    // Six about 0, 0, the first at 30° (clockwise of +Y)
+    setup
+        = { .holes = 6, .pcd = 100.0, .firstAngleDeg = 30.0, .centre = mgo::BoltHoleCentre::Zero };
+    plan = mgo::planBoltHoles(setup, here);
+    REQUIRE(plan.centreX == 0.0);
+    REQUIRE(plan.holes[0].x == Approx(25.0));
+    REQUIRE(plan.holes[0].y == Approx(43.30127));
+    REQUIRE(plan.holes[1].x == Approx(50.0));
+    REQUIRE(plan.holes[1].y == Approx(0.0).margin(1e-9));
+    // (Neighbours are a radius apart, with six)
+    REQUIRE(mgo::boltHoleSpacingMm(setup) == Approx(50.0));
+    // -30° is 330°
+    setup.firstAngleDeg = -30.0;
+    plan = mgo::planBoltHoles(setup, here);
+    REQUIRE(plan.holes[0].angleDeg == Approx(330.0));
+    REQUIRE(plan.holes[0].x == Approx(-25.0));
+}
+
+TEST_CASE("Bolt holes: what's needed, and the centre from a memory slot")
+{
+    mgo::BoltHolePositions positions { .xHere = 0.0,
+                                       .yHere = std::nullopt,
+                                       .xMemory = { 1.0, 2.0, std::nullopt },
+                                       .yMemory = { std::nullopt, 3.0, 4.0 } };
+    REQUIRE(
+        mgo::planBoltHoles({ .pcd = 10.0 }, positions).error == "Type how many holes there are");
+    REQUIRE(
+        mgo::planBoltHoles({ .holes = 3 }, positions).error
+        == "Type the pitch circle's diameter (PCD)");
+    REQUIRE(!mgo::planBoltHoles({ .holes = 361, .pcd = 10.0 }, positions).error.empty());
+    // Here, with Y unread
+    REQUIRE(
+        mgo::planBoltHoles({ .holes = 3, .pcd = 10.0 }, positions).error
+        == "Y has no reading from its scale, so the centre isn't known");
+    // Only Mem 2 has both
+    REQUIRE(mgo::boltHoleCentreSlots(positions) == std::vector<std::size_t> { 1 });
+    mgo::BoltHoleSetup setup {
+        .holes = 3, .pcd = 10.0, .centre = mgo::BoltHoleCentre::Memory, .centreMemory = 0
+    };
+    REQUIRE(
+        mgo::planBoltHoles(setup, positions).error
+        == "Mem 1 needs both X and Y set to be the centre");
+    setup.centreMemory = 1;
+    const mgo::BoltHolePlan plan = mgo::planBoltHoles(setup, positions);
+    REQUIRE(plan.error.empty());
+    REQUIRE(plan.centreX == Approx(2.0));
+    REQUIRE(plan.centreY == Approx(3.0));
+    // The dialog's default keeps a slot only while it has both
+    REQUIRE(mgo::defaultBoltHoleSetup(setup, positions).centre == mgo::BoltHoleCentre::Memory);
+    setup.centreMemory = 2;
+    REQUIRE(mgo::defaultBoltHoleSetup(setup, positions).centre == mgo::BoltHoleCentre::Here);
+}
+
+namespace {
+
+// The mill's X, and Y (and optionally Z) as manual axes (on the simulated
+// DRO sender)
+std::map<std::string, std::string> boltHoleConfig(bool withZ)
+{
+    std::map<std::string, std::string> values { { "BoltHoles", "true" },
+                                                { "Axis1Label", "X" },
+                                                { "Axis2Label", "A" },
+                                                { "Axis2DisplayUnits", "deg" },
+                                                { "Axis3Kind", "manual" },
+                                                { "Axis3Label", "Y" },
+                                                { "Axis3Scale", "serial" },
+                                                { "Axis3ScaleSerialLetter", "Y" },
+                                                { "Axis3ScaleCountsPerMm", "100" } };
+    if (withZ) {
+        values.insert(
+            { { "Axis4Kind", "manual" },
+              { "Axis4Label", "Z" },
+              { "Axis4Scale", "serial" },
+              { "Axis4ScaleSerialLetter", "Z" },
+              { "Axis4ScaleCountsPerMm", "100" } });
+    }
+    return values;
+}
+
+struct BoltHoleTestModel {
+    explicit BoltHoleTestModel(bool withZ = false)
+        : config(boltHoleConfig(withZ))
+    {
+    }
+    TestConfigReader config;
+    mgo::MockGpio gpio { false };
+    mgo::Model model { gpio, config };
+};
+
+} // end anonymous namespace
+
+TEST_CASE("Model:   bolt holes need the config, X in mm and a manual Y")
+{
+    {
+        mgo::MockConfigReader config;
+        mgo::MockGpio gpio(false);
+        mgo::Model model(gpio, config);
+        model.initialise();
+        REQUIRE(
+            model.boltHolesUnavailable()
+            == "Bolt holes aren't turned on (BoltHoles in the config file)");
+    }
+    {
+        TestConfigReader config { { { "BoltHoles", "true" } } };
+        mgo::MockGpio gpio(false);
+        mgo::Model model(gpio, config);
+        model.initialise();
+        REQUIRE(
+            model.boltHolesUnavailable()
+            == "Bolt holes need a manual axis 3 (e.g. Y: Axis3Kind = manual)");
+    }
+    BoltHoleTestModel t;
+    t.model.initialise();
+    REQUIRE(t.model.boltHolesUnavailable().empty());
+    const mgo::BoltHoleSetup setup { .holes = 4, .pcd = 20.0 };
+    // (Only in the mode)
+    REQUIRE(!t.model.setBoltHoleSetup(setup).empty());
+    t.model.changeMode(mgo::Mode::BoltHoles);
+    REQUIRE(t.model.setBoltHoleSetup(setup).empty());
+    REQUIRE(t.model.boltHolesSet());
+    // (Leaving the mode clears it, but the dialog starts with it next time)
+    t.model.changeMode(mgo::Mode::None);
+    REQUIRE(!t.model.boltHolesSet());
+    REQUIRE(t.model.boltHoleDialogSetup().holes == 4);
+}
+
+TEST_CASE("Model:   bolt holes: Enter, n and p go round the holes")
+{
+    BoltHoleTestModel t;
+    mgo::Model& model = t.model;
+    model.initialise();
+    model.changeMode(mgo::Mode::BoltHoles);
+    // Four on a 20 mm PCD about X 0, Y 0 (where they are)
+    REQUIRE(model.setBoltHoleSetup({ .holes = 4, .pcd = 20.0 }).empty());
+    REQUIRE(model.boltHolePlan().centreX == Approx(0.0));
+    REQUIRE(model.boltHolePlan().centreY == Approx(0.0).margin(0.005));
+    // Nothing moves until asked
+    REQUIRE(!model.boltHoleGoneTo());
+    REQUIRE(!model.manualAxisGoTo(3));
+    REQUIRE(!model.isMotorRunning(1));
+
+    // n first goes to hole 1 (+Y): X is there already, so only Y is wound
+    model.nextBoltHole();
+    REQUIRE(model.boltHoleGoneTo());
+    REQUIRE(model.currentBoltHole() == 0);
+    REQUIRE(model.manualAxisGoTo(3)->targetMm == Approx(10.0));
+    REQUIRE(model.axisStatus(1).find("Going to") == std::string::npos);
+    // Then hole 2 (+X): X moves, and Y is wound to 0
+    model.nextBoltHole();
+    REQUIRE(model.currentBoltHole() == 1);
+    REQUIRE(model.axisStatus(1) == "Going to 10.000");
+    REQUIRE(model.manualAxisGoTo(3)->targetMm == Approx(0.0));
+    // p goes back; and from the first, round to the last
+    model.stopAllMotors();
+    model.previousBoltHole();
+    REQUIRE(model.currentBoltHole() == 0);
+    model.stopAllMotors();
+    model.previousBoltHole();
+    REQUIRE(model.currentBoltHole() == 3);
+    REQUIRE(model.axisStatus(1) == "Going to -10.000");
+    // and n from the last, round to the first
+    model.stopAllMotors();
+    model.nextBoltHole();
+    REQUIRE(model.currentBoltHole() == 0);
+    // Enter goes to the current one again
+    model.stopAllMotors();
+    model.cancelManualAxisGoTos();
+    model.goToBoltHole();
+    REQUIRE(model.currentBoltHole() == 0);
+    REQUIRE(model.manualAxisGoTo(3)->targetMm == Approx(10.0));
+}
+
+TEST_CASE("Model:   bolt holes: p first goes to the last hole")
+{
+    BoltHoleTestModel t;
+    t.model.initialise();
+    t.model.changeMode(mgo::Mode::BoltHoles);
+    REQUIRE(t.model.setBoltHoleSetup({ .holes = 5, .pcd = 20.0 }).empty());
+    t.model.previousBoltHole();
+    REQUIRE(t.model.currentBoltHole() == 4);
+    // (Outside the mode, n and p do nothing)
+    t.model.stopAllMotors();
+    t.model.changeMode(mgo::Mode::None);
+    t.model.nextBoltHole();
+    REQUIRE(!t.model.isMotorRunning(1));
+}
+
+TEST_CASE("Bolt holes: a depth needs Z, and which way is down comes from it")
+{
+    mgo::BoltHolePositions positions { .xHere = 0.0, .yHere = 0.0 };
+    mgo::BoltHoleSetup setup { .holes = 3, .pcd = 10.0, .depth = -5.0 };
+    REQUIRE(mgo::planBoltHoles(setup, positions).error == "There's no Z for a depth");
+    positions.hasZ = true;
+    REQUIRE(
+        mgo::planBoltHoles(setup, positions).error
+        == "Z has no reading from its scale, so the depth can't be watched");
+    positions.zHere = -4.95;
+    REQUIRE(
+        mgo::planBoltHoles(setup, positions).error
+        == "The depth is where Z is now: raise the drill clear of the work first");
+    positions.zHere = 2.0;
+    mgo::BoltHolePlan plan = mgo::planBoltHoles(setup, positions);
+    REQUIRE(plan.error.empty());
+    REQUIRE(plan.zStart == Approx(2.0));
+    // Down is towards -5: below the start is positive
+    REQUIRE(mgo::boltHoleZBelowStartMm(setup, plan, 1.0) == Approx(1.0));
+    REQUIRE(mgo::boltHoleZBelowStartMm(setup, plan, 3.0) == Approx(-1.0));
+    // With Z counting up as it goes down, the other way
+    setup.depth = 10.0;
+    plan = mgo::planBoltHoles(setup, positions);
+    REQUIRE(mgo::boltHoleZBelowStartMm(setup, plan, 4.0) == Approx(2.0));
+    // No depth, no start, and nothing is below it
+    setup.depth.reset();
+    plan = mgo::planBoltHoles(setup, positions);
+    REQUIRE(!plan.zStart);
+    REQUIRE(mgo::boltHoleZBelowStartMm(setup, plan, -100.0) == 0.0);
+}
+
+TEST_CASE("Model:   bolt holes with a depth: Z's go-to, and n and p wait for Z", "[timing]")
+{
+    BoltHoleTestModel t(true);
+    mgo::Model& model = t.model;
+    model.initialise();
+    REQUIRE(model.manualAxis(4));
+    // Polls (up to 5 s) until a condition holds
+    const auto waitFor = [&model](const std::function<bool()>& condition) {
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        while (std::chrono::steady_clock::now() < deadline) {
+            model.checkStatus();
+            if (condition()) {
+                return true;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        }
+        return false;
+    };
+    REQUIRE(waitFor([&] { return model.manualAxis(4)->positionMm().has_value(); }));
+    model.changeMode(mgo::Mode::BoltHoles);
+    // Four on a 20 mm PCD about X 0, Y 0, drilled to Z -5 (Z is at 0)
+    REQUIRE(model.setBoltHoleSetup({ .holes = 4, .pcd = 20.0, .depth = -5.0 }).empty());
+
+    // Hole 1 (X 0, Y 10): no Z go-to until Y is there
+    model.nextBoltHole();
+    REQUIRE(model.manualAxisGoTo(3));
+    model.checkStatus();
+    REQUIRE(!model.manualAxisGoTo(4));
+    model.fakeMoveManualAxis(3, 10.0);
+    REQUIRE(waitFor([&] { return model.manualAxisGoTo(4).has_value(); }));
+    REQUIRE(model.manualAxisGoTo(4)->targetMm == Approx(-5.0));
+    REQUIRE(model.boltHoleXThere());
+    REQUIRE(model.boltHoleYThere());
+
+    // Drilled: n won't move X or Y with Z down
+    model.fakeMoveManualAxis(4, -5.0);
+    REQUIRE(waitFor([&] { return !model.manualAxisGoTo(4); }));
+    model.nextBoltHole();
+    REQUIRE(model.currentBoltHole() == 0);
+    REQUIRE(!model.isMotorRunning(1));
+    REQUIRE(model.getWarning() == "Raise Z first: it's 5.00 below where it started (0.00)");
+    // Back up (nearly to the start), it goes on to hole 2, and Z's go-to
+    // waits for X and Y again
+    model.fakeMoveManualAxis(4, -0.05);
+    REQUIRE(waitFor([&] { return *model.boltHoleZBelowStartMm() < 0.1; }));
+    model.nextBoltHole();
+    REQUIRE(model.currentBoltHole() == 1);
+    REQUIRE(!model.manualAxisGoTo(4));
+    // (Space cancels the depth's go-to before it starts)
+    model.stopAllMotors();
+    model.cancelManualAxisGoTos();
+    model.fakeMoveManualAxis(3, 0.0);
+    REQUIRE(waitFor([&] { return model.boltHoleYThere(); }));
+    model.checkStatus();
+    REQUIRE(!model.manualAxisGoTo(4));
 }

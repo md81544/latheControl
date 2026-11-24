@@ -1,5 +1,7 @@
 #include "view_qt.h"
 
+#include "boltholediagram.h"
+
 #include "commands.h"
 #include "joystick.h"
 #include "keycodes.h"
@@ -87,7 +89,13 @@ struct RectItem {
     QColor border { Qt::transparent };
 };
 
-using DrawItem = std::variant<TextItem, RectItem>;
+// A bolt hole diagram (see paintBoltHoleDiagram())
+struct BoltHoleItem {
+    QRectF rect;
+    BoltHoleDiagram diagram;
+};
+
+using DrawItem = std::variant<TextItem, RectItem, BoltHoleItem>;
 
 // A position as displayed (already converted to the display units), avoiding
 // "-0.00"
@@ -226,6 +234,10 @@ protected:
                     rect->border == Qt::transparent ? QPen(Qt::NoPen) : QPen(rect->border, 2));
                 painter.setBrush(rect->fill);
                 painter.drawRect(rect->rect);
+                continue;
+            }
+            if (const auto* holes = std::get_if<BoltHoleItem>(&drawItem)) {
+                paintBoltHoleDiagram(painter, holes->rect, holes->diagram, font);
                 continue;
             }
             const auto& item = std::get<TextItem>(drawItem);
@@ -559,6 +571,9 @@ struct ViewQt::Impl {
     // The knurl, on one line (e.g. its starts and lead)
     std::string knurlDescription(const Model& model) const;
     void updateGearData(const Model& model);
+    void updateBoltHoleData(const Model& model);
+    // The bolt holes' circle, with the hole gone to and where X and Y are
+    void drawBoltHoles(std::vector<DrawItem>& frame, const Model& model) const;
 };
 
 ViewQt::ViewQt()
@@ -804,6 +819,22 @@ void ViewQt::openRadiusDialog(
         m_impl->fontFamily,
         info,
         [this, onDone = std::move(onDone)](std::optional<RadiusSetup> setup) {
+            m_impl->dialogClosed();
+            onDone(setup);
+        });
+}
+
+void ViewQt::openBoltHoleDialog(
+    const BoltHoleDialogInfo& info,
+    std::function<void(std::optional<BoltHoleSetup>)> onDone)
+{
+    assert(!isDialogOpen()); // (one at a time)
+    m_impl->setDimmed(true);
+    m_impl->dialog = dialog::openBoltHoleDialog(
+        m_impl->widget.get(),
+        m_impl->fontFamily,
+        info,
+        [this, onDone = std::move(onDone)](std::optional<BoltHoleSetup> setup) {
             m_impl->dialogClosed();
             onDone(setup);
         });
@@ -1451,6 +1482,7 @@ void ViewQt::updateDisplay(const Model& model)
         }
         d.drawFeature(frame, model);
         d.drawTool(frame, model);
+        d.drawBoltHoles(frame, model);
         draw(d.misc1);
         draw(d.misc2);
         draw(d.misc3);
@@ -1694,6 +1726,9 @@ void ViewQt::Impl::updateTextFromModel(const Model& model)
         case Mode::GearCutting:
             notification.text = "GEAR CUTTING";
             break;
+        case Mode::BoltHoles:
+            notification.text = "BOLT HOLES";
+            break;
         default:
             notification.text = "";
     }
@@ -1754,6 +1789,15 @@ void ViewQt::Impl::updateTextFromModel(const Model& model)
         case Mode::GearCutting:
             {
                 updateGearData(model);
+                warning.text = warningText(model);
+                if (!model.getWarning().empty()) {
+                    warning.colour = ++iteration % 6 < 3 ? RED : YELLOW;
+                }
+                break;
+            }
+        case Mode::BoltHoles:
+            {
+                updateBoltHoleData(model);
                 warning.text = warningText(model);
                 if (!model.getWarning().empty()) {
                     warning.colour = ++iteration % 6 < 3 ? RED : YELLOW;
@@ -2140,6 +2184,147 @@ void ViewQt::Impl::updateGearData(const Model& model)
         : "";
     misc5.text = mp.inProgress() || model.multiPassMovingToStart() ? "Space stops" : "";
     misc6.text = "";
+}
+
+void ViewQt::Impl::updateBoltHoleData(const Model& model)
+{
+    misc5.text = misc6.text = "";
+    if (!model.boltHolesSet()) {
+        mode.text = "";
+        misc1.text = "Bolt holes aren't set up";
+        misc2.text = misc3.text = misc4.text = "";
+        return;
+    }
+    const BoltHoleSetup& setup = model.getBoltHoleSetup();
+    const BoltHolePlan& plan = model.boltHolePlan();
+    const std::string x = model.axisLabel(1);
+    const std::string y = model.axisLabel(3);
+    // A position, without "-0.00"
+    const auto position = [&model](int axis, double mm) {
+        const int decimals = model.axisDecimals(axis);
+        double value = model.toDisplayUnits(axis, mm);
+        if (std::abs(value) < 0.5 * std::pow(10.0, -decimals)) {
+            value = 0.0;
+        }
+        return fmt::format("{:.{}f}", value, decimals);
+    };
+    const auto length = [&](double mm) { return position(1, mm) + " " + model.axisUnitName(1); };
+    // (These lines stay short, to fit beside the diagram)
+    // e.g. "6 holes, PCD 50.00 mm, 25.00 mm apart"
+    mode.text = fmt::format(
+        "{} hole{}, PCD {}{}",
+        setup.holes,
+        setup.holes == 1 ? "" : "s",
+        length(setup.pcd),
+        setup.holes > 1 ? ", " + length(boltHoleSpacingMm(setup)) + " apart" : "");
+    // e.g. "Centre X 0.00 Y 0.00; the first at 0°, clockwise"
+    misc1.text = fmt::format(
+        "Centre {} {} {} {}; 1st at {:g}°, {}",
+        x,
+        position(1, plan.centreX),
+        y,
+        position(3, plan.centreY),
+        normaliseDegrees(setup.firstAngleDeg),
+        setup.clockwise ? "clockwise" : "anticlockwise");
+    const int index = model.currentBoltHole();
+    const BoltHole& hole = plan.holes.at(static_cast<std::size_t>(index));
+    // e.g. "Hole 2 of 6 (60°): X 21.65 Y 12.50"
+    misc2.text = fmt::format(
+        "Hole {} of {} ({:g}°): {} {} {} {}",
+        index + 1,
+        plan.holes.size(),
+        std::round(hole.angleDeg * 100.0) / 100.0,
+        x,
+        position(1, hole.x),
+        y,
+        position(3, hole.y));
+    if (!model.boltHoleGoneTo()) {
+        misc3.text = fmt::format("Press Enter to go to hole {}", index + 1);
+    } else {
+        // How far each axis is from the hole: X's, once it has stopped (the
+        // status line says where it's going meanwhile), and Y's, once its
+        // go-to has finished (its line shows the distance to wind meanwhile)
+        const bool xMoving = model.isMotorRunning(1) || model.isMotionSequenceRunning()
+            || model.anyFinishingOnScale();
+        const double xOff = model.motorPosition(1) - hole.x;
+        const auto* yAxis = model.manualAxis(3);
+        const auto yGoTo = model.manualAxisGoTo(3);
+        const auto yHere = yAxis ? yAxis->positionMm() : std::nullopt;
+        const bool xThere = model.boltHoleXThere();
+        const bool yThere = model.boltHoleYThere();
+        if (xThere && yThere) {
+            // (With a depth, Z's go-to to it is under way, until it's there)
+            misc3.text = fmt::format("At hole {}", index + 1);
+            if (setup.depth && model.manualAxisGoTo(4)) {
+                misc3.text += ": wind " + model.axisLabel(4) + " down to the depth";
+            }
+        } else {
+            std::vector<std::string> parts;
+            if (xMoving) {
+                parts.push_back(x + " moving");
+            } else if (!xThere) {
+                parts.push_back(fmt::format("{} off by {}", x, position(1, xOff)));
+            }
+            if (yGoTo) {
+                parts.push_back("wind " + y);
+            } else if (!yThere) {
+                parts.push_back(
+                    yHere ? fmt::format("{} off by {}", y, position(3, *yHere - hole.y))
+                          : y + " has no reading");
+            }
+            misc3.text = fmt::format("Going to hole {}: ", index + 1);
+            for (std::size_t n = 0; n < parts.size(); ++n) {
+                misc3.text += (n == 0 ? "" : ", ") + parts[n];
+            }
+        }
+    }
+    // The depth, and whether Z is clear for the next hole
+    if (setup.depth && plan.zStart) {
+        const std::string z = model.axisLabel(4);
+        const auto below = model.boltHoleZBelowStartMm();
+        const bool clear = below && *below <= BOLT_HOLE_Z_CLEAR_MM;
+        // e.g. "Depth Z -5.00; Z clear (start 0.00)"
+        misc5.text = fmt::format(
+            "Depth {} {}; {} {} (start {})",
+            z,
+            position(4, *setup.depth),
+            z,
+            !below      ? "has no reading"
+                : clear ? "clear"
+                        : "down: raise it to move",
+            position(4, *plan.zStart));
+    }
+    misc4.text = "n: next   p: previous   Enter: this hole";
+}
+
+void ViewQt::Impl::drawBoltHoles(std::vector<DrawItem>& frame, const Model& model) const
+{
+    if (!model.boltHolesSet()) {
+        return;
+    }
+    // To the right of the mode's lines, below the memory slots (where the
+    // lathe's current feature goes)
+    const QRectF area(1010.f, 380.f, 255.f, 240.f);
+    frame.push_back(
+        RectItem {
+            area.adjusted(-2.0, -2.0, 2.0, 2.0), QColor(20, 20, 20), QColor(128, 128, 128) });
+    const BoltHoleSetup& setup = model.getBoltHoleSetup();
+    const BoltHolePlan& plan = model.boltHolePlan();
+    BoltHoleDiagram diagram { .holes = setup.holes,
+                              .firstAngleDeg = setup.firstAngleDeg,
+                              .clockwise = setup.clockwise };
+    if (model.boltHoleGoneTo()) {
+        diagram.current = model.currentBoltHole();
+    }
+    // Where X and Y are, as a fraction of the radius from the centre
+    const ManualAxis* y = model.manualAxis(3);
+    const auto yHere = y ? y->positionMm() : std::nullopt;
+    if (yHere && setup.pcd > 0.0) {
+        const double radius = setup.pcd / 2.0;
+        diagram.here = QPointF(
+            (model.motorPosition(1) - plan.centreX) / radius, (*yHere - plan.centreY) / radius);
+    }
+    frame.push_back(BoltHoleItem { area, diagram });
 }
 
 std::string ViewQt::Impl::knurlDescription(const Model& model) const

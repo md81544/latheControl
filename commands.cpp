@@ -230,6 +230,7 @@ bool menuOnly(int k)
         case key::multiPassMode:
         case key::knurlingMode:
         case key::gearCuttingMode:
+        case key::boltHoleMode:
         case key::measureAxis1Backlash:
         case key::toggleAxis1FinishOnScale:
         case key::toggleAxis2FinishOnScale:
@@ -766,6 +767,13 @@ std::vector<Command> buildCommands(
     // (Only on a machine with a rotary table as axis 2, e.g. the mill)
     if (config.readBool("GearCutting", false)) {
         b.add(c, "Gear cutting...", key::gearCuttingMode, BOTH, nullptr, 'c');
+    }
+    // (Only on a machine with X, and Y as a manual axis, e.g. the mill)
+    if (config.readBool("BoltHoles", false)) {
+        const auto boltHoles = [](const Model& m) { return m.boltHolesSet(); };
+        b.add(c, "Bolt holes...", key::boltHoleMode, AXIS1 | AXIS3, nullptr, 'b');
+        b.add(c, "Next bolt hole", key::n, AXIS1 | AXIS3, boltHoles);
+        b.add(c, "Previous bolt hole", key::p, AXIS1 | AXIS3, boltHoles);
     }
     // (Rarely changed, so no shortcut. It moves nothing, so can be changed
     // at any time.) Worded as a statement of how it's set now ("is ON"),

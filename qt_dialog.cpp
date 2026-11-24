@@ -1,5 +1,6 @@
 #include "qt_dialog.h"
 
+#include "boltholediagram.h"
 #include "calculator.h"
 #include "log.h"
 #include "tapers.h"
@@ -3046,6 +3047,518 @@ private:
     QLabel* m_calc { nullptr };
 };
 
+// ---------------------------------------------------------------------------
+// Bolt hole dialog
+// ---------------------------------------------------------------------------
+
+// The bolt hole circle, as the dialog has it so far (see
+// paintBoltHoleDiagram())
+class BoltHoleDiagramWidget final : public QWidget {
+public:
+    BoltHoleDiagramWidget(const QString& fontFamily, QWidget* parent)
+        : QWidget(parent)
+        , m_font(fontFamily)
+    {
+        setFixedSize(320, 320);
+    }
+
+    void setDiagram(const BoltHoleDiagram& diagram)
+    {
+        m_diagram = diagram;
+        update();
+    }
+
+protected:
+    void paintEvent(QPaintEvent*) override
+    {
+        QPainter p(this);
+        paintBoltHoleDiagram(p, QRectF(rect()), m_diagram, m_font);
+    }
+
+private:
+    QFont m_font;
+    BoltHoleDiagram m_diagram;
+};
+
+class BoltHoleDialog final : public QDialog {
+public:
+    BoltHoleDialog(QWidget* parent, const QString& fontFamily, const BoltHoleDialogInfo& info)
+        : QDialog(parent, Qt::Dialog | Qt::FramelessWindowHint)
+        , m_info(info)
+        , m_setup(info.setup)
+    {
+        setModal(true);
+        setFocusPolicy(Qt::StrongFocus);
+        QFont titleFont(fontFamily);
+        titleFont.setPixelSize(MP_TITLE_FONT_SIZE);
+        QFont labelFont(fontFamily);
+        labelFont.setPixelSize(MP_LABEL_FONT_SIZE);
+        QFont valueFont(fontFamily);
+        valueFont.setPixelSize(MP_VALUE_FONT_SIZE);
+        QFont hintFont(fontFamily);
+        hintFont.setPixelSize(MP_HINT_FONT_SIZE);
+
+        auto* outer = new QVBoxLayout(this);
+        outer->setContentsMargins(0, 0, 0, 0);
+        auto* box = new QFrame(this);
+        box->setObjectName("box");
+        box->setStyleSheet(BOX_STYLE);
+        outer->addWidget(box);
+        auto* layout = new QVBoxLayout(box);
+        layout->setContentsMargins(16, 12, 16, 12);
+        layout->setSpacing(10);
+
+        auto* title = new QLabel("Bolt holes", box);
+        title->setFont(titleFont);
+        title->setStyleSheet(PROMPT_STYLE);
+        layout->addWidget(title);
+
+        auto* columns = new QHBoxLayout();
+        columns->setSpacing(20);
+        layout->addLayout(columns);
+
+        // Left: the entries, and what they come to
+        auto* left = new QVBoxLayout();
+        left->setSpacing(10);
+        columns->addLayout(left);
+        auto* grid = new QGridLayout();
+        grid->setHorizontalSpacing(12);
+        grid->setVerticalSpacing(8);
+        left->addLayout(grid);
+        const std::string names[ROW_COUNT]
+            = { "Holes",    "PCD",    "First hole at (°)",
+                "Numbered", "Centre", (m_info.z ? m_info.z->label : std::string("Z")) + " depth" };
+        // (Shared by the rows' entries: added below the grid)
+        m_calc = new QLabel(box);
+        m_calc->setFont(labelFont);
+        for (int r = 0; r < ROW_COUNT; ++r) {
+            Row& row = m_rows[r];
+            row.name = addLabel(box, grid, r, 0, names[r], labelFont);
+            row.result = addLabel(box, grid, r, 2, "", labelFont);
+            if (r == Direction || r == Centre) {
+                row.chooser = addLabel(box, grid, r, 1, "", valueFont);
+                continue;
+            }
+            row.edit = new QLineEdit(box);
+            row.edit->setFont(valueFont);
+            row.edit->setStyleSheet(MP_EDIT_STYLE);
+            row.edit->setFixedWidth(120);
+            // (The angle can be negative: -30 is 30° anticlockwise of +Y; and
+            // the depth, a Z position)
+            const char* pattern = r == Holes ? R"(^[0-9]{0,3}$)"
+                : r == FirstAngle            ? R"(^-?[0-9]{0,3}(\.[0-9]*)?$)"
+                : r == Depth                 ? R"(^-?[0-9]{0,4}(\.[0-9]*)?$)"
+                                             : R"(^[0-9]{0,4}(\.[0-9]*)?$)";
+            // (The PCD and the depth are lengths, which in or mm can follow)
+            const std::string unit = r == Pcd ? m_info.x.unit
+                : r == Depth && m_info.z      ? m_info.z->unit
+                                              : "";
+            row.field = new ExpressionField(
+                row.edit,
+                pattern,
+                calc::Context { .memory = m_info.calculatorMemory, .unit = unit },
+                m_calc);
+            row.edit->installEventFilter(this);
+            grid->addWidget(row.edit, r, 1);
+        }
+        grid->setColumnStretch(2, 1);
+        // (Without a Z, there's no depth)
+        if (!m_info.z) {
+            m_rows[Depth].name->hide();
+            m_rows[Depth].edit->hide();
+            m_rows[Depth].result->hide();
+        }
+        left->addWidget(m_calc);
+        m_figures = new QLabel(box);
+        m_figures->setFont(labelFont);
+        m_figures->setStyleSheet(MP_LABEL_STYLE);
+        left->addWidget(m_figures);
+        m_message = new QLabel(box);
+        m_message->setFont(labelFont);
+        left->addWidget(m_message);
+        left->addStretch();
+
+        // Right: the diagram
+        m_diagram = new BoltHoleDiagramWidget(fontFamily, box);
+        columns->addWidget(m_diagram, 0, Qt::AlignTop);
+
+        auto* hint = new QLabel(
+            QString::fromStdString(
+                "Up/Down: line   Left/Right: choose   Enter: OK   Esc: cancel\n"
+                "Angles are from +"
+                + m_info.y.label + " (the hole with the highest " + m_info.y.label
+                + " is at 0°), seen from above"),
+            box);
+        hint->setFont(hintFont);
+        hint->setStyleSheet(MP_HINT_STYLE);
+        layout->addWidget(hint);
+
+        // The values to start with
+        if (m_setup.holes > 0) {
+            m_rows[Holes].edit->setText(QString::number(m_setup.holes));
+        }
+        if (m_setup.pcd > 0.0) {
+            m_rows[Pcd].edit->setText(
+                QString::number(m_setup.pcd * m_info.x.displayPerMm, 'f', m_info.x.decimals));
+        }
+        m_rows[FirstAngle].edit->setText(QString::number(m_setup.firstAngleDeg, 'g', 6));
+        if (!m_info.z) {
+            m_setup.depth.reset();
+        } else if (m_setup.depth) {
+            m_rows[Depth].edit->setText(
+                QString::number(*m_setup.depth * m_info.z->displayPerMm, 'f', m_info.z->decimals));
+        }
+
+        m_rows[Holes].field->onValueEdited([this] {
+            m_setup.holes = static_cast<int>(typed(m_rows[Holes].edit).value_or(0.0));
+            refresh();
+        });
+        m_rows[Pcd].field->onValueEdited([this] {
+            m_setup.pcd = typed(m_rows[Pcd].edit).value_or(0.0) / m_info.x.displayPerMm;
+            refresh();
+        });
+        m_rows[FirstAngle].field->onValueEdited([this] {
+            m_setup.firstAngleDeg = typed(m_rows[FirstAngle].edit).value_or(0.0);
+            refresh();
+        });
+        // (Left empty, there's no depth)
+        m_rows[Depth].field->onValueEdited([this] {
+            const auto v = typed(m_rows[Depth].edit);
+            m_setup.depth
+                = v && m_info.z ? std::optional(*v / m_info.z->displayPerMm) : std::nullopt;
+            refresh();
+        });
+
+        // (Start where something needs typing, if anything does)
+        setCurrentRow(m_setup.holes < 1 || m_setup.pcd > 0.0 ? Holes : Pcd);
+        adjustSize();
+        if (parent) {
+            const QPoint centre = parent->mapToGlobal(parent->rect().center());
+            move(centre - rect().center());
+        }
+    }
+
+    std::optional<BoltHoleSetup> chosenSetup() const
+    {
+        if (result() != QDialog::Accepted) {
+            return std::nullopt;
+        }
+        return m_setup;
+    }
+
+protected:
+    bool eventFilter(QObject* watched, QEvent* event) override
+    {
+        if (event->type() == QEvent::KeyPress && handleKey(static_cast<QKeyEvent*>(event))) {
+            return true;
+        }
+        return QDialog::eventFilter(watched, event);
+    }
+
+    void keyPressEvent(QKeyEvent* event) override
+    {
+        if (!handleKey(event)) {
+            QDialog::keyPressEvent(event);
+        }
+    }
+
+private:
+    enum RowId {
+        Holes,
+        Pcd,
+        FirstAngle,
+        Direction,
+        Centre,
+        Depth,
+        ROW_COUNT
+    };
+
+    struct Row {
+        QLabel* name { nullptr };
+        // The value typed in
+        QLineEdit* edit { nullptr };
+        // Its calculator (owned by edit)
+        ExpressionField* field { nullptr };
+        // Or, for a choice, e.g. "< Clockwise >"
+        QLabel* chooser { nullptr };
+        // What it comes to
+        QLabel* result { nullptr };
+    };
+
+    static QLabel* addLabel(
+        QWidget* parent,
+        QGridLayout* grid,
+        int row,
+        int column,
+        const std::string& text,
+        const QFont& font)
+    {
+        auto* label = new QLabel(QString::fromStdString(text), parent);
+        label->setFont(font);
+        label->setStyleSheet(MP_LABEL_STYLE);
+        grid->addWidget(label, row, column);
+        return label;
+    }
+
+    static std::optional<double> typed(const QLineEdit* edit)
+    {
+        bool ok = false;
+        const double v = edit->text().toDouble(&ok);
+        return ok ? std::optional<double>(v) : std::nullopt;
+    }
+
+    // A length on an axis, in its display units
+    static std::string format(const MultiPassDialogInfo::Axis& axis, double mm)
+    {
+        const int decimals = axis.decimals;
+        double value = mm * axis.displayPerMm;
+        // (Not "-0.00")
+        if (std::abs(value) < 0.5 * std::pow(10.0, -decimals)) {
+            value = 0.0;
+        }
+        return fmt::format("{:.{}f}", value, decimals);
+    }
+
+    std::string position(double x, double y) const
+    {
+        return m_info.x.label + " " + format(m_info.x, x) + ", " + m_info.y.label + " "
+            + format(m_info.y, y);
+    }
+
+    BoltHolePlan plan() const
+    {
+        return planBoltHoles(
+            m_setup,
+            m_info.positions,
+            m_info.x.label,
+            m_info.y.label,
+            m_info.z ? m_info.z->label : "Z");
+    }
+
+    // The centre's choices, in order: here, 0, 0, then each slot with both
+    // axes set
+    struct CentreChoice {
+        BoltHoleCentre centre;
+        std::size_t slot { 0 };
+    };
+    std::vector<CentreChoice> centreChoices() const
+    {
+        std::vector<CentreChoice> choices { { BoltHoleCentre::Here }, { BoltHoleCentre::Zero } };
+        for (const std::size_t slot : boltHoleCentreSlots(m_info.positions)) {
+            choices.push_back({ BoltHoleCentre::Memory, slot });
+        }
+        return choices;
+    }
+
+    std::string centreName() const
+    {
+        switch (m_setup.centre) {
+            case BoltHoleCentre::Here:
+                return "Here";
+            case BoltHoleCentre::Zero:
+                return "0, 0";
+            case BoltHoleCentre::Memory:
+                return "Mem " + std::to_string(m_setup.centreMemory + 1);
+        }
+        return "";
+    }
+
+    void choose(int direction)
+    {
+        if (m_current == Direction) {
+            m_setup.clockwise = !m_setup.clockwise;
+        } else if (m_current == Centre) {
+            const auto choices = centreChoices();
+            const int n = static_cast<int>(choices.size());
+            int index = 0;
+            for (int i = 0; i < n; ++i) {
+                const CentreChoice& c = choices.at(static_cast<std::size_t>(i));
+                if (c.centre == m_setup.centre
+                    && (c.centre != BoltHoleCentre::Memory || c.slot == m_setup.centreMemory)) {
+                    index = i;
+                }
+            }
+            const CentreChoice& chosen
+                = choices.at(static_cast<std::size_t>(((index + direction) % n + n) % n));
+            m_setup.centre = chosen.centre;
+            m_setup.centreMemory = chosen.slot;
+        }
+        refresh();
+    }
+
+    void setCurrentRow(int row)
+    {
+        m_current = row;
+        QLineEdit* edit = m_rows[row].edit;
+        if (edit) {
+            edit->setFocus();
+            edit->selectAll(); // (so typing replaces it)
+        } else {
+            setFocus();
+        }
+        refresh();
+    }
+
+    void refresh()
+    {
+        const BoltHolePlan p = plan();
+        const auto chooser
+            = [](const std::string& text) { return QString::fromStdString("< " + text + " >"); };
+        m_rows[Direction].chooser->setText(
+            chooser(m_setup.clockwise ? "Clockwise" : "Anticlockwise"));
+        m_rows[Centre].chooser->setText(chooser(centreName()));
+        m_rows[Holes].result->setText(
+            m_setup.holes > 0 && m_setup.holes <= BOLT_HOLE_MAX_HOLES
+                ? QString::fromStdString(fmt::format("{:.4g}° apart", 360.0 / m_setup.holes))
+                : "");
+        m_rows[Pcd].result->setText(
+            m_setup.pcd > 0.0
+                ? QString::fromStdString(
+                      "radius " + format(m_info.x, m_setup.pcd / 2.0) + " " + m_info.x.unit)
+                : "");
+        const double first = normaliseDegrees(m_setup.firstAngleDeg);
+        m_rows[FirstAngle].result->setText(
+            first == m_setup.firstAngleDeg
+                ? ""
+                : QString::fromStdString(fmt::format("i.e. {:.4g}° clockwise", first)));
+        m_rows[Direction].result->setText("seen from above");
+        // (The centre is shown wherever it comes from, if it's known)
+        std::optional<QPointF> centre;
+        switch (m_setup.centre) {
+            case BoltHoleCentre::Here:
+                if (m_info.positions.yHere) {
+                    centre = QPointF(m_info.positions.xHere, *m_info.positions.yHere);
+                }
+                break;
+            case BoltHoleCentre::Zero:
+                centre = QPointF(0.0, 0.0);
+                break;
+            case BoltHoleCentre::Memory:
+                {
+                    const std::size_t slot = m_setup.centreMemory;
+                    const auto& xs = m_info.positions.xMemory;
+                    const auto& ys = m_info.positions.yMemory;
+                    if (slot < xs.size() && slot < ys.size() && xs[slot] && ys[slot]) {
+                        centre = QPointF(*xs[slot], *ys[slot]);
+                    }
+                    break;
+                }
+        }
+        m_rows[Centre].result->setText(
+            centre ? QString::fromStdString(position(centre->x(), centre->y())) : "");
+        if (m_info.z) {
+            const std::string& z = m_info.z->label;
+            m_rows[Depth].result->setText(
+                QString::fromStdString(
+                    !m_setup.depth ? "none (empty)"
+                        : m_info.positions.zHere
+                        ? z + " now " + format(*m_info.z, *m_info.positions.zHere) + " (clear)"
+                        : std::string()));
+        }
+
+        for (int row = 0; row < ROW_COUNT; ++row) {
+            Row& w = m_rows[row];
+            const bool current = row == m_current;
+            if (w.edit) {
+                w.edit->setStyleSheet(current ? MP_EDIT_CURRENT_STYLE : MP_EDIT_STYLE);
+            }
+            if (w.chooser) {
+                w.chooser->setStyleSheet(current ? MP_CURRENT_STYLE : MP_LABEL_STYLE);
+            }
+            w.name->setStyleSheet(current ? MP_CURRENT_STYLE : MP_LABEL_STYLE);
+        }
+
+        BoltHoleDiagram diagram { .holes = m_setup.holes <= BOLT_HOLE_MAX_HOLES ? m_setup.holes : 0,
+                                  .firstAngleDeg = m_setup.firstAngleDeg,
+                                  .clockwise = m_setup.clockwise };
+        if (m_setup.pcd > 0.0) {
+            diagram.pcdText = "PCD " + format(m_info.x, m_setup.pcd) + " " + m_info.x.unit;
+        }
+        m_diagram->setDiagram(diagram);
+
+        if (p.error.empty()) {
+            const BoltHole& hole = p.holes.front();
+            std::string figures = "Hole 1: " + position(hole.x, hole.y);
+            if (m_setup.holes > 1) {
+                figures += "\nHoles " + format(m_info.x, boltHoleSpacingMm(m_setup)) + " "
+                    + m_info.x.unit + " apart (centre to centre)";
+            }
+            m_figures->setText(QString::fromStdString(figures));
+            m_message->setStyleSheet(MP_HINT_STYLE);
+            std::string message = "In the mode, Enter goes to hole 1, then n and p\n"
+                                  "go to the next and previous holes. "
+                + m_info.x.label + " moves; " + m_info.y.label + " is wound by hand";
+            if (m_setup.depth && m_info.z) {
+                const std::string& z = m_info.z->label;
+                message += "\nAt each, " + z + " is wound to the depth. " + m_info.x.label + " and "
+                    + m_info.y.label + " won't\nmove until " + z + " is back up to where it is now";
+            }
+            m_message->setText(QString::fromStdString(message));
+        } else {
+            m_figures->setText("");
+            m_message->setStyleSheet(MP_ERROR_STYLE);
+            m_message->setText(QString::fromStdString(p.error));
+        }
+    }
+
+    // Returns true if the key press has been dealt with
+    bool handleKey(QKeyEvent* event)
+    {
+        const int qtKey = event->key();
+        ExpressionField* field = m_rows[m_current].field;
+        if (qtKey == Qt::Key_Escape) {
+            reject();
+            return true;
+        }
+        if (qtKey == Qt::Key_Return || qtKey == Qt::Key_Enter) {
+            // (A sum's value is put in first, to be seen before it's used)
+            if ((!field || field->resolve() == ExpressionField::Outcome::Number)
+                && plan().error.empty()) {
+                accept();
+            }
+            return true; // (not accepted unless it can be used)
+        }
+        if (qtKey == Qt::Key_Up || qtKey == Qt::Key_Down) {
+            if (field && field->resolve() == ExpressionField::Outcome::Invalid) {
+                return true; // (stays, showing what's wrong with the sum)
+            }
+            const int row = m_current + (qtKey == Qt::Key_Up ? -1 : 1);
+            // (The depth only with a Z)
+            const int rows = m_info.z ? ROW_COUNT : Depth;
+            if (row >= 0 && row < rows) {
+                setCurrentRow(row);
+            }
+            return true;
+        }
+        if (field && field->active()) {
+            return false; // (typing a sum: letters, and Left and Right, are the entry's)
+        }
+        if ((qtKey == Qt::Key_Left || qtKey == Qt::Key_Right) && !field) {
+            choose(qtKey == Qt::Key_Left ? -1 : 1);
+            return true;
+        }
+        const QString text = event->text();
+        if (!field && text.size() == 1 && !text.at(0).isSpace()) {
+            return true; // (nothing to type into on a choice)
+        }
+        if (text.size() == 1 && text.at(0).isLetter()) {
+            return true; // (letters do nothing)
+        }
+        return false;
+    }
+
+    BoltHoleDialogInfo m_info;
+    BoltHoleSetup m_setup;
+    Row m_rows[ROW_COUNT];
+    int m_current { Holes };
+    BoltHoleDiagramWidget* m_diagram { nullptr };
+    // Hole 1's position, and the distance between holes
+    QLabel* m_figures { nullptr };
+    QLabel* m_message { nullptr };
+    // A sum's value, or what's wrong with it (see ExpressionField)
+    QLabel* m_calc { nullptr };
+};
+
 } // end anonymous namespace
 
 QDialog* openMultiPassDialog(
@@ -3085,6 +3598,21 @@ QDialog* openRadiusDialog(
     std::function<void(std::optional<RadiusSetup>)> onDone)
 {
     auto* dlg = new RadiusDialog(parent, fontFamily, info);
+    dlg->setAttribute(Qt::WA_DeleteOnClose);
+    QObject::connect(dlg, &QDialog::finished, dlg, [dlg, onDone = std::move(onDone)](int) {
+        onDone(dlg->chosenSetup());
+    });
+    dlg->open();
+    return dlg;
+}
+
+QDialog* openBoltHoleDialog(
+    QWidget* parent,
+    const QString& fontFamily,
+    const BoltHoleDialogInfo& info,
+    std::function<void(std::optional<BoltHoleSetup>)> onDone)
+{
+    auto* dlg = new BoltHoleDialog(parent, fontFamily, info);
     dlg->setAttribute(Qt::WA_DeleteOnClose);
     QObject::connect(dlg, &QDialog::finished, dlg, [dlg, onDone = std::move(onDone)](int) {
         onDone(dlg->chosenSetup());

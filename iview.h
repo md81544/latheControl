@@ -118,6 +118,21 @@ struct RadiusDialogInfo {
     calc::Memory calculatorMemory;
 };
 
+// What the bolt hole dialog needs to know (see IView::openBoltHoleDialog())
+struct BoltHoleDialogInfo {
+    // X and Y (the PCD is in X's display units)
+    MultiPassDialogInfo::Axis x;
+    MultiPassDialogInfo::Axis y;
+    // Z (axis 4, moved by hand), for the depth, if there is one
+    std::optional<MultiPassDialogInfo::Axis> z;
+    // Where X, Y and Z are now, and X's and Y's memory slots
+    BoltHolePositions positions;
+    // The setup to start with
+    BoltHoleSetup setup;
+    // The memory slots, for the calculator in the entries (see calculator.h)
+    calc::Memory calculatorMemory;
+};
+
 class IView {
 public:
     virtual void initialise(const Model&) = 0;
@@ -181,6 +196,13 @@ public:
     virtual void openRadiusDialog(
         const RadiusDialogInfo& info,
         std::function<void(std::optional<RadiusSetup>)> onDone) = 0;
+    // The bolt hole dialog: how many holes, the PCD, the first hole's angle,
+    // which way they're numbered, and the centre. onDone gets the setup
+    // chosen (which planBoltHoles() accepts with info's positions), or
+    // nullopt if cancelled
+    virtual void openBoltHoleDialog(
+        const BoltHoleDialogInfo& info,
+        std::function<void(std::optional<BoltHoleSetup>)> onDone) = 0;
     virtual bool isDialogOpen() const = 0;
     // Closes the open dialog (if any) as if cancelled, calling its onDone
     virtual void cancelDialog() = 0;
