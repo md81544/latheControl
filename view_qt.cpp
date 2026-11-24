@@ -1658,8 +1658,16 @@ void ViewQt::Impl::updateTextFromModel(const Model& model)
         memoryLabel.at(n).colour = slotColour(n);
     }
     for (auto& row : memoryRows) {
+        // The values on the clipboard are blue where they were copied from
+        // (brighter in the current slot), while they're still there, as a
+        // copy otherwise shows nothing
+        const auto copiedFrom = model.memoryClipboardSourceSlot(row.axisNumber);
         for (std::size_t n = 0; n < row.values.size(); ++n) {
             row.values.at(n).colour = slotColour(n);
+            if (copiedFrom == n) {
+                row.values.at(n).colour = model.getCurrentMemorySlot() == n ? QColor(120, 200, 255)
+                                                                            : QColor(40, 120, 200);
+            }
             const auto memory = model.getMemory(row.axisNumber, n);
             row.values.at(n).text = memory
                 ? fmt::format("{: >9}", model.formatPosition(row.axisNumber, *memory))

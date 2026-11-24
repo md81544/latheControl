@@ -675,12 +675,44 @@ void Controller::processKey(int t)
                 {
                     // (Every axis is stored: a manual axis with no reading
                     // keeps what it had)
-                    for (int n = 1; n <= Model::AXES; ++n) {
-                        const ManualAxis* axis = m_model->manualAxis(n);
-                        if (m_model->hasAxis(n) && (!axis || axis->hasReading())) {
-                            m_model->storePosition(n);
-                        }
-                    }
+                    m_model->storePosition(0);
+                    break;
+                }
+            // The memory slots' clipboard: the whole slot, or after an
+            // axis's leader, that axis alone (axisOfKey() is 0 for \)
+            case key::CtrlC:
+            case key::a1_CtrlC:
+            case key::a2_CtrlC:
+            case key::aAll_CtrlC:
+            case key::a3_CtrlC:
+            case key::a4_CtrlC:
+                {
+                    m_model->copyMemorySlot(key::axisOfKey(kp));
+                    break;
+                }
+            case key::CtrlX:
+            case key::a1_CtrlX:
+            case key::a2_CtrlX:
+            case key::aAll_CtrlX:
+            case key::a3_CtrlX:
+            case key::a4_CtrlX:
+                {
+                    m_model->cutMemorySlot(key::axisOfKey(kp));
+                    break;
+                }
+            case key::CtrlV:
+            case key::a1_CtrlV:
+            case key::a2_CtrlV:
+            case key::aAll_CtrlV:
+            case key::a3_CtrlV:
+            case key::a4_CtrlV:
+                {
+                    m_model->pasteMemorySlot(key::axisOfKey(kp));
+                    break;
+                }
+            case key::CtrlZ:
+                {
+                    m_model->undoMemory();
                     break;
                 }
             case key::a2_ENTER:
@@ -1581,9 +1613,7 @@ void Controller::processKey(int t)
             case key::DELETE:
             case key::aAll_DELETE:
                 {
-                    for (int n = 1; n <= Model::AXES; ++n) {
-                        m_model->clearCurrentMemorySlot(n);
-                    }
+                    m_model->clearCurrentMemorySlot(0);
                     break;
                 }
             default: // e.g. key::SPACE to stop all motors

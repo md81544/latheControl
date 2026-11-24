@@ -433,14 +433,49 @@ public:
     // as does losing a manual axis's readings (and so its zero)
     std::optional<double> getMemory(int axisNumber, std::size_t slot) const;
     // Stores where the axis is in the current slot (a manual axis without a
-    // reading warns, and keeps what it had)
+    // reading warns, and keeps what it had). axisNumber 0 is every axis (M),
+    // except a manual axis without a reading, which keeps what it had
+    // without a warning
     void storePosition(int axisNumber);
     // Stores a position (in mm) in the current slot: for a motorised axis,
     // the nearest whole step
     void storePosition(int axisNumber, double mm);
+    // (axisNumber 0 is every axis)
     void clearCurrentMemorySlot(int axisNumber);
-    // Clears every slot
+    // Clears every slot. Not something the user does directly (it's from
+    // zeroing, setting or halving the axis, or a manual axis losing its
+    // reading), so it can't be undone: the axis is cleared from the undo
+    // history and the clipboard too, whose positions would be somewhere
+    // else now
     void clearMemory(int axisNumber);
+
+    // Copying, cutting and pasting memory slots, as in an editor: Ctrl+C,
+    // Ctrl+X and Ctrl+V on the current slot, or after an axis's leader key
+    // for that axis alone (axisNumber 0 is every axis). The clipboard is the
+    // program's own. Copying a whole slot takes every axis, set or not, so
+    // pasting it makes the slot the same as the one copied (an axis empty
+    // there is cleared). An axis's value only pastes onto the same axis. The
+    // clipboard stays after pasting, so it can be pasted again. Each warns
+    // if there's nothing to copy, or nothing on the clipboard for the axis
+    void copyMemorySlot(int axisNumber);
+    // Copies, then clears what was copied
+    void cutMemorySlot(int axisNumber);
+    void pasteMemorySlot(int axisNumber);
+    // Whether there's anything in the current slot to copy or cut (on the
+    // axis, or any axis for 0)
+    bool canCopyMemorySlot(int axisNumber) const;
+    // Whether the clipboard has anything for the axis (or any axis, for 0)
+    bool canPasteMemorySlot(int axisNumber) const;
+    // The slot the clipboard was copied from, if it holds the axis's value
+    // and the slot still has that value there (so the view can mark it).
+    // After a cut, that's the emptied slot, until something is put in it
+    std::optional<std::size_t> memoryClipboardSourceSlot(int axisNumber) const;
+    // Undoing (Ctrl+Z) the last change the user made to the memory slots or
+    // the clipboard: storing, entering a value, clearing, copying, cutting
+    // or pasting. Again undoes the one before, and so on. The slot selected
+    // stays as it is
+    void undoMemory();
+    bool canUndoMemory() const;
     // Goes to the current slot. A motorised axis moves there (unless it's
     // empty, or it's there already). A manual axis has no motor, so the user
     // winds it there, with the distance to go shown meanwhile (see
@@ -861,6 +896,37 @@ private:
         return memory;
     }() };
     std::size_t m_currentMemory { 0 };
+    // The memory slots' clipboard (see copyMemorySlot())
+    struct MemoryClipboard {
+        // The slot it was copied from
+        std::size_t slot { 0 };
+        // Whether it holds each axis, and if so, its value there (which may
+        // be empty: pasting that clears the axis)
+        std::array<bool, AXES> holds {};
+        // Whether it was cut, rather than copied (so the slot it came from
+        // is marked while it's still empty)
+        bool cut { false };
+        std::array<std::optional<double>, AXES> values;
+        bool operator==(const MemoryClipboard&) const = default;
+    };
+    std::optional<MemoryClipboard> m_memoryClipboard;
+    // What the slots and clipboard were before each change by the user, the
+    // latest last (see undoMemory()). Only so many are kept
+    struct MemoryUndo {
+        std::array<std::vector<std::optional<double>>, AXES> memory;
+        std::optional<MemoryClipboard> clipboard;
+        bool operator==(const MemoryUndo&) const = default;
+    };
+    static constexpr std::size_t MEMORY_UNDO_LEVELS = 50;
+    std::vector<MemoryUndo> m_memoryUndo;
+    // Called before each change by the user to the slots or clipboard
+    void pushMemoryUndo();
+    // Stores where the axis is in the current slot (see storePosition()),
+    // without an undo of its own
+    void storePositionInSlot(int axisNumber);
+    // The axes a memory slot command is for: the one given, or every axis
+    // (for 0)
+    std::vector<int> memoryAxes(int axisNumber) const;
     // A motorised axis's current slot, in steps, or nothing if it's not set
     std::optional<long> memoryStep(int axisNumber) const;
     void axis1GoToCurrentMemory();

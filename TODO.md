@@ -17,6 +17,10 @@ notes.
   window with a dialog open. → [Controller on the event loop](#controller-on-the-event-loop)
 - At start-up each axis moves by its backlash, and the first move after
   starting is right. → [Using the mill scales](#using-the-mill-scales)
+- Copying, cutting and pasting memory slots (Ctrl+C/X/V, alone or after an
+  axis key), and Ctrl+Z to undo. Check that Ctrl reaches the program on the
+  Pis' keyboards (the desktop mustn't take any of them first).
+  → [Memory slot clipboard](#memory-slot-clipboard)
 
 #### Lathe
 - The Z scale's checks are on (23 Nov 2026): at rest, `Axis1ScaleWarnMm`
@@ -3934,3 +3938,22 @@ change.
             - feed in/out x by the specified change per pass
             - optional pause message
             - repeat until x delta equals thread pitch cut depth
+
+### Memory slot clipboard
+
+Added 24 Nov 2026, not yet tried on the machines. Ctrl+C, Ctrl+X and
+Ctrl+V copy, cut and paste the current slot. After an axis's leader they
+work on that axis alone. Ctrl+Z undoes. Decisions:
+- The clipboard is the program's own: the desktop's would gain nothing
+  here, and would bring X11 clipboard ownership into it.
+- A whole slot's copy takes every axis, set or not, so a paste makes the
+  slot an exact copy (an empty axis is cleared). An axis's value only pastes
+  onto the same axis, as Z's position means nothing on X.
+- Undo also covers storing, entering and clearing (an accidental `Delete`
+  is the likeliest thing to want back), with 50 levels. It doesn't cover
+  the clearing done by zeroing, setting or halving an axis. Instead, that
+  axis's old values are cleared from the clipboard and the undo history,
+  so an undo can never bring back a position measured from the old zero.
+- The cells copied from are shown in blue while they still hold what was
+  copied, because otherwise a copy shows nothing.
+- Possible later: redo (Ctrl+Y); gamepad buttons for copy and paste.

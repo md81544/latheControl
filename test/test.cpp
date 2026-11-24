@@ -1847,6 +1847,132 @@ TEST_CASE("A memory value typed in is stored to the nearest step")
     REQUIRE(model.motorPosition(1) == Approx(0.701).margin(1e-9));
 }
 
+TEST_CASE("Memory slots: copy, cut, paste and undo")
+{
+    mgo::MockGpio gpio(false);
+    mgo::MockConfigReader config;
+    mgo::Model model(gpio, config);
+    model.initialise();
+    // Mem 1: Z 1.5 and X -2; Mem 2: Z 7 only
+    model.storePosition(1, 1.5);
+    model.storePosition(2, -2.0);
+    model.selectNextMemorySlot();
+    model.storePosition(1, 7.0);
+    const auto slot = [&model](int axis, std::size_t n) { return model.getMemory(axis, n); };
+
+    SECTION("Nothing to copy or paste yet")
+    {
+        model.selectNextMemorySlot(); // (Mem 3, empty)
+        REQUIRE(!model.canCopyMemorySlot(0));
+        REQUIRE(!model.canPasteMemorySlot(0));
+        model.copyMemorySlot(0);
+        REQUIRE(model.getWarning() == "Mem 3 is empty: nothing to copy");
+        model.pasteMemorySlot(0);
+        REQUIRE(!slot(1, 2));
+    }
+
+    SECTION("A whole slot pastes over every axis, clearing one empty in the copy")
+    {
+        model.copyMemorySlot(0); // (Mem 2: Z 7, X empty)
+        REQUIRE(model.memoryClipboardSourceSlot(1) == 1u);
+        REQUIRE(model.memoryClipboardSourceSlot(2) == 1u);
+        model.selectPreviousMemorySlot();
+        model.pasteMemorySlot(0);
+        REQUIRE(*slot(1, 0) == Approx(7.0));
+        REQUIRE(!slot(2, 0));
+        // The copy is still there, and Mem 2 unchanged
+        REQUIRE(*slot(1, 1) == Approx(7.0));
+        REQUIRE(model.canPasteMemorySlot(0));
+
+        // Undo puts Mem 1 back; again, the clipboard (as before the copy)
+        model.undoMemory();
+        REQUIRE(*slot(1, 0) == Approx(1.5));
+        REQUIRE(*slot(2, 0) == Approx(-2.0));
+        REQUIRE(model.canPasteMemorySlot(0));
+        model.undoMemory();
+        REQUIRE(!model.canPasteMemorySlot(0));
+        // ... and so on back to the stores
+        model.undoMemory();
+        REQUIRE(!slot(1, 1));
+    }
+
+    SECTION("One axis copies and pastes only that axis, and only onto it")
+    {
+        model.selectPreviousMemorySlot();
+        model.copyMemorySlot(2); // (X -2)
+        REQUIRE(model.canPasteMemorySlot(2));
+        REQUIRE(!model.canPasteMemorySlot(1));
+        REQUIRE(!model.memoryClipboardSourceSlot(1));
+        model.selectNextMemorySlot();
+        model.pasteMemorySlot(1);
+        REQUIRE(model.getWarning() == "Nothing to paste for Z: copy it first");
+        REQUIRE(*slot(1, 1) == Approx(7.0));
+        // Pasting the whole clipboard pastes what it has: X alone
+        model.pasteMemorySlot(0);
+        REQUIRE(*slot(1, 1) == Approx(7.0));
+        REQUIRE(*slot(2, 1) == Approx(-2.0));
+    }
+
+    SECTION("A cut empties the slot, and undoes in one go")
+    {
+        model.selectPreviousMemorySlot();
+        model.cutMemorySlot(1);
+        REQUIRE(!slot(1, 0));
+        REQUIRE(*slot(2, 0) == Approx(-2.0));
+        // (Still marked, as the slot it was cut from, while it's empty)
+        REQUIRE(model.memoryClipboardSourceSlot(1) == 0u);
+        model.storePosition(1, 2.0);
+        REQUIRE(!model.memoryClipboardSourceSlot(1));
+        model.undoMemory();
+        REQUIRE(model.memoryClipboardSourceSlot(1) == 0u);
+        model.selectNextMemorySlot();
+        model.selectNextMemorySlot();
+        model.pasteMemorySlot(1);
+        REQUIRE(*slot(1, 2) == Approx(1.5));
+        model.undoMemory();
+        REQUIRE(!slot(1, 2));
+        model.undoMemory();
+        REQUIRE(*slot(1, 0) == Approx(1.5));
+        REQUIRE(!model.canPasteMemorySlot(0));
+    }
+
+    SECTION("Storing and clearing every axis are one undo each")
+    {
+        model.clearCurrentMemorySlot(0);
+        REQUIRE(!slot(1, 1));
+        model.undoMemory();
+        REQUIRE(*slot(1, 1) == Approx(7.0));
+        model.storePosition(0); // (where the axes are: 0, 0)
+        REQUIRE(*slot(1, 1) == Approx(0.0));
+        REQUIRE(*slot(2, 1) == Approx(0.0));
+        model.undoMemory();
+        REQUIRE(*slot(1, 1) == Approx(7.0));
+        REQUIRE(!slot(2, 1));
+    }
+
+    SECTION("Zeroing an axis clears it from the clipboard and the undo history")
+    {
+        model.selectPreviousMemorySlot();
+        model.copyMemorySlot(0);
+        model.clearCurrentMemorySlot(2);
+        model.zero(1);
+        REQUIRE(!model.canPasteMemorySlot(1));
+        REQUIRE(model.canPasteMemorySlot(2));
+        // Undoing the clear brings back X, but never Z's old positions
+        model.undoMemory();
+        REQUIRE(*slot(2, 0) == Approx(-2.0));
+        REQUIRE(!slot(1, 0));
+        REQUIRE(!slot(1, 1));
+        while (model.canUndoMemory()) {
+            model.undoMemory();
+        }
+        REQUIRE(!slot(1, 0));
+        REQUIRE(!slot(1, 1));
+        model.undoMemory();
+        REQUIRE(model.getWarning() == "Nothing to undo in the memory slots");
+    }
+}
+
 TEST_CASE("Stepper: driver alarm stops the motor until cleared")
 {
     mgo::MockGpio gpio(false);
@@ -2724,7 +2850,10 @@ TEST_CASE("Commands: the manual axes (e.g. the mill's Y and Z)")
                            mgo::key::a3_m,
                            mgo::key::a3_ENTER,
                            mgo::key::a3_i,
-                           mgo::key::a3_DELETE });
+                           mgo::key::a3_DELETE,
+                           mgo::key::a3_CtrlC,
+                           mgo::key::a3_CtrlX,
+                           mgo::key::a3_CtrlV });
     REQUIRE(
         keysFor(mgo::KeyMode::Axis4)
         == std::set<int> { mgo::key::a4_z,
@@ -2734,7 +2863,10 @@ TEST_CASE("Commands: the manual axes (e.g. the mill's Y and Z)")
                            mgo::key::a4_m,
                            mgo::key::a4_ENTER,
                            mgo::key::a4_i,
-                           mgo::key::a4_DELETE });
+                           mgo::key::a4_DELETE,
+                           mgo::key::a4_CtrlC,
+                           mgo::key::a4_CtrlX,
+                           mgo::key::a4_CtrlV });
 
     REQUIRE(!keysFor(mgo::KeyMode::Axis1).contains(mgo::key::a3_z));
     REQUIRE(mgo::shortcutText(mgo::key::a3_z, config) == "y z");

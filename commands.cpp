@@ -22,9 +22,15 @@ constexpr int AXIS4_LEADER_BIT = 0x20000;
 constexpr int LEADER_BITS = AXIS1_LEADER_BIT | AXIS2_LEADER_BIT | ALL_AXES_LEADER_BIT
     | AXIS3_LEADER_BIT | AXIS4_LEADER_BIT;
 
-// The name of a single key (without leader keys)
+// The name of a single key (without leader keys), e.g. "Ctrl+c"
 std::string keyName(int k)
 {
+    if (k & key::ALT) {
+        return "Alt+" + keyName(k & ~key::ALT);
+    }
+    if (k & key::CTRL) {
+        return "Ctrl+" + keyName(k & ~key::CTRL);
+    }
     if (k >= key::a && k <= key::z) {
         return std::string(1, static_cast<char>(k));
     }
@@ -253,12 +259,8 @@ std::string shortcutText(int k, const IConfigReader& config)
     if (menuOnly(k)) {
         return "";
     }
-    if (k & key::ALT) {
-        return "Alt+" + keyName(k & ~key::ALT);
-    }
-    if (k & key::CTRL) {
-        return "Ctrl+" + keyName(k & ~key::CTRL);
-    }
+    // (A Ctrl or Alt key may follow a leader, e.g. "z Ctrl+c": keyName()
+    // gives those)
     if (k & ALL_AXES_LEADER_BIT) {
         return "\\ " + keyName(k & ~ALL_AXES_LEADER_BIT);
     }
@@ -287,10 +289,6 @@ std::vector<const Command*> commandsForLeader(const std::vector<Command>& comman
     std::vector<const Command*> result;
     for (const auto& c : commands) {
         const int k = c.key;
-        // (Alt and Ctrl combinations never follow a leader key)
-        if (k & (key::ALT | key::CTRL)) {
-            continue;
-        }
         // (Nor do the menu-only commands, whose codes can look as if they
         // have an axis leader's bit set)
         if (menuOnly(k)) {
@@ -664,16 +662,39 @@ std::vector<Command> buildCommands(
         key::DELETE,
         BOTH,
         anySlotSet);
+    // The clipboard, as in an editor (the whole slot, or after an axis's
+    // leader, that axis alone), and undoing the last change to the slots
+    const auto canCopy
+        = [](int n) { return [n](const Model& m) { return m.canCopyMemorySlot(n); }; };
+    const auto canPaste
+        = [](int n) { return [n](const Model& m) { return m.canPasteMemorySlot(n); }; };
+    b.add(c, "Copy slot", key::CtrlC, NONE, canCopy(0));
+    b.add(c, "Cut slot", key::CtrlX, NONE, canCopy(0));
+    b.add(c, "Paste into slot", key::CtrlV, NONE, canPaste(0));
+    b.add(c, fmt::format("Copy slot: {}", a1), key::a1_CtrlC, AXIS1, canCopy(1));
+    b.add(c, fmt::format("Cut slot: {}", a1), key::a1_CtrlX, AXIS1, canCopy(1));
+    b.add(c, fmt::format("Paste into slot: {}", a1), key::a1_CtrlV, AXIS1, canPaste(1));
+    b.add(c, fmt::format("Copy slot: {}", a2), key::a2_CtrlC, AXIS2, canCopy(2));
+    b.add(c, fmt::format("Cut slot: {}", a2), key::a2_CtrlX, AXIS2, canCopy(2));
+    b.add(c, fmt::format("Paste into slot: {}", a2), key::a2_CtrlV, AXIS2, canPaste(2));
+    b.add(
+        c, "Undo slot change", key::CtrlZ, NONE, [](const Model& m) { return m.canUndoMemory(); });
     // (A manual axis has no motor, so going to its slot shows the distance
     // to wind it)
     b.add(c, fmt::format("Store {} in slot", a3), key::a3_m, AXIS3);
     b.add(c, fmt::format("Go to slot: {} (wind it there)", a3), key::a3_ENTER, AXIS3, slotSet(3));
     b.add(c, fmt::format("Enter a {} value for slot...", a3), key::a3_i, AXIS3);
     b.add(c, fmt::format("Clear slot: {}", a3), key::a3_DELETE, AXIS3, slotSet(3));
+    b.add(c, fmt::format("Copy slot: {}", a3), key::a3_CtrlC, AXIS3, canCopy(3));
+    b.add(c, fmt::format("Cut slot: {}", a3), key::a3_CtrlX, AXIS3, canCopy(3));
+    b.add(c, fmt::format("Paste into slot: {}", a3), key::a3_CtrlV, AXIS3, canPaste(3));
     b.add(c, fmt::format("Store {} in slot", a4), key::a4_m, AXIS4);
     b.add(c, fmt::format("Go to slot: {} (wind it there)", a4), key::a4_ENTER, AXIS4, slotSet(4));
     b.add(c, fmt::format("Enter a {} value for slot...", a4), key::a4_i, AXIS4);
     b.add(c, fmt::format("Clear slot: {}", a4), key::a4_DELETE, AXIS4, slotSet(4));
+    b.add(c, fmt::format("Copy slot: {}", a4), key::a4_CtrlC, AXIS4, canCopy(4));
+    b.add(c, fmt::format("Cut slot: {}", a4), key::a4_CtrlX, AXIS4, canCopy(4));
+    b.add(c, fmt::format("Paste into slot: {}", a4), key::a4_CtrlV, AXIS4, canPaste(4));
 
     c = "Position";
     b.add(c, fmt::format("Zero {}", a1), key::a1_z, AXIS1);

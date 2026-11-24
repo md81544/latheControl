@@ -259,6 +259,29 @@ constexpr int ALT = 0x100000;
 constexpr int JOYSTICK = 0x200000;
 
 constexpr int CtrlQ = key::q | CTRL; // quit
+// The memory slots' clipboard, as in an editor: copy, cut and paste the
+// current slot, and undo the last change to the slots. After an axis's leader
+// key (the leader's bit added, as for any key), copy, cut and paste are for
+// that axis alone; after \, for every axis, as without a leader
+constexpr int CtrlC = key::c | CTRL;
+constexpr int CtrlX = key::x | CTRL;
+constexpr int CtrlV = key::v | CTRL;
+constexpr int CtrlZ = key::z | CTRL;
+constexpr int a1_CtrlC = CtrlC + 0x1000;
+constexpr int a1_CtrlX = CtrlX + 0x1000;
+constexpr int a1_CtrlV = CtrlV + 0x1000;
+constexpr int a2_CtrlC = CtrlC + 0x2000;
+constexpr int a2_CtrlX = CtrlX + 0x2000;
+constexpr int a2_CtrlV = CtrlV + 0x2000;
+constexpr int aAll_CtrlC = CtrlC + 0x4000;
+constexpr int aAll_CtrlX = CtrlX + 0x4000;
+constexpr int aAll_CtrlV = CtrlV + 0x4000;
+constexpr int a3_CtrlC = CtrlC + 0x8000;
+constexpr int a3_CtrlX = CtrlX + 0x8000;
+constexpr int a3_CtrlV = CtrlV + 0x8000;
+constexpr int a4_CtrlC = CtrlC + 0x20000;
+constexpr int a4_CtrlX = CtrlX + 0x20000;
+constexpr int a4_CtrlV = CtrlV + 0x20000;
 constexpr int AltW = key::w | ALT; // big nudge
 constexpr int AltA = key::a | ALT; // big nudge
 constexpr int AltS = key::s | ALT; // big nudge

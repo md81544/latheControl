@@ -704,6 +704,14 @@ void press(QWidget* w, mgo::Controller& controller, Qt::Key k)
     QTest::qWait(110);
 }
 
+void press(QWidget* w, mgo::Controller& controller, Qt::Key k, Qt::KeyboardModifiers modifiers)
+{
+    QTest::keyClick(w, k, modifiers);
+    controller.processKeyPress();
+    REQUIRE(waitForDialogToClose());
+    QTest::qWait(110);
+}
+
 bool waitUntil(const std::function<bool()>& condition)
 {
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
@@ -1877,6 +1885,54 @@ TEST_CASE("UI: keys wait while a nudge is moving, except Space")
     REQUIRE(moved > 0.0);
     REQUIRE(moved < 0.05);
     REQUIRE(tm.model.motorSpeed(1) == Approx(speed));
+}
+
+TEST_CASE("UI: copying and pasting memory slots with Ctrl, alone or after a leader key")
+{
+    TestModel tm;
+    mgo::Controller controller(&tm.model);
+    QWidget* w = mainWindow();
+    REQUIRE(w);
+    // Mem 1: Z 3 and X 4
+    tm.model.storePosition(1, 3.0);
+    tm.model.storePosition(2, 4.0);
+    const auto slot = [&tm](int axis, std::size_t n) { return tm.model.getMemory(axis, n); };
+
+    // The whole slot (Ctrl+C), pasted into Mem 2 (Ctrl+V)
+    press(w, controller, Qt::Key_C, Qt::ControlModifier);
+    press(w, controller, Qt::Key_BracketRight);
+    press(w, controller, Qt::Key_V, Qt::ControlModifier);
+    REQUIRE(*slot(1, 1) == Approx(3.0));
+    REQUIRE(*slot(2, 1) == Approx(4.0));
+
+    // Z alone (z, then Ctrl+X), cut from Mem 2 and pasted into Mem 3. (x
+    // after Ctrl isn't X's leader, nor z after Ctrl Z's)
+    press(w, controller, Qt::Key_Z);
+    press(w, controller, Qt::Key_X, Qt::ControlModifier);
+    REQUIRE(tm.model.getKeyMode() == mgo::KeyMode::None);
+    REQUIRE(!slot(1, 1));
+    REQUIRE(*slot(2, 1) == Approx(4.0));
+    press(w, controller, Qt::Key_BracketRight);
+    press(w, controller, Qt::Key_V, Qt::ControlModifier);
+    REQUIRE(*slot(1, 2) == Approx(3.0));
+    REQUIRE(!slot(2, 2));
+
+    // Ctrl+Z undoes the paste, then the cut
+    press(w, controller, Qt::Key_Z, Qt::ControlModifier);
+    REQUIRE(tm.model.getKeyMode() == mgo::KeyMode::None);
+    REQUIRE(!slot(1, 2));
+    press(w, controller, Qt::Key_Z, Qt::ControlModifier);
+    REQUIRE(*slot(1, 1) == Approx(3.0));
+
+    // The menu and the hints after a leader show them as e.g. "z Ctrl+c"
+    REQUIRE(mgo::shortcutText(mgo::key::a1_CtrlC, tm.config) == "z Ctrl+c");
+    REQUIRE(mgo::shortcutText(mgo::key::CtrlV, tm.config) == "Ctrl+v");
+    const auto commands = mgo::buildCommands(tm.config);
+    const auto hints = mgo::commandsForLeader(commands, mgo::KeyMode::Axis2);
+    REQUIRE(std::ranges::any_of(hints, [](const mgo::Command* c) {
+        return c->key == mgo::key::a2_CtrlV;
+    }));
+    REQUIRE(mgo::followUpKeyName(mgo::key::a2_CtrlV) == "Ctrl+v");
 }
 
 TEST_CASE("UI: multi-pass through the controller")

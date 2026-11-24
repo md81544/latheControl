@@ -8,6 +8,7 @@
 #include <chrono>
 #include <cmath>
 #include <ctime>
+#include <functional>
 #include <sstream>
 #include <utility>
 
@@ -2627,11 +2628,53 @@ std::optional<long> Model::memoryStep(int axisNumber) const
     return std::lround(*mm / m->getConversionFactor());
 }
 
+std::vector<int> Model::memoryAxes(int axisNumber) const
+{
+    std::vector<int> axes;
+    for (int n = 1; n <= AXES; ++n) {
+        if ((axisNumber == 0 || axisNumber == n) && hasAxis(n)) {
+            axes.push_back(n);
+        }
+    }
+    return axes;
+}
+
+void Model::pushMemoryUndo()
+{
+    MemoryUndo undo { m_memory, m_memoryClipboard };
+    // (Not again if nothing has changed since: e.g. storing the same place
+    // twice. undoMemory() also skips any which are the same as now)
+    if (!m_memoryUndo.empty() && m_memoryUndo.back() == undo) {
+        return;
+    }
+    if (m_memoryUndo.size() == MEMORY_UNDO_LEVELS) {
+        m_memoryUndo.erase(m_memoryUndo.begin());
+    }
+    m_memoryUndo.push_back(std::move(undo));
+}
+
 void Model::storePosition(int axisNumber)
 {
+    if (axisNumber == 0) {
+        // (One undo for them all)
+        pushMemoryUndo();
+        for (int n = 1; n <= AXES; ++n) {
+            const ManualAxis* axis = manualAxis(n);
+            if (hasAxis(n) && (!axis || axis->hasReading())) {
+                storePositionInSlot(n);
+            }
+        }
+        return;
+    }
     if (!hasAxis(axisNumber)) {
         return;
     }
+    pushMemoryUndo();
+    storePositionInSlot(axisNumber);
+}
+
+void Model::storePositionInSlot(int axisNumber)
+{
     auto& slot = m_memory.at(static_cast<std::size_t>(axisNumber - 1)).at(m_currentMemory);
     if (axisNumber == 1 || axisNumber == 2) {
         slot = motorPosition(axisNumber);
@@ -2645,6 +2688,7 @@ void Model::storePosition(int axisNumber, double mm)
     if (!hasAxis(axisNumber)) {
         return;
     }
+    pushMemoryUndo();
     auto& slot = m_memory.at(static_cast<std::size_t>(axisNumber - 1)).at(m_currentMemory);
     if (axisNumber == 1 || axisNumber == 2) {
         // (To the nearest step: a slot holds a position the motor can go to
@@ -2658,18 +2702,152 @@ void Model::storePosition(int axisNumber, double mm)
 
 void Model::clearCurrentMemorySlot(int axisNumber)
 {
-    if (hasAxis(axisNumber)) {
-        m_memory.at(static_cast<std::size_t>(axisNumber - 1)).at(m_currentMemory).reset();
+    const auto axes = memoryAxes(axisNumber);
+    if (axes.empty()) {
+        return;
+    }
+    pushMemoryUndo();
+    for (const int n : axes) {
+        m_memory.at(static_cast<std::size_t>(n - 1)).at(m_currentMemory).reset();
     }
 }
 
 void Model::clearMemory(int axisNumber)
 {
-    if (hasAxis(axisNumber)) {
-        for (auto& slot : m_memory.at(static_cast<std::size_t>(axisNumber - 1))) {
+    if (!hasAxis(axisNumber)) {
+        return;
+    }
+    const auto index = static_cast<std::size_t>(axisNumber - 1);
+    const auto clear = [index](
+                           std::array<std::vector<std::optional<double>>, AXES>& memory,
+                           std::optional<MemoryClipboard>& clipboard) {
+        for (auto& slot : memory.at(index)) {
             slot.reset();
         }
+        if (clipboard) {
+            clipboard->holds.at(index) = false;
+            clipboard->values.at(index).reset();
+            if (std::ranges::none_of(clipboard->holds, std::identity {})) {
+                clipboard.reset();
+            }
+        }
+    };
+    clear(m_memory, m_memoryClipboard);
+    // (So an undo never brings back a position from before, which would be
+    // somewhere else now. The other axes' changes can still be undone)
+    for (auto& undo : m_memoryUndo) {
+        clear(undo.memory, undo.clipboard);
     }
+}
+
+bool Model::canCopyMemorySlot(int axisNumber) const
+{
+    return std::ranges::any_of(memoryAxes(axisNumber), [this](int n) {
+        return getMemory(n, m_currentMemory).has_value();
+    });
+}
+
+bool Model::canPasteMemorySlot(int axisNumber) const
+{
+    return m_memoryClipboard && std::ranges::any_of(memoryAxes(axisNumber), [this](int n) {
+               return m_memoryClipboard->holds.at(static_cast<std::size_t>(n - 1));
+           });
+}
+
+void Model::copyMemorySlot(int axisNumber)
+{
+    if (!canCopyMemorySlot(axisNumber)) {
+        m_warning = axisNumber == 0
+            ? fmt::format("Mem {} is empty: nothing to copy", m_currentMemory + 1)
+            : fmt::format("{} isn't set in this slot", axisLabel(axisNumber));
+        return;
+    }
+    pushMemoryUndo();
+    MemoryClipboard clipboard;
+    clipboard.slot = m_currentMemory;
+    for (const int n : memoryAxes(axisNumber)) {
+        const auto index = static_cast<std::size_t>(n - 1);
+        clipboard.holds.at(index) = true;
+        clipboard.values.at(index) = m_memory.at(index).at(m_currentMemory);
+    }
+    m_memoryClipboard = clipboard;
+    MGOLOG(fmt::format("Memory: copied Mem {}", m_currentMemory + 1));
+}
+
+void Model::cutMemorySlot(int axisNumber)
+{
+    if (!canCopyMemorySlot(axisNumber)) {
+        copyMemorySlot(axisNumber); // (which warns)
+        return;
+    }
+    // (One undo for both: copying's own finds nothing has changed yet)
+    pushMemoryUndo();
+    copyMemorySlot(axisNumber);
+    for (const int n : memoryAxes(axisNumber)) {
+        m_memory.at(static_cast<std::size_t>(n - 1)).at(m_currentMemory).reset();
+    }
+    m_memoryClipboard->cut = true;
+}
+
+void Model::pasteMemorySlot(int axisNumber)
+{
+    if (!canPasteMemorySlot(axisNumber)) {
+        m_warning = !m_memoryClipboard || axisNumber == 0
+            ? "Nothing to paste: copy a memory slot first (Ctrl+C)"
+            : fmt::format("Nothing to paste for {}: copy it first", axisLabel(axisNumber));
+        return;
+    }
+    pushMemoryUndo();
+    for (const int n : memoryAxes(axisNumber)) {
+        const auto index = static_cast<std::size_t>(n - 1);
+        if (m_memoryClipboard->holds.at(index)) {
+            m_memory.at(index).at(m_currentMemory) = m_memoryClipboard->values.at(index);
+        }
+    }
+    MGOLOG(
+        fmt::format(
+            "Memory: pasted Mem {}'s values into Mem {}",
+            m_memoryClipboard->slot + 1,
+            m_currentMemory + 1));
+}
+
+std::optional<std::size_t> Model::memoryClipboardSourceSlot(int axisNumber) const
+{
+    if (!m_memoryClipboard || !hasAxis(axisNumber)) {
+        return std::nullopt;
+    }
+    const auto index = static_cast<std::size_t>(axisNumber - 1);
+    const std::size_t slot = m_memoryClipboard->slot;
+    const auto& now = m_memory.at(index).at(slot);
+    const bool unchanged
+        = m_memoryClipboard->cut ? !now.has_value() : now == m_memoryClipboard->values.at(index);
+    if (!m_memoryClipboard->holds.at(index) || !unchanged) {
+        return std::nullopt;
+    }
+    return slot;
+}
+
+bool Model::canUndoMemory() const
+{
+    const MemoryUndo now { m_memory, m_memoryClipboard };
+    return std::ranges::any_of(m_memoryUndo, [&now](const MemoryUndo& u) { return u != now; });
+}
+
+void Model::undoMemory()
+{
+    // (Skipping any which changed nothing)
+    const MemoryUndo now { m_memory, m_memoryClipboard };
+    while (!m_memoryUndo.empty() && m_memoryUndo.back() == now) {
+        m_memoryUndo.pop_back();
+    }
+    if (m_memoryUndo.empty()) {
+        m_warning = "Nothing to undo in the memory slots";
+        return;
+    }
+    m_memory = std::move(m_memoryUndo.back().memory);
+    m_memoryClipboard = std::move(m_memoryUndo.back().clipboard);
+    m_memoryUndo.pop_back();
+    MGOLOG("Memory: undone");
 }
 
 void Model::goToCurrentMemory(int axisNumber)
