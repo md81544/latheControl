@@ -45,11 +45,6 @@ notes.
   → [Tool library](#tool-library)
 
 #### Mill
-- Bolt hole mode (Modes, `B`): a circle of holes about where X and Y are,
-  `n` and `p` round them, X moving and Y wound (with the ticks). Check which
-  way clockwise comes out, and that X's go-tos finish on its scale there.
-  With a depth: Z's go-to once X and Y are there, and `n`/`p` refused until
-  Z is back up. → [Bolt hole mode](#bolt-hole-mode)
 - `XB` (re-base by hand), at rest and with a multi-pass paused.
   → [Re-basing an axis by hand](#re-basing-an-axis-by-hand)
 - Re-basing between passes in a run without pauses; the "waiting for X's
@@ -3605,7 +3600,8 @@ change.
 
 #### Bolt hole mode
 
-- **Done (24 Nov 2026), not yet tried on the mill.** First asked for in the
+- **Done (24 Nov 2026), and tried on the mill the same day: all as
+      expected.** First asked for in the
       Mill list as: "Give option for using A axis (in which case it's a
       simple rotation of the rotary table per bolt hole) or Y axis, in which
       a series of coordinates should be calculated. The rest of the mode
@@ -3623,8 +3619,8 @@ change.
       chord), to check with calipers.
     - Angles are from +Y (0° is the hole with the highest Y, as asked),
       clockwise seen from above, from +Y towards +X. That assumes X goes up
-      to the right and Y away from you, as on a DRO: to check on the mill.
-      The numbering can be anticlockwise instead. -30 is taken as 330.
+      to the right and Y away from you, as on a DRO: it comes out right on
+      the mill. The numbering can be anticlockwise instead. -30 is taken as 330.
     - The centre was asked about: a DRO's bolt hole function usually takes a
       typed centre, but here the usual way is to find the centre first, so
       "Here" is the default, with 0, 0 and the memory slots as the others.
@@ -3651,8 +3647,8 @@ change.
       object, so it outlived the test, and fired during a later one,
       quitting a destroyed model and corrupting the heap. Its timers now go
       with the test.
-- **Done (24 Nov 2026), not yet tried on the mill: a depth on Z, and Z
-      guarding n and p.** Asked for the same day.
+- **Done (24 Nov 2026): a depth on Z, and Z guarding n and p.** Asked
+      for the same day, and tried on the mill that day: all as expected.
     - The dialog's last line, "Z depth", only with a manual axis 4 (the
       mill's Z, on the quill): a Z position, or empty for none. It's carried
       over to the next time.
