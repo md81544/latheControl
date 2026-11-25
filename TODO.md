@@ -1864,7 +1864,19 @@ notes.
       pick up noise differently), but anything that cuts the drift is
       cutting the same source. Likely candidates, best first:
         - A mains filter on the VFD's input: the noise most likely
-          reaches the mill through the shared mains wiring and earth
+          reaches the mill through the shared mains wiring and earth.
+          **Tried 25 Nov 2026:** Mitsubishi's FFR-CS-050-14A-SF1, wired in
+          (no RCD trips). The mill's X scale still drifts while the lathe's
+          spindle runs, but Y and Z stay steady. All three share the
+          sender, its supply, the FTDI link and lc's reader, so the noise
+          gets in through what's X's alone: its scale, read head and cable,
+          or the X stepper (motor, driver and supply) bolted to the table.
+          A slow drift, rather than garbled readings, suggests the scale's
+          own counter is being upset, not the serial link. Next, one at a
+          time: the mill's X driver unplugged from the mains; X's and Y's
+          cables swapped at the sender; a ferrite or common-mode reactor on
+          the VFD's motor output (the input filter does nothing for the
+          motor cable's leakage to the lathe's frame and earth)
         - A shielded motor cable, its shield earthed at the VFD and the
           motor, and ferrites on it, to keep the noise in that loop rather
           than in the lathe's frame
