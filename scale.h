@@ -106,7 +106,9 @@ public:
         // taken as slips, and taken off, rather than as the table moving or a
         // misread. While this is on, the misread check at rest (faultMm) waits
         // for the reading to settle, as a slip comes in through the sender's
-        // smoothing a bit at a time
+        // smoothing a bit at a time, and a change at rest goes on settling
+        // for as long as the reading keeps jumping (not just maxSettleTime),
+        // as slips can come every few seconds
         int32_t slipCounts { 0 };
     };
 

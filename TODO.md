@@ -47,8 +47,9 @@ notes.
 #### Mill
 - X's scale slips taken off at rest (`Axis1ScaleSlipCounts = 512`): with
   the lathe running, X at rest should hold its position, with "slipped by"
-  lines in lc.log and no dialog. Check that a multi-pass's waits between
-  passes ride through them too. → [The lathe Z scale](#the-lathe-z-scale)
+  lines in lc.log and no dialog (the first try, 25 Nov 2026, still gave
+  dialogs when slips came quickly; fixed since). Check that a multi-pass's
+  waits between passes ride through them too. → [The lathe Z scale](#the-lathe-z-scale)
 - `XB` (re-base by hand), at rest and with a multi-pass paused.
   → [Re-basing an axis by hand](#re-basing-an-axis-by-hand)
 - Re-basing between passes in a run without pauses; the "waiting for X's
@@ -1921,11 +1922,19 @@ notes.
           second), except for a jump too big to be slips (more than 10 of
           them, plus `Axis1ScaleFaultMm`), which still stops everything at
           once. Not covered: slips while moving or while settling after a
-          move (they show as a mismatch, and the dialog asks), and a
-          settle that ends part way through a slip (still jumping after the
-          longest settle time), which also shows as a mismatch. Y and Z
-          (the manual axes) aren't covered either. Not yet tried on the
-          machine
+          move (they show as a mismatch, and the dialog asks). Y and Z (the
+          manual axes) aren't covered either.
+          **First try on the mill (25 Nov 2026), lathe started and stopped
+          twice:** 15 slips taken off, but three misread dialogs. The
+          slips came every 2-5 s, so the reading was often still jumping
+          when the longest settle time (3 s) ran out; it settled part way
+          through, 10-15 mm out, which is past `Axis1ScaleFaultMm`. Later
+          settles took the slips off, so the scale came back into line
+          behind the dialog. Fixed: with slips on, a change at rest now
+          goes on settling until the jumps stop (1.5 s without one), with
+          no time limit. A jump too big to be slips is still seen at once.
+          (The log also showed the slips' count with the wrong sign on the
+          reversed scale; fixed.) To try again
         - A shielded motor cable, its shield earthed at the VFD and the
           motor, and ferrites on it, to keep the noise in that loop rather
           than in the lathe's frame

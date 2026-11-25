@@ -128,14 +128,23 @@ void AxisScale::update(double motorMm, bool motorRunning, double motorSpeed, Clo
         checkForMisreadWhileSettling(*counts);
     }
     const bool steady = now - m_lastChangeAt >= m_settings.settleTime;
+    // (Flicker of a count, which can go on for ever on the mill, still counts
+    // as steady; jumps don't)
+    const bool jumpsStopped = steady || now - m_lastJumpAt >= m_settings.settleTime;
+    // With slips taken off, a change at rest goes on settling for as long as
+    // the reading keeps jumping: on the mill, slips came every 2-5 s while
+    // the lathe ran (25 Nov 2026), so after the longest settle time the
+    // reading was often part way through one, and was taken as a misread.
+    // (A jump too big to be slips is still seen at once, above)
+    if (m_changedAtRest && m_settings.slipCounts > 0 && !jumpsStopped) {
+        return;
+    }
     if (!steady && now - m_stoppedAt < m_settings.maxSettleTime) {
         return;
     }
     m_state = State::Settled;
     ++m_settleCount;
-    // (Flicker of a count, which can go on for ever on the mill, still counts
-    // as steady; jumps don't)
-    m_lastSettleSteady = steady || now - m_lastJumpAt >= m_settings.settleTime;
+    m_lastSettleSteady = jumpsStopped;
     // (Before the reading it settled at is noted, as both compare with the
     // one before)
     if (m_aligned && m_changedAtRest && m_settings.slipCounts > 0 && !correctSlips(*counts)) {
@@ -236,16 +245,18 @@ bool AxisScale::correctSlips(int32_t counts)
         || std::abs(change - slips * m_settings.slipCounts) > SLIP_TOLERANCE_COUNTS) {
         return false;
     }
-    // The position stays where it was, give or take the flicker
+    // The position stays where it was, give or take the flicker. (Logged
+    // the way the reading went, as the scale may be reversed)
     const double slipMm = rawMm(slips * m_settings.slipCounts);
+    const int32_t slipsShown = m_settings.reversed ? -slips : slips;
     m_offsetMm -= slipMm;
     m_slipsCorrected += std::abs(slips);
     MGOLOG(
         fmt::format(
-            "*** Warning *** {} scale slipped by {} period{} of {} counts ({:+.4f} mm) at rest, "
+            "*** Warning *** {} scale slipped by {:+} period{} of {} counts ({:+.4f} mm) at rest, "
             "most likely interference: taken off ({} so far)",
             m_settings.axisLabel,
-            slips,
+            slipsShown,
             std::abs(slips) == 1 ? "" : "s",
             m_settings.slipCounts,
             slipMm,

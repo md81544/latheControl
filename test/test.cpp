@@ -1364,6 +1364,37 @@ TEST_CASE("Scale:   Slips of whole periods at rest are taken off")
     REQUIRE(*t.axisScale->positionMm() == Approx(0.18));
 }
 
+TEST_CASE("Scale:   Slips coming every few seconds keep the reading settling")
+{
+    // As on the mill (25 Nov 2026): each slip comes in through the sender's
+    // smoothing over about a second, and the next comes before the reading
+    // has been steady for long
+    auto settings = axisScaleSettings(false, 5.0);
+    settings.slipCounts = 512;
+    AxisScaleTest t(settings);
+    t.rest(0.0, 600);
+    const int settles = t.axisScale->settleCount();
+    int32_t counts = 1'000;
+    for (int slip = 0; slip < 6; ++slip) {
+        for (const int32_t part : { 150, 150, 150, 62 }) {
+            counts += part;
+            *t.counts = counts;
+            t.update(0.0, false, 250);
+        }
+        // (Less than the settle time, 500ms, before the next)
+        t.rest(0.0, 300);
+        REQUIRE(!t.axisScale->misreadJumpMm());
+        REQUIRE(!t.axisScale->isSettled());
+    }
+    REQUIRE(t.axisScale->settleCount() == settles);
+    // Once they stop, all six are taken off together
+    t.rest(0.0, 600);
+    REQUIRE(t.axisScale->isSettled());
+    REQUIRE(t.axisScale->isSteady());
+    REQUIRE(!t.axisScale->misreadJumpMm());
+    REQUIRE(*t.axisScale->positionMm() == Approx(0.0));
+}
+
 TEST_CASE("Scale:   Slips the other way, on a reversed scale")
 {
     auto settings = axisScaleSettings(true, 5.0);
