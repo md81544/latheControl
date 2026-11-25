@@ -1872,9 +1872,33 @@ notes.
           gets in through what's X's alone: its scale, read head and cable,
           or the X stepper (motor, driver and supply) bolted to the table.
           A slow drift, rather than garbled readings, suggests the scale's
-          own counter is being upset, not the serial link. Next, one at a
-          time: the mill's X driver unplugged from the mains; X's and Y's
-          cables swapped at the sender; a ferrite or common-mode reactor on
+          own counter is being upset, not the serial link. Isolating the
+          mill's X stepper made no difference (25 Nov 2026), so it's not
+          the way in. Swapping X's and Y's scales at the sender moved the
+          trouble to Y, so it follows the X scale (or its cable), not the
+          sender's input. It isn't a drift either: the reading jumps by
+          almost exactly 5 mm, holds (flickering now and then), then jumps
+          another 5 mm, and it doesn't seem to come back after the lathe
+          stops. lc.log from 25 Nov (14:23:40 to 14:24:42, the table at
+          rest) shows 13 jumps in about a minute. Each one adds exactly
+          512 raw counts (sometimes two or four together), and always in
+          the same direction. 512 counts is 0.2" (5.08 mm) at the scales'
+          2560 counts per inch. 0.2" is the electrode pitch of these
+          capacitive scales as far as I know, and the jumps add up instead
+          of flipping back, so the read head is most likely miscounting
+          whole periods of its pattern. A flipped bit in the serial data
+          would go back and forth instead. So the count is really lost,
+          not just misread. lc's at-rest misread check (`Axis1ScaleFaultMm
+          = 5`) caught every jump, but only just: after the sender's
+          smoothing, they reached 5.02-5.18 mm. Next: swap only the
+          cables, to tell the scale from its cable; reroute X's cable away
+          from the lathe and fit a ferrite near the read head; check the
+          read head's mounting and where X's scale sits relative to the
+          lathe. Perhaps, if the hardware can't be quietened: with the
+          table at rest, treat a settled change of a whole number of 512
+          raw counts (give or take a count or two) as a slip and take it
+          off, instead of stopping (a slip while moving would still go
+          unseen); a ferrite or common-mode reactor on
           the VFD's motor output (the input filter does nothing for the
           motor cable's leakage to the lathe's frame and earth)
         - A shielded motor cable, its shield earthed at the VFD and the
