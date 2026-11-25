@@ -1333,6 +1333,107 @@ TEST_CASE("Scale:   A jump at rest bigger than the fault limit is a misread")
     REQUIRE(!off.axisScale->misreadJumpMm());
 }
 
+TEST_CASE("Scale:   Slips of whole periods at rest are taken off")
+{
+    auto settings = axisScaleSettings(false, 5.0);
+    settings.slipCounts = 512;
+    AxisScaleTest t(settings);
+    t.rest(0.0, 600);
+    REQUIRE(t.axisScale->isAligned());
+    REQUIRE(*t.axisScale->positionMm() == Approx(0.0));
+    // One slip, coming in through the sender's smoothing a bit at a time (as
+    // on the mill): not a misread, even when it's past faultMm
+    for (const int32_t counts : { 1'150, 1'300, 1'450, 1'513 }) {
+        *t.counts = counts;
+        t.update(0.0, false, 250);
+    }
+    REQUIRE(!t.axisScale->misreadJumpMm());
+    t.rest(0.0, 600);
+    REQUIRE(t.axisScale->isSteady());
+    REQUIRE(!t.axisScale->misreadJumpMm());
+    // Taken off: the position is where it was, give or take the count over
+    REQUIRE(*t.axisScale->positionMm() == Approx(0.01));
+    // Two at once, a few counts short, are taken off too
+    *t.counts = 1'513 + 2 * 512 - 3;
+    t.rest(0.0, 600);
+    REQUIRE(!t.axisScale->misreadJumpMm());
+    REQUIRE(*t.axisScale->positionMm() == Approx(-0.02));
+    // The table being pushed a little still moves the position
+    *t.counts = 1'513 + 2 * 512 - 3 + 20;
+    t.rest(0.0, 600);
+    REQUIRE(*t.axisScale->positionMm() == Approx(0.18));
+}
+
+TEST_CASE("Scale:   Slips the other way, on a reversed scale")
+{
+    auto settings = axisScaleSettings(true, 5.0);
+    settings.slipCounts = 512;
+    AxisScaleTest t(settings);
+    t.rest(3.0, 600);
+    *t.counts = 1'000 - 512;
+    t.rest(3.0, 600);
+    REQUIRE(!t.axisScale->misreadJumpMm());
+    REQUIRE(*t.axisScale->positionMm() == Approx(3.0));
+}
+
+TEST_CASE("Scale:   With slips taken off, other jumps at rest are still misreads")
+{
+    auto settings = axisScaleSettings(false, 5.0);
+    settings.slipCounts = 512;
+    {
+        // Not a whole number of slips: a misread once it has settled
+        AxisScaleTest t(settings);
+        t.rest(0.0, 600);
+        *t.counts = 1'800;
+        t.update(0.0, false);
+        REQUIRE(!t.axisScale->misreadJumpMm());
+        t.rest(0.0, 600);
+        REQUIRE(t.axisScale->misreadJumpMm());
+        REQUIRE(*t.axisScale->misreadJumpMm() == Approx(8.0));
+    }
+    {
+        // Too big to be slips (more than MAX_SLIPS_AT_ONCE): seen at once,
+        // even if it lands near a whole number of them
+        AxisScaleTest t(settings);
+        t.rest(0.0, 600);
+        *t.counts = 1'000 + 100 * 512;
+        t.update(0.0, false);
+        REQUIRE(t.axisScale->misreadJumpMm());
+    }
+    {
+        // A whole number of slips, but too many at once: a misread when it
+        // settles
+        AxisScaleTest t(settings);
+        t.rest(0.0, 600);
+        *t.counts = 1'000 + 11 * 512;
+        t.rest(0.0, 600);
+        REQUIRE(t.axisScale->misreadJumpMm());
+    }
+    {
+        // Less than faultMm, and not slips: the table moved (e.g. knocked)
+        AxisScaleTest t(settings);
+        t.rest(0.0, 600);
+        *t.counts = 1'300;
+        t.rest(0.0, 600);
+        REQUIRE(!t.axisScale->misreadJumpMm());
+        REQUIRE(*t.axisScale->positionMm() == Approx(3.0));
+    }
+}
+
+TEST_CASE("Scale:   Slips aren't looked for after a move")
+{
+    auto settings = axisScaleSettings(false, 5.0);
+    settings.slipCounts = 512;
+    AxisScaleTest t(settings);
+    t.rest(0.0, 600);
+    // The motor moves 10 mm, but the table goes 5.12 mm further: the
+    // difference is left for the mismatch check to ask about
+    t.update(10.0, true);
+    *t.counts = 1'000 + 1'000 + 512;
+    t.rest(10.0, 600);
+    REQUIRE(*t.axisScale->differenceMm(10.0) == Approx(5.12));
+}
+
 namespace {
 
 // A manual axis (1 count = 0.01mm) on a scale whose reading the test sets

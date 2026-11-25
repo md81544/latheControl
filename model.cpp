@@ -3843,6 +3843,7 @@ void Model::configureScale(int axisNumber)
         .lag = std::chrono::milliseconds(m_config.readLong(key("LagMs"), 0)),
         .stallMm = m_config.readDouble(key("StallMm"), 0.0),
         .movingFaultMm = m_config.readDouble(key("MovingFaultMm"), 0.0),
+        .slipCounts = static_cast<int32_t>(m_config.readLong(key("SlipCounts"), 0)),
     };
     // (Simulated, following the motor's actual steps, as a table with no
     // backlash would: so neither the backlash compensation nor re-basing the

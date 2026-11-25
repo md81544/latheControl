@@ -98,7 +98,27 @@ public:
         // misreadJumpMm()). The table can't outrun the motor by more than the
         // backlash
         double movingFaultMm { 0.0 };
+        // A scale which, upset by interference, can slip by whole periods of
+        // its pattern (in raw counts; 0 is off): the mill's iGaging scales
+        // jump by exactly 512 counts (0.2") at a time while the lathe's VFD
+        // runs. With the axis at rest, a change of the reading which settles
+        // at a whole number of these, give or take SLIP_TOLERANCE_COUNTS, is
+        // taken as slips, and taken off, rather than as the table moving or a
+        // misread. While this is on, the misread check at rest (faultMm) waits
+        // for the reading to settle, as a slip comes in through the sender's
+        // smoothing a bit at a time
+        int32_t slipCounts { 0 };
     };
+
+    // How far a settled change at rest may be from a whole number of slips
+    // and still be taken as slips. (On the mill, 25 Nov 2026, they were
+    // within 3 counts, with the reading flickering by a count or two)
+    static constexpr int32_t SLIP_TOLERANCE_COUNTS = 5;
+    // And at most this many slips at once: a bigger jump is a misread (e.g.
+    // the hundreds of mm seen on the mill on 15 Nov 2026), even if it happens
+    // to land near a whole number of slips. (On 25 Nov 2026, up to four came
+    // in at once)
+    static constexpr int32_t MAX_SLIPS_AT_ONCE = 10;
 
     AxisScale(std::unique_ptr<IScale> scale, Settings settings);
 
@@ -165,7 +185,17 @@ private:
     void align(int32_t counts, double motorMm);
     // Starts settling (after a move, or a change at rest)
     void startSettling(int32_t counts, Clock::time_point now);
-    void checkForMisread(int32_t counts);
+    // A change at rest by more than limitMm since the reading last settled
+    // is a misread
+    void checkForMisread(int32_t counts, double limitMm);
+    // While a change at rest settles: with slips taken off, only a jump too
+    // big to be slips (see MAX_SLIPS_AT_ONCE) is a misread straight away;
+    // otherwise, one bigger than faultMm
+    void checkForMisreadWhileSettling(int32_t counts);
+    // On settling after a change at rest: if the change since the last
+    // steady reading is a whole number of slips, takes them off (see
+    // Settings::slipCounts). Returns whether it did
+    bool correctSlips(int32_t counts);
     // Called on each update while the motor is running (see Settings::stallMm
     // and movingFaultMm)
     void checkWhileMoving(int32_t counts, double motorMm, double motorSpeed, Clock::time_point now);
@@ -199,6 +229,11 @@ private:
     std::optional<double> m_lastMotorMm;
     // The reading when it last settled (or was lined up), to watch at rest
     int32_t m_settledCounts { 0 };
+    // The reading when it last settled steadily (or was lined up), so slips
+    // are counted from a reading which wasn't part way through one
+    int32_t m_steadyCounts { 0 };
+    // How many slips have been taken off, for the log
+    int m_slipsCorrected { 0 };
     // When the motor last stopped (for the log)
     Clock::time_point m_motorStoppedAt;
     // Whether it's settling after a change at rest, not a move
