@@ -45,11 +45,6 @@ notes.
   → [Tool library](#tool-library)
 
 #### Mill
-- X's scale slips taken off at rest (`Axis1ScaleSlipCounts = 512`): with
-  the lathe running, X at rest should hold its position, with "slipped by"
-  lines in lc.log and no dialog (the first try, 25 Nov 2026, still gave
-  dialogs when slips came quickly; fixed since). Check that a multi-pass's
-  waits between passes ride through them too. → [The lathe Z scale](#the-lathe-z-scale)
 - `XB` (re-base by hand), at rest and with a multi-pass paused.
   → [Re-basing an axis by hand](#re-basing-an-axis-by-hand)
 - Re-basing between passes in a run without pauses; the "waiting for X's
@@ -147,8 +142,9 @@ notes.
 
 ### Sensors and scales
 - Low priority: quieten the lathe's VFD for the mill's scales, measured
-  with the lathe's Z scale (glitch filter off).
-  → [The lathe Z scale](#the-lathe-z-scale)
+  with the lathe's Z scale (glitch filter off). Only the mill's X scale is
+  upset (it slips by whole 0.2" periods): check its earthing, try it off
+  the table, or replace it. → [The lathe Z scale](#the-lathe-z-scale)
 - A scale on the lathe's X (waiting for the 5 V to 3.3 V boards and for Z's
   scale to be proven); the code is ready. → [An array of axes](#an-array-of-axes)
 - The finishing moves' "the scale's reading didn't settle" (it flickers a
@@ -1895,46 +1891,52 @@ notes.
           would go back and forth instead. So the count is really lost,
           not just misread. lc's at-rest misread check (`Axis1ScaleFaultMm
           = 5`) caught every jump, but only just: after the sender's
-          smoothing, they reached 5.02-5.18 mm. Next: swap only the
-          cables, to tell the scale from its cable; reroute X's cable away
-          from the lathe and fit a ferrite near the read head; check the
-          read head's mounting and where X's scale sits relative to the
-          lathe; a ferrite or common-mode reactor on the VFD's motor
-          output (the input filter does nothing for the motor cable's
-          leakage to the lathe's frame and earth).
+          smoothing, they reached 5.02-5.18 mm.
           **Hardware, as it stands (25 Nov 2026):** the scales' cables are
-          moulded into their read heads, so they can't be swapped. No
-          ferrites to hand. The VFD's motor cable has been moved as far
-          from the mill as it can go; it's thick, with the earth inside it,
-          so threading only the phases through a ferrite isn't easy. X's
-          and Y's scales are only 40-50 mm apart, so position alone
-          doesn't explain why X's is the one upset. The mains filter is
-          worth keeping in: it doesn't trip the RCDs, and it cuts what the
-          VFD sends back into the mains, even if that wasn't what upsets X.
-          **Software (25 Nov 2026): slips taken off at rest.**
-          `Axis1ScaleSlipCounts = 512` in lc_mill.cfg (`AxisScale`, off
-          unless set). With the axis at rest, a change which settles
-          steadily at a whole number of 512 raw counts (give or take 5, up
-          to 10 at once) is taken off the scale's offset, so the position
-          stays put and nothing stops; lc.log says "slipped by ...". The
-          misread check at rest then waits for the reading to settle (a
-          slip comes in through the sender's smoothing over about a
-          second), except for a jump too big to be slips (more than 10 of
-          them, plus `Axis1ScaleFaultMm`), which still stops everything at
-          once. Not covered: slips while moving or while settling after a
-          move (they show as a mismatch, and the dialog asks). Y and Z (the
-          manual axes) aren't covered either.
-          **First try on the mill (25 Nov 2026), lathe started and stopped
-          twice:** 15 slips taken off, but three misread dialogs. The
-          slips came every 2-5 s, so the reading was often still jumping
-          when the longest settle time (3 s) ran out; it settled part way
-          through, 10-15 mm out, which is past `Axis1ScaleFaultMm`. Later
-          settles took the slips off, so the scale came back into line
-          behind the dialog. Fixed: with slips on, a change at rest now
-          goes on settling until the jumps stop (1.5 s without one), with
-          no time limit. A jump too big to be slips is still seen at once.
-          (The log also showed the slips' count with the wrong sign on the
-          reversed scale; fixed.) To try again
+          moulded into their read heads, so they can't be swapped. X's and
+          Y's cables run from the sender in the same conduit, and the
+          scales are only 40-50 mm apart, so neither the cable route nor
+          the position explains why only X's is upset: most likely the
+          scale itself, or how it's mounted. The VFD's motor cable has been
+          moved as far from the mill as it can go (it's thick, with the
+          earth inside, so threading only the phases through a ferrite
+          isn't easy). No ferrites to hand yet. The mains filter is worth
+          keeping in: it doesn't trip the RCDs, and it cuts what the VFD
+          sends back into the mains.
+          **Next (hardware):** check with a meter whether X's scale body
+          is really earthed to the table (the extrusion is probably
+          anodised, which insulates, so being bolted down may not be
+          enough), and compare with Y's; if it isn't, a wire from a
+          scratched spot to the table. Run the lathe with X's scale
+          unbolted and laid on something insulated, still plugged in: if
+          it still slips, it's the scale (replace it); if not, it's the
+          mounting. A replacement must speak the sender's protocol
+          (iGaging's 21-bit, 2560 counts per inch; the plug looks like USB
+          but isn't). Ferrites on X's cable and the VFD's motor output
+          once ordered.
+          **Tried in software, and taken out (25 Nov 2026):** with
+          `Axis1ScaleSlipCounts = 512`, a change at rest that settled at a
+          whole number of slips (within 5 counts) was taken off the
+          scale's offset instead of stopping. At rest it worked (five
+          slips taken off on the second try, once a change at rest kept
+          settling for as long as slips kept coming, as they came every
+          2-5 s). But every slip during a move still stopped everything:
+          the slips always go the same way (+ in lc's frame), so moving
+          right one looks like a misread (over `Axis1ScaleMovingFaultMm`
+          ahead) and moving left like a stall (over `Axis1ScaleStallMm`
+          behind). A slip can't be told apart reliably while moving, as
+          the sender's lag leaves the reading up to about 0.8 mm off, and
+          guessing would hide real stalls. A dozen stops in under three
+          minutes, so it was reverted rather than kept for the at-rest
+          case alone. Lesson from the dialogs: with the lathe running,
+          answer N (keep the motor's position); Y took the slipped
+          reading four times, moving X's position by 5-10 mm each time.
+          If the hardware can't be fixed, the simplest software help would
+          be a way to turn X's scale off (checks and re-basing) while the
+          lathe runs, and back on (lined up again) after.
+        - A ferrite or common-mode reactor on the VFD's motor output (the
+          input filter does nothing for the motor cable's leakage to the
+          lathe's frame and earth)
         - A shielded motor cable, its shield earthed at the VFD and the
           motor, and ferrites on it, to keep the noise in that loop rather
           than in the lathe's frame

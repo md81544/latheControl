@@ -101,7 +101,7 @@ void AxisScale::update(double motorMm, bool motorRunning, double motorSpeed, Clo
         if (std::abs(change) < REST_CHANGE_COUNTS) {
             return;
         }
-        checkForMisreadWhileSettling(*counts);
+        checkForMisread(*counts);
         MGOLOG(
             fmt::format(
                 "{} scale's reading changed at rest by {:+.4f} mm ({:+} counts), {:.1f} s after "
@@ -125,34 +125,17 @@ void AxisScale::update(double motorMm, bool motorRunning, double motorSpeed, Clo
         m_lastJumpAt = now;
     }
     if (m_changedAtRest) {
-        checkForMisreadWhileSettling(*counts);
+        checkForMisread(*counts);
     }
     const bool steady = now - m_lastChangeAt >= m_settings.settleTime;
-    // (Flicker of a count, which can go on for ever on the mill, still counts
-    // as steady; jumps don't)
-    const bool jumpsStopped = steady || now - m_lastJumpAt >= m_settings.settleTime;
-    // With slips taken off, a change at rest goes on settling for as long as
-    // the reading keeps jumping: on the mill, slips came every 2-5 s while
-    // the lathe ran (25 Nov 2026), so after the longest settle time the
-    // reading was often part way through one, and was taken as a misread.
-    // (A jump too big to be slips is still seen at once, above)
-    if (m_changedAtRest && m_settings.slipCounts > 0 && !jumpsStopped) {
-        return;
-    }
     if (!steady && now - m_stoppedAt < m_settings.maxSettleTime) {
         return;
     }
     m_state = State::Settled;
     ++m_settleCount;
-    m_lastSettleSteady = jumpsStopped;
-    // (Before the reading it settled at is noted, as both compare with the
-    // one before)
-    if (m_aligned && m_changedAtRest && m_settings.slipCounts > 0 && !correctSlips(*counts)) {
-        checkForMisread(*counts, m_settings.faultMm);
-    }
-    if (m_lastSettleSteady) {
-        m_steadyCounts = *counts;
-    }
+    // (Flicker of a count, which can go on for ever on the mill, still counts
+    // as steady; jumps don't)
+    m_lastSettleSteady = steady || now - m_lastJumpAt >= m_settings.settleTime;
     m_settledCounts = *counts;
     m_lastMoveDirection = 0;
     if (m_moveStartMm && !m_changedAtRest && motorMm != *m_moveStartMm) {
@@ -202,23 +185,13 @@ void AxisScale::startSettling(int32_t counts, Clock::time_point now)
     m_lastJumpAt = now;
 }
 
-void AxisScale::checkForMisreadWhileSettling(int32_t counts)
-{
-    // (A slip comes in through the sender's smoothing a bit at a time, so it
-    // can only be told from a misread once it has settled)
-    const double slipsMm = m_settings.slipCounts > 0
-        ? MAX_SLIPS_AT_ONCE * m_settings.slipCounts / m_settings.countsPerMm
-        : 0.0;
-    checkForMisread(counts, m_settings.faultMm + slipsMm);
-}
-
-void AxisScale::checkForMisread(int32_t counts, double limitMm)
+void AxisScale::checkForMisread(int32_t counts)
 {
     if (m_settings.faultMm <= 0.0 || !m_aligned || m_misreadJumpMm) {
         return;
     }
     const double jumpMm = rawMm(counts) - rawMm(m_settledCounts);
-    if (std::abs(jumpMm) <= limitMm) {
+    if (std::abs(jumpMm) <= m_settings.faultMm) {
         return;
     }
     m_misreadJumpMm = jumpMm;
@@ -228,40 +201,7 @@ void AxisScale::checkForMisread(int32_t counts, double limitMm)
             "it's misreading",
             m_settings.axisLabel,
             jumpMm,
-            limitMm));
-}
-
-bool AxisScale::correctSlips(int32_t counts)
-{
-    // (Only from a steady reading to a steady reading: part way through a
-    // slip, or while the reading jumps about, it isn't one yet)
-    if (!m_lastSettleSteady) {
-        return false;
-    }
-    const int32_t change = counts - m_steadyCounts;
-    const int32_t slips
-        = static_cast<int32_t>(std::lround(static_cast<double>(change) / m_settings.slipCounts));
-    if (slips == 0 || std::abs(slips) > MAX_SLIPS_AT_ONCE
-        || std::abs(change - slips * m_settings.slipCounts) > SLIP_TOLERANCE_COUNTS) {
-        return false;
-    }
-    // The position stays where it was, give or take the flicker. (Logged
-    // the way the reading went, as the scale may be reversed)
-    const double slipMm = rawMm(slips * m_settings.slipCounts);
-    const int32_t slipsShown = m_settings.reversed ? -slips : slips;
-    m_offsetMm -= slipMm;
-    m_slipsCorrected += std::abs(slips);
-    MGOLOG(
-        fmt::format(
-            "*** Warning *** {} scale slipped by {:+} period{} of {} counts ({:+.4f} mm) at rest, "
-            "most likely interference: taken off ({} so far)",
-            m_settings.axisLabel,
-            slipsShown,
-            std::abs(slips) == 1 ? "" : "s",
-            m_settings.slipCounts,
-            slipMm,
-            m_slipsCorrected));
-    return true;
+            m_settings.faultMm));
 }
 
 void AxisScale::checkWhileMoving(
@@ -459,7 +399,6 @@ void AxisScale::align(int32_t counts, double motorMm)
     m_aligned = true;
     m_misreadJumpMm.reset();
     m_settledCounts = counts;
-    m_steadyCounts = counts;
     MGOLOG(
         fmt::format(
             "{} scale lined up with the motor at {:.4f} mm (reading {} counts)",
