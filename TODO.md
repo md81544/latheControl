@@ -141,10 +141,10 @@ notes.
   longer lead. → [Cut knurling](#cut-knurling)
 
 ### Sensors and scales
-- Low priority: quieten the lathe's VFD for the mill's scales, measured
-  with the lathe's Z scale (glitch filter off). Only the mill's X scale is
-  upset (it slips by whole 0.2" periods): check its earthing, try it off
-  the table, or replace it. → [The lathe Z scale](#the-lathe-z-scale)
+- The mill's scales and the lathe's VFD: fixed by bonding the sender's
+  GND to the mill's frame (27 Nov 2026), with lc reading them over the
+  FTDI lead. Still to do: a permanent bond, and a longer run.
+  → [The lathe Z scale](#the-lathe-z-scale)
 - A scale on the lathe's X (waiting for the 5 V to 3.3 V boards and for Z's
   scale to be proven); the code is ready. → [An array of axes](#an-array-of-axes)
 - The finishing moves' "the scale's reading didn't settle" (it flickers a
@@ -1914,6 +1914,80 @@ notes.
           (iGaging's 21-bit, 2560 counts per inch; the plug looks like USB
           but isn't). Ferrites on X's cable and the VFD's motor output
           once ordered.
+          **Found (25 Nov 2026): it comes in through the table.** A wire
+          from X's scale body to the table made the slips worse; with the
+          scale off the table (still plugged in), they stopped. So the
+          noise is on the mill's frame (the lathe's VFD sharing its earth),
+          and reaches the scale through its body, which must have been
+          touching the table through its screws. To try: mount it
+          insulated, with fibre or nylon washers and insulating top-hat
+          bushes (or nylon screws), so the screws touch neither the body
+          nor the brackets, then check with a meter that the body reads
+          open to the table. Check whether Y's (and Z's) bodies already
+          read open to the mill: that would explain why they don't slip.
+          If the read head's bracket also conducts, that may need the
+          same. The mill's frame earth stays as it is (it's for safety).
+          **Insulating didn't fix it (27 Nov 2026).** Nylon stand-offs
+          made no difference. Off the mill, touching X's scale strip (not
+          the slider's plate) brought the misreads back. Insulating X's
+          scale body (tape round its ends inside the brackets) cured X,
+          but Y started slipping; insulating Y moved it to Z; with all
+          three insulated, all three slipped. Running the sender off a 9 V
+          battery made no difference. So the sender and scales float as
+          one circuit, and the VFD's noise on the mill's frame finds its
+          way through whichever scale couples best to the frame (the
+          scale body and strip seem to be the sensitive part). Bolting X
+          down while its electronics float was the problem, which is why
+          the wire from its body to the table made it worse.
+          **Next:** tie the sender's GND to the mill's frame, so the scale
+          bodies (on the frame) and their electronics sit at the same
+          potential. First measure AC volts between the sender's GND and
+          the frame with the lathe idle and running. Then, one at a time:
+          unplug the FTDI lead (TouchDRO only) and see whether the slips
+          change, as the sender's only other link to anything is through
+          the Pi; bond the sender's GND to the frame with the scales
+          mounted normally, first with the FTDI lead unplugged, then
+          plugged in. If it's only good unplugged, the bond has made a
+          loop through the Pi (frame, sender, FTDI, Pi, monitor and its
+          earth), and the link wants isolating (an isolated USB adapter,
+          or an opto-isolator on the sender's TX, the only line lc needs).
+          A capacitor (e.g. 10 nF) in place of the wire would give the
+          noise a path without a DC loop, if a solid bond causes trouble.
+          **Also found (27 Nov 2026): 35-40 V AC between a scale's body
+          and the mill's table,** and a tingle felt touching both. Before
+          anything else, find which side it's on: measure each against a
+          known good earth (a socket's earth pin), with the lathe off and
+          on, and check the mill's table has continuity to its plug's
+          earth pin (power off). If the table is the one that's up, it's
+          an earth fault: stop and get it checked. If it's the sender's
+          side, it's most likely leakage from a switch-mode supply's
+          Y capacitor reaching the floating circuit (the Pi's, through
+          the FTDI lead, or the sender's adapter), little current but a
+          noticeable tingle; a resistor of about 10 kΩ across the meter
+          (or its low-impedance mode) collapses that kind of reading.
+          Bonding the sender's GND to the frame would remove it too.
+          Checked: the mill's table has 0 Ω to its plug's earth pin, and
+          reads 4 V AC to earth with the mill on (not running), whether
+          the lathe runs or not. With 0 Ω to earth, 4 V can't be a real
+          current (it would take amps), so it's most likely pickup on the
+          meter's high input impedance, or a difference between two
+          circuits' earths; a resistor across the meter would show which.
+          So the table is sound, and the 35-40 V is on the sender's side.
+          **Fixed (27 Nov 2026): the sender's GND bonded to the mill's
+          frame.** A banana socket on the sender box, wired to its GND,
+          with a lead to the frame (clamped in the vice for the test).
+          Without it, all three scales misread with the lathe running;
+          with it, all three were rock steady. So the scales' electronics
+          must sit at the same potential as their bodies on the frame.
+          The FTDI lead was plugged in, with lc showing the readings, so
+          tying the Pi's GND to the frame through it was fine in that
+          test. Still to do: a permanent bond (planned: a ring terminal in
+          a hole drilled in the back of the column, rather than the vice),
+          then check it with a meter (ohms from the banana socket to the
+          table); and run the lathe for longer with lc, watching lc.log
+          for "changed at rest" jumps and "no readings" dropouts, and the
+          Pi for misbehaving (if it does, isolate the link). The VFD's input
+          filter wasn't the fix, but is still worth keeping (see above)
           **Tried in software, and taken out (25 Nov 2026):** with
           `Axis1ScaleSlipCounts = 512`, a change at rest that settled at a
           whole number of slips (within 5 counts) was taken off the
