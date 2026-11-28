@@ -145,8 +145,10 @@ notes.
   GND to the mill's frame (27 Nov 2026), with lc reading them over the
   FTDI lead. Still to do: a permanent bond, and a longer run.
   → [The lathe Z scale](#the-lathe-z-scale)
-- A scale on the lathe's X (waiting for the 5 V to 3.3 V boards and for Z's
-  scale to be proven); the code is ready. → [An array of axes](#an-array-of-axes)
+- A scale on the lathe's X: a glass scale won't fit, so most likely a
+  magnetic tape scale (questions out to the supplier, 28 Nov 2026). The
+  code is ready, apart from the second set of quadrature scale callbacks
+  below. → [The lathe X scale](#the-lathe-x-scale)
 - The finishing moves' "the scale's reading didn't settle" (it flickers a
   count). → [The lathe Z scale](#the-lathe-z-scale)
 - Show the position as unconfirmed while a scale has no reading.
@@ -2754,6 +2756,52 @@ notes.
     - Later: Y and Z as read-only (display-only) axes from the same reader,
       each with its own zero. Z's depth would help gear cutting, where the
       depth is fed by hand
+
+#### The lathe X scale
+
+- **Which scale for the lathe's X (the cross-slide), 28 Nov 2026.** lc
+  already takes a scale on axis 2 (`Axis2Scale`, quadrature or serial:
+  see lc.cfg), but nothing is fitted yet. A quadrature scale is still
+  preferred, as for Z
+    - **A glass quadrature scale won't fit.** Looked at closely on the
+      lathe (27 Nov 2026): every place for one either eats into how close
+      the tailstock can get to the work (already limited, and none can be
+      lost), or has the whole scale sticking out of the back of the
+      carriage on arms (perhaps no room), or needs a precarious mount high
+      above the carriage
+    - **Most likely: a magnetic tape scale.** A self-adhesive strip a
+      millimetre or two thick, with a small read head, giving the same A/B
+      quadrature output as Z's scale. The candidate is the M-DRO EHM series
+      from machine-dro.co.uk (£170): a 40 × 12 × 12 mm sealed head
+      (DRO-MG-EH-05M), 5 µm (10 µm on diameter), a stainless cover strip,
+      tape cut to length (160 mm reading length), and a 9-way D connector.
+      Its page doesn't give the output type, the supply, the pinout, the
+      gap or the maximum speed, so these were asked of the supplier on
+      28 Nov 2026 (no answer yet). TTL at 5 V would go through the 5 V to
+      3.3 V boards as Z's does; RS-422 would need a line receiver (e.g. an
+      AM26LS32, or a 3.3 V equivalent), which would also stand up to the
+      VFD's noise better. Still to do: measure the cross-slide's full
+      travel, and the space where the head would go. Steel swarf sticks to
+      the strip, so it wants the cover strip and the head kept out of the
+      chips
+    - **The fallback: a spare iGaging-style scale** (the kind with a
+      battery remote display, as on the mill, but with a mini-USB plug
+      rather than micro-USB). It would need its own small sender for the
+      lathe: a 3.3 V/8 MHz Pro Mini running the mill's sketch (it writes
+      the ATmega328's registers directly, so another chip would need a
+      port) with X only and the smoothing off, read over a USB-serial
+      adapter as `Axis2Scale = serial`, with the sender's GND bonded to
+      the lathe's frame from the start. Not tested yet: the scale's pinout.
+      Its four wires (red, black, white, green) were found by opening the
+      slider; trace them to the plug with a meter rather than going by
+      colour. Its body isn't much thinner than a glass scale's, and at
+      about 10 µm a count (20 µm on diameter) it's good for catching lost
+      steps and re-basing, but marginal for finishing to size. The user
+      may make it into a 300 mm caliper instead
+    - Rejected: reading an iGaging scale straight from the Pi's GPIO (see
+      [Interfacing with the mill scales](#interfacing-with-the-mill-scales))
+    - Before any quadrature scale on X, `Gpio` needs a second set of scale
+      callbacks (see Sensors and scales in Outstanding)
 
 ### Work geometry and tools (lathe)
 
